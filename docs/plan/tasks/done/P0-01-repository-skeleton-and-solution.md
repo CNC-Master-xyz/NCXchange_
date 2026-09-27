@@ -50,7 +50,7 @@ Claude (agent), 2026-09-13. Commit 1 is the maintainer's "initial commit" (the d
 Done when:
 
 - `dotnet build` and `dotnet test` succeed on a clean checkout with no warnings: holds (`-warnaserror` with 0 warnings, 12 tests passing, `dotnet format --verify-no-changes` clean, also on a copy of the committed files outside the repository).
-- The CI badge is green on the main branch: waits for the maintainer's push; the workflow and the badge are in place.
+- The CI badge is green on the main branch: holds. The maintainer pushed `main` (9a1fb19) on 2026-09-19; run 35432466202 of the workflow finished `success` on both `ubuntu-latest` (2m03s) and `windows-latest` (2m50s), so the line endings of the writer hold on Windows too.
 - Every project references only what the dependency diagram allows: holds, and `ReferenceGraphTests` keeps it so.
 
-The file stays in `inbox/` until CI is green on `main`.
+Claude (orchestrator), 2026-09-27: the last criterion holds and the file moves to `done/`. Nothing in the repository changed for it; the evidence is the CI run of 2026-09-19 named above (`gh run view 35432466202`).

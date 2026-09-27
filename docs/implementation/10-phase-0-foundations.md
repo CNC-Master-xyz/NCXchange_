@@ -1,6 +1,6 @@
 # Phase 0: foundations
 
-Status: written 2026-09-11; closed 2026-09-18 except the CI criterion of P0-01, which waits for the maintainer's push (Log). Milestone M1. Tasks P0-01 to P0-07 of `../plan/tasks/inbox/`. Closed when the five `.ncx` examples parse and format to themselves byte for byte, the analyzers are quiet and CI runs the tests on every push (`../plan/phases.md`).
+Status: written 2026-09-11; closed 2026-09-18, and fully closed on 2026-09-27 when the CI criterion of P0-01 held (Log). Milestone M1. Tasks P0-01 to P0-07 of `../plan/tasks/inbox/`. Closed when the five `.ncx` examples parse and format to themselves byte for byte, the analyzers are quiet and CI runs the tests on every push (`../plan/phases.md`).
 
 ## Entry state
 
@@ -158,7 +158,7 @@ The folder READMEs are written now (one per `src/` and `tests/` project: what li
 
 Built, by task; what was decided in each is in its log in `../plan/tasks/done/`:
 
-- P0-01 Repository skeleton and solution: 858ddae, eebc2e9. The file stays in `inbox/` because its criterion "the CI badge is green on the main branch" waits for the push.
+- P0-01 Repository skeleton and solution: 858ddae, eebc2e9. In `done/` since 2026-09-27, when its last criterion, "the CI badge is green on the main branch", held.
 - P0-02 Core model: 002b29a. P0-03 Word catalog: 69babf0. P0-04 Lexer and parser: 49833f7. P0-05 Expression parser: ecbd94e.
 - P0-06 Canonical writer and `ncx format`: c35d5d6, which closed M1.
 - P0-07 Folder READMEs and `reading-the-code.md`: 4483a6e (the READMEs), fda949a (the tour, after P1-07, as D78 allows).
@@ -169,8 +169,8 @@ Decisions implemented: D90 to D98 (batch 1), D106 for the project references and
 Exit checklist (`20-schedule.md` 6):
 
 1. The row of `../plan/phases.md`, run as the commands below. The five examples parse and format to themselves byte for byte: holds. The analyzers are quiet: holds. The CI runs the tests on every push: `.github/workflows/ci.yml` is set to run on every push and pull request, but it has never run (item 2).
-2. CI green on `main` on both operating systems: cannot be checked, because nothing is pushed. The remote `origin` exists. By the local tracking ref, `origin/main` is still the initial commit 6be8356, 52 commits behind c2b683f. The four steps of the workflow pass on macOS (below); Ubuntu and Windows were not tried. This criterion waits for the maintainer's push (`20-schedule.md` 5, task 1).
-3. Task files: P0-02 to P0-07 are in `done/` with their logs. P0-01 is in `inbox/` with its log, held back by item 2 alone.
+2. CI green on `main` on both operating systems: holds since 2026-09-19. The maintainer pushed `main` up to 9a1fb19; run 35432466202 of `.github/workflows/ci.yml` finished `success` on `ubuntu-latest` and on `windows-latest`, so restore, build with `-warnaserror`, `dotnet format --verify-no-changes` and the tests all pass on both, and the line-ending handling of the writer holds on Windows (checked 2026-09-27 with `gh run view 35432466202`).
+3. Task files: P0-01 to P0-07 are in `done/` with their logs; P0-01 moved there on 2026-09-27 with item 2.
 4. Decisions: D90 to D98, D106 and D107 have their rows in `decisions.md` and their answers in `rationale.md`. The language sections and the examples were amended when the batch was applied (2026-09-11), before the first commit of the repository, and have not changed since. The phase took no other decision; the open entries above are unanswered.
 5. The five examples pass `ncx format --check`: holds.
 6. `docs/spec/generated/word-catalog.md` equals the catalog: holds. `WordCatalogTableTests` passes and leaves `docs/spec/generated/` unchanged.
@@ -190,3 +190,5 @@ for f in 2.5D_FRAESEN INCREMENTAL_SUB MILLTURN_TRANSFER PATTERN_LOOP POLAR_FACE;
 done
 git status --short docs/spec/generated              # empty after the test run
 ```
+
+2026-09-27, the phase is fully closed. Claude (orchestrator): the CI criterion of item 2 above holds; the P0-01 task file moved to `../plan/tasks/done/` and its row in `20-schedule.md` is ticked. Nothing else changed.
