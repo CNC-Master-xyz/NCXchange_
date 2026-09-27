@@ -34,6 +34,7 @@ Before a feature is implemented as code, it is checked whether a TOML rule cover
 | `controllers/` | The controller knowledge base: differences, Fanuc, Heidenhain, Siemens, machine builders, sample corpus |
 | `decisions/decisions.md` | Every decision by number, as the documents cite them |
 | `decisions/rationale.md` | The questions, recommendations and answers behind the decisions |
+| `decisions/manual-answers-2026-09-27.md` | The summary sheet of the manual answers to the open drafts D108 to D346: verdict, confidence, the answer in one line and the main evidence per draft |
 | `plan/phases.md` | The phases with what each delivers and when it is closed |
 | `plan/tasks/` | One file per task, `inbox/` and `done/`, with the index in `plan/tasks/README.md` |
 | `implementation/` | The engineer's execution plan: method, the findings against the specification, proposed decisions D90 and up, one file per phase, the schedule |
