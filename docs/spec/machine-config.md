@@ -25,6 +25,19 @@ default_workpiece = "TABLE1"
 tool_table = "dmu50.tools.toml"   # optional (D10): tool kind, length, radius per tool number; when missing, {kind} takes the default and the compiler writes a warning block at the head of the program naming the expected file and the tools it lacks, so nobody runs the program by accident
 ```
 
+The tool table of `tool_table` is TOML made of `[[tool]]` tables, one per tool; an unknown key is a WARNING (D265).
+
+```toml
+# dmu50.tools.toml, next to the machine file (D10, D265)
+[[tool]]
+number = 4                         # the tool number TOOL=4 calls; or name = "DRILL_D8" for a tool called by name (language 4.4)
+kind = "ROTARY"                    # a key of [tool_change] kind_map (section 3, D52)
+length = 120.5
+radius = 4
+```
+
+Without the table, or for a tool it does not describe, `{kind}` takes the default kind `ROTARY`, and the compiler writes the warning block of D10 at the head of that program only, after its header: comment lines of the controller, under `comment_charset` (section 2), that name D10, the expected file and the tools without data with the kind written. The block stops nothing, and a machine whose templates need no tool data gets no warning (D265).
+
 `controller` selects the reader and compiler; `dialect` selects their variant tables. `default_*` resolve NCX words without a role address. `check`, `trace`, `annotate` and `analyze` run without a machine file against a built-in default machine (`ncx-virtual-machine.md`, section 3.8, D103); `convert` and `compile` need one (D77).
 
 ## 2. Output format
@@ -56,7 +69,7 @@ auto_preload = true                # insert PRELOAD of the next tool after each 
 preload_position = "after_change"  # after_change | before_first_motion
 offsets_with_change = false        # true on Heidenhain: OFFSET words are implicit in TOOL CALL and not written
 tool_name_allowed = false          # TOOL="NAME" accepted (Heidenhain, Siemens) or mapped to numbers
-kind_map = { ROTARY = "0.", TURNING = "1." }   # the value of {kind} per tool kind of the tool table (D52); Mori Seiki as here, DMG { ROTARY = 1, TURNING = 2 }
+kind_map = { ROTARY = "0.", TURNING = "1." }   # the value of {kind} per tool kind of the tool table (D52); Mori Seiki as here, DMG { ROTARY = 1, TURNING = 2 }; a tool without data takes ROTARY (D265)
 ```
 
 Templates found in the manuals:
@@ -133,9 +146,12 @@ ncx = "C"
 letter = "C"
 kind = "rotary"
 owner = "S1"                       # rotary axis of a work spindle
+modulo = true                      # rotary axis only: its limits are the display range, never compared or clamped (D193)
 limits = [0, 360]                 # degrees, modulo axis: the display range, not a travel limit (D100)
 home = 0                           # the spindle zero mark, machine frame (D100)
 ```
+
+`modulo = true` on a rotary axis says that its `limits` are the display range of the control (the Fanuc roll-over axis, the Heidenhain `isModulo`, the Siemens modulo range): they are never compared, never clamped and never reported by the travel-limit analytic. Without the key the `limits` of a rotary axis are travel limits like those of a linear axis, compared in the MACHINE frame, reported by the travel-limit analytic and clamped under `limits = "clamp"`; a swivel `B` is written that way. The key decides only the limits, not how a modulo position wraps (D193).
 
 `home` and `limits` are machine coordinates (the G53 / M91 frame). `HOME` on an axis without `home` (or without `home2` under `POINT=2`) is a WARNING at check time, once per run and axis, and an ERROR only in a compiler that must write the coordinates (D100). `[positions]` names further machine-frame positions, each a set of axis values; expansion rules reach them through `{position:NAME}` (section 5a).
 
@@ -193,7 +209,7 @@ ON = "M96"                         # Doosan: "M203", Mori Seiki: "M35", Biglia: 
 OFF = "M97"                        # Mori Seiki: "M36", Biglia: "M63"
 PHASE = "M92"                      # phase-synchronous variant (Mori Seiki "M34", Biglia "M62"); omit when the machine has none
 channel = 2                        # D56: the machine accepts these codes only from this channel (Nakamura: the path that owns the second spindle)
-# channels = "all"                 # D56: the code must stand in every channel program behind a SYNC (Mori Seiki M34/M35)
+# channels = "all"                 # D56: the code must stand in every channel program behind a SYNC (Mori Seiki M34/M35); a word every channel program already writes between the same two marks is left as it stands, and two channels writing such words between the same two marks is an ERROR (D312)
 
 [workpiece]                        # native selection of the spindle the turret works on, and how that side is programmed (D57)
 MAIN = "G54 M428"                  # Mori Seiki: "M303", Doosan: "M34", Biglia: "M64", DMG: "M814"; the datum may be part of the template
@@ -285,6 +301,8 @@ pre = ["FUNC:PECK_MODE=RETRACT"]   # Doosan M291 before G83, as an NCX word so t
 - `pre` and `post`: lists of NCX blocks inserted before and after the block. They are NCX text, not native lines, so the VM executes them and the reader can recognize them; native text goes through `RAW:BUILDER`. A block may contain `{position:NAME}`, which expands to the axis words of that entry of `[positions]`, e.g. `pre = ["RAPID {position:tool_change} FRAME=MACHINE"]` (D100).
 - `requires`: state conditions that must hold while the function is written, as state variable = value (`SPINDLE = "OFF"`, `COOLANT = "OFF"`, `SPINDLE_MODE = "AXIS"`). The expander inserts the words that establish them, preceded by `@SAVE` of the variables named in `restore`.
 - `restore`: the state variables to put back after the block, through `@RESTORE`; the VM re-applies the saved value from its own snapshot, so the rule never has to know the speed the spindle had. Restoring costs cycle time (a spindle stop and start), which the runtime estimate counts and a WARNING reports at compile time.
+
+The triggering block of a catalog cycle is the block that names the cycle (`CYCLE=name` or `CYCLE:<controller>=n`), never a `CYCLE_CALL` block, and the rule covers the cycle while it is active: `@SAVE`, `requires` and `pre` stand before that block, `post` and `@RESTORE` directly after the `CYCLE=OFF` that ends the cycle, and directly before every other block that ends it (the next `CYCLE`, a `TOOL`, the `PROGRAM=END`, or the `SUB=END` of a subprogram, where generated blocks stay in their section). A required state therefore holds at every hole, and a `post` that moves cannot drill while the cycle is still modal on the control. The expander finds the end in the text of the section, without VM state, and a `JUMP` out of the range skips `post` and `@RESTORE` like any block it jumps over (D204).
 
 Readers use the same rules backwards: a source sequence `M5`, `M51`, `M3 S1500` on a machine whose rule says the spindle stop belongs to `COOLANT:THROUGH=ON` is read as the one NCX word, so the round trip does not accumulate stops. Plugins that need more than these four keys get the same insertion points in code (`ncx-virtual-machine.md`, section 7).
 

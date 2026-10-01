@@ -10,8 +10,8 @@ namespace Ncx.Compilers;
 // D52, D91).
 public abstract partial class CompilerBase
 {
-    // TODO(question): D10 and machine-config 1 let {kind} take "the default" for a tool without data and do not name
-    // it; the kind ROTARY, the first of the kind_map example of machine-config 3, is written until that is answered.
+    // D265: the default kind of a tool without data is ROTARY, as the Mori Seiki G361 note assumes a rotary tool for
+    // an omitted D address (decisions.md; machine-config 1, 3; D10).
     private const string DefaultKind = "ROTARY";
 
     // Tool 0 is the empty spindle (language 4.4).

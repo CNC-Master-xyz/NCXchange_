@@ -111,10 +111,10 @@ internal static class MotionValidation
     /// </summary>
     /// <param name="context">The motion block, after its verb moved the axes.</param>
     /// <param name="before">The position store before the block.</param>
-    // TODO(question): machine-config 4 calls the limits of a modulo rotary axis its display range and not a travel
-    // limit, and names no key that tells a modulo axis from a rotary axis with travel limits (a tilting B); the limits
-    // of rotary axes are not compared until D193 is answered. Whether the machine coordinates of an X axis programmed
-    // in diameters are diameters is D137: the stored radius is compared with the limits as written.
+    // D193: the limits of a rotary axis are travel limits like a linear axis's and are compared, unless its [[axis]]
+    // carries modulo = true, which makes them its display range (decisions.md; machine-config 4). Whether the machine
+    // coordinates of an X axis programmed in diameters are diameters is D137: the stored radius is compared with the
+    // limits as written.
     public static void CheckLimits(BlockContext context, IReadOnlyDictionary<string, AxisPosition> before)
     {
         ChannelState state = context.State;
@@ -126,7 +126,7 @@ internal static class MotionValidation
             }
 
             if (context.Machine.ResolveAxis(axisPosition.Key) is not AxisDef axis
-                || axis.Kind != AxisKind.Linear
+                || !HasTravelLimits(axis)
                 || FrameRules.MachineCoordinate(state, axisPosition.Key) is not decimal machine)
             {
                 continue;
@@ -148,19 +148,27 @@ internal static class MotionValidation
     }
 
     /// <summary>
-    /// Tells whether the machine has a linear axis with limits, the only axes whose targets are compared.
+    /// Tells whether the machine has an axis with travel limits, the only axes whose targets are compared: every
+    /// linear axis, and a rotary axis that is not a modulo axis (D193).
     /// </summary>
-    public static bool HasLinearLimits(MachineConfig machine)
+    public static bool HasComparedLimits(MachineConfig machine)
     {
         foreach (AxisDef axis in machine.Axes)
         {
-            if (axis.Kind == AxisKind.Linear && (axis.Min is not null || axis.Max is not null))
+            if (HasTravelLimits(axis))
             {
                 return true;
             }
         }
 
         return false;
+    }
+
+    // An axis whose limits are travel limits and carry a value: every linear axis, and a rotary axis without
+    // modulo = true, whose limits are its display range (machine-config 4, D193).
+    private static bool HasTravelLimits(AxisDef axis)
+    {
+        return !(axis.Kind == AxisKind.Rotary && axis.Modulo) && (axis.Min is not null || axis.Max is not null);
     }
 
     private static string Text(decimal value)

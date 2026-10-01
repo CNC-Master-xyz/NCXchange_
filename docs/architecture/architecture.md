@@ -623,7 +623,7 @@ flowchart TD
 
 ### 5.5 Expander and generated blocks
 
-The expander runs once over the parsed program before the VM. Its inputs are the expansion rules of the machine file (`pre`, `post`, `requires`, `restore` on functions, tool change and cycles) and the plugins that implement `IProgramRewriter`. It never sees VM state; where a rule needs the previous value of something (the spindle that must run again after the coolant clutch has engaged), it emits the pseudo-words `@SAVE=key` and `@RESTORE=key`, and the VM does the remembering from its own snapshot. Generated blocks carry their origin for diagnostics and `trace`, are executed like any block, and are never written by `format`. A `pre` or `post` block may carry `{position:NAME}`; the expander replaces it with the axis words of that entry of the machine's `[positions]` table before the block is parsed, and an unknown name is an ERROR on the rule (machine-config 5a, D100).
+The expander runs once over the parsed program before the VM. Its inputs are the expansion rules of the machine file (`pre`, `post`, `requires`, `restore` on functions, tool change and cycles) and the plugins that implement `IProgramRewriter`. It never sees VM state; where a rule needs the previous value of something (the spindle that must run again after the coolant clutch has engaged), it emits the pseudo-words `@SAVE=key` and `@RESTORE=key`, and the VM does the remembering from its own snapshot. Generated blocks carry their origin for diagnostics and `trace`, are executed like any block, and are never written by `format`. A `pre` or `post` block may carry `{position:NAME}`; the expander replaces it with the axis words of that entry of the machine's `[positions]` table before the block is parsed, and an unknown name is an ERROR on the rule (machine-config 5a, D100). The rule of a catalog cycle covers the cycle while it is active, so the expander puts its `post` and `@RESTORE` at the block that ends the cycle, which it finds in the text of the section (machine-config 5a, D204).
 
 ```mermaid
 flowchart TD
@@ -1027,7 +1027,7 @@ sequenceDiagram
     C-->>CLI: CompileResult (text, diagnostics)
 ```
 
-Where the compiler needs look-ahead (`{next}` from a following `PRELOAD`, `{b}` from a following positioning block, the automatic preload of the next tool), it uses the STATIC pre-pass of the VM, which records the tool sequence and the labels before any line is written. The tool kind for `{kind}` comes from the optional tool table (`tool_table` in the machine file, D10); when the table or a tool is missing, the compiler takes the default kind and writes a warning block at the head of the program that names the expected file and the missing tools, so that nobody runs the program by accident.
+Where the compiler needs look-ahead (`{next}` from a following `PRELOAD`, `{b}` from a following positioning block, the automatic preload of the next tool), it uses the STATIC pre-pass of the VM, which records the tool sequence and the labels before any line is written. The tool kind for `{kind}` comes from the optional tool table (`tool_table` in the machine file, a file of `[[tool]]` tables, D10, D265); when the table or a tool is missing, the compiler takes the default kind `ROTARY` and writes a warning block of controller comment lines at the head of that program, after its header, naming the expected file and the missing tools, so that nobody runs the program by accident. A machine whose templates carry no `{kind}` gets no such block.
 
 ## 9. Analytics and plugins
 
@@ -1124,7 +1124,7 @@ Each milestone ends with tests and a runnable `ncx` command, so that the project
 
 ## 13. Open points that touch the architecture
 
-- D10 tool table (settled): optional `tools.toml`; missing data becomes a warning block at the head of the compiled program.
+- D10 tool table (settled): optional `tools.toml`, TOML made of `[[tool]]` tables with `number` or `name`, `kind`, `length` and `radius`; missing data takes the kind `ROTARY` and becomes a warning block at the head of the compiled program that needed it (D265).
 - D16 history: `trace` and `annotate` are analytics, no history in the model.
 - D52: look-ahead in the compiler is done on the STATIC pre-pass; nothing in the model.
 - D56 channel-bound functions: only the job compiler knows several channels; the single-file compiler reports the ERROR.

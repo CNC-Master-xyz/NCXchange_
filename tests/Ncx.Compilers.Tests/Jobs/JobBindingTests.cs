@@ -141,8 +141,8 @@ public sealed class JobBindingTests
         Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\n/2M96\nM111\nM30\n%\n", texts[1]);
     }
 
-    // The TODO(question) of JobCompiler.Duplicate: a word bound to every channel that every channel program already
-    // writes behind the same mark, as a job read from the programs of such a machine does, stays as it stands.
+    // D312 (a): a word bound to every channel that every channel program already writes behind the same mark, as a
+    // job read from the programs of such a machine does, stays as it stands.
     [Fact]
     public void AllChannelsWord_AlreadyInEveryProgramBehindTheSameMark_StaysAsItStands()
     {
@@ -189,9 +189,9 @@ public sealed class JobBindingTests
         Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nM100\nM96\nM111\nM100\nM70\nM30\n%\n", texts[1]);
     }
 
-    // The TODO(question) of JobCompiler.Duplicate: the words of two channels duplicated between the same marks would
-    // stand in the programs in two orders, and the generated waits pair in execution order (virtual machine 3.7), so
-    // that the paths would command different codes at one wait: CMP705.
+    // D312 (b): the words of two channels duplicated between the same marks would stand in the programs in two
+    // orders, and the generated waits pair in execution order (virtual machine 3.7), so that the paths would command
+    // different codes at one wait: CMP705.
     [Fact]
     public void AllChannelsWords_OfTwoChannelsBetweenTheSameMarks_IsCmp705()
     {
@@ -208,8 +208,8 @@ public sealed class JobBindingTests
         Assert.Equal(5, error.Line);
     }
 
-    // The TODO(question) of JobCompiler.Duplicate: before every mark, the start of the programs is the same place for
-    // the words of every channel: CMP705.
+    // D312 (b): before every mark, the start of the programs is the same place for the words of every channel:
+    // CMP705.
     [Fact]
     public void AllChannelsWords_OfTwoChannelsBeforeEveryMark_IsCmp705()
     {

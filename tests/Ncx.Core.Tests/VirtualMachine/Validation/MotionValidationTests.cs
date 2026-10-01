@@ -100,6 +100,30 @@ public sealed class MotionValidationTests
             StringComparison.Ordinal);
     }
 
+    // VM 5, D193: the limits of a rotary axis without modulo = true are travel limits and are compared: B homes to 0
+    // and a machine-frame move to 130 leaves the swivel range.
+    [Fact]
+    public void RotaryTravelLimits_SwivelTargetBeyondTheRange_Warns()
+    {
+        VmHarness vm = new VmHarness(ValidationMachines.MillTurnWithRotaryLimits())
+            .Execute("UNITS=MM", "HOME B", "RAPID B=130 FRAME=MACHINE");
+
+        Diagnostic warning = RuleAssert.Only(vm, DiagnosticCodes.TargetBeyondLimits);
+
+        Assert.StartsWith("B ends at 130 in the MACHINE frame, beyond its upper limit 120", warning.Message,
+            StringComparison.Ordinal);
+    }
+
+    // VM 5, D193: the limits of a modulo rotary axis are its display range and are never compared: C homes to 90 and a
+    // machine-frame move to 400 passes without a diagnostic.
+    [Fact]
+    public void RotaryTravelLimits_ModuloAxisTargetBeyondTheDisplayRange_IsNotCompared()
+    {
+        new VmHarness(ValidationMachines.MillTurnWithRotaryLimits())
+            .Execute("UNITS=MM", "SPINDLE_MODE:MAIN=AXIS", "HOME C", "RAPID C=400 FRAME=MACHINE")
+            .AssertNoDiagnostics();
+    }
+
     // VM 5, D100: the lower limit: Z homes to 450 and moves 500 down in the machine frame to -50, below -10.
     [Fact]
     public void Target_BelowTheLowerLimitInTheMachineFrame_Warns()

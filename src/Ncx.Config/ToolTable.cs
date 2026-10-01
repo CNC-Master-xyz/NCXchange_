@@ -2,10 +2,9 @@ using Ncx.Core.Model;
 
 namespace Ncx.Config;
 
-// TODO(question): machine-config 1 and D10 give the tool table its content, the tool kind, length and radius per tool
-// number, and no document gives the form of the file. It is read as [[tool]] tables with number (or name, for a tool
-// that a program calls by name, language 4.4), kind (a key of [tool_change] kind_map, D52), length and radius, in the
-// manner of the [[axis]] and [[resource]] tables of the machine file, until that is answered.
+// D265: the tool table is TOML made of [[tool]] tables with number (or name, for a tool that a program calls by name,
+// language 4.4), kind (a key of [tool_change] kind_map, D52), length and radius, in the manner of the [[axis]] and
+// [[resource]] tables of the machine file; an unknown key is a WARNING (decisions.md; machine-config 1).
 
 /// <summary>
 /// The tool table of D10, the optional file that [machine] tool_table names: the tool kind, length and radius per

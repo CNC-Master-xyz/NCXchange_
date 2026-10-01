@@ -279,20 +279,18 @@ public sealed record MachineConfig
     }
 
     /// <summary>
-    /// Resolves an axis name of a program for the workpiece holder in use: A, B and C name the rotary axis of that
-    /// holder when it has one, every other name the axis with that NCX name (virtual machine 3.8 rule 3, language
-    /// 4.3); null when no axis fits.
+    /// Resolves an axis name of a program for the workpiece holder in use: of A, B and C the one whose letter that
+    /// holder's rotary axis carries names that axis, every other name the axis with that NCX name (virtual machine
+    /// 3.8 rule 3, language 4.3, D147); null when no axis fits.
     /// </summary>
     /// <param name="ncxName">The axis name as the program writes it.</param>
     /// <param name="workpieceHolder">The resource id of the current workpiece holder, S2 after WORKPIECE=SUB.</param>
     public AxisDef? ResolveAxis(string ncxName, string workpieceHolder)
     {
-        // A, B, C resolve to the rotary axis of the current workpiece holder when it has one, otherwise to the machine
-        // axis with that NCX name (virtual machine 3.8 rule 3). The rotary axis of a holder is the axis its
-        // [[resource]] names, the C axis the spindle becomes in AXIS mode (machine-config 4).
-        // TODO(question): rule 3 lets A, B and C all resolve to the holder's rotary axis; this resolves only the name
-        // whose letter the axis carries (C to C2 of the sub spindle), so that A stays the A slide of the Mori Seiki
-        // (D147).
+        // D147: only the standard rotary name whose letter the holder's rotary axis carries resolves to that axis
+        // (C to C2 of the sub spindle), so that A stays the A slide of the Mori Seiki and B its swivel; every other
+        // name goes through [[axis]] (decisions.md; virtual machine 3.8 rule 3). The rotary axis of a holder is the
+        // axis its [[resource]] names, the C axis the spindle becomes in AXIS mode (machine-config 4).
         bool standardRotaryName = ncxName is "A" or "B" or "C";
         ResourceDef? holder = FindResource(workpieceHolder);
         if (standardRotaryName && holder?.Axis is string holderAxisId)

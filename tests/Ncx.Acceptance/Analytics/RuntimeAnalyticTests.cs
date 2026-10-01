@@ -217,6 +217,36 @@ public sealed class RuntimeAnalyticTests
         Assert.Equal(1.1, runtime.TotalSeconds, Precision);
     }
 
+    // D288: while the tool holder's spindle stands, a feed per revolution follows the workpiece holder's spindle, the
+    // one a turning tool cuts on. On the default machine (D103) the holder carries the tool spindle TOOL and MAIN
+    // holds the part: 6 mm/rev at 1000 rpm of MAIN is 6000 mm/min, 1.1 s for 100 mm.
+    [Fact]
+    public void FeedPerRevolutionSpindle_ToolSpindleStandsAndTheWorkpieceSpindleTurns_TakesTheWorkpieceSpindlesRpm()
+    {
+        RuntimeAnalytic runtime = Run(AnalyticMachines.PolarLathe(),
+            ["RPM:MAIN=1000", "SPINDLE:MAIN=CW", "FEED_MODE=PER_REV", "RAPID X=0 Z=0"],
+            "LINE Z=-100 F=6",
+            "SPINDLE:MAIN=OFF");
+
+        Assert.Equal(1.1, runtime.TotalSeconds, Precision);
+    }
+
+    // D288: while the tool holder's spindle turns, it is the rpm, also when the workpiece holder's spindle turns as
+    // well: 6 mm/rev at the 500 rpm of TOOL is 3000 mm/min (50 mm/s), 100 mm from rest to rest with 1000 mm/s^2, and
+    // not the 1000 rpm of MAIN, which would take 1.1 s.
+    [Fact]
+    public void FeedPerRevolutionSpindle_BothSpindlesTurn_TakesTheToolHoldersRpm()
+    {
+        RuntimeAnalytic runtime = Run(AnalyticMachines.PolarLathe(),
+            ["RPM:MAIN=1000", "SPINDLE:MAIN=CW", "RPM:TOOL=500", "SPINDLE:TOOL=CW", "FEED_MODE=PER_REV",
+                "RAPID X=0 Z=0"],
+            "LINE Z=-100 F=6",
+            "SPINDLE:TOOL=OFF",
+            "SPINDLE:MAIN=OFF");
+
+        Assert.Equal((100d / 50) + (50d / 1000), runtime.TotalSeconds, Precision);
+    }
+
     // VM 8: under CSS the rpm follows from VC and the current X radius: 200 m/min at X=50 is 200000 / (2 pi 50) rpm,
     // times 0.2 mm/rev; LINE Z=-100 moves X nowhere, from rest to rest with 1000 mm/s^2: 100 / v + v / 1000 s.
     [Fact]

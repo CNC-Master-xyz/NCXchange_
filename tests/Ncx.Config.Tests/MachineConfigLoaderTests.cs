@@ -567,6 +567,34 @@ public sealed class MachineConfigLoaderTests
         Assert.Equal(PathMode.ExactStop, machine.Dynamics?.PathMode);
     }
 
+    // Machine-config 4, D193: modulo = true on a rotary axis says that its limits are the display range; a rotary
+    // axis without the key keeps travel limits.
+    [Fact]
+    public void ModuloKey_RotaryAxisWithAndWithoutIt_LoadsTheFlag()
+    {
+        MachineConfig machine = LoadClean("""
+            [machine]
+            name = "Test lathe"
+            controller = "fanuc"
+
+            [[axis]]
+            id = "C1"
+            ncx = "C"
+            kind = "rotary"
+            modulo = true
+            limits = [0, 360]
+
+            [[axis]]
+            id = "B1"
+            ncx = "B"
+            kind = "rotary"
+            limits = [-120, 120]
+            """);
+
+        Assert.True(machine.FindAxis("C1")?.Modulo);
+        Assert.False(machine.FindAxis("B1")?.Modulo);
+    }
+
     // Machine-config 4: limits are a minimum and a maximum.
     [Fact]
     public void Axis_LimitsWithOneNumber_ReportsWrongType()

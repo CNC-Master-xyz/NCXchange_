@@ -114,6 +114,33 @@ public sealed class MachineConfigTests
         Assert.Equal("C1", MillTurn().ResolveAxis("C", "H1")?.Id);
     }
 
+    // D147: the letter is that of the holder axis's NCX name, not of its id, so an axis with the id A1 and the NCX
+    // name C2 is the holder's C and answers to nothing else (decisions.md; virtual machine 3.8 rule 3).
+    [Fact]
+    public void ResolveAxis_HolderAxisWhoseIdAndNcxNameDiffer_ResolvesTheLetterOfTheNcxName()
+    {
+        MachineConfig machine = MillTurn() with
+        {
+            Resources =
+            [
+                new ResourceDef { Id = "S1", Type = ResourceType.WorkSpindle, Axis = "C1" },
+                new ResourceDef { Id = "S2", Type = ResourceType.WorkSpindle, Axis = "A1" },
+                new ResourceDef { Id = "S3", Type = ResourceType.ToolSpindle },
+                new ResourceDef { Id = "H1", Type = ResourceType.ToolHolder, Spindle = "S3" },
+            ],
+            Axes =
+            [
+                new AxisDef { Id = "X1", NcxName = "X", Kind = AxisKind.Linear },
+                new AxisDef { Id = "Z1", NcxName = "Z", Kind = AxisKind.Linear },
+                new AxisDef { Id = "C1", NcxName = "C", Kind = AxisKind.Rotary, Owner = "S1" },
+                new AxisDef { Id = "A1", NcxName = "C2", Kind = AxisKind.Rotary, Owner = "S2" },
+            ],
+        };
+
+        Assert.Equal("A1", machine.ResolveAxis("C", "S2")?.Id);
+        Assert.Null(machine.ResolveAxis("A", "S2"));
+    }
+
     // Machine-config 5: FUNC:SUB_CHUCK=OPEN compiles to the code of that state.
     [Fact]
     public void FindFunction_KnownState_ReturnsTheTemplate()

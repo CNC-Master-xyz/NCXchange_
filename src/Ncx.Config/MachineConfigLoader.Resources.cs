@@ -13,7 +13,7 @@ public static partial class MachineConfigLoader
     private static readonly string[] s_axisKeys =
     [
         "id", "ncx", "letter", "incremental_letter", "kind", "owner", "limits", "rapid", "max_feed", "acceleration",
-        "programming", "home", "home2", "clamp",
+        "programming", "home", "home2", "clamp", "modulo",
     ];
 
     private static readonly string[] s_axisKinds = ["linear", "rotary"];
@@ -91,6 +91,8 @@ public static partial class MachineConfigLoader
             string? letter = table.Text("letter");
             string? incrementalLetter = table.Text("incremental_letter");
             string? owner = table.Text("owner");
+            // modulo: the limits of this rotary axis are its display range, never compared or clamped (D193).
+            bool modulo = table.Flag("modulo");
             IReadOnlyList<decimal>? limits = table.NumberPair("limits");
             decimal? rapid = table.Number("rapid");
             decimal? maxFeed = table.Number("max_feed");
@@ -119,6 +121,7 @@ public static partial class MachineConfigLoader
                 IncrementalLetter = incrementalLetter,
                 Kind = axisKind,
                 Owner = owner,
+                Modulo = modulo,
                 Min = limits?[0],
                 Max = limits?[1],
                 Rapid = rapid,

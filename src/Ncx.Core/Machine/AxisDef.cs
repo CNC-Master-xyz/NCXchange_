@@ -37,14 +37,20 @@ public sealed record AxisDef
     public string? Owner { get; init; }
 
     /// <summary>
-    /// limits: the lower travel limit in machine coordinates; for a modulo axis the start of the display range (D100);
-    /// null when left out.
+    /// modulo: true on a rotary axis whose limits are its display range and not a travel limit, so that they are
+    /// never compared, clamped or reported by the travel-limit analytic (machine-config 4, D193).
+    /// </summary>
+    public bool Modulo { get; init; }
+
+    /// <summary>
+    /// limits: the lower travel limit in machine coordinates; for a modulo axis the start of the display range (D100,
+    /// D193); null when left out.
     /// </summary>
     public decimal? Min { get; init; }
 
     /// <summary>
-    /// limits: the upper travel limit in machine coordinates; for a modulo axis the end of the display range (D100);
-    /// null when left out.
+    /// limits: the upper travel limit in machine coordinates; for a modulo axis the end of the display range (D100,
+    /// D193); null when left out.
     /// </summary>
     public decimal? Max { get; init; }
 

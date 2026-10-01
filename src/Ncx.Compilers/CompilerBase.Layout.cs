@@ -148,10 +148,9 @@ public abstract partial class CompilerBase
     // D10: without the tool table, or for a tool it does not describe, {kind} takes the default and the compiler
     // writes a warning block at the head of the program that names the expected file and the tools it lacks, so that
     // nobody runs the program by accident. Its lines pass BLOCK_WRITE as lines of PROGRAM=BEGIN.
-    // TODO(question): D10 does not say what the warning block is made of, nor whether it stands in every program of a
-    // machine without a tool table or only where a template needed the tool data. It is comment lines of the
-    // controller, written where a template with {kind} took the default, and it stops nothing, until that is
-    // answered.
+    // D265: the block is comment lines of the controller that name D10, the expected file and the tools without data
+    // with the kind written; it stands only in a program where a template with {kind} took the default, after its
+    // header, and it stops nothing (decisions.md; machine-config 1).
     private List<OutputLine> ToolDataWarning(ProgramText program, List<ToolRef> tools)
     {
         Block block = program.Begin.Block;

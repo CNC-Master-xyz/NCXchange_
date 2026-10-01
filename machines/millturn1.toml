@@ -106,7 +106,8 @@ ncx = "C"                          # C in a program is the axis of the workpiece
 letter = "C"
 kind = "rotary"
 owner = "S1"                       # rotary axis of the main spindle (M70 / SPOS)
-limits = [0, 360]                  # degrees; modulo axis, the range is the display range and not a travel limit
+limits = [0, 360]                  # degrees; modulo axis
+modulo = true                      # the limits are the display range, not a travel limit (D193)
 rapid = 36000                      # deg/min (100 rpm in axis mode)
 max_feed = 18000                   # deg/min
 acceleration = 2000                # deg/s^2
@@ -131,6 +132,7 @@ letter = "C2"                      # written as C2=90
 kind = "rotary"
 owner = "S2"                       # rotary axis of the sub spindle (M2=70 / SPOS[2])
 limits = [0, 360]                  # degrees; modulo axis
+modulo = true                      # the limits are the display range, not a travel limit (D193)
 rapid = 36000
 max_feed = 18000
 acceleration = 2000

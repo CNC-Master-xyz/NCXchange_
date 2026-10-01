@@ -118,9 +118,9 @@ public sealed partial class JobCompiler
     // A word the machine needs in every channel program stands in each behind a SYNC the job compiler generates
     // (machine-config 5, channels = "all"; D56, as Mori Seiki requires for M34 and M35): in its own program the SYNC
     // stands before its block, in every other program the SYNC and the word stand after the same mark.
-    // TODO(question): D56 does not say what the job compiler does when every channel program already writes the word
-    // behind the same mark, as a job read from the programs of such a machine does; the words are left as they stand,
-    // until that is answered.
+    // D312 (a): a word that every channel program already writes, with the same canonical text, between the same two
+    // marks stands behind that wait already and is left as it stands, so a Mori Seiki job read from its own programs
+    // writes M34 and M35 back without extra waits (decisions.md; virtual machine 3.8 rule 2a).
     private static void Duplicate(JobChannel from, int index, List<Word> words, List<JobChannel> channels,
         MachineConfig machine, int? mark, List<Duplication> duplicated)
     {
@@ -160,10 +160,9 @@ public sealed partial class JobCompiler
         // The generated SYNCs pair in execution order (virtual machine 3.7), so every program needs the duplicated
         // words of one place between two marks behind them in one order; each channel's own words stand where its
         // program writes them, after the words of the other channels, which stand after the mark.
-        // TODO(question): D56 and virtual machine 3.8 rule 2a do not say in which order the words bound to every
-        // channel stand in every program when two channels write such words between the same marks (or both before
-        // every mark), nor whether a channel's own word may leave its place for that order; the words of the second
-        // channel are the ERROR CMP705, until that is answered.
+        // D312 (b): the words of the second channel stay the ERROR CMP705. The machine wants the bound word in the
+        // block directly behind the wait, so only one channel's word can hold that place, and the order is one the
+        // author states with a SYNC of their own (decisions.md; virtual machine 3.7, 3.8 rule 2a).
         MarkRelease? after = ReleaseBefore(from, index);
         if (DuplicatedByAnotherChannel(duplicated, from, after) is Duplication first)
         {
@@ -171,8 +170,8 @@ public sealed partial class JobCompiler
                 CultureInfo.InvariantCulture,
                 $"{Text(words)}: {table} must stand in every channel program behind a SYNC, and channel "
                 + $"{first.Channel.Channel} writes {Text(first.Words)} ({first.Channel.File.FileName} line "
-                + $"{first.Block.Line}) between the same marks; the SYNCs pair in execution order, and no document "
-                + $"says in which order the words of two channels stand in every program (D56; virtual machine 3.7, "
+                + $"{first.Block.Line}) between the same marks; the SYNCs pair in execution order, and the order of "
+                + $"the words of two channels is one a SYNC of the program states (D312; virtual machine 3.7, "
                 + $"3.8 rule 2a)."));
             return;
         }

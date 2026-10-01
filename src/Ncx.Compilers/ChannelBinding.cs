@@ -19,6 +19,10 @@ internal static class ChannelBinding
     /// The table a word is written from, when that table is bound to one channel or to every channel; null for a word
     /// of an unbound table, and for a word of no table.
     /// </summary>
+    // TODO(question): D312 settled that a machine may want one state of a bound table in one program only (the Mori
+    // Seiki M36 that cancels the synchronization, the Nakamura M443), so machine-config 5 needs a way to bind only
+    // some states of a table; it names no key, and the states key of D198 is still open. channel and channels = "all"
+    // bind every state of their table, as the model has them, until that is answered.
     public static FunctionTable? BoundTableOf(Word word, MachineConfig machine)
     {
         FunctionTable? table = TableOf(word, machine);

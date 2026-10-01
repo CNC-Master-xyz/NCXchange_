@@ -31,6 +31,27 @@ internal static class ValidationMachines
     }
 
     /// <summary>
+    /// The mill-turn of VmMachines with limits on its rotary axes: B is a swivel whose limits are travel limits, C the
+    /// main spindle's modulo axis, whose limits are its display range (machine-config 4, D193).
+    /// </summary>
+    public static MachineConfig MillTurnWithRotaryLimits()
+    {
+        MachineConfig machine = VmMachines.MillTurn();
+        var axes = new List<AxisDef>();
+        foreach (AxisDef axis in machine.Axes)
+        {
+            axes.Add(axis.NcxName switch
+            {
+                "B" => axis with { Min = -120m, Max = 120m },
+                "C" => axis with { Min = 0m, Max = 360m, Modulo = true },
+                _ => axis,
+            });
+        }
+
+        return machine with { Axes = axes };
+    }
+
+    /// <summary>
     /// The mill-turn of VmMachines with the speed limits of its main spindle, [spindle.MAIN] rpm_min 45 and rpm_max
     /// 6000.
     /// </summary>

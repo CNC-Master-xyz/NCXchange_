@@ -51,7 +51,7 @@ internal static class ExpanderMachines
                 new AxisDef
                 {
                     Id = "C1", NcxName = "C", Kind = AxisKind.Rotary, Owner = "S1", Home = 0m, Min = 0m, Max = 360m,
-                    MaxFeed = 3600m,
+                    MaxFeed = 3600m, Modulo = true,
                 },
             ],
             Positions = new PositionsTable
@@ -168,6 +168,23 @@ internal static class ExpanderMachines
     public static MachineConfig Clamp()
     {
         return Mill() with { Limits = LimitPolicy.Clamp };
+    }
+
+    /// <summary>
+    /// The clamping mill with a swivel B axis whose limits are travel limits, not a display range (D193).
+    /// </summary>
+    public static MachineConfig ClampWithSwivel()
+    {
+        MachineConfig machine = Clamp();
+        var axes = new List<AxisDef>(machine.Axes)
+        {
+            new AxisDef
+            {
+                Id = "B1", NcxName = "B", Kind = AxisKind.Rotary, Home = 0m, Min = -120m, Max = 120m,
+                MaxFeed = 3600m,
+            },
+        };
+        return machine with { Axes = axes };
     }
 
     private static FunctionTable States(string first, string firstCode, string second, string secondCode,

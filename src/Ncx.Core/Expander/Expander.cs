@@ -44,15 +44,22 @@ public static class Expander
         // TODO: in INTERPRETED mode (P4-01) a JUMP or a REPEAT to a LABEL enters its block after the blocks generated
         // before it; the pre-pass of the labels must map the label to the first of them.
         var generated = new GeneratedText(machine, diagnostics);
+        var cycleEnds = new CycleRuleEnds();
         var blocks = new List<Block>();
         var newIndex = new int[program.Blocks.Count];
         for (int index = 0; index < program.Blocks.Count; index++)
         {
-            BlockExpansion expansion = ExpandBlock(program, index, machine, rewriters, generated, diagnostics);
+            BlockExpansion expansion =
+                ExpandBlock(program, index, machine, rewriters, generated, diagnostics, cycleEnds);
+
+            // D204: the post blocks and the @RESTORE of a catalog cycle's rule stand at the block that ends the
+            // cycle, outside everything that block's own rules generate.
+            blocks.AddRange(cycleEnds.Before(index));
             blocks.AddRange(expansion.Before);
             newIndex[index] = blocks.Count;
             blocks.Add(expansion.Block);
             blocks.AddRange(expansion.After);
+            blocks.AddRange(cycleEnds.After(index));
         }
 
         // Every program and subprogram keeps its BEGIN and its END block, and a generated block stands inside the
@@ -75,14 +82,18 @@ public static class Expander
     // limits = "clamp" over every block the virtual machine executes for it (D64). A block that triggers nothing stays
     // the same block.
     private static BlockExpansion ExpandBlock(NcxProgram program, int index, MachineConfig machine,
-        IReadOnlyList<IProgramRewriter> rewriters, GeneratedText generated, Diagnostics diagnostics)
+        IReadOnlyList<IProgramRewriter> rewriters, GeneratedText generated, Diagnostics diagnostics,
+        CycleRuleEnds cycleEnds)
     {
         Block block = program.Blocks[index];
         Section? section = SectionOf(program, index);
         var expansion = new BlockExpansion(block, section, index);
+        CycleEnd? cycleEnd = null;
         foreach (TriggeredRule rule in ExpansionRules.Of(block, machine))
         {
-            RuleBlocks.Apply(rule, expansion, generated, machine);
+            // The end of the cycle is looked up once, and only for a block that names one (D204).
+            cycleEnd ??= rule.CoversCycle ? CycleRuleEnds.EndOf(program, index, section) : null;
+            RuleBlocks.Apply(rule, expansion, generated, machine, cycleEnds, cycleEnd);
         }
 
         // A rewriter learns the machine name, the channel and the line, and nothing of the virtual machine (D61, D106);

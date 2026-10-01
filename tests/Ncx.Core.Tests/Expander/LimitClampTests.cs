@@ -94,10 +94,10 @@ public sealed class LimitClampTests
         Assert.Equal(2, expanded.Diagnostics.Items.Count);
     }
 
-    // The expander never sees the machine position of a workpiece-frame target, and the limits of a rotary axis may be
-    // a display range; neither is rewritten (architecture 5.5, D100).
+    // The expander never sees the machine position of a workpiece-frame target, and the limits of a modulo rotary axis
+    // are its display range; neither is rewritten (architecture 5.5, D100, D193).
     [Fact]
-    public void D64_WorkpieceTargetAndRotaryTarget_AreNotRewritten()
+    public void D64_WorkpieceTargetAndModuloRotaryTarget_AreNotRewritten()
     {
         string text = ExpanderHarness.File("UNITS=MM", "RAPID X=700", "RAPID C=400 FRAME=MACHINE");
 
@@ -105,6 +105,20 @@ public sealed class LimitClampTests
 
         Assert.Equal(text, ExpanderHarness.WriteWithGenerated(expanded));
         Assert.Empty(expanded.Diagnostics.Items);
+    }
+
+    // D193: the limits of a rotary axis without modulo = true are travel limits, so a machine-frame target beyond the
+    // swivel range is clamped like a linear one.
+    [Fact]
+    public void RotaryTravelLimits_SwivelTargetBeyondTheRange_IsClamped()
+    {
+        NcxProgram expanded = ExpanderHarness.Expand(
+            ExpanderHarness.File("UNITS=MM", "RAPID B=130 FRAME=MACHINE"), ExpanderMachines.ClampWithSwivel());
+
+        Assert.Equal(
+            ExpanderHarness.File("UNITS=MM", "RAPID B=120 FRAME=MACHINE"),
+            ExpanderHarness.WriteWithGenerated(expanded));
+        Assert.Single(expanded.Diagnostics.Items);
     }
 
     // The clamp applies to every block the VM executes for a block, a generated one as well, which keeps its place and

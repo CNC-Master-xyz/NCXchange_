@@ -152,8 +152,8 @@ internal static class LimitClamp
     // the virtual machine knows for a workpiece-frame target, and the expander never sees the state (architecture 5.5);
     // only the targets of FRAME=MACHINE blocks are clamped, and the virtual machine reports the others, until D203 is
     // answered.
-    // TODO(question): the limits of a rotary axis are travel limits on a swivel and the display range of a modulo axis
-    // (machine-config 4, D100), and no key tells the two apart; a rotary target is not clamped until D193 is answered.
+    // D193: the limits of a rotary axis are travel limits and are clamped like a linear axis's, unless its [[axis]]
+    // carries modulo = true, which makes them its display range (decisions.md; machine-config 4).
     private static Word? ClampTarget(Word word, decimal target, Block block, MachineConfig machine,
         List<string> findings)
     {
@@ -164,7 +164,7 @@ internal static class LimitClamp
         }
 
         AxisDef? axis = machine.ResolveAxis(name);
-        if (axis is null || axis.Kind != AxisKind.Linear)
+        if (axis is null || (axis.Kind == AxisKind.Rotary && axis.Modulo))
         {
             return null;
         }

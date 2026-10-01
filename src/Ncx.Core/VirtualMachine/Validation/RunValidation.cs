@@ -19,7 +19,8 @@ internal sealed class RunValidation
     // The number of channels of the job whose channel the run is; null for a run outside a job (virtual machine 3.7).
     private readonly int? _jobChannels;
 
-    // Only a machine with a linear axis that has limits compares the targets of its motions (virtual machine 5, D100).
+    // Only a machine with an axis whose limits are travel limits compares the targets of its motions: every
+    // linear axis, and a rotary axis that is not a modulo axis (virtual machine 5, D100, D193).
     private readonly bool _comparesLimits;
 
     // The line where the program that runs gave each form of the offsets first (ToolValidation).
@@ -48,7 +49,7 @@ internal sealed class RunValidation
         _diagnostics = diagnostics;
         _mode = mode;
         _jobChannels = jobChannels;
-        _comparesLimits = MotionValidation.HasLinearLimits(machine);
+        _comparesLimits = MotionValidation.HasComparedLimits(machine);
     }
 
     /// <summary>

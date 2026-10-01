@@ -66,16 +66,12 @@ internal static class ExpansionRules
                 return Triggered(TableOf(machine.Coolant, channel)?.Rule, "[coolant] " + channel);
             case "FUNC" when word.Addr is string function:
                 return Triggered(TableOf(machine.Functions, function)?.Rule, "[func] " + function);
-            // TODO(question): machine-config 5a turns the keys of a catalog cycle into blocks "around the triggering
-            // block", and language 4.7 defines a cycle once (modal) and executes it by CYCLE_CALL at each position;
-            // neither names the triggering block of a catalog cycle: the definition, each CYCLE_CALL, or both. A pre
-            // on the definition gives the mode code before the cycle of language 4.7.1 (the Doosan M291 before G83),
-            // but a post, or a requires with its restore, then undoes the mode or the required state before the
-            // CYCLE_CALL blocks drill. The rule fires on the block that names the cycle, never on a CYCLE_CALL block,
-            // until D204 is answered.
+            // D204: the rule of a catalog cycle covers the cycle while it is active. It fires on the block that names
+            // the cycle, never on a CYCLE_CALL block, and its post and @RESTORE stand at the block that ends the
+            // cycle (decisions.md; machine-config 5a, language 4.7.1, CycleRuleEnds).
             case "CYCLE":
                 return CycleEntryOf(word, machine) is CycleEntry entry
-                    ? Triggered(entry.Rule, "cycle " + entry.Name)
+                    ? Triggered(entry.Rule, "cycle " + entry.Name, coversCycle: true)
                     : null;
             default:
                 return null;
@@ -101,9 +97,9 @@ internal static class ExpansionRules
         return tables.TryGetValue(name, out FunctionTable? table) ? table : null;
     }
 
-    private static TriggeredRule? Triggered(ExpansionRule? rule, string source)
+    private static TriggeredRule? Triggered(ExpansionRule? rule, string source, bool coversCycle = false)
     {
-        return rule is null ? null : new TriggeredRule(rule, source);
+        return rule is null ? null : new TriggeredRule(rule, source, coversCycle);
     }
 
     private static bool Contains(List<TriggeredRule> triggered, string source)

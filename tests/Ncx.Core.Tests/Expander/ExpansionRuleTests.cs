@@ -85,9 +85,8 @@ public sealed class ExpansionRuleTests
             ExpanderHarness.WriteWithGenerated(expanded));
     }
 
-    // A catalog cycle may carry pre (machine-config 5a, the Doosan M291 before G83). Which block triggers the rule of a
-    // catalog cycle is open (TODO(question) D204 in ExpansionRules): the rule fires on the block that names the cycle,
-    // so the mode function stands before that block and not before its CYCLE_CALL blocks.
+    // A catalog cycle may carry pre (machine-config 5a, the Doosan M291 before G83). D204: the rule fires on the block
+    // that names the cycle, never on a CYCLE_CALL block, so the mode function stands before the definition.
     [Fact]
     public void MachineConfig5a_CatalogCyclePre_StandsBeforeTheBlockThatNamesTheCycle()
     {
@@ -112,10 +111,10 @@ public sealed class ExpansionRuleTests
             ExpanderHarness.WriteWithGenerated(expanded));
     }
 
-    // The same reading for post (the open question in ExpansionRules): the post block stands directly after the block
-    // that names the cycle, before its CYCLE_CALL blocks, so it switches the mode back before the holes are drilled.
+    // D204: the rule covers the cycle while it is active, so post and @RESTORE stand directly after the CYCLE=OFF
+    // that ends it and not after the block that defines it; the mode holds at every hole.
     [Fact]
-    public void MachineConfig5a_CatalogCyclePost_StandsDirectlyAfterTheBlockThatNamesTheCycle()
+    public void D204_CatalogCyclePost_StandsDirectlyAfterTheCycleOff()
     {
         MachineConfig machine = ExpanderMachines.Peck(
             new ExpansionRule { Pre = ["FUNC:PECK_MODE=RETRACT"], Post = ["FUNC:PECK_MODE=CHIP_BREAK"] });
@@ -132,9 +131,89 @@ public sealed class ExpansionRuleTests
                 "UNITS=MM",
                 "FUNC:PECK_MODE=RETRACT",
                 "CYCLE=PECK CLEARANCE=5 DEPTH=-20 PECK=2 CYCLE_F=100",
-                "FUNC:PECK_MODE=CHIP_BREAK",
                 "CYCLE_CALL X=10 Y=10",
-                "CYCLE=OFF"),
+                "CYCLE=OFF",
+                "FUNC:PECK_MODE=CHIP_BREAK"),
+            ExpanderHarness.WriteWithGenerated(expanded));
+    }
+
+    // D204: where another block ends the cycle (the next CYCLE, a TOOL, PROGRAM=END or SUB=END; virtual machine 4),
+    // post and @RESTORE stand directly before that block.
+    [Fact]
+    public void D204_CatalogCyclePostWithoutACycleOff_StandsDirectlyBeforeTheToolThatEndsTheCycle()
+    {
+        MachineConfig machine = ExpanderMachines.Peck(
+            new ExpansionRule { Pre = ["FUNC:PECK_MODE=RETRACT"], Post = ["FUNC:PECK_MODE=CHIP_BREAK"] });
+        string program = ExpanderHarness.File(
+            "UNITS=MM",
+            "CYCLE=PECK CLEARANCE=5 DEPTH=-20 PECK=2 CYCLE_F=100",
+            "CYCLE_CALL X=10 Y=10",
+            "PRELOAD=2",
+            "TOOL=2");
+
+        NcxProgram expanded = ExpanderHarness.Expand(program, machine);
+
+        Assert.Equal(
+            ExpanderHarness.File(
+                "UNITS=MM",
+                "FUNC:PECK_MODE=RETRACT",
+                "CYCLE=PECK CLEARANCE=5 DEPTH=-20 PECK=2 CYCLE_F=100",
+                "CYCLE_CALL X=10 Y=10",
+                "PRELOAD=2",
+                "FUNC:PECK_MODE=CHIP_BREAK",
+                "TOOL=2"),
+            ExpanderHarness.WriteWithGenerated(expanded));
+    }
+
+    // D204: a cycle that no block of the section ends is ended by its PROGRAM=END, so the blocks stand before it.
+    [Fact]
+    public void D204_CatalogCyclePostOfACycleNoBlockEnds_StandsBeforeTheProgramEnd()
+    {
+        MachineConfig machine = ExpanderMachines.Peck(
+            new ExpansionRule { Post = ["FUNC:PECK_MODE=CHIP_BREAK"] });
+        string program = ExpanderHarness.File(
+            "UNITS=MM",
+            "CYCLE=PECK CLEARANCE=5 DEPTH=-20 PECK=2 CYCLE_F=100",
+            "CYCLE_CALL X=10 Y=10");
+
+        NcxProgram expanded = ExpanderHarness.Expand(program, machine);
+
+        Assert.Equal(
+            ExpanderHarness.File(
+                "UNITS=MM",
+                "CYCLE=PECK CLEARANCE=5 DEPTH=-20 PECK=2 CYCLE_F=100",
+                "CYCLE_CALL X=10 Y=10",
+                "FUNC:PECK_MODE=CHIP_BREAK"),
+            ExpanderHarness.WriteWithGenerated(expanded));
+    }
+
+    // D204: a required state holds at every hole, so the @SAVE and the words that establish it stand before the
+    // definition and the @RESTORE after the block that ends the cycle.
+    [Fact]
+    public void D204_CatalogCycleRequiresAndRestore_SurroundTheWholeCycle()
+    {
+        MachineConfig machine = ExpanderMachines.Peck(new ExpansionRule
+        {
+            Requires = new Dictionary<string, string> { ["SPINDLE_MODE"] = "AXIS" },
+            Restore = ["SPINDLE_MODE"],
+        });
+        string program = ExpanderHarness.File(
+            "UNITS=MM",
+            "CYCLE=PECK CLEARANCE=5 DEPTH=-20 PECK=2 CYCLE_F=100",
+            "CYCLE_CALL X=10 Y=10",
+            "CYCLE=OFF");
+
+        NcxProgram expanded = ExpanderHarness.Expand(program, machine);
+
+        Assert.Equal(
+            ExpanderHarness.File(
+                "UNITS=MM",
+                "@SAVE=SPINDLE_MODE:MAIN",
+                "SPINDLE_MODE:MAIN=AXIS",
+                "CYCLE=PECK CLEARANCE=5 DEPTH=-20 PECK=2 CYCLE_F=100",
+                "CYCLE_CALL X=10 Y=10",
+                "CYCLE=OFF",
+                "@RESTORE=SPINDLE_MODE:MAIN"),
             ExpanderHarness.WriteWithGenerated(expanded));
     }
 

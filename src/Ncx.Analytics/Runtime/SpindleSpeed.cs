@@ -14,24 +14,48 @@ internal static class SpindleSpeed
     private const double MillimetresPerMetre = 1000d;
 
     /// <summary>
-    /// The spindle of the tool: the spindle of the holder of the last TOOL, the default spindle for a holder without
-    /// one, as virtual machine 5 reads the spindle of the current tool holder; null when the machine has none.
+    /// The spindle whose revolutions a feed per revolution and CSS follow (virtual machine 8, D288): the spindle of
+    /// the holder of the last TOOL, the default spindle for a holder without one, while that spindle turns; while it
+    /// stands, the workpiece holder's spindle if that one turns in SPINDLE mode, the spindle a turning tool cuts on.
+    /// Null when the machine has none.
     /// </summary>
-    // TODO(question): virtual machine 8 multiplies a feed per revolution by "rpm" without naming the spindle. It is the
-    // spindle of the current tool holder, as virtual machine 5 checks it before a LINE, which on a turret with a driven
-    // tool spindle (millturn1.toml) is that spindle and not the work spindle a turning tool cuts on: the case of wave-2
-    // question #46, until that is answered.
+    /// <param name="vmEvent">The event with the state after its block.</param>
+    /// <param name="machine">The machine file, or the default machine of D103.</param>
     public static string? SpindleOf(VmEvent vmEvent, MachineConfig machine)
     {
+        ChannelSnapshot state = vmEvent.After;
         string? holderSpindle = vmEvent.After.LastHolder is string holder
             ? machine.FindResource(holder)?.Spindle
             : null;
-        return holderSpindle ?? machine.ResolveDefaultSpindle()?.Id;
+        holderSpindle ??= machine.ResolveDefaultSpindle()?.Id;
+        if (Turns(state, holderSpindle))
+        {
+            return holderSpindle;
+        }
+
+        // D288: on a turret with a driven tool spindle the holder's spindle stands while a turning tool cuts, and the
+        // feed per revolution is that of the spindle that turns the workpiece (the master spindle of the controls).
+        string? workpieceSpindle = state.Frame.WorkpieceHolder is string workpiece
+            ? machine.FindResource(workpiece)?.Spindle ?? workpiece
+            : null;
+        return Turns(state, workpieceSpindle)
+            && state.Spindles[workpieceSpindle!].Mode == SpindleMode.Spindle
+                ? workpieceSpindle
+                : holderSpindle;
+    }
+
+    // A spindle of the machine that turns: a direction other than OFF (virtual machine 2.4).
+    private static bool Turns(ChannelSnapshot state, string? spindle)
+    {
+        return spindle is not null
+            && state.Spindles.TryGetValue(spindle, out SpindleSnapshot? speed)
+            && speed.Direction != SpindleDirection.Off;
     }
 
     /// <summary>
-    /// The rpm of the tool's spindle during a motion: 0 while it stands, the rpm of RPM while it turns, under CSS the
-    /// rpm from VC and the X radius capped by RPM_MAX (virtual machine 8); null when a value it needs is unknown.
+    /// The rpm of the spindle a feed per revolution follows during a motion (D288): 0 while it stands, the rpm of RPM
+    /// while it turns, under CSS the rpm from VC and the X radius capped by RPM_MAX (virtual machine 8); null when a
+    /// value it needs is unknown.
     /// </summary>
     public static double? RpmOf(MotionEvent motion, MachineConfig machine)
     {
