@@ -12,6 +12,26 @@ namespace Ncx.Readers.Tests.Siemens;
 /// </summary>
 public sealed class SiemensFrameTests
 {
+    // D340: the settable frame and the programmable frame are separate components of the total frame, so a datum of
+    // group 8 and G500 leave TRANS standing; ORIGIN empties the NCX chain, and the reader writes the entries of the
+    // chain again after it.
+    [Fact]
+    public void Datum_AfterAProgrammableFrame_WritesTheFrameAgainAfterTheOrigin()
+    {
+        Assert.Equal(Lines("ORIGIN=1", "SHIFT X=10", "ORIGIN=2", "SHIFT X=10", "ORIGIN=0", "SHIFT X=10"),
+            CheckedBody("G54\nTRANS X10\nG55\nG500"));
+    }
+
+    // D340 (3) settles the programmable frame of group 3 alone, and the swivel of CYCLE800 belongs to none of its
+    // instructions: whether a datum leaves that swivel standing is the open D333, so the ORIGIN writes the shift again
+    // and no second TILT, which would move the rotary axes a second time.
+    [Fact]
+    public void Datum_AfterACycle800Swivel_WritesTheShiftAgainAndNoSecondTilt()
+    {
+        Assert.Equal(Lines("TILT A=0 B=45 C=0 MOVE=TURN", "SHIFT X=5", "ORIGIN=1", "SHIFT X=5", "LINE X=10 F=100"),
+            CheckedBody("CYCLE800(0,\"TABLE\",0,27,0,0,0,0,45,0,0,0,0,-1,100,1)\nATRANS X5\nG54\nG1 X10 F100"));
+    }
+
     // G54 to G57 are the datums 1 to 4, G505 to G599 5 and up, G500 cancels them (controller-mapping 1, ORIGIN).
     [Fact]
     public void G54G505AndG500_AreOrigins()
@@ -86,24 +106,41 @@ public sealed class SiemensFrameTests
                 + "CYCLE800(1,\"TABLE\",0,57,0,0,0,0,20,0,0,0,0,-1,100,1)\nCYCLE800()"));
     }
 
-    // Rule 4: _MODE 39 with one turning angle is TILT whatever the order of the axes; _DIR 0 only computes the frame,
-    // MOVE=STAY; _FR=5 retracts by _FR_I (controller-mapping 1, TILT; D83).
+    // D335: _A is the first rotation of the order the mode gives, not the angle about X; _MODE 39 is the order Z X Y,
+    // so its _A turns about Z and is the C of TILT. _DIR 0 only computes the frame, MOVE=STAY; _FR=5 retracts by _FR_I
+    // (controller-mapping 1, TILT; D83).
     [Fact]
-    public void CYCLE800Mode39_WithOneTurningAngle_BecomesTiltWithRetract()
+    public void CYCLE800AxisWiseMode_WithOneTurningAngle_BecomesTheTiltAngleOfThatAxis()
     {
-        Assert.Equal(Lines("RETRACT=50", "TILT A=30 B=0 C=0 MOVE=STAY"),
+        Assert.Equal(Lines("RETRACT=50", "TILT A=0 B=0 C=30 MOVE=STAY"),
             CheckedBody("CYCLE800(5,\"TABLE\",0,39,0,0,0,30,0,0,0,0,0,0,50,1)"));
     }
 
-    // _MODE 39 with two turning angles, the form of the Hermle program of the corpus, stays RAW while the order of the
-    // TILT angles against the axis-wise orders of CYCLE800 is an open question (SiemensTilt, TODO(question)).
+    // D335: _MODE 39 is the axis-wise order Z X Y, the form of the Hermle program of the corpus; the reader converts
+    // it into the X, Y, Z order of TILT through the rotation matrix, Rz(180) Rx(0) Ry(-90) = Rz(180) Ry(-90).
     [Fact]
-    public void CYCLE800Mode39_WithTwoTurningAngles_StaysRaw()
+    public void CYCLE800AxisWiseMode_WithTwoTurningAngles_BecomesTiltThroughTheRotationMatrix()
     {
-        const string Hermle = "CYCLE800(0,\"HERMLE\",0,39,0,0,0,180,0,-90,0,0,0,-1,)";
-        NcxProgram program = FramedProgram(Hermle);
+        Assert.Equal(Lines("TILT A=0 B=-90 C=180 MOVE=TURN"),
+            CheckedBody("CYCLE800(0,\"HERMLE\",0,39,0,0,0,180,0,-90,0,0,0,-1,)"));
+    }
 
-        Assert.Equal(Lines(Raw(Hermle)), BodyOf(NcxWriter.Write(program)));
+    // D335: _MODE 27 is the order Z Y X, which is exactly TILT with A = _C, B = _B and C = _A; the projection-angle
+    // mode (bits 7 and 6 = 10) has no construction in the manuals and stays RAW.
+    [Fact]
+    public void CYCLE800Mode27_IsTiltWithTheAnglesReversed()
+    {
+        Assert.Equal(Lines("TILT A=-10.196 B=0 C=288.079 MOVE=TURN"),
+            CheckedBody("CYCLE800(0,\"TABLE\",0,27,0,0,0,288.079,0,-10.196,0,0,0,-1,0,1)"));
+    }
+
+    [Fact]
+    public void CYCLE800ProjectionAngleMode_StaysRaw()
+    {
+        const string Projection = "CYCLE800(0,\"TABLE\",0,155,0,0,0,30,20,10,0,0,0,-1,)";
+        NcxProgram program = FramedProgram(Projection);
+
+        Assert.Equal(Lines(Raw(Projection)), BodyOf(NcxWriter.Write(program)));
         Assert.Equal([DiagnosticCodes.KeptAsRaw], Codes(program));
     }
 

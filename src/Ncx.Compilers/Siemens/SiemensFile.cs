@@ -254,20 +254,77 @@ internal sealed partial class SiemensFile
     }
 
     /// <summary>
-    /// True when a JUMP=END, or a RETURN outside a subprogram, stands in the program, so that its end carries the label
-    /// (controller-mapping 1, JUMP=END; language 4.9, RETURN).
+    /// True when a JUMP=END, or a RETURN outside a subprogram, stands in the program or in a subprogram the program
+    /// calls, so that its end carries the label: a JUMP=END in a subprogram is written RET("label",,$P_STACK), which
+    /// needs the label in the program it returns to (controller-mapping 1, JUMP=END; language 4.9, RETURN; D344).
     /// </summary>
     public bool JumpsToEnd(Section program)
     {
-        foreach (BlockStep step in _steps)
+        foreach (Section section in Reaches(program))
         {
-            if (step.Section == program && (step.Block.Has("JUMP", null, "END") || step.Block.Has("RETURN")))
+            foreach (BlockStep step in _steps)
             {
-                return true;
+                if (step.Section == section
+                    && (step.Block.Has("JUMP", null, "END") || step.Block.Has("RETURN")))
+                {
+                    return true;
+                }
             }
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// The label that a JUMP=END of a subprogram returns to: the end label of the programs that call it, directly or
+    /// through other subprograms, where they all give the same one; null where no program of the file reaches the
+    /// subprogram or two of them name different labels (D344).
+    /// </summary>
+    /// <param name="sub">The subprogram the JUMP=END stands in.</param>
+    public string? EndLabelReachedFrom(Section sub)
+    {
+        string? label = null;
+        foreach (BlockStep step in _steps)
+        {
+            if (step.Section is not Section program || program.Kind == SectionKind.Sub
+                || !Reaches(program).Contains(sub))
+            {
+                continue;
+            }
+
+            string name = EndLabelOf(program);
+            if (label is not null && label != name)
+            {
+                return null;
+            }
+
+            label = name;
+        }
+
+        return label;
+    }
+
+    // The section itself and every subprogram it reaches through the calls of the file (language 4.9; D99).
+    private HashSet<Section> Reaches(Section section)
+    {
+        var reached = new HashSet<Section> { section };
+        for (bool grown = true; grown;)
+        {
+            grown = false;
+            foreach (BlockStep step in _steps)
+            {
+                if (step.Section is not Section from || !reached.Contains(from)
+                    || step.Block.Find("CALL")?.Value is not Value call
+                    || SubNamed(call) is not Section sub)
+                {
+                    continue;
+                }
+
+                grown |= reached.Add(sub);
+            }
+        }
+
+        return reached;
     }
 
     /// <summary>

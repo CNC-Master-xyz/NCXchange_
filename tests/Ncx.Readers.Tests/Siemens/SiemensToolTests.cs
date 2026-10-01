@@ -83,6 +83,16 @@ public sealed class SiemensToolTests
             CheckedBody("G96 S200 LIMS=3000 M3\nG97 S1000\nG26 S4000"));
     }
 
+    // D342: G961 switches the surface speed on with the feed type G94 and G97 off with the feed type G95, so the
+    // reader writes FEED_MODE=PER_MIN on the one and FEED_MODE=PER_REV on the other; G971 switches off with G94.
+    [Fact]
+    public void SurfaceSpeedOff_G97AndG971_LeaveTheFeedTypeOfTheirCode()
+    {
+        Assert.Equal(Lines("SPINDLE=CW CSS=ON VC=200", "FEED_MODE=PER_REV RPM=1000 CSS=OFF",
+                "FEED_MODE=PER_MIN CSS=ON VC=200", "RPM=1000 CSS=OFF"),
+            CheckedBody("G961 S200 M3\nG97 S1000\nG961 S200\nG971 S1000"));
+    }
+
     // SPOS= and M19 orient a spindle, M2=70 switches spindle 2 to axis mode (controller-mapping 4, ORIENT and
     // SPINDLE_MODE; D154, D155).
     [Fact]

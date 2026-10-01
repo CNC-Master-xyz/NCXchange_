@@ -13,6 +13,10 @@ namespace Ncx.Readers.Siemens;
 /// </summary>
 internal static class SiemensMotion
 {
+    // The code of group 1 that is active before the source writes one: G1, the Siemens standard setting of the group,
+    // which a builder may change with MD20150 $MC_GCODE_RESET_VALUES (controllers siemens.md 2; D340).
+    private const string DefaultMotionCode = "G1";
+
     // The address words of a motion block that NCX has no word for, kept as RAW words (controllers siemens.md 3, 6;
     // controller-mapping 2 and 9): the feed per tooth, the velocity limits, the override, the accelerations, the
     // smoothing distances, the tolerances of an axis, the contour allowance, the transition circle, the cutting speed
@@ -198,7 +202,7 @@ internal static class SiemensMotion
         bool polar = block.Find("AP") is not null || block.Find("RP") is not null;
         bool arcWords = block.Find(plane.FirstCenter) is not null || block.Find(plane.SecondCenter) is not null
             || block.Find("CR") is not null || block.Find("AR") is not null;
-        string code = facts.MotionCode ?? "G0";
+        string code = facts.MotionCode ?? DefaultMotionCode;
         bool arc = code is "G2" or "G3" or "CIP" or "CT";
 
         // G1 ANG=30 without an end coordinate is the first line of a contour of two blocks (controllers siemens.md 3).
@@ -237,8 +241,8 @@ internal static class SiemensMotion
             return;
         }
 
-        // TODO(question): wave-2 question #56, the code of group 1 that is active before the source writes one; a block
-        // with axis words before any G0 to G3 moves at RAPID.
+        // D340 (2): G1 is the Siemens standard setting of group 1, so a block with axis words before any G0 to G3
+        // moves at LINE; a builder may set another reset value with MD20150 (decisions.md; controllers siemens.md 2).
         SiemensDraftBlock main = block.Draft.Main;
         if (!arc)
         {

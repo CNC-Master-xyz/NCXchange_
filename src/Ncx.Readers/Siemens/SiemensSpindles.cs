@@ -183,9 +183,12 @@ internal static class SiemensSpindles
     }
 
     // G96 switches the constant surface speed on and G95 with it, G961 with the feed per minute, G962 leaves the feed
-    // mode; G97, G971 and G972 switch it off; G973 off without the limit has no NCX word (controller-mapping 4, CSS).
-    // TODO(question): the documents give the feed mode that G96 and G961 set, not the one G97, G971 and G972 leave;
-    // G971 is read as per minute, the counterpart of G961, and G97 and G972 leave FEED_MODE as it is.
+    // mode; G97 switches it off with the feed type G95, G971 with G94, G972 leaves the feed type (controller-mapping 4,
+    // CSS; D342). G973, off without the speed limit, has no NCX word and stays a RAW word written back in place.
+    // TODO(question): D342 settles that G973 leaves the feed per revolution and asks the reader to write FEED_MODE for
+    // it, but G973 itself has no NCX word: a FEED_MODE in its block makes the block unwritable (the RAW word takes it),
+    // and one after it compiles under the CSS that NCX still holds to G96, which switches the surface speed back on.
+    // Nothing is written for it until that is settled, so the block round-trips as the source wrote it.
     private static void ReadSurfaceSpeed(SiemensBlock block)
     {
         foreach (string code in new[] { "G96", "G961", "G962", "G97", "G971", "G972", "G973" })
@@ -212,9 +215,13 @@ internal static class SiemensSpindles
             block.Facts.FeedType = code;
             block.Facts.Unknown.Remove(SiemensFacts.Feed);
             AddSpindleWord(block, "CSS", role, new IdentValue(on ? "ON" : "OFF"));
-            if (code is "G96" or "G961" or "G971")
+            if (code is "G96" or "G97")
             {
-                SiemensGroups.AddModal(block, "FEED_MODE", code == "G96" ? "PER_REV" : "PER_MIN");
+                SiemensGroups.AddModal(block, "FEED_MODE", "PER_REV");
+            }
+            else if (code is "G961" or "G971")
+            {
+                SiemensGroups.AddModal(block, "FEED_MODE", "PER_MIN");
             }
         }
     }

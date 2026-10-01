@@ -107,6 +107,12 @@ public static partial class DiagnosticCodes
     public const string SiemensCycleValueMissing = "CMP572";
 
     /// <summary>
+    /// CMP573: CLEARANCE lies on the other side of SURFACE than SAFE, and SDIS is a distance without a sign that moves
+    /// the reference plane towards the retract plane (controller-mapping 5; D334).
+    /// </summary>
+    public const string SiemensCycleClearanceOnTheWrongSide = "CMP573";
+
+    /// <summary>
     /// CMP590: an expression holds an operator or a function the SINUMERIK language has no form for (controllers
     /// siemens.md 8; language 4.12).
     /// </summary>

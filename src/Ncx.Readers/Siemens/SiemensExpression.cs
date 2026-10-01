@@ -10,12 +10,17 @@ namespace Ncx.Readers.Siemens;
 /// 6; language 4.9, 4.12): R1 and R[1] to $R1, a DEF or GUD name to $NAME, a system variable through the
 /// [system_variables] of the machine (D51), == and &lt;&gt; to == and !=, AND OR NOT MOD as they are, SIN COS TAN
 /// ASIN ACOS ATAN2 SQRT ABS ROUND LN EXP to the NCX functions, TRUNC to INT, MINVAL and MAXVAL to MIN and MAX, POT to
-/// the square. What NCX cannot express, an indirect R[R1], a string, XOR, the bit operators, the concatenation
-/// &lt;&lt;,
+/// the square, DIV to INT of the division (D346). What NCX cannot express, an indirect R[R1], a string, XOR, the bit
+/// operators, the concatenation &lt;&lt;,
 /// an unmapped system variable, is a problem that keeps the block as RAW.
 /// </summary>
 internal static partial class SiemensExpression
 {
+    // The operators of the translated text that bind less tightly than * / MOD, before which a product chain ends
+    // (language 4.12).
+    private static readonly string[] s_belowProduct =
+        ["+", "-", "==", "!=", "<", "<=", ">", ">=", "AND", "OR", "NOT"];
+
     // The functions of controller-mapping 6 and their NCX names (language 4.12).
     private static readonly Dictionary<string, string> s_functions = new(StringComparer.Ordinal)
     {
@@ -92,6 +97,7 @@ internal static partial class SiemensExpression
     private static string Translate(SiemensBlock block, string text, ref string? problem)
     {
         var output = new StringBuilder();
+        int divisions = 0;
         int position = 0;
         while (problem is null && position < text.Length)
         {
@@ -128,25 +134,96 @@ internal static partial class SiemensExpression
             }
             else if (character == ',')
             {
+                CloseDivisions(output, ref divisions);
                 output.Append(", ");
                 position++;
             }
             else if (SiemensScanner.StartsIdentifier(character))
             {
-                position = Identifier(block, text, position, output, ref problem);
+                position = Identifier(block, text, position, output, ref divisions, ref problem);
             }
             else
             {
-                position = Operator(text, position, output, ref problem);
+                position = Operator(text, position, output, ref divisions, ref problem);
             }
         }
 
+        CloseDivisions(output, ref divisions);
         return output.ToString();
+    }
+
+    // Closes the INT( of every integer division of the product chain that ends here: DIV takes the operands it stands
+    // between, so the next operator of the chain works on its result (D346).
+    private static void CloseDivisions(StringBuilder output, ref int divisions)
+    {
+        output.Append(')', divisions);
+        divisions = 0;
+    }
+
+    // a DIV b is the quotient truncated towards zero, which language 4.12 writes as INT(a / b) (D346): the INT( opens
+    // in front of the product chain the left operand belongs to, and CloseDivisions closes it where that chain ends.
+    private static void OpenDivision(StringBuilder output, ref int divisions)
+    {
+        CloseDivisions(output, ref divisions);
+        output.Insert(ProductStart(output.ToString()), "INT(");
+        output.Append(" / ");
+        divisions = 1;
+    }
+
+    // Where the product chain at the end of the translated text begins: after the last operator of lower precedence
+    // than * / MOD that stands outside parentheses, after the last argument comma, or at the start (language 4.12).
+    private static int ProductStart(string text)
+    {
+        int depth = 0;
+        for (int index = text.Length - 1; index >= 0; index--)
+        {
+            char character = text[index];
+            if (character == ')')
+            {
+                depth++;
+            }
+            else if (character == '(')
+            {
+                depth--;
+            }
+            else if (depth != 0)
+            {
+                continue;
+            }
+            else if (character == ',')
+            {
+                int start = index + 1;
+                while (start < text.Length && text[start] == ' ')
+                {
+                    start++;
+                }
+
+                return start;
+            }
+            else if (character == ' ')
+            {
+                int token = index;
+                while (token > 0 && text[token - 1] is not (' ' or ','))
+                {
+                    token--;
+                }
+
+                if (Array.IndexOf(s_belowProduct, text.Substring(token, index - token)) >= 0)
+                {
+                    return index + 1;
+                }
+
+                index = token;
+            }
+        }
+
+        return 0;
     }
 
     // The comparisons and the arithmetic of controllers siemens.md 8; <> is != (language 4.12); << concatenates
     // strings, which NCX has no operator for (controller-mapping 6).
-    private static int Operator(string text, int position, StringBuilder output, ref string? problem)
+    private static int Operator(string text, int position, StringBuilder output, ref int divisions,
+        ref string? problem)
     {
         string two = position + 1 < text.Length ? text.Substring(position, 2) : "";
         string? ncx = two switch
@@ -159,6 +236,7 @@ internal static partial class SiemensExpression
         };
         if (ncx is not null)
         {
+            CloseDivisions(output, ref divisions);
             output.Append(' ').Append(ncx).Append(' ');
             return position + 2;
         }
@@ -172,13 +250,14 @@ internal static partial class SiemensExpression
             return position + 1;
         }
 
+        CloseDivisions(output, ref divisions);
         output.Append(' ').Append(character).Append(' ');
         return position + 1;
     }
 
     // A name: an operator word, a function with its arguments, an R parameter, a system variable, or a variable.
     private static int Identifier(SiemensBlock block, string text, int position, StringBuilder output,
-        ref string? problem)
+        ref int divisions, ref string? problem)
     {
         int end = SiemensScanner.ReadIdentifier(text, position);
         string name = text.Substring(position, end - position).ToUpperInvariant();
@@ -186,12 +265,17 @@ internal static partial class SiemensExpression
         switch (name)
         {
             case "AND" or "OR" or "NOT" or "MOD":
+                CloseDivisions(output, ref divisions);
                 output.Append(' ').Append(name).Append(' ');
                 return end;
 
-            // TODO(question): DIV divides whole numbers on the control (controllers siemens.md 8), and language 4.12
-            // has no operator for it; a block with DIV stays RAW.
-            case "DIV" or "XOR" or "B_AND" or "B_OR" or "B_NOT" or "B_XOR" or "TRUE" or "FALSE":
+            // D346: DIV is the integer division, 3 DIV 4 = 0, and NCX writes it INT(a / b), since INT of language
+            // 4.12 truncates towards zero (decisions.md; controller-mapping 6, functions).
+            case "DIV":
+                OpenDivision(output, ref divisions);
+                return end;
+
+            case "XOR" or "B_AND" or "B_OR" or "B_NOT" or "B_XOR" or "TRUE" or "FALSE":
                 problem = $"{name} has no NCX form (language 4.12; controller-mapping 6)";
                 return end;
         }

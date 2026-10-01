@@ -255,7 +255,7 @@ POLAR_ON = "G12.1"                 # Siemens: "TRANSMIT", DMG: "TRANSMIT_S4"
 POLAR_OFF = "G13.1"
 TCPM_ON = "G43.4 H{offset}"        # Nakamura: "G435", Siemens: "TRAORI", Heidenhain: "FUNCTION TCPM F TCP AXIS POS"
 TCPM_OFF = "G49"                   # Nakamura: "G436", Siemens: "TRAFOOF", Heidenhain: "FUNCTION RESET TCPM"
-TILT_ON = "G68.2 X{x} Y{y} Z{z} I{a} J{b} K{c}"   # Siemens: "CYCLE800(1,\"TC1\",{move},57,0,0,0,{a},{b},{c},0,0,0,{dir},100,1)" ({move} in the place of _ST, {dir} in the place of _DIR: one placeholder per native parameter, D262), Heidenhain: "PLANE SPATIAL SPA{a} SPB{b} SPC{c} {move}"
+TILT_ON = "G68.2 X{x} Y{y} Z{z} I{a} J{b} K{c}"   # Siemens: "CYCLE800(1,\"TC1\",{move},27,0,0,0,{c},{b},{a},0,0,0,{dir},100,1)" (mode 27 is the axis-wise order Z Y X, which is TILT with the angles reversed, D335; {move} in the place of _ST, {dir} in the place of _DIR: one placeholder per native parameter, D262), Heidenhain: "PLANE SPATIAL SPA{a} SPB{b} SPC{c} {move}"
 TILT_OFF = "G69"                   # Siemens: "CYCLE800()", Heidenhain: "PLANE RESET STAY"
 TILT_AXIS_ON = ""                  # empty = the target cannot write TILT_AXIS without the kinematics module (ERROR at compile time, D82)
                                    # Heidenhain: "PLANE AXIAL A{a} B{b} C{c} {move}"; Siemens: CYCLE800 with the rotary-axes mode (bits 7 and 6 set) and {dir}

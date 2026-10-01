@@ -21,6 +21,24 @@ public sealed class SiemensCycleTests
                 "CYCLE_CALL X=30", "CYCLE=OFF"));
     }
 
+    // D334: SDIS is a distance without a sign that moves the reference plane forward, towards the retract plane, so
+    // the compiler writes |CLEARANCE - SURFACE| and a CLEARANCE on the other side of SURFACE than SAFE is an ERROR.
+    [Fact]
+    public void ClearanceBelowTheSurface_WithTheRetractPlaneBelowIt_IsTheUnsignedDistance()
+    {
+        Assert.Equal(Lines("MCALL CYCLE81(-10,0,5,20)", "G0 X10", "MCALL"),
+            MillBody("CYCLE=DRILL SURFACE=0 CLEARANCE=-5 DEPTH=20 SAFE=-10 CYCLE_RETRACT=SAFE", "CYCLE_CALL X=10",
+                "CYCLE=OFF"));
+    }
+
+    [Fact]
+    public void ClearanceOnTheOtherSideOfTheSurfaceThanTheRetractPlane_IsAnError()
+    {
+        Assert.Equal(["CMP573"], CompilerCodes(Run(Program(MillHeader,
+            "CYCLE=DRILL SURFACE=0 CLEARANCE=-5 DEPTH=-20 SAFE=10 CYCLE_RETRACT=SAFE", "CYCLE_CALL X=10",
+            "CYCLE=OFF"), Mill())));
+    }
+
     // Controller-mapping 5, CYCLE_F: the cycle's own feed never touches the motion feed of the program, so the program
     // feed stands again at the next feed motion (D29).
     [Fact]
@@ -43,11 +61,12 @@ public sealed class SiemensCycleTests
     }
 
     // Siemens 7: every block with a position calls the modal cycle, one in the text of a RAW line too, so MCALL alone
-    // ends it before the RAW line; the motion after it writes its modal codes again (language 4.1, RAW).
+    // ends it before the RAW line; the motion after it writes its modal codes again (language 4.1, RAW). The modal
+    // call is unknown after the RAW line, so a second MCALL alone stands before that motion (D343).
     [Fact]
-    public void ModalCall_ArmedBeforeARawLine_IsEndedBeforeIt()
+    public void ModalCall_ArmedBeforeARawLine_IsEndedBeforeItAndUnknownAfterIt()
     {
-        Assert.Equal(Lines("MCALL CYCLE81(2,0,2,-10)", "G0 X20 Y10", "MCALL", "STOPRE", "G0 G90 Z50"),
+        Assert.Equal(Lines("MCALL CYCLE81(2,0,2,-10)", "G0 X20 Y10", "MCALL", "STOPRE", "MCALL", "G0 G90 Z50"),
             MillBody("CYCLE=DRILL SURFACE=0 CLEARANCE=2 DEPTH=-10", "CYCLE_CALL X=20 Y=10", "RAW:SIEMENS=\"STOPRE\"",
                 "RAPID Z=50"));
     }

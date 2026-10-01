@@ -171,8 +171,9 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
     // the datum, the diameter programming and the master spindle, which the next block that needs them writes again.
     // The modal call of the compiler ends before it, since every block with a position, one in the RAW text too, would
     // call it, and a jump in the RAW text would carry it to its label; a modal call that only a RAW line before this
-    // one armed is left alone, so that no MCALL stands between two RAW lines (controllers siemens.md 7, 8; D259). The
-    // programmable
+    // one armed is left alone, so that no MCALL stands between two RAW lines (controllers siemens.md 7, 8; D259).
+    // After it the modal call is unknown, because a subprogram the RAW line calls can leave one armed (controllers
+    // siemens.md 7, 11 rule 8; D343). The programmable
     // frame and the swivel are unknown after a RAW text that names their instructions (controllers siemens.md 4).
     private static bool WriteRaw(SiemensBlock write)
     {
@@ -183,7 +184,7 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
 
         write.Written("RAW");
         write.Written("SKIP");
-        SiemensCycles.EndModalCallBeforeRaw(write);
+        SiemensCycles.EndModalCallBeforeRaw(write, raw);
         if (raw.StartsWith('/'))
         {
             write.Writer(raw);

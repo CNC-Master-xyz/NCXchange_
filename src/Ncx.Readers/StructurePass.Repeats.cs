@@ -23,10 +23,8 @@ internal sealed partial class StructurePass
     // section, without a begin, an end or a return, or a jump, a call, a contour or a repeat of their own, since a SUB
     // section is entered and left as a whole. Another repeat of the section that names the same range calls the same
     // section; a repeat whose range cannot be copied calls none, and the reader keeps it as its source writes it.
-    // TODO(question): controller-mapping 6 lowers REPEAT start end P=k to a SUB, but does not say whether the range
-    // leaves its place for the SUB, called there as well, or stays where it stands with the SUB a copy of it, nor how
-    // the SUB is named; the range stays and is copied, so that every source block still reads where the control runs
-    // it, into a SUB named REPEAT_ and its labels.
+    // D327: the range stays where it stands and the SUB is a copy of it, named REPEAT_ and its labels, because the
+    // control runs the marked blocks there first and repeats them afterwards (decisions.md; controller-mapping 6).
     private void FindRepeats(List<SourceSection> sections)
     {
         foreach (SourceSection section in sections)

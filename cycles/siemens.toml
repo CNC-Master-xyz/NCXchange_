@@ -6,7 +6,9 @@
 # TODO(question): machine-config 6 has no key for the kind of a parameter ("Params with their kinds", phase 2 P2-03); every parameter of this file is a number or an expression (D115).
 #
 # The parameters (siemens 7, controller-mapping 5): RTP retract plane (absolute) is SAFE; RFP reference plane is SURFACE; SDIS safety distance, unsigned and
-# added to RFP, gives CLEARANCE = RFP + SDIS, so CLEARANCE is absolute_from_surface; DP depth absolute is DEPTH; DTB is the dwell (CYCLE_DWELL).
+# moving RFP forward towards RTP, gives CLEARANCE = RFP + SDIS where RTP lies above RFP and RFP - SDIS where it lies below, so CLEARANCE is
+# absolute_from_surface and the Siemens reader and compiler carry the sign of RTP - RFP with it (D334); DP depth absolute is DEPTH; DTB is the dwell
+# (CYCLE_DWELL).
 #
 # Rules of the Siemens reader and compiler that no key of the catalog carries:
 # - A direct CYCLE8x(...) block calls once at the current position; MCALL CYCLE8x(...) makes the cycle modal, every following block with a position calls it,
@@ -14,7 +16,8 @@
 # - The cycle always returns to RTP: CYCLE_RETRACT=SAFE with SAFE = RTP, and the compiler writes RTP = CLEARANCE for CYCLE_RETRACT=CLEARANCE (controller-mapping 5).
 #   CYCLE_RETRACT has no position of its own: the NCX words of a drilling entry are its params plus this rule, and the words that CYCLE81, G81 and CYCL DEF 200
 #   share (phase 2 P2-03) are compared with the rules of each family included (see cycles/fanuc.toml).
-# - DEPTH is DP, or RFP + DPR when the source gives the incremental DPR (controller-mapping 5); DPR has no NCX word of its own.
+# - DEPTH is DP, or RFP less the unsigned DPR when the source gives it, counted away from the retract plane (controller-mapping 5; D334); DPR has no NCX word
+#   of its own.
 # - The cycle feed is the modal F, and CYCLE85 has its own FFR (siemens 7): the reader turns the F before an MCALL into CYCLE_F and restores the feed afterwards
 #   (controller-mapping 5, siemens 11.5). CYCLE_F = "F" in params of CYCLE81..CYCLE83, CYCLE86, CYCLE830 and CYCLE840 (wave-1 question #24); F is no position
 #   of the signature (machine-config 6).

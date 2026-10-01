@@ -150,6 +150,19 @@ public sealed class SiemensFlowTests
             "RAPID Z=20", "SUB=END"), text, StringComparison.Ordinal);
     }
 
+    // D344: the parameterized return RET("<label>",,$P_STACK) of a subprogram continues at that label in the program
+    // of level 0; where the label is the one before the program end, that is JUMP=END, the one form of the
+    // parameterized return NCX reads. Every other RET with parameters stays RAW (controller-mapping 6, RET).
+    [Fact]
+    public void ParameterizedReturn_ToTheLabelBeforeTheProgramEnd_IsJumpToEnd()
+    {
+        string text = Text("%_N_MAIN_MPF\nCALL \"CHECK\"\nG0 X10\nPROGRAM_END:\nM30\n%_N_CHECK_SPF\n"
+            + "PROC CHECK\nIF R1==1\nRET(\"PROGRAM_END\",,$P_STACK)\nENDIF\nM17\n");
+
+        Assert.Contains(Lines("SUB=BEGIN NAME=CHECK", "JUMP=IF1_END IF={NOT ($R1 == 1)}", "JUMP=END",
+            "LABEL=IF1_END", "SUB=END"), text, StringComparison.Ordinal);
+    }
+
     // EXTCALL calls a program outside the file by its name, CALL="NAME" (controller-mapping 6, CALL).
     [Fact]
     public void Extcall_IsACallOfAProgramOutsideTheFile()
@@ -178,6 +191,17 @@ public sealed class SiemensFlowTests
 
         Assert.Equal(Lines(Raw("DEF REAL FIELD[4]")), BodyOf(NcxWriter.Write(program)));
         Assert.Equal([DiagnosticCodes.KeptAsRaw], Codes(program));
+    }
+
+    // D346: DIV is the integer division of the control, 3 DIV 4 = 0, which NCX writes INT(a / b), since its INT
+    // truncates towards zero; DIV takes the product chain it stands between, and the operator after it works on the
+    // quotient.
+    [Fact]
+    public void Div_InAnExpression_IsTheIntegerDivisionOfItsOperands()
+    {
+        Assert.Equal(Lines("VAR:R1={INT(3 / 4)}", "VAR:R2={1 + INT($R3 / 2)}", "VAR:R4={INT($R1 * 2 / 3) + 1}",
+                "VAR:R5={MAX(1, INT($R1 / 2))}"),
+            CheckedBody("R1=3 DIV 4\nR2=1+R3 DIV 2\nR4=R1*2 DIV 3+1\nR5=MAXVAL(1,R1 DIV 2)"));
     }
 
     // An end without its structure is an ERROR and stays RAW, a structure without its end a WARNING (siemens 8).

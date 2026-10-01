@@ -128,7 +128,8 @@ internal static class SiemensArcs
     // I J K incremental from the start point, I=AC() absolute, I=IC() incremental; a center word left out is 0 from the
     // start point. The reader writes the absolute center where it knows the start point, and the incremental one where
     // it does not or where X is a diameter, whose I is a radius (controller-mapping 2, CENTER; D60).
-    // TODO(question): wave-2 question #55, a center word left out; it is taken as 0, as the Fanuc reader takes it.
+    // D340 (1): a center parameter whose value is 0 may be left out, while the belonging second one must be given in
+    // every case, so a word left out is 0 and an arc with neither word of its plane is RAW (decisions.md).
     private static SiemensPoint? AddCenter(SiemensBlock block, SiemensDraftBlock main, SiemensPlane plane,
         SiemensPoint? from, SourceWord? firstWord, SourceWord? secondWord)
     {

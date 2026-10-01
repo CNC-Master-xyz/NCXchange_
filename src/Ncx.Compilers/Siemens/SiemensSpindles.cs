@@ -323,18 +323,24 @@ internal static partial class SiemensSpindles
 
     /// <summary>
     /// The words of a template in the main line: a G code with the codes, an M function with the functions, the other
-    /// words with the spindle words; G96 switches G95 on, G961 the feed per minute, G97 the surface speed off
-    /// (controllers siemens.md 2, 5).
+    /// words with the spindle words; G96 switches G95 on, G961 the feed per minute, G97 the surface speed off with the
+    /// feed per revolution and G971 with the feed per minute (controllers siemens.md 2, 5; D342).
     /// </summary>
     // D300: on this control the feed type and the constant surface speed are one G code of group 15, which the
     // program's FEED_MODE decides and no template can know, so the compiler writes a spindle template's group-15 code
     // as the code for the feed type the block leaves, G96 per revolution and G961 per minute, and a FEED_MODE change
-    // under the surface speed as that code alone (decisions.md D300; machine-config 5, VC).
+    // under the surface speed as that code alone (decisions.md D300; machine-config 5, VC). The G97 and G971 of a
+    // CSS_OFF template follow the same rule, which D342 settles for them.
     public static void AddToMain(SiemensBlock write, string text)
     {
         foreach (string template in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
         {
-            string word = template is "G96" or "G961" ? SiemensMotion.SurfaceSpeedCode(write) : template;
+            string word = template switch
+            {
+                "G96" or "G961" => SiemensMotion.SurfaceSpeedCode(write),
+                "G97" or "G971" => SiemensMotion.SurfaceSpeedOffCode(write),
+                _ => template,
+            };
             if (write.Main.Holds(word))
             {
                 continue;

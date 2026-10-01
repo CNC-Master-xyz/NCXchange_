@@ -281,7 +281,7 @@ POLAR_ON = "TRANSMIT_S4"
 POLAR_OFF = "TRANS_OFF"
 TCPM_ON = "TRANS_5A"
 TCPM_OFF = "TRANS_OFF"
-TILT_ON = "CYCLE800(1,\"TC1\",{move},57,0,0,0,{a},{b},{c},0,0,0,{dir},100,1)"   # {move} is _ST and {dir} is _DIR (D262)
+TILT_ON = "CYCLE800(1,\"TC1\",{move},27,0,0,0,{c},{b},{a},0,0,0,{dir},100,1)"   # axis-wise Z Y X (mode 27), the order of TILT with the angles reversed (D335); {move} is _ST and {dir} is _DIR (D262)
 TILT_OFF = "CYCLE800()"
 move = { TURN = "100000", MOVE = "100010", STAY = "100000" }   # _ST per MOVE option, the direction-optimisation digit kept, the tens digit 1 tracking the tool tip (D262)
 

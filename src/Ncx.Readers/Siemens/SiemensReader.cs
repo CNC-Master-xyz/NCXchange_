@@ -338,13 +338,17 @@ public sealed class SiemensReader : ReaderBase
             {
                 reading.MarkRead(word);
             }
+            else if (word.Address == "RET" && word.Text.Length > 0)
+            {
+                ReadParameterizedReturn(reading, word);
+            }
             else if (word.Address == "RET" && word.Text.Length == 0)
             {
                 reading.MarkRead(word);
                 if (unit?.Kind != SiemensUnitKind.Sub)
                 {
-                    // TODO(question): siemens 1 accepts M17 in a main program as its end and does not say what RET
-                    // does there; RET in a main program stays RAW.
+                    // D346: RET in the main program level is alarm 14091 index 1, so it does not end a main program
+                    // and stays RAW; M17 there does act as M2/M30 (decisions.md; controllers siemens.md 1).
                     reading.Draft.KeepAsRaw("RET returns from a subprogram, and this is a main program (controllers "
                         + "siemens.md 1)");
                 }
@@ -361,6 +365,24 @@ public sealed class SiemensReader : ReaderBase
             reading.Siemens.ForgetPositions();
             reading.Facts.Written.Clear();
         }
+    }
+
+    // RET("<label>",,$P_STACK) in a subprogram returns to that label in the program of level 0, so a return to the
+    // label that stands before the program end is JUMP=END, the one form of the parameterized return NCX reads; every
+    // other RET with parameters stays RAW, as controller-mapping 6 keeps it (D344).
+    private static void ReadParameterizedReturn(SiemensBlock reading, SourceWord word)
+    {
+        List<string> arguments = SiemensArguments.Split(word.Text);
+        string label = arguments.Count > 0 ? (SiemensArguments.StringOf(arguments[0]) ?? "").ToUpperInvariant() : "";
+        if (reading.Unit?.Kind != SiemensUnitKind.Sub || arguments.Count != 3 || arguments[1].Length != 0
+            || !string.Equals(arguments[2].Trim(), "$P_STACK", StringComparison.OrdinalIgnoreCase)
+            || !reading.Siemens.Units.ProgramEndLabels.Contains(label))
+        {
+            return;
+        }
+
+        reading.MarkRead(word);
+        reading.Draft.Main.Add("JUMP", new IdentValue("END"));
     }
 
     private static void ReadLabel(SiemensBlock reading, SourceWord word)

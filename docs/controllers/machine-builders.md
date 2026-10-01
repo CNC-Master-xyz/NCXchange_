@@ -32,7 +32,7 @@ DMG's lathes are programmed with a house structure on top of the 840D: two chann
 
 ### DMG CLX 350 and 550 with the DLL postprocessor (Siemens 840D sl)
 
-Programs written by the maintainer's own postprocessor for the CLX: a `;PROJEKT =` header, `WORKPIECE(,,,"CYLINDER",...)`, `MSG("OP1 - BOHREN")` per operation, `T="DREHBOHRER_D30"` then `TC(1)`, `G54`, `SETMS(4)`, `LIMS=`, `G94 G97 S3600 M3` or `G95 G96 S180 M3`, `DIAMON`, `M108`/`M109` for the driven tools, `M067` at the end, `M30`. Generic Siemens plus the `TC` and `SETMS` of the structure programming.
+Programs written by the maintainer's own postprocessor for the CLX: a `;PROJEKT =` header, `WORKPIECE(,,,"CYLINDER",...)`, `MSG("OP1 - BOHREN")` per operation, `T="DREHBOHRER_D30"` then `TC(1)`, `G54`, `SETMS(4)`, `LIMS=`, `G94 G97 S3600 M3` or `G95 G96 S180 M3` (two codes of group 15 in one block: alarm 12060, and the last one acts, so the post's `G94` is ignored and the block feeds per revolution; D342), `DIAMON`, `M108`/`M109` for the driven tools, `M067` at the end, `M30`. Generic Siemens plus the `TC` and `SETMS` of the structure programming.
 
 ### Monforts RNC 700 (Siemens 840D)
 

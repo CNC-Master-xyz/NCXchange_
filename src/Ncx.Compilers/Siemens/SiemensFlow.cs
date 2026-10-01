@@ -186,7 +186,7 @@ internal static class SiemensFlow
         bool toEnd = jump.Value.ToCanonical() == "END";
         if (toEnd && section is { Kind: SectionKind.Sub })
         {
-            WriteJumpToEndInSubprogram(write, section);
+            WriteJumpToEndInSubprogram(write, section, Condition(write));
             return;
         }
 
@@ -208,18 +208,25 @@ internal static class SiemensFlow
     }
 
     // JUMP=END in a subprogram "continues at the PROGRAM=END of the current program" (language 4.9), ending the
-    // program from the call (virtual machine 3.6); the target of a GOTOF is a label of the subprogram's own unit
-    // (controllers siemens.md 8), where the label before the M30 of the program does not stand.
-    // TODO(question): the documents give a SINUMERIK subprogram no form that ends the program: siemens 1 names M17 and
-    // RET as the returns and does not say what M30 does in a subprogram, and controller-mapping 6 keeps RET("label")
-    // as RAW; JUMP=END in a subprogram is an ERROR, until that is answered.
-    private static void WriteJumpToEndInSubprogram(SiemensBlock write, Section sub)
+    // program from the call (virtual machine 3.6); an M30 in a subprogram does not do that, since M17 and M30 are
+    // treated as equal in the NC language and both return to the block after the call. The parameterized return does
+    // it: RET("<end label>",,$P_STACK) continues at that label in the program $P_STACK levels up, which is level 0,
+    // the main program, from any depth (controllers siemens.md 1, 8; controller-mapping 1, JUMP=END, and 6, RET; D344).
+    // A conditional JUMP=END stands under a jump over it, as a conditional CALL does.
+    private static void WriteJumpToEndInSubprogram(SiemensBlock write, Section sub, string? condition)
     {
         write.Written("IF");
-        write.Error(DiagnosticCodes.SiemensJumpToEndInSubprogram,
-            $"JUMP=END in the subprogram {sub.Name ?? sub.Number?.ToString(CultureInfo.InvariantCulture)} ends the "
-            + "program from the call (language 4.9; virtual machine 3.6), and a SINUMERIK subprogram has no form that "
-            + "ends the program: a GOTOF goes to a label of its own unit (controllers siemens.md 8).");
+        if (write.File.EndLabelReachedFrom(sub) is not string label)
+        {
+            write.Error(DiagnosticCodes.SiemensJumpToEndInSubprogram,
+                $"JUMP=END in the subprogram {sub.Name ?? sub.Number?.ToString(CultureInfo.InvariantCulture)} ends the "
+                + "program from the call (language 4.9; virtual machine 3.6), and the file gives no one program whose "
+                + "end label the return RET(\"label\",,$P_STACK) can name (controller-mapping 1, JUMP=END; D344).");
+            return;
+        }
+
+        SiemensCycles.EndModalCall(write);
+        WriteConditional(write, condition, "RET(\"" + label + "\",,$P_STACK)");
     }
 
     // REPEAT=label TIMES=n as REPEAT LABEL P=n, the blocks from the label to this one n more times; without TIMES

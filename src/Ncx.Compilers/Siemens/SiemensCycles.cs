@@ -17,6 +17,10 @@ internal static partial class SiemensCycles
 {
     // The target key of the modal call the control has active, OFF or the call (controllers siemens.md 7).
     private const string ModalCall = "MCALL";
+
+    // The value of that key after a RAW line that names MCALL: a modal call the RAW may have armed for a pattern of
+    // the same RAW range, which no MCALL alone of the compiler may take away from it (D259, D343).
+    private const string RawArmed = "RAW";
     private const string Off = "OFF";
 
     // The words of a cycle definition (language 4.7).
@@ -119,15 +123,17 @@ internal static partial class SiemensCycles
     }
 
     /// <summary>
-    /// MCALL alone before a RAW line, but only where the compiler itself armed the modal call: a block with a position
-    /// in the RAW text would call it. Where the modal call is merely unknown, a RAW line before this one armed it on
-    /// the control, and an MCALL alone between two RAW lines would take the drilling cycle away from a pattern that
-    /// follows (controllers siemens.md 7; D259).
+    /// MCALL alone before a RAW line: a block with a position in the RAW text would call a modal call this compiler
+    /// armed, and one that is unknown after an earlier RAW may be armed on the control, which the control's next
+    /// position would call (D343). The RAW range of a pattern and its modal cycle is left alone: a RAW that names
+    /// MCALL itself needs none, and after such a line none may stand, since it would take the drilling cycle away
+    /// from a pattern of the range that follows (controllers siemens.md 7; D259).
     /// </summary>
     /// <param name="write">The block being written.</param>
-    public static void EndModalCallBeforeRaw(SiemensBlock write)
+    /// <param name="raw">The RAW text that is about to be written.</param>
+    public static void EndModalCallBeforeRaw(SiemensBlock write, string raw)
     {
-        if (write.ActiveOf(ModalCall) is not null)
+        if (write.ActiveOf(ModalCall) != RawArmed && !McallWord().IsMatch(raw))
         {
             EndModalCall(write);
         }
@@ -146,9 +152,10 @@ internal static partial class SiemensCycles
     // until that is answered.
     public static bool RawModalCallStands(SiemensBlock write)
     {
-        if (write.ActiveOf(ModalCall) is not null)
+        if (write.ActiveOf(ModalCall) != RawArmed)
         {
-            // Off, or a call this compiler armed itself and ends or uses in this block.
+            // Off, a call this compiler armed itself and ends or uses in this block, or merely unknown after a RAW
+            // that names no MCALL, which the next block that needs it ends with MCALL alone (D343).
             return false;
         }
 
@@ -185,20 +192,24 @@ internal static partial class SiemensCycles
     }
 
     /// <summary>
-    /// After a RAW line: a RAW that names MCALL may arm a modal call or end one, so the modal call is unknown after it;
-    /// any other RAW leaves it as MCALL alone before the RAW left it (controllers siemens.md 7, 8: MCALL makes a call
-    /// modal and MCALL alone ends it).
+    /// After a RAW line the modal call is unknown, as the G groups are: the modal call is one channel state that holds
+    /// across program levels, so a subprogram a RAW line calls can leave one armed after its return, and a bare MCALL
+    /// in a level that a multi-level return skips is lost (controllers siemens.md 7, 11 rule 8; D343). A RAW that
+    /// names MCALL may have armed the modal call of a pattern of its own RAW range, which the compiler neither ends
+    /// nor fires while that range runs, up to and including the RAW line that ends the range
+    /// (controllers siemens.md 7; D259).
     /// </summary>
-    // TODO(question): the documents do not say whether a RAW line without MCALL, through a subprogram it calls (a
-    // builder cycle), can leave a modal call armed after its return; the modal call stays off after such a RAW, since
-    // MCALL alone after every RAW would stand before the next motion after every MSG and STOPRE of a program
-    // (controllers sample-corpus.md: MSG before every operation), until that is answered.
+    /// <param name="write">The block being written.</param>
+    /// <param name="raw">The RAW text that was written.</param>
     public static void AfterRaw(SiemensBlock write, string raw)
     {
-        if (McallWord().IsMatch(raw))
+        if (McallWord().IsMatch(raw) || write.ActiveOf(ModalCall) == RawArmed)
         {
-            write.MakeUnknown(ModalCall);
+            write.Target.Set(ModalCall, RawArmed);
+            return;
         }
+
+        write.MakeUnknown(ModalCall);
     }
 
     // A definition writes nothing of its own: the call writes it, where the control needs it (language 4.7).
@@ -373,8 +384,9 @@ internal static partial class SiemensCycles
         return false;
     }
 
-    // A word of the definition as the native value: a plane absolute along the drilling axis, CLEARANCE as SDIS from
-    // the reference plane (machine-config 6, absolute_from_surface; controller-mapping 5).
+    // A word of the definition as the native value: a plane absolute along the drilling axis, CLEARANCE as SDIS, the
+    // distance from the reference plane without a sign, whose direction the cycle works out itself (machine-config 6,
+    // absolute_from_surface; controller-mapping 5; D334).
     private static string? ValueOf(SiemensBlock write, CycleSnapshot cycle, CycleEntry entry, Word word,
         Value? surface)
     {
@@ -382,12 +394,18 @@ internal static partial class SiemensCycles
         {
             if (Number(word.Value) is decimal ncx && Number(surface) is decimal reference)
             {
-                return write.Format(DecimalsAddress(write, cycle), entry.ToNative(word.Key, ncx, reference));
+                if (!SameSideAsTheRetractPlane(write, cycle, entry, word, ncx - reference))
+                {
+                    return null;
+                }
+
+                return write.Format(DecimalsAddress(write, cycle),
+                    Math.Abs(entry.ToNative(word.Key, ncx, reference)));
             }
 
             string? value = SiemensExpressions.ValueText(write, word.Value, "SDIS");
             string? from = SiemensExpressions.ValueText(write, surface, "SDIS");
-            return value is null || from is null ? null : "(" + value + ")-(" + from + ")";
+            return value is null || from is null ? null : "ABS((" + value + ")-(" + from + "))";
         }
 
         if (s_planes.Contains(word.Key))
@@ -396,6 +414,25 @@ internal static partial class SiemensCycles
         }
 
         return SiemensExpressions.ValueText(write, word.Value, word.Key);
+    }
+
+    // SDIS moves the reference plane forward, towards the retract plane, so CLEARANCE must lie on the side of SURFACE
+    // that SAFE lies on; on the other side the control would run the cycle the wrong way (D334).
+    private static bool SameSideAsTheRetractPlane(SiemensBlock write, CycleSnapshot cycle, CycleEntry entry, Word word,
+        decimal offset)
+    {
+        if (Parameter(cycle, "SAFE") is not Value safe || Number(safe) is not decimal retract
+            || Parameter(cycle, "SURFACE") is not Value plane || Number(plane) is not decimal reference
+            || Math.Sign(offset) * Math.Sign(retract - reference) >= 0)
+        {
+            return true;
+        }
+
+        write.Error(DiagnosticCodes.SiemensCycleClearanceOnTheWrongSide,
+            $"{word.ToCanonical()} lies on the other side of SURFACE than SAFE, and {entry.NativeOf(word.Key)} of "
+            + $"{entry.Native} is a distance without a sign that moves the reference plane towards the retract plane "
+            + "(controller-mapping 5; D334).");
+        return false;
     }
 
     // A plane along the drilling axis with the factor of that axis, the diameter of X or the Z of a side whose datum

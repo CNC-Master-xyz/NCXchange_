@@ -24,6 +24,12 @@ internal sealed partial class SiemensUnits
     public Dictionary<string, int> CallCounts { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The labels of the programs of the file that stand directly before the program end: the targets a
+    /// RET("label",,$P_STACK) of a subprogram returns to, which is JUMP=END (controller-mapping 1, JUMP=END; D344).
+    /// </summary>
+    public HashSet<string> ProgramEndLabels { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// Lays out the units of the blocks of a file.
     /// </summary>
     /// <param name="blocks">Every block of the file in file order.</param>
@@ -386,6 +392,18 @@ internal sealed partial class SiemensUnits
         }
 
         unit.EndTargets.ExceptWith(unit.Targets);
+        if (unit.Kind != SiemensUnitKind.Program)
+        {
+            return;
+        }
+
+        foreach (string label in unit.Labels)
+        {
+            if (IsWritable(label) && IsBeforeTheEnd(unit, label))
+            {
+                ProgramEndLabels.Add(label);
+            }
+        }
     }
 
     // The block of the label holds nothing but its number and the label, and the next block of the unit only its

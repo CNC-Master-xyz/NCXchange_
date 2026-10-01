@@ -20,6 +20,14 @@ public sealed class SiemensMotionTests
             CheckedBody("G0 X10 Y20 Z5\nG1 X=AC(5) Y=IC(2) F200\nG91 G1 X10 Z=AC(0)\nG90 X1.500"));
     }
 
+    // D340: G1 is the Siemens standard setting of G group 1, so a block with axis words before the source writes a
+    // code of the group moves at LINE, not at RAPID.
+    [Fact]
+    public void MotionBeforeACodeOfGroupOne_WithAxisWords_IsALine()
+    {
+        Assert.Equal(Lines("F=200", "LINE X=10 Y=20"), CheckedBody("F200\nX10 Y20"));
+    }
+
     // Rule 2: DC(), ACP() and ACN() give the path of a rotary axis that the NCX word does not say; the position is C=
     // and the direction a RAW word of the block, written back in place by the Siemens compiler (controller-mapping 2).
     [Fact]

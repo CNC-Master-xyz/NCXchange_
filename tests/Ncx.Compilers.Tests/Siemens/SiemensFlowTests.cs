@@ -57,11 +57,11 @@ public sealed class SiemensFlowTests
             "PROGRAM_END:", "M30"), TextOf(result));
     }
 
-    // Language 4.9 and virtual machine 3.6: JUMP=END in a subprogram ends the program from the call, and the target of
-    // a GOTOF is a label of its own unit (siemens 8), which has no form that ends the program; an ERROR (the
-    // TODO(question) of SiemensFlow).
+    // Language 4.9 and virtual machine 3.6: JUMP=END in a subprogram ends the program from the call, which the
+    // parameterized return RET("<end label>",,$P_STACK) does, since an M30 in a subprogram only returns to the caller
+    // (D344). The condition stands as a jump over the return, as it does over a conditional CALL.
     [Fact]
-    public void JumpToEnd_InASubprogram_IsAnError()
+    public void JumpToEndInASubprogram_WithACondition_IsTheParameterizedReturnUnderAJumpOverIt()
     {
         string program = """
             FILE=BEGIN NCX=1
@@ -76,8 +76,12 @@ public sealed class SiemensFlowTests
             SUB=END
             FILE=END
             """;
+        CompileResult result = Run(program, Mill());
 
-        Assert.Equal(["CMP594"], CompilerCodes(Run(program, Mill())));
+        Assert.Empty(CompilerCodes(result));
+        Assert.Contains("IF NOT (R1==1) GOTOF SKIP_CALL_9", TextOf(result));
+        Assert.Contains("RET(\"PROGRAM_END\",,$P_STACK)", TextOf(result));
+        Assert.Contains("PROGRAM_END:", TextOf(result));
     }
 
     // Siemens 8: the comparisons bind weaker than AND and OR on the control, so they stand in parentheses; NOT binds

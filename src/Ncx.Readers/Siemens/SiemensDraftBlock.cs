@@ -30,6 +30,17 @@ internal sealed class SiemensDraftBlock
     public bool IsEmpty => Verb is null && Words.Count == 0;
 
     /// <summary>
+    /// A copy of the block, which the reader writes a second time where one chain entry stands twice in the file: the
+    /// programmable frame written again after an ORIGIN (language 4.2; D340).
+    /// </summary>
+    public SiemensDraftBlock Copy()
+    {
+        var copy = new SiemensDraftBlock { Verb = Verb, VerbValue = VerbValue };
+        copy.Words.AddRange(Words);
+        return copy;
+    }
+
+    /// <summary>
     /// Sets the verb of the block, a block has at most one (language 5 rule 1).
     /// </summary>
     /// <param name="verb">The verb, "LINE".</param>

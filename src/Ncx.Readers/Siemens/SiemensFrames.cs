@@ -37,10 +37,13 @@ internal static class SiemensFrames
     }
 
     // G54 to G57 are the datums 1 to 4, G505 to G599 5 and up, G500 cancels them (controller-mapping 1, ORIGIN); ORIGIN
-    // starts an empty chain (language 4.2).
-    // TODO(question): siemens 4 does not say whether G54 to G599 and G500 end the programmable frame on the control,
-    // while ORIGIN empties the chain of NCX (as wave-2 question #59 asks for the Fanuc G54); the reader writes ORIGIN
-    // and does not write the programmable frame again.
+    // starts an empty chain (language 4.2). The settable frame and the programmable frame are separate components of
+    // the total frame on the control, so a datum of group 8 leaves TRANS, ROT, MIRROR and SCALE standing: the reader
+    // writes the entries of the programmable frame again after the ORIGIN that empties the chain (D340).
+    // TODO(question): D340 (3) settles the programmable frame of group 3 alone, and the swivel of CYCLE800 belongs to
+    // none of its instructions; whether a datum of group 8 leaves that swivel standing is the open D333. A tilt of
+    // CYCLE800 in the chain is therefore not written again, as it was not before D340, so a datum writes no second
+    // swivel motion into the converted program.
     private static void ReadOrigin(SiemensBlock block)
     {
         foreach (SourceWord word in block.Unread())
@@ -59,8 +62,34 @@ internal static class SiemensFrames
                 >= 505 => number - 500,
                 _ => number - 53,
             };
+            SiemensChain chain = block.Facts.Chain;
+            var programmable = new List<SiemensChainEntry>();
+            if (chain.Known)
+            {
+                foreach (SiemensChainEntry entry in chain.Entries)
+                {
+                    if (entry.Instruction != "CYCLE800")
+                    {
+                        programmable.Add(entry);
+                    }
+                }
+            }
+
+            bool known = chain.Known;
             block.Draft.AddState("ORIGIN", null, new IntegerValue(datum, datum.ToString(CultureInfo.InvariantCulture)));
-            block.Facts.Chain.Clear();
+            chain.Clear();
+            var again = new List<SiemensDraftBlock>();
+            foreach (SiemensChainEntry entry in programmable)
+            {
+                chain.Append(entry with { Block = entry.Block.Copy() }, again);
+            }
+
+            if (!known)
+            {
+                chain.Forget();
+            }
+
+            block.Draft.After.AddRange(again);
             block.Facts.Unknown.Remove(SiemensFacts.Frames);
             block.Siemens.ForgetPositions();
         }

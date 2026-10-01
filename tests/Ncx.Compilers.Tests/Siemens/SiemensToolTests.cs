@@ -132,6 +132,18 @@ public sealed class SiemensToolTests
         Assert.Equal(Lines("G961 S200 LIMS=3000 M3", "G1 X40 F100"), Body(Run(program, MillTurn())));
     }
 
+    // D342: G97 switches the surface speed off with the feed type G95 and G971 with G94, so the G97 of a CSS_OFF
+    // template is written as the code of the feed type the block leaves, and the feed motion after it writes no G94.
+    [Fact]
+    public void SurfaceSpeedOff_WhenTheBlockLeavesFeedPerMinute_IsG971()
+    {
+        string program = Program("FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
+            "SPINDLE:MAIN=CW RPM:MAIN=1500 CSS:MAIN=ON VC:MAIN=200 RPM_MAX:MAIN=3000", "CSS:MAIN=OFF",
+            "LINE X=40 F=100");
+
+        Assert.Equal(Lines("G961 S200 LIMS=3000 M3", "G971 S1500", "G1 X40 F100"), Body(Run(program, MillTurn())));
+    }
+
     // Siemens 2 and 5: a FEED_MODE under the constant surface speed is the surface speed code of the new feed type,
     // G961 per minute and G96 per revolution, never G94 or G95, which would switch it off; after G97 the feed type
     // stays (controller-mapping 4, CSS).

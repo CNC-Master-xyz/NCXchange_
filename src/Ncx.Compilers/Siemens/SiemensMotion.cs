@@ -132,6 +132,16 @@ internal static class SiemensMotion
     }
 
     /// <summary>
+    /// The code that switches the constant surface speed off with the feed type the block leaves: G97, which leaves the
+    /// feed per revolution, or G971, which leaves the feed per minute (controllers siemens.md 5; controller-mapping 4,
+    /// CSS; D342).
+    /// </summary>
+    public static string SurfaceSpeedOffCode(SiemensBlock write)
+    {
+        return write.After.Motion.FeedMode == FeedMode.PerRev ? "G97" : "G971";
+    }
+
+    /// <summary>
     /// True for a code of group 15, feed type and constant surface speed (controllers siemens.md 2).
     /// </summary>
     public static bool IsFeedTypeCode(string code)
@@ -140,26 +150,24 @@ internal static class SiemensMotion
     }
 
     /// <summary>
-    /// Records the code of group 15 that a template wrote (controllers siemens.md 2, 5): G93 to G96, G961 and G962 as
-    /// they are, G962 with either feed type; G97, G972 and G973 switch the surface speed off and leave the feed type of
-    /// the code before, G971 the feed per minute.
+    /// Records the code of group 15 that a template wrote (controllers siemens.md 2, 5; D342): G93 to G96, G961 and
+    /// G962 as they are, G962 with either feed type; G97 switches the surface speed off with the feed type G95, G971
+    /// with G94, G973 is G97 without the speed limit and so leaves the feed per revolution, and G972 leaves the feed
+    /// type of the code before.
     /// </summary>
-    // TODO(question): the documents give the feed type that G96 and G961 set, not the one G97, G971 and G972 leave (the
-    // question of the Siemens reader, P5-01); the compiler reads them as the reader does, G971 per minute and G97 and
-    // G972 the feed type before, and G973 leaves it unknown, until that is answered.
     public static void FeedTypeSwitched(SiemensBlock write, string code)
     {
         string? before = write.ActiveOf(FeedTypeGroup);
         string? after = code switch
         {
-            "G97" or "G972" => before switch
+            "G972" => before switch
             {
                 "G96" or "G95" => "G95",
                 "G961" or "G94" => "G94",
                 _ => null,
             },
+            "G97" or "G973" => "G95",
             "G971" => "G94",
-            "G973" => null,
             _ => code,
         };
         if (after is null)

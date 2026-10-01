@@ -48,12 +48,9 @@ internal static class SiemensCycles
 
             if (word.Address is "CYCLE801" or "CYCLE802")
             {
-                // TODO(question): siemens 7 names CYCLE801 and CYCLE802 without their signatures; they stay RAW. D259
-                // keeps the MCALL range RAW with them, so the pattern keeps its drilling cycle; D341 would give the
-                // signatures and let the reader expand them.
-                block.MarkRead(word);
-                block.Draft.KeepAsRaw($"{word.Address} is a pattern whose parameters the documents do not give "
-                    + "(controllers siemens.md 7)");
+                // D341: the full sl signatures of CYCLE801 and CYCLE802 are in siemens 7, and the reader expands them
+                // into CYCLE_CALL blocks as it expands HOLES1 and HOLES2 (decisions.md).
+                SiemensPatterns.Read(block, word);
                 return;
             }
 
@@ -121,12 +118,7 @@ internal static class SiemensCycles
         {
             foreach (SourceWord word in next.Words)
             {
-                if (word.Address is "CYCLE801" or "CYCLE802" && word.Text.StartsWith('('))
-                {
-                    return true;
-                }
-
-                if (word.Address is "HOLES1" or "HOLES2" && word.Text.StartsWith('(')
+                if (word.Address is "HOLES1" or "HOLES2" or "CYCLE801" or "CYCLE802" && word.Text.StartsWith('(')
                     && !SiemensPatterns.CanExpand(word))
                 {
                     return true;
@@ -448,7 +440,7 @@ internal static class SiemensCycles
 
             if (entry.AbsoluteFromSurface.Contains(word))
             {
-                value = Sum(surface, value);
+                value = Shift(surface, value, towardsTheRetractPlane: true);
             }
             else if (word == "AXIS")
             {
@@ -468,10 +460,8 @@ internal static class SiemensCycles
             return true;
         }
 
-        // DEPTH is DP, or RFP + DPR where the source gives the incremental DPR (controller-mapping 5).
-        // TODO(question): controller-mapping 5 writes DEPTH = RFP + DPR, while DPR is given without a sign on the
-        // control for a hole below the reference plane (to confirm with the programming manual, as D181); the reader
-        // follows controller-mapping 5.
+        // DEPTH is DP, or RFP less the unsigned DPR, which counts from the reference plane away from the retract
+        // plane (controller-mapping 5; D334).
         private Value? Relative(Value surface)
         {
             int index = IndexOf(entry.Signature, "DPR");
@@ -482,7 +472,7 @@ internal static class SiemensCycles
 
             _used.Add("DPR");
             Value? relative = SiemensExpression.ValueOf(block, arguments[index], out _);
-            return relative is null ? null : Sum(surface, relative);
+            return relative is null ? null : Shift(surface, relative, towardsTheRetractPlane: false);
         }
 
         // _AXN 1, 2, 3 are the first, second and third geometry axis of the plane (controller-mapping 5, AXIS; D59).
@@ -561,14 +551,45 @@ internal static class SiemensCycles
             return value;
         }
 
-        private Value? Sum(Value surface, Value relative)
+        // SDIS and DPR are entered without a sign: SDIS moves the reference plane forward, towards the retract plane,
+        // and DPR counts from it the other way, towards the depth (D334). The direction is the one the cycle works out
+        // itself from RTP and RFP, so a call that needs it and does not give both as numbers stays RAW.
+        private Value? Shift(Value surface, Value distance, bool towardsTheRetractPlane)
         {
-            if (SiemensNumbers.NumberOf(surface) is decimal from && SiemensNumbers.NumberOf(relative) is decimal by)
+            decimal? by = SiemensNumbers.NumberOf(distance);
+            if (by == 0)
             {
-                return SiemensNumbers.Of(from + by);
+                return surface;
             }
 
-            return SiemensExpression.Parse(block, "(" + TextOf(surface) + ") + (" + TextOf(relative) + ")", out _);
+            if (Direction(surface) is not int sign)
+            {
+                Raw($"{entry.Native} gives a distance without a sign, and its direction needs the retract plane RTP "
+                    + "and the reference plane RFP as two different numbers (D334)");
+                return null;
+            }
+
+            bool plus = towardsTheRetractPlane == sign > 0;
+            if (SiemensNumbers.NumberOf(surface) is decimal from && by is decimal number)
+            {
+                return SiemensNumbers.Of(plus ? from + number : from - number);
+            }
+
+            return SiemensExpression.Parse(block,
+                "(" + TextOf(surface) + ") " + (plus ? "+" : "-") + " (" + TextOf(distance) + ")", out _);
+        }
+
+        // The cycle drills away from the retract plane, which lies before the reference plane (D334): 1 where RTP lies
+        // above RFP, -1 where it lies below, null where the two are not two different numbers.
+        private int? Direction(Value surface)
+        {
+            if (SiemensNumbers.NumberOf(surface) is not decimal reference
+                || SiemensNumbers.NumberOf(Argument("SAFE")) is not decimal retract || retract == reference)
+            {
+                return null;
+            }
+
+            return retract > reference ? 1 : -1;
         }
 
         // A position no word of the entry carries is not written, with a WARNING (D164; wave-2 question #79).

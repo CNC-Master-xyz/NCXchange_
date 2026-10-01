@@ -108,6 +108,77 @@ public sealed class SiemensCycleTests
         Assert.Equal([DiagnosticCodes.SiemensValueNotCarried], Codes(program));
     }
 
+    // D334: SDIS and DPR are entered without a sign and the cycle works the direction out from RTP and RFP, which it
+    // assumes lie the one before the other. With RTP above RFP, CLEARANCE = RFP + SDIS and DEPTH = RFP - DPR, so the
+    // manual's own pair CYCLE81(110,100,2,,65) and CYCLE81(110,100,2,35) is one and the same hole.
+    [Fact]
+    public void CycleDepth_FromTheUnsignedDpr_CountsFromTheReferencePlaneAwayFromTheRetractPlane()
+    {
+        const string Hole = "CYCLE=DRILL SURFACE=100 CLEARANCE=102 DEPTH=35 SAFE=110 CYCLE_RETRACT=SAFE";
+
+        Assert.Equal(Lines(Hole, "CYCLE_CALL", Hole, "CYCLE_CALL"),
+            CheckedBody("CYCLE81(110,100,2,,65)\nCYCLE81(110,100,2,35)"));
+    }
+
+    // D334: with the retract plane below the reference plane the cycle works the other way, so SDIS and DPR count the
+    // other way too: CLEARANCE = RFP - SDIS and DEPTH = RFP + DPR.
+    [Fact]
+    public void CycleDepth_WithTheRetractPlaneBelowTheReferencePlane_CountsTheOtherWay()
+    {
+        Assert.Equal(Lines("CYCLE=DRILL SURFACE=-100 CLEARANCE=-102 DEPTH=-35 SAFE=-110 CYCLE_RETRACT=SAFE",
+                "CYCLE_CALL"),
+            CheckedBody("CYCLE81(-110,-100,2,,65)"));
+    }
+
+    // D341: CYCLE801 works a grid of _NUM1 by _NUM2 positions, _DIS1 and _DIS2 apart, from the reference point at the
+    // base angle _STA; the reader expands it into one call per position, as it does HOLES1 and HOLES2.
+    [Fact]
+    public void Cycle801_AsAGrid_ExpandsIntoOneCallPerPosition()
+    {
+        Assert.Equal(Lines("RAPID X=0 Y=0 Z=10", Drill, "CYCLE_CALL X=10 Y=5", "CYCLE_CALL X=30 Y=5",
+                "CYCLE_CALL X=10 Y=20", "CYCLE_CALL X=30 Y=20", "CYCLE=OFF"),
+            CheckedBody("G0 X0 Y0 Z10\nF100\nMCALL CYCLE81(10,0,2,-5,)\nCYCLE801(10,5,0,20,15,2,2)\nMCALL"));
+    }
+
+    // D341: CYCLE802 works up to nine free positions; the nine-digit codes _XA and _YA say every position is absolute.
+    [Fact]
+    public void Cycle802_WithAbsolutePositions_ExpandsIntoOneCallPerPosition()
+    {
+        Assert.Equal(Lines("RAPID X=0 Y=0 Z=10", Drill, "CYCLE_CALL X=10 Y=20", "CYCLE_CALL X=30 Y=40",
+                "CYCLE=OFF"),
+            CheckedBody("G0 X0 Y0 Z10\nF100\nMCALL CYCLE81(10,0,2,-5,)\n"
+                + "CYCLE802(111111111,111111111,10,20,30,40)\nMCALL"));
+    }
+
+    // D341: the manual leaves out the unneeded positions of CYCLE802 at the end, so a position that follows a left-out
+    // one is a hole the reader cannot place; the call stays RAW rather than losing the hole, and the whole modal range
+    // stays RAW with it, so that the pattern keeps its drilling cycle (D259).
+    [Fact]
+    public void Cycle802_WithAPositionAfterALeftOutOne_StaysRaw()
+    {
+        string[] range =
+        [
+            "F100", "MCALL CYCLE81(10,0,2,-5,)", "CYCLE802(111111111,111111111,10,20,,,30,40)", "MCALL",
+        ];
+        NcxProgram program = FramedProgram("G0 X0 Y0 Z10\n" + string.Join('\n', range));
+
+        Assert.Equal(Lines("RAPID X=0 Y=0 Z=10", Raw(range[0]), Raw(range[1]), Raw(range[2]), Raw(range[3])),
+            BodyOf(NcxWriter.Write(program)));
+    }
+
+    // D341: the ones digit of _DMODE carries the plane of CYCLE801, and the expansion works in the modal working
+    // plane; a mode that is given and not 0 keeps the call RAW, as the drilling cycles keep their mode integers, and
+    // the whole modal range stays RAW with it (D259).
+    [Fact]
+    public void Cycle801_WithAPlaneOfItsOwnInDmode_StaysRaw()
+    {
+        string[] range = ["F100", "MCALL CYCLE81(10,0,2,-5,)", "CYCLE801(10,5,0,20,15,2,2,0,,,,,,3)", "MCALL"];
+        NcxProgram program = FramedProgram("G0 X0 Y0 Z10\n" + string.Join('\n', range));
+
+        Assert.Equal(Lines("RAPID X=0 Y=0 Z=10", Raw(range[0]), Raw(range[1]), Raw(range[2]), Raw(range[3])),
+            BodyOf(NcxWriter.Write(program)));
+    }
+
     // CYCLE832 is TOLERANCE with the mode of the machine's table, CYCLE832(0, 0, 1) switches it off (controller-mapping
     // 1, TOLERANCE; D85).
     [Fact]

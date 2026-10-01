@@ -7,13 +7,16 @@ namespace Ncx.Readers.Siemens;
 /// <summary>
 /// The swivelled plane of CYCLE800 and ROTS (controllers siemens.md 4, 11 rule 4; controller-mapping 1, TILT,
 /// TILT_AXIS, MOVE, RETRACT; language 4.2, 4.3; D82, D83): CYCLE800(_FR, _TC, _ST, _MODE, _X0, _Y0, _Z0, _A, _B, _C,
-/// _X1, _Y1, _Z1, _DIR, _FR_I, _DMODE) is TILT with the angles, or TILT_AXIS where _MODE gives the rotary axes
-/// directly,
+/// _X1, _Y1, _Z1, _DIR, _FR_I, _DMODE) is TILT with the angles converted from the order _MODE gives into the X, Y, Z
+/// order of TILT (D335), or TILT_AXIS where _MODE gives the rotary axes directly,
 /// with MOVE from _DIR and _ST and a RETRACT block in front of it from _FR; CYCLE800() is TILT=RESET; ROTS and AROTS
 /// with two spatial angles are TILT. The reader keeps the form the source used (D82).
 /// </summary>
 internal static class SiemensTilt
 {
+    // Below this cosine of the second rotation the first and the third cannot be told apart, and the first is 0.
+    private const double GimbalLimit = 1e-9;
+
     // The places of the parameters of CYCLE800 (controllers siemens.md 4).
     private const int Retract = 0;
     private const int Carrier = 1;
@@ -110,7 +113,16 @@ internal static class SiemensTilt
             return;
         }
 
-        SiemensDraftBlock? entry = Entry(block, modeBits, angles);
+        int decimals = SiemensNumbers.LeastDecimals;
+        for (int index = 0; index < 3; index++)
+        {
+            if (FirstAngle + index < arguments.Count)
+            {
+                decimals = Math.Max(decimals, SiemensNumbers.DecimalsOf(arguments[FirstAngle + index]));
+            }
+        }
+
+        SiemensDraftBlock? entry = Entry(block, modeBits, angles, decimals);
         if (entry is null)
         {
             return;
@@ -145,36 +157,45 @@ internal static class SiemensTilt
         block.Siemens.ForgetPositions();
     }
 
-    // _MODE bits 7 and 6: 00 axis-wise angles with the rotation order in bits 5 to 0 (57 X Y Z, 27 Z Y X), 01 spatial
-    // angles, 10 projection angles, 11 the rotary axes directly (controller-mapping 1, TILT and TILT_AXIS; D82).
-    // TODO(question): TILT turns about X, Y and Z in that order (language 4.2), and controller-mapping 11 reads the
-    // axis-wise modes 27 and 39 as TILT "with the angles in the order the mode gives" without a conversion between the
-    // orders; the reader writes TILT for mode 57, the order of TILT, for the spatial angles, and for any order where at
-    // most one angle turns, and keeps the other orders and the projection angles as RAW.
+    // _MODE bits 7 and 6: 00 axis-wise angles with the rotation order in bits 5 to 0, 01 spatial angles, 10 projection
+    // angles, 11 the rotary axes directly (controller-mapping 1, TILT and TILT_AXIS; D82). The axis-wise rotations
+    // build on each other, each about the axis the one before left, and _A, _B, _C are the first, second and third
+    // rotation of the order the bit pairs give, not the angles about X, Y and Z: mode 27 (Z Y X) is exactly TILT with
+    // A = _C, B = _B, C = _A, and every other order becomes TILT through the rotation matrix. The spatial-angle mode
+    // turns by _A about Z and then by _B about the rotated Y, which is TILT A=0 B=_B C=_A (D335).
+    // TODO(question): D335 settles the axis-wise and the spatial modes; its evidence gives the projection angles no
+    // construction a rotation matrix can be built from (the Zyklen manual describes them as the angle of the swivelled
+    // face projected onto the first two axes, with the third rotation building on the ones before), so the projection
+    // mode stays RAW.
     // D296: _A and _B of the rotary-axes mode are the angles of rotary axis 1 and 2 of the swivel data record _TC
     // names, and which machine axes those are belongs to the commissioned kinematics, not to the program; the reader
     // takes their NCX names from the machine's [transform] TILT_AXIS_ON template, the placeholder in the place of _A
     // first and the one in the place of _B second, and keeps the block RAW where the machine has no such template
     // (decisions.md D296).
-    private static SiemensDraftBlock? Entry(SiemensBlock block, int mode, decimal?[] angles)
+    private static SiemensDraftBlock? Entry(SiemensBlock block, int mode, decimal?[] angles, int decimals)
     {
         int kind = (mode >> 6) & 3;
-        int turning = 0;
-        foreach (decimal? angle in angles)
+        if (kind == 1)
         {
-            turning += angle == 0 ? 0 : 1;
+            return Tilt(0m, angles[1]!.Value, angles[0]!.Value);
         }
 
-        if ((kind == 0 && (mode == 57 || turning <= 1)) || kind == 1)
+        if (kind == 0 && Order(mode) is char[] order)
         {
-            var tilt = new SiemensDraftBlock().WithVerb("TILT");
-            string[] keys = ["A", "B", "C"];
-            for (int index = 0; index < 3; index++)
+            if (order is ['Z', 'Y', 'X'])
             {
-                tilt.Add(keys[index], SiemensNumbers.Of(angles[index]!.Value));
+                return Tilt(angles[2]!.Value, angles[1]!.Value, angles[0]!.Value);
             }
 
-            return tilt;
+            double[,] rotation = About(order[0], (double)angles[0]!.Value);
+            for (int index = 1; index < 3; index++)
+            {
+                rotation = Times(rotation, About(order[index], (double)angles[index]!.Value));
+            }
+
+            TiltAngles(rotation, out double a, out double b, out double c);
+            return Tilt(SiemensNumbers.Round(a, decimals), SiemensNumbers.Round(b, decimals),
+                SiemensNumbers.Round(c, decimals));
         }
 
         if (kind == 3 && RotaryAxes(block.Machine) is List<string> rotary)
@@ -188,6 +209,85 @@ internal static class SiemensTilt
         block.Draft.KeepAsRaw($"CYCLE800 with _MODE {mode.ToString(CultureInfo.InvariantCulture)} gives its angles in "
             + "an order or a form the reader does not convert (controller-mapping 1, TILT)");
         return null;
+    }
+
+    // TILT A B C: the rotations about X, Y and Z of the frame where the word stands, in that order (language 4.2).
+    private static SiemensDraftBlock Tilt(decimal a, decimal b, decimal c)
+    {
+        return new SiemensDraftBlock().WithVerb("TILT")
+            .Add("A", SiemensNumbers.Of(a))
+            .Add("B", SiemensNumbers.Of(b))
+            .Add("C", SiemensNumbers.Of(c));
+    }
+
+    // The axes of the three rotations of the axis-wise mode, in the order they turn: bits 1 and 0 name the axis of the
+    // first rotation, bits 3 and 2 that of the second, bits 5 and 4 that of the third, 01 the first geometry axis X,
+    // 10 the second Y, 11 the third Z (D335). Null where a pair names no axis or an axis turns twice.
+    private static char[]? Order(int mode)
+    {
+        var order = new char[3];
+        for (int index = 0; index < 3; index++)
+        {
+            order[index] = ((mode >> (index * 2)) & 3) switch
+            {
+                1 => 'X',
+                2 => 'Y',
+                3 => 'Z',
+                _ => '\0',
+            };
+        }
+
+        return order[0] != '\0' && order[1] != '\0' && order[2] != '\0' && order[0] != order[1]
+            && order[1] != order[2] && order[0] != order[2] ? order : null;
+    }
+
+    // The matrix of a rotation about X, Y or Z by an angle in degrees.
+    private static double[,] About(char axis, double degrees)
+    {
+        double sin = Math.Sin(degrees * Math.PI / 180);
+        double cos = Math.Cos(degrees * Math.PI / 180);
+        return axis switch
+        {
+            'X' => new[,] { { 1, 0, 0 }, { 0, cos, -sin }, { 0, sin, cos } },
+            'Y' => new[,] { { cos, 0, sin }, { 0, 1, 0 }, { -sin, 0, cos } },
+            _ => new[,] { { cos, -sin, 0 }, { sin, cos, 0 }, { 0, 0, 1 } },
+        };
+    }
+
+    private static double[,] Times(double[,] first, double[,] second)
+    {
+        var product = new double[3, 3];
+        for (int row = 0; row < 3; row++)
+        {
+            for (int column = 0; column < 3; column++)
+            {
+                product[row, column] = (first[row, 0] * second[0, column]) + (first[row, 1] * second[1, column])
+                    + (first[row, 2] * second[2, column]);
+            }
+        }
+
+        return product;
+    }
+
+    // The TILT angles of a rotation matrix: R = Rz(C) Ry(B) Rx(A), the rotations about X, Y and Z of the frame in that
+    // order (language 4.2), as FanucTilt.SpatialAngles decomposes the Euler angles of G68.2.
+    private static void TiltAngles(double[,] rotation, out double a, out double b, out double c)
+    {
+        b = Math.Asin(Math.Clamp(-rotation[2, 0], -1.0, 1.0));
+        if (Math.Abs(Math.Cos(b)) > GimbalLimit)
+        {
+            a = Math.Atan2(rotation[2, 1], rotation[2, 2]);
+            c = Math.Atan2(rotation[1, 0], rotation[0, 0]);
+        }
+        else
+        {
+            a = 0;
+            c = Math.Atan2(-rotation[0, 1], rotation[1, 1]);
+        }
+
+        a = a * 180 / Math.PI;
+        b = b * 180 / Math.PI;
+        c = c * 180 / Math.PI;
     }
 
     // _FR retracts before the swivel: 0 none, 1 machine Z, 2 Z then XY, 4 in tool direction to the limit, 5 by _FR_I

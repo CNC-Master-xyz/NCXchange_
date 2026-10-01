@@ -185,7 +185,8 @@ public sealed class SiemensProgramFrameTests
     }
 
     // Siemens 12 rule 6: RAW:SIEMENS blocks verbatim, with their own N number where they carry one; block_numbers
-    // gives that number no other line, since N numbers must be unique for the block search (siemens 1).
+    // gives that number no other line, since N numbers must be unique for the block search (siemens 1). MCALL alone
+    // stands before the second RAW line, because the modal call is unknown after the first (D343).
     [Fact]
     public void RawSiemens_IsWrittenVerbatim()
     {
@@ -193,13 +194,14 @@ public sealed class SiemensProgramFrameTests
             "RAW:SIEMENS=\"N20 STOPRE\""), Mill());
 
         Assert.False(result.Diagnostics.HasErrors, result.Diagnostics.ToText());
-        Assert.Equal("%_N_T_MPF\r\nN10 G17 G40 G90 G94 G71\r\nN30 MSG(\"ROUGHING\")\r\nN20 STOPRE\r\nN40 M30\r\n",
-            Assert.Single(result.Files).Text);
+        Assert.Equal("%_N_T_MPF\r\nN10 G17 G40 G90 G94 G71\r\nN30 MSG(\"ROUGHING\")\r\nN40 MCALL\r\nN20 STOPRE"
+            + "\r\nN50 M30\r\n", Assert.Single(result.Files).Text);
     }
 
     // Siemens 1: N numbers must be unique for the block search. A RAW line keeps the number of its source block,
     // skipped or not (siemens 12 rule 6), and the numbering of block_numbers passes over every number a line of the
-    // file carries, so that each number names one block (machine-config 2).
+    // file carries, so that each number names one block (machine-config 2). The MCALL lines before the motions are
+    // the modal call that is unknown after a RAW (D343).
     [Fact]
     public void BlockNumbers_BesideRawLinesWithNumbersOfTheirOwn_AreUnique()
     {
@@ -213,10 +215,12 @@ public sealed class SiemensProgramFrameTests
             "N10 G17 G40 G90 G94 G71",
             "N30 G0 X0",
             "N20 MSG(\"OP1\")",
-            "N50 G1 G90 G94 X10 F100",
+            "N50 MCALL",
+            "N60 G1 G90 G94 X10 F100",
             "/N40 STOPRE",
-            "N60 G0 G90 X20",
-            "N70 M30"), text.ReplaceLineEndings("\n"));
+            "N70 MCALL",
+            "N80 G0 G90 X20",
+            "N90 M30"), text.ReplaceLineEndings("\n"));
         List<string> numbers = BlockNumbersOf(text);
         Assert.Equal(numbers.Distinct().Count(), numbers.Count);
     }

@@ -63,15 +63,16 @@ public sealed class SiemensFrameTests
     [Fact]
     public void Tilt_TurnThenReset_IsCycle800WithDirMinusOneThenCycle800()
     {
-        Assert.Equal(Lines("CYCLE800(1,\"TC1\",0,57,0,0,0,0,45,0,0,0,0,-1,100,1)", "CYCLE800()"),
+        Assert.Equal(Lines("CYCLE800(1,\"TC1\",0,27,0,0,0,0,45,0,0,0,0,-1,100,1)", "CYCLE800()"),
             MillTurnBody("TILT B=45 MOVE=TURN", "TILT=RESET"));
     }
 
-    // Machine-config 5: {dir} of MOVE=STAY is 0, the frame only computed.
+    // Machine-config 5: {dir} of MOVE=STAY is 0, the frame only computed. The template writes mode 27, the axis-wise
+    // order Z Y X, with the angles reversed, which is TILT (D335).
     [Fact]
     public void Tilt_Stay_IsCycle800WithDirZero()
     {
-        Assert.Equal(Lines("CYCLE800(1,\"TC1\",0,57,0,0,0,10,20,30,0,0,0,0,100,1)"),
+        Assert.Equal(Lines("CYCLE800(1,\"TC1\",0,27,0,0,0,30,20,10,0,0,0,0,100,1)"),
             MillTurnBody("TILT A=10 B=20 C=30 MOVE=STAY"));
     }
 
@@ -80,7 +81,7 @@ public sealed class SiemensFrameTests
     [Fact]
     public void Tilt_Move_IsTheTensDigitOfStWithDirMinusOne()
     {
-        Assert.Equal(Lines("CYCLE800(1,\"TC1\",10,57,0,0,0,0,45,0,0,0,0,-1,100,1)"),
+        Assert.Equal(Lines("CYCLE800(1,\"TC1\",10,27,0,0,0,0,45,0,0,0,0,-1,100,1)"),
             MillTurnBody("TILT B=45 MOVE=MOVE"));
     }
 
@@ -92,7 +93,7 @@ public sealed class SiemensFrameTests
         MachineConfig constant = Replaced(MillTurnFile, "{dir},100,1)\"", "-1,100,1)\"");
 
         Assert.Equal(["CMP532"], CompilerCodes(Run(Program(MillTurnHeader, "TILT B=45 MOVE=STAY"), constant)));
-        Assert.Equal(Lines("CYCLE800(1,\"TC1\",0,57,0,0,0,0,45,0,0,0,0,-1,100,1)"),
+        Assert.Equal(Lines("CYCLE800(1,\"TC1\",0,27,0,0,0,0,45,0,0,0,0,-1,100,1)"),
             Body(Run(Program(MillTurnHeader, "TILT B=45 MOVE=TURN"), constant)));
     }
 
@@ -162,7 +163,7 @@ public sealed class SiemensFrameTests
     [Fact]
     public void TiltReset_AfterALabelThatAJumpReachesFromARawSwivel_IsCycle800()
     {
-        Assert.Equal(Lines("R1=0", "AGAIN:", "CYCLE800()", HermleSwivel, "R1=R1+1", "IF R1<2 GOTOB AGAIN"),
+        Assert.Equal(Lines("R1=0", "AGAIN:", "CYCLE800()", HermleSwivel, "R1=R1+1", "MCALL", "IF R1<2 GOTOB AGAIN"),
             MillTurnBody("VAR:R1=0", "LABEL=AGAIN", "TILT=RESET", RawHermleSwivel, "VAR:R1={$R1 + 1}",
                 "JUMP=AGAIN IF={$R1 < 2}"));
     }
