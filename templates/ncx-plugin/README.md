@@ -6,7 +6,7 @@ The coolant clutch rule could be written as an expansion rule of the machine fil
 
 ```toml
 [coolant]
-THROUGH = { ON = "M51", OFF = "M9", requires = { SPINDLE = "OFF" }, restore = ["SPINDLE"] }
+THROUGH = { ON = "M51", OFF = "M9", states = ["ON"], requires = { SPINDLE = "OFF" }, restore = ["SPINDLE"] }
 ```
 
 The template uses it anyway, because every NC programmer has met a machine like it, and the mechanism is easiest to follow with a case one knows. Before you write a rule as a plugin, look whether the machine file can say it.

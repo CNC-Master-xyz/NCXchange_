@@ -280,11 +280,11 @@ Function values may carry a parameter: `HIGH_PRESSURE = { ON = "H7={value} M7", 
 
 ### 5a. Expansion rules
 
-Some machines need a sequence where the program has one word. The example from the shop floor: the through-spindle coolant has a clutch that can only engage while the spindle stands still, so `COOLANT:THROUGH=ON` on that machine means stop the spindle, switch the coolant, start the spindle again with the speed it had. Every function state, the tool change and every catalog cycle may therefore carry four optional keys, and the expander (`ncx-virtual-machine.md`, section 1 and 3.10) turns them into generated NCX blocks around the triggering block:
+Some machines need a sequence where the program has one word. The example from the shop floor: the through-spindle coolant has a clutch that can only engage while the spindle stands still, so `COOLANT:THROUGH=ON` on that machine means stop the spindle, switch the coolant, start the spindle again with the speed it had. Every function table, the tool change and every catalog cycle may therefore carry four optional keys, and a function table also `states`; the expander (`ncx-virtual-machine.md`, section 1 and 3.10) turns them into generated NCX blocks around the triggering block:
 
 ```toml
 [coolant]
-THROUGH = { ON = "M51", OFF = "M9", requires = { SPINDLE = "OFF" }, restore = ["SPINDLE"] }
+THROUGH = { ON = "M51", OFF = "M9", states = ["ON"], requires = { SPINDLE = "OFF" }, restore = ["SPINDLE"] }
 
 [func]
 PALLET_CHANGE = { RUN = "M60", pre = ["HOME Z", "HOME X Y"], post = ["ORIGIN=1"] }
@@ -299,6 +299,7 @@ native = "G83"
 pre = ["FUNC:PECK_MODE=RETRACT"]   # Doosan M291 before G83, as an NCX word so that the VM sees it
 ```
 
+- `states`: the states of the function table whose words trigger the rule, `states = ["ON"]` on the clutch of the through-spindle coolant, so that the sequence runs when the coolant is switched on and not when it is switched off. Without the key every state of the table triggers it. One rule per table: a word triggers the state it sets, under the state names this section gives its table, so `SPINDLE=CW` triggers `CW`, `RPM`, `ORIENT` and `RPM_MAX` their own state, `CSS=ON` and `VC` the state `VC` and `CSS=OFF` the state `CSS_OFF`, `SPINDLE_MODE`, `COOLANT` and `FUNC` their value, `SPINDLE_SYNC` with two roles `ON` and `SPINDLE_SYNC=OFF` the state `OFF`, and `PHASE` the state `PHASE` (D198). The tool change and a catalog cycle have no states and take no key.
 - `pre` and `post`: lists of NCX blocks inserted before and after the block. They are NCX text, not native lines, so the VM executes them and the reader can recognize them; native text goes through `RAW:BUILDER`. A block may contain `{position:NAME}`, which expands to the axis words of that entry of `[positions]`, e.g. `pre = ["RAPID {position:tool_change} FRAME=MACHINE"]` (D100).
 - `requires`: state conditions that must hold while the function is written, as state variable = value (`SPINDLE = "OFF"`, `COOLANT = "OFF"`, `SPINDLE_MODE = "AXIS"`). The expander inserts the words that establish them, preceded by `@SAVE` of the variables named in `restore`.
 - `restore`: the state variables to put back after the block, through `@RESTORE`; the VM re-applies the saved value from its own snapshot, so the rule never has to know the speed the spindle had. Restoring costs cycle time (a spindle stop and start), which the runtime estimate counts and a WARNING reports at compile time.
@@ -307,7 +308,7 @@ The triggering block of a catalog cycle is the block that names the cycle (`CYCL
 
 Readers use the same rules backwards: a source sequence `M5`, `M51`, `M3 S1500` on a machine whose rule says the spindle stop belongs to `COOLANT:THROUGH=ON` is read as the one NCX word, so the round trip does not accumulate stops. Plugins that need more than these four keys get the same insertion points in code (`ncx-virtual-machine.md`, section 7).
 
-A named function is written as `FUNC:SUB_CHUCK=OPEN` in NCX and compiles to the M code of that state. Readers map M codes back to names; an M code that matches no entry becomes `MFUNC=n` with a WARNING. The states of a `[func]` entry are free identifiers, the values `FUNC:name=` takes (`OPEN_RUNNING`, `NORMAL`, `LOW` and the like); the states of the other function tables are the values of their word: `CW`, `CCW`, `OFF`, `ORIENT`, `RPM`, `VC`, `CSS_OFF`, `RPM_MAX` in `[spindle.ROLE]`, `AXIS` and `SPINDLE` in `[spindle_mode.ROLE]`, `ON`, `OFF` and `PHASE` in `[spindle_sync]`, `ON` and `OFF` in a `[coolant]` channel (F23).
+A named function is written as `FUNC:SUB_CHUCK=OPEN` in NCX and compiles to the M code of that state. Readers map M codes back to names; an M code that matches no entry becomes `MFUNC=n` with a WARNING. The states of a `[func]` entry are free identifiers, the values `FUNC:name=` takes (`OPEN_RUNNING`, `NORMAL`, `LOW` and the like); the states of the other function tables are the values of their word: `CW`, `CCW`, `OFF`, `ORIENT`, `RPM`, `VC`, `CSS_OFF`, `RPM_MAX` in `[spindle.ROLE]`, `AXIS` and `SPINDLE` in `[spindle_mode.ROLE]`, `ON`, `OFF` and `PHASE` in `[spindle_sync]`, `ON` and `OFF` in a `[coolant]` channel (F23). Besides its states, a function table may carry `channel` or `channels` (D56), the four keys of its expansion rule and `states`, the states that rule fires on (5a, D198); a spindle table also carries `rpm_min`, `rpm_max` and `accel_time` (D64).
 
 ## 6. Cycle catalog
 

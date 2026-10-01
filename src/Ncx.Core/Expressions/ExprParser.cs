@@ -1,3 +1,4 @@
+using System.Globalization;
 using Ncx.Core.Model;
 
 namespace Ncx.Core.Expressions;
@@ -304,8 +305,6 @@ public sealed class ExprParser
             return null;
         }
 
-        // TODO(question): language 4.12 gives no number of arguments per function (ATAN2 two, MIN and MAX two or
-        // more?); the parser accepts what the grammar accepts, one or more, until D118 is settled.
         var arguments = new List<ExprNode>();
         do
         {
@@ -327,7 +326,31 @@ public sealed class ExprParser
             return null;
         }
 
-        return new CallNode(function.Value, arguments);
+        // D118: ATAN2 takes two arguments, MIN and MAX two or more, every other function one. A wrong count is an
+        // ERROR of the parser, like an unknown function, so format, convert, check and compile all report it.
+        return ArgumentCountFits(function.Value, arguments.Count, name)
+            ? new CallNode(function.Value, arguments)
+            : null;
+    }
+
+    // The number of arguments each function of language 4.12 takes (D118). False after the ERROR.
+    private bool ArgumentCountFits(ExprFunction function, int given, ExprToken name)
+    {
+        bool atLeastTwo = function is ExprFunction.Min or ExprFunction.Max;
+        int expected = function == ExprFunction.Atan2 ? 2 : 1;
+        if (atLeastTwo ? given >= 2 : given == expected)
+        {
+            return true;
+        }
+
+        string takes = atLeastTwo
+            ? "two arguments or more"
+            : expected == 1 ? "one argument" : "two arguments";
+        Report(DiagnosticCodes.ExpressionArgumentCount,
+            $"{name.Text} {Place(name)} of {Braced} is given "
+            + $"{given.ToString(CultureInfo.InvariantCulture)} arguments, and {name.Text} takes {takes} "
+            + "(language 4.12, D118).");
+        return false;
     }
 
     // "(" expr ")": parentheses group an expression, and the tree keeps them as written (language 4.12, primary).

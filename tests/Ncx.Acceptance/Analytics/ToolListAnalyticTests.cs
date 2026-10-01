@@ -3,6 +3,7 @@ using Ncx.Analytics;
 using Ncx.Analytics.Runtime;
 using Ncx.Analytics.ToolList;
 using Ncx.Config;
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine;
 
@@ -134,6 +135,24 @@ public sealed class ToolListAnalyticTests
         ToolUse use = Assert.Single(Rows(tools));
         Assert.Equal((396.266 / 2387 * 60) + (154.59 / (1.5 * 1592) * 60), use.Seconds, Precision);
         Assert.Equal(runtime.SecondsOfTool("1"), use.Seconds, Precision);
+    }
+
+    // D289: under CSS the rpm range of a tool takes the extremes of a cutting motion, the rpm at the start and at the
+    // end X radius each capped by RPM_MAX, not the mean the runtime estimate times the motion with. A facing cut from
+    // radius 50 to radius 5 at VC=200 turns at 200000 / (2 * pi * 50) = 637 rpm where it starts and would reach 6366
+    // rpm at radius 5, which RPM_MAX=3000 caps; the mean radius 27.5 would report the single value 1157.
+    [Fact]
+    public void CssRpmRange_FacingCutThatChangesX_SpansTheStartAndTheEndRadius()
+    {
+        MachineConfig machine = AnalyticMachines.Mill(AnalyticMachines.ExactStop);
+        var tools = new ToolListAnalytic(AnalyticRuns.Options(machine));
+        AnalyticRuns.Run(
+            CliHarness.OneProgram("UNITS=MM", "TOOL=1", "RPM_MAX=3000", "VC=200", "CSS=ON", "SPINDLE=CW",
+                "FEED_MODE=PER_REV", "RAPID X=50 Y=0 Z=0", "LINE X=5 F=0.2", "SPINDLE=OFF"),
+            machine, tools);
+
+        ToolUse use = Assert.Single(Rows(tools));
+        Assert.Equal("637-3000", use.RpmText());
     }
 
     // The rows of the report: the uses with a block in the range.

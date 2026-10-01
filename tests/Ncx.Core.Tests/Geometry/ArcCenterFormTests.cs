@@ -88,6 +88,29 @@ public sealed class ArcCenterFormTests
         }
     }
 
+    // D122: start = end is compared exactly, so an end 0.004 from the start, inside the arc tolerance of 0.01 mm, is
+    // the short arc its coordinates give and not a full circle.
+    [Fact]
+    public void FullCircle_EndInsideTheArcToleranceOfTheStart_IsTheShortArcAndNotAFullTurn()
+    {
+        Arc arc = GeometryAssert.Resolved(ArcResolver.ResolveCenterForm(ArcDirection.Counterclockwise,
+            new Vec3(10, 0, 0), new Vec3(10, 0.004, 0), new Vec3(0, 0, 0), GeometryAssert.ArcToleranceMm));
+
+        Assert.Equal(0.022918310582923086, arc.Sweep, GeometryAssert.Precision);
+        Assert.Equal(0, arc.FullTurns);
+    }
+
+    // D122: a center that lies on the start point gives an arc of radius 0, which is an ERROR as R=0 is.
+    [Fact]
+    public void CenterOnTheStart_RadiusZero_IsAnError()
+    {
+        ArcResult result = ArcResolver.ResolveCenterForm(ArcDirection.Clockwise, new Vec3(0, 0, 0),
+            new Vec3(0.005, 0, 0), new Vec3(0, 0, 0), GeometryAssert.ArcToleranceMm);
+
+        Assert.Null(result.Arc);
+        Assert.Equal(ArcError.CenterOnTheStart, result.Error);
+    }
+
     // A tool-axis word makes a helix (virtual machine 3.2): start = end in the plane with a different tool-axis
     // coordinate is one full turn of a helix.
     [Fact]

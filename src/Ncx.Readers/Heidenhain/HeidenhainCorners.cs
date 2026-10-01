@@ -386,8 +386,8 @@ internal static class HeidenhainCorners
     // The arc the block reads into: C, CT and CP about the CENTER they write, CR about the centre its radius gives from
     // where it starts (virtual machine 3.2), over its sweep from there to the corner point or its ANGLE of more than a
     // turn (D84).
-    // TODO(question): D122, an arc that ends where it starts is a full circle or nothing; the reader keeps a corner
-    // next to it RAW.
+    // D122: an arc whose end is its start is a full circle, and a centre on the start point is an ERROR (radius 0),
+    // so neither is the corner the source meant; the reader keeps a corner next to such an arc RAW (decisions.md).
     private static HeidenhainElement? ArcBefore(HeidenhainDraftBlock main, HeidenhainElement element,
         HeidenhainPoint start, HeidenhainPoint point, string first, string second, out string? problem)
     {

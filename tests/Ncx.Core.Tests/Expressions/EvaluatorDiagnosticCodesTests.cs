@@ -13,7 +13,6 @@ public sealed class EvaluatorDiagnosticCodesTests
     [InlineData(DiagnosticCodes.UnassignedVariableRead)]
     [InlineData(DiagnosticCodes.StringWhereNumberIsRequired)]
     [InlineData(DiagnosticCodes.SystemVariableUnknown)]
-    [InlineData(DiagnosticCodes.FunctionArgumentCount)]
     [InlineData(DiagnosticCodes.ResultUndefined)]
     [InlineData(DiagnosticCodes.ResultOutOfRange)]
     [InlineData(DiagnosticCodes.IndexNeedsSystemVariable)]

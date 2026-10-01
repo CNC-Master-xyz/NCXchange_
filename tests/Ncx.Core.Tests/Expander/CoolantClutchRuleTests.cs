@@ -80,6 +80,47 @@ public sealed class CoolantClutchRuleTests
         Assert.True(diagnostics.Items.Count == 0, diagnostics.ToText());
     }
 
+    // D198: the rule names states = ["ON"], so COOLANT:THROUGH=OFF triggers nothing and the block stands alone.
+    [Fact]
+    public void RuleStates_StateTheRuleDoesNotName_TriggersNothing()
+    {
+        string program = ExpanderHarness.File(
+            "UNITS=MM",
+            "SPINDLE:MAIN=CW RPM:MAIN=1500",
+            "COOLANT:THROUGH=OFF");
+
+        NcxProgram expanded = ExpanderHarness.Expand(program, ExpanderMachines.CoolantClutch());
+
+        Assert.Equal(program, ExpanderHarness.WriteWithGenerated(expanded));
+    }
+
+    // D198: without the states key every state of the table triggers the rule, as before the decision.
+    [Fact]
+    public void RuleStates_RuleWithoutTheStatesKey_TriggersOnEveryState()
+    {
+        string program = ExpanderHarness.File(
+            "UNITS=MM",
+            "SPINDLE:MAIN=CW RPM:MAIN=1500",
+            "COOLANT:THROUGH=OFF");
+        var everyState = new Ncx.Core.Machine.ExpansionRule
+        {
+            Requires = new Dictionary<string, string> { ["SPINDLE"] = "OFF" },
+            Restore = ["SPINDLE"],
+        };
+
+        NcxProgram expanded = ExpanderHarness.Expand(program, ExpanderMachines.CoolantRule(everyState));
+
+        Assert.Equal(
+            ExpanderHarness.File(
+                "UNITS=MM",
+                "SPINDLE:MAIN=CW RPM:MAIN=1500",
+                "@SAVE=SPINDLE:MAIN",
+                "SPINDLE:MAIN=OFF",
+                "COOLANT:THROUGH=OFF",
+                "@RESTORE=SPINDLE:MAIN"),
+            ExpanderHarness.WriteWithGenerated(expanded));
+    }
+
     // A requires key with its role written names the same variable as the bare key of the default spindle
     // (virtual machine 3.8 rule 2, 3.10).
     [Fact]

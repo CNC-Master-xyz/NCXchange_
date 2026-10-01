@@ -34,11 +34,16 @@ internal static class ArcResolver
             return ArcResult.Failed(ArcError.InconsistentCenter);
         }
 
+        // D122: a center on the start point has radius 0 and is an ERROR, as R=0 is (language 4.3).
+        if (startRadius == 0)
+        {
+            return ArcResult.Failed(ArcError.CenterOnTheStart);
+        }
+
         // Start = end is a full circle (virtual machine 3.2), a full turn of a helix when a tool-axis word moves the
         // end; otherwise the arc turns from the start to the end in the direction of the verb.
-        // TODO(question): start = end is read as equal plane coordinates. Whether an end within the arc tolerance of
-        // the start is a full circle, and what an arc of radius 0 (a center on the start) is, the documents do not say;
-        // such arcs resolve to what their coordinates give (a sweep near 0 or near 360, a radius near 0) (D122).
+        // D122: start = end is compared exactly, on the plane coordinates as the position store holds them; an end
+        // near the start resolves to the short arc, or the near-full turn, that its coordinates give.
         double sweep = Angle.FullTurn;
         if (!SameInPlane(start, end))
         {

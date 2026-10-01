@@ -357,20 +357,21 @@ internal sealed class ResourceResolver
         CheckSpindleAxisWords(context);
     }
 
-    // In SPINDLE mode, C= on the axis of a work spindle is an ERROR; in AXIS mode it is allowed (rule 4). The words
-    // that command or declare the position of an axis are those of the motion verbs and of SETPOS.
-    // TODO(question): rule 4 names C= without naming the verbs; a C word under SHIFT or TILT_AXIS is a shift or an
-    // angle, not a position of the spindle, and is not checked until D131 is answered.
+    // In SPINDLE mode, a word that positions the axis of a work spindle or declares its position is an ERROR; in AXIS
+    // mode it is allowed (rule 4). D131: that is C and IC under RAPID, LINE, ARC, CYCLE_CALL and SETPOS, the bare C of
+    // HOME, and the C of a TILT_AXIS with MOVE=TURN or MOVE=MOVE, which position the axis (virtual machine 3.4);
+    // a SHIFT appends a chain entry and moves nothing, and a TILT_AXIS with MOVE=STAY leaves the axes standing.
     private void CheckSpindleAxisWords(BlockContext context)
     {
-        if (context.Block.Verb?.Key is not ("RAPID" or "LINE" or "ARC" or "CYCLE_CALL" or "SETPOS"))
+        bool home = context.Block.Verb?.Key == "HOME";
+        if (!PositionsTheAxesItNames(context.Block))
         {
             return;
         }
 
         foreach (Word word in context.Block.Words)
         {
-            if (word.Value is NoValue
+            if ((word.Value is NoValue && !home)
                 || !context.AxisOf.TryGetValue(word, out string? axis)
                 || SpindleOfAxis(axis) is not string spindleId
                 || context.State.Spindles[spindleId].Mode != SpindleMode.Spindle)
@@ -381,6 +382,20 @@ internal sealed class ResourceResolver
             context.Diagnostics.Error(context.Block, DiagnosticCodes.AxisOfSpindleInSpindleMode,
                 $"{word.ToCanonical()} positions the axis of the spindle {spindleId}, which is in SPINDLE mode; "
                 + "SPINDLE_MODE switches it to AXIS mode first (virtual machine 3.8 rule 4).");
+        }
+    }
+
+    // The verbs whose axis words position the axes they name or declare their position (D131).
+    private static bool PositionsTheAxesItNames(Block block)
+    {
+        switch (block.Verb?.Key)
+        {
+            case "RAPID" or "LINE" or "ARC" or "CYCLE_CALL" or "SETPOS" or "HOME":
+                return true;
+            case "TILT_AXIS":
+                return block.Find("MOVE") is Word move && BlockContext.IdentOf(move) is "TURN" or "MOVE";
+            default:
+                return false;
         }
     }
 

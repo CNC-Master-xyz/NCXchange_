@@ -281,7 +281,41 @@ public sealed class ExprParserDiagnosticsTests
             count++;
         }
 
-        Assert.Equal(11, count);
+        Assert.Equal(12, count);
+    }
+
+    // D118: ATAN2 takes two arguments, MIN and MAX two or more, every other function one, and a wrong count is a PAR
+    // ERROR of the parser, so format, convert, check and compile all report it.
+    [Theory]
+    [InlineData("SIN(1, 2)", "SIN at position 1 of {SIN(1, 2)} is given 2 arguments, and SIN takes one argument "
+        + "(language 4.12, D118).")]
+    [InlineData("ROUND(2.5, 1)", "ROUND at position 1 of {ROUND(2.5, 1)} is given 2 arguments, and ROUND takes one "
+        + "argument (language 4.12, D118).")]
+    [InlineData("ATAN2(1)", "ATAN2 at position 1 of {ATAN2(1)} is given 1 arguments, and ATAN2 takes two arguments "
+        + "(language 4.12, D118).")]
+    [InlineData("MIN(3)", "MIN at position 1 of {MIN(3)} is given 1 arguments, and MIN takes two arguments or more "
+        + "(language 4.12, D118).")]
+    public void FunctionArity_WrongNumberOfArguments_IsAParseError(string text, string message)
+    {
+        Diagnostic diagnostic = SingleError(text, DiagnosticCodes.ExpressionArgumentCount);
+
+        Assert.Equal(message, diagnostic.Message);
+    }
+
+    // D118: the counts each function does take parse, MIN and MAX with two arguments or more.
+    [Theory]
+    [InlineData("SIN(30)")]
+    [InlineData("ATAN2(1, 2)")]
+    [InlineData("MIN(1, 2)")]
+    [InlineData("MAX(1, 2, 3)")]
+    public void FunctionArity_TheCountTheFunctionTakes_Parses(string text)
+    {
+        var diagnostics = new Diagnostics("test.ncx");
+
+        ExprNode? tree = ExprParser.Parse(text, 1, diagnostics);
+
+        Assert.NotNull(tree);
+        Assert.Empty(diagnostics.Items);
     }
 
     // Parses a text that must fail with exactly one ERROR of the given code, and no tree.

@@ -282,7 +282,7 @@ Stored numbers are `decimal` with the original text, so that a program is reprod
 
 ## 5. Virtual machine (Ncx.Core)
 
-The VM executes blocks against a `ChannelState` and raises events. It runs in STATIC mode (one pass over each program, jumps and repeats recorded, every call followed with the caller's state, expressions unresolved; D99) for `convert`, `compile` and `check` (`format` does not run it, D91), and in INTERPRETED mode (flow followed, expressions evaluated, block cap) for `analyze`. The state classes mirror section 2 of the VM specification one to one, so that the specification stays the documentation of the code.
+The VM executes blocks against a `ChannelState` and raises events. It runs in STATIC mode (one pass over each program, jumps and repeats recorded, every call followed with the caller's state, expressions unresolved; D99) for `convert`, `compile` and `check` (`format` does not run it, D91), and in INTERPRETED mode (flow followed, expressions evaluated, block cap) for `analyze`. The state classes mirror section 2 of the VM specification one to one, so that the specification stays the documentation of the code. In `SpindleState`, `SyncPartner` and `SyncPhase` are set on the following spindle only, where they name the leading spindle and carry the phase; the leading spindle keeps neither (D171).
 
 ```mermaid
 classDiagram
@@ -713,6 +713,7 @@ classDiagram
         +ExpansionRule Rule
     }
     class ExpansionRule {
+        +List~string~ States
         +List~string~ Pre
         +List~string~ Post
         +Dictionary~string,string~ Requires

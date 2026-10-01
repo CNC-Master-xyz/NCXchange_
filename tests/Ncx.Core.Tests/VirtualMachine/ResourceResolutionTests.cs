@@ -190,11 +190,20 @@ public sealed class ResourceResolutionTests
         vm.AssertNoDiagnostics();
     }
 
-    // VM 3.8 rule 4: HOME carries a bare C, no C=.
+    // VM 3.8 rule 4 as D131 settles it: HOME carries a bare C, and it positions the axis, so it is covered too.
     [Fact]
-    public void HomeC_SpindleInSpindleMode_IsNoCWord()
+    public void HomeC_SpindleInSpindleMode_IsAnError()
     {
         VmHarness vm = new VmHarness(VmMachines.MillTurn()).Execute("UNITS=MM", "HOME C");
+
+        Assert.Equal([DiagnosticCodes.AxisOfSpindleInSpindleMode], vm.Codes());
+    }
+
+    // VM 3.8 rule 4, D131: in AXIS mode the bare C of HOME is allowed, as POLAR_FACE writes it.
+    [Fact]
+    public void HomeC_SpindleInAxisMode_IsAllowed()
+    {
+        VmHarness vm = new VmHarness(VmMachines.MillTurn()).Execute("SPINDLE_MODE:MAIN=AXIS UNITS=MM", "HOME C");
 
         vm.AssertNoDiagnostics();
     }

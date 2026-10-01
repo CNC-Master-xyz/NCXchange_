@@ -1,4 +1,3 @@
-using System.Globalization;
 using Ncx.Core.Model;
 
 namespace Ncx.Core.Expressions;
@@ -14,14 +13,11 @@ internal sealed partial class Evaluator
     private const decimal FullTurn = 360;
 
     // function "(" expr { "," expr } ")": the arguments are evaluated left to right, each is a number, and the
-    // function computes its value from them (language 4.12).
+    // function computes its value from them (language 4.12). D118: the number of arguments each function takes is
+    // checked by the expression parser (PAR111), so a call that reaches the evaluator has the count its function
+    // takes.
     private ExprResult? EvaluateCall(CallNode call)
     {
-        if (!ArgumentCountFits(call))
-        {
-            return null;
-        }
-
         var arguments = new List<decimal>();
         bool unknown = false;
         foreach (ExprNode argument in call.Arguments)
@@ -80,32 +76,6 @@ internal sealed partial class Evaluator
             _ => throw new ArgumentOutOfRangeException(
                 nameof(call), call.Function, "Not a function of language 4.12."),
         };
-    }
-
-    // ATAN2 takes two arguments, MIN and MAX one or more, every other function one (language 4.12, function). False
-    // after the ERROR.
-    // TODO(question): language 4.12 gives no number of arguments per function, and the parser accepts the grammar's
-    // one or more (P0-05); these are the counts the mathematics of each function needs, ROUND without a number of
-    // decimals, until D118 is settled.
-    private bool ArgumentCountFits(CallNode call)
-    {
-        if (call.Function is ExprFunction.Min or ExprFunction.Max)
-        {
-            return true;
-        }
-
-        int expected = call.Function == ExprFunction.Atan2 ? 2 : 1;
-        if (call.Arguments.Count == expected)
-        {
-            return true;
-        }
-
-        string name = ExprSymbols.Of(call.Function);
-        string takes = expected == 1 ? "one argument" : "two arguments";
-        Report(DiagnosticCodes.FunctionArgumentCount,
-            $"{call} gives {name} {call.Arguments.Count.ToString(CultureInfo.InvariantCulture)} arguments, and {name} "
-            + $"takes {takes} (language 4.12).");
-        return false;
     }
 
     // SIN of an angle in degrees (language 4.12); on the axes the value is exact, SIN(180) is 0 and not 1.2E-16.

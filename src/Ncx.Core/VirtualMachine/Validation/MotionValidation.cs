@@ -28,7 +28,8 @@ internal static class MotionValidation
         [
             ValidationRule.Error(DiagnosticCodes.MotionBeforeUnits, "Motion before UNITS.",
                 "language 4.1; VM 3.1, 5") with { SuppressedInUncalledSub = true },
-            ValidationRule.Error(DiagnosticCodes.LineWithoutFeed, "LINE without feed.", "VM 3.1, 5")
+            ValidationRule.Error(DiagnosticCodes.LineWithoutFeed, "LINE or ARC without feed.",
+                    "VM 3.1, 3.2, 5; D184")
                 with { SuppressedInUncalledSub = true },
             ValidationRule.Error(DiagnosticCodes.IncrementalFromUnknownPosition,
                 "IX from an unknown position. In a subprogram nothing calls the position becomes unknown instead.",

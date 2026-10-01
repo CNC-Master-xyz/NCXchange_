@@ -63,4 +63,10 @@ public static partial class DiagnosticCodes
     /// cmpexpr).
     /// </summary>
     public const string ExpressionChainedComparison = "PAR110";
+
+    /// <summary>
+    /// A function called with a number of arguments it does not take, SIN(1, 2), ATAN2(1), MIN(3): ATAN2 takes two
+    /// arguments, MIN and MAX two or more, every other function one (language 4.12, D118).
+    /// </summary>
+    public const string ExpressionArgumentCount = "PAR111";
 }

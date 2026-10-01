@@ -86,7 +86,7 @@ Linear motion and the machine limits of a motion (language 4.3; VM 3.1, 5; machi
 | Code | Severity | Rule | Section |
 |---|---|---|---|
 | `VM200` | ERROR | Motion before UNITS. Suppressed inside a subprogram that no program of the file calls (D99). | language 4.1; VM 3.1, 5 |
-| `VM201` | ERROR | LINE without feed. Suppressed inside a subprogram that no program of the file calls (D99). | VM 3.1, 5 |
+| `VM201` | ERROR | LINE or ARC without feed. Suppressed inside a subprogram that no program of the file calls (D99). | VM 3.1, 3.2, 5; D184 |
 | `VM202` | ERROR | IX from an unknown position. In a subprogram nothing calls the position becomes unknown instead. Suppressed inside a subprogram that no program of the file calls (D99). | VM 3.1, 5; D99 |
 | `VM203` | ERROR | Two forms of one axis in one block (X=10 IX=5). | language 4.3 |
 | `VM440` | WARNING | F in a RAPID block. | VM 5 |
@@ -113,6 +113,7 @@ The three forms of an arc in its working plane (language 4.3; VM 3.2, 5; D36, D8
 | `VM232` | ERROR | Full circle with R. | language 4.3; VM 3.2, 5 |
 | `VM233` | ERROR | R=0. | language 4.3 |
 | `VM234` | ERROR | ANGLE not greater than 0. | language 4.3; VM 5; D84 |
+| `VM235` | ERROR | A center on the start point: the arc has radius 0. | language 4.3; VM 3.2, 5; D122 |
 | `VM460` | ERROR | COMP change in an ARC block. | VM 5 |
 
 ## Vector
@@ -213,13 +214,13 @@ Expressions and variables (language 4.9, 4.12; VM 1, 2.7, 3.6, 5; D38, D51). The
 | `PAR108` | ERROR | A name without $ and without parentheses. | language 4.9, 4.12 |
 | `PAR109` | ERROR | A part after a complete expression. | language 4.12 |
 | `PAR110` | ERROR | A second comparison behind a comparison. | language 4.12 |
+| `PAR111` | ERROR | A function with a number of arguments it does not take. | language 4.12; D118 |
 | `VM080` | ERROR | Assignment to a SYS_ variable. | VM 2.7, 5 |
 | `VM540` | WARNING | Unresolved expression in STATIC mode, counted and reported once per run. | VM 1, 5 |
 | `VM900` | ERROR | Division by zero. | language 4.12; VM 5 |
 | `VM901` | ERROR | Unassigned variable, unless the configuration sets unassigned = 0. | VM 3.6, 5; D38 |
 | `VM902` | ERROR | String where a number is required. | VM 5 |
 | `VM903` | ERROR | A SYS_ name the configuration does not map, or an unknown state, read in INTERPRETED mode. | VM 2.7, 3.6; D51 |
-| `VM904` | ERROR | A function with a number of arguments it does not take. | language 4.12 |
 | `VM905` | ERROR | An operation without a real result. | language 4.12 |
 | `VM906` | ERROR | A number beyond the range of the decimal arithmetic. | language 4.12 |
 | `VM907` | ERROR | An index on a variable that is not a SYS_ name. | language 4.12; D51 |

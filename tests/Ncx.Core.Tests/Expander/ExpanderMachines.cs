@@ -84,13 +84,15 @@ internal static class ExpanderMachines
     }
 
     /// <summary>
-    /// The shop-floor example of machine-config 5a: THROUGH = { ON = "M51", OFF = "M9", requires = { SPINDLE = "OFF" },
-    /// restore = ["SPINDLE"] }.
+    /// The shop-floor example of machine-config 5a: THROUGH = { ON = "M51", OFF = "M9", states = ["ON"],
+    /// requires = { SPINDLE = "OFF" }, restore = ["SPINDLE"] }; the states key makes the clutch sequence run when the
+    /// coolant is switched on and not when it is switched off (D198).
     /// </summary>
     public static MachineConfig CoolantClutch()
     {
         var clutch = new ExpansionRule
         {
+            States = ["ON"],
             Requires = new Dictionary<string, string> { ["SPINDLE"] = "OFF" },
             Restore = ["SPINDLE"],
         };

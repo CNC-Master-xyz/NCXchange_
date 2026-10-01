@@ -77,15 +77,32 @@ internal static class MotionRules
     /// </summary>
     public static void MoveStraight(BlockContext context)
     {
-        // TODO(question): virtual machine 3.1 and 5 name "LINE without feed"; ARC moves at the active feed as well
-        // (language 4.3) and is not named, so only LINE is checked until D184 is answered.
-        if (context.Block.Verb?.Key == "LINE" && context.State.Motion.Feed is null)
+        if (context.Block.Verb?.Key == "LINE")
         {
-            context.CallerRuleDiagnostics.Error(context.Block, DiagnosticCodes.LineWithoutFeed,
-                "LINE moves at the active feed, and no F is set (virtual machine 3.1).");
+            RequireFeed(context);
         }
 
         MoveAxes(context);
+    }
+
+    /// <summary>
+    /// A LINE or an ARC moves at the active feed, and feed.value none is the ERROR VM201, suppressed inside a
+    /// subprogram that no program of the file calls (virtual machine 3.1, 3.2, 3.9, 5; D99, D184). An ARC is
+    /// interpolated at F exactly as a LINE is, and the runtime estimate of virtual machine 8 cannot time it without
+    /// one; CYCLE_CALL stays outside the rule, because its feed is CYCLE_F (D29).
+    /// </summary>
+    /// <param name="context">The LINE or ARC block.</param>
+    public static void RequireFeed(BlockContext context)
+    {
+        if (context.State.Motion.Feed is not null)
+        {
+            return;
+        }
+
+        string verb = context.Block.Verb?.Key == "ARC" ? "ARC" : "LINE";
+        string section = verb == "ARC" ? "3.2" : "3.1";
+        context.CallerRuleDiagnostics.Error(context.Block, DiagnosticCodes.LineWithoutFeed,
+            $"{verb} moves at the active feed, and no F is set (virtual machine {section}, D184).");
     }
 
     /// <summary>

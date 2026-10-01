@@ -591,16 +591,17 @@ public sealed partial class VirtualMachine
 
     // Step 6: FRAME, IF, ARG, TIMES and WITH end with their block (virtual machine 3 step 6), and so do the verb, SKIP,
     // PHASE and POINT (virtual machine 4). IF, ARG, TIMES, WITH, PHASE and POINT have no state row of their own: they
-    // act inside their block only. A HOME that found no reference point is "directly before" a SETPOS only until
-    // another block names the axis (D101).
-    // TODO(question): D101 accepts SETPOS "directly after a HOME of that axis" without saying whether a block that
-    // does not name the axis may stand between them (POLAR_FACE has none); it may, until D127 is answered.
+    // act inside their block only. A HOME that found no reference point is "directly before" a SETPOS until the next
+    // block that names the axis, or that switches the spindle owning it to SPINDLE mode; blocks that touch neither may
+    // stand between the two (D101; D127: HOME C, COOLANT=OFF, SETPOS C=0 keeps the permission, and a switch back to
+    // SPINDLE mode ends it, because the axis then turns as a spindle and no longer stands where the HOME left it).
     private void ResetBlockScope(BlockContext context)
     {
         _state.Frame.MachineFrameBlock = false;
         _state.Motion.BlockVerb = null;
         _state.Motion.Skip = false;
         _state.Motion.SkipNumber = null;
+        EndSetposPermissionOfSpindlesBackInSpindleMode(context);
         if (context.Block.Verb?.Key == "HOME")
         {
             return;
@@ -609,6 +610,34 @@ public sealed partial class VirtualMachine
         foreach (string axis in context.AxisOf.Values)
         {
             _homedWithoutReference.Remove(axis);
+        }
+    }
+
+    // D127: a block that switches the spindle owning the axis to SPINDLE mode ends the SETPOS permission of D101, so
+    // that a switch back to SPINDLE mode before the SETPOS does not keep it alive.
+    private void EndSetposPermissionOfSpindlesBackInSpindleMode(BlockContext context)
+    {
+        if (_homedWithoutReference.Count == 0)
+        {
+            return;
+        }
+
+        foreach (Word word in context.Block.Words)
+        {
+            if (word.Key != "SPINDLE_MODE"
+                || BlockContext.IdentOf(word) == "AXIS"
+                || !context.ResourceOf.TryGetValue(word, out string? switched))
+            {
+                continue;
+            }
+
+            foreach (string axis in _homedWithoutReference.ToArray())
+            {
+                if (context.Resources.SpindleOfAxis(axis) == switched)
+                {
+                    _homedWithoutReference.Remove(axis);
+                }
+            }
         }
     }
 

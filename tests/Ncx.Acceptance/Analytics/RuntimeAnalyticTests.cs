@@ -274,6 +274,20 @@ public sealed class RuntimeAnalyticTests
         Assert.Equal(10.01, runtime.TotalSeconds, Precision);
     }
 
+    // D289: along a motion that changes X the radius of CSS is the mean of the start and the end X radius, so a
+    // facing cut from X=50 to X=0 is timed at radius 25 and not at the start radius 50.
+    [Fact]
+    public void CssRadius_FacingCutThatChangesX_TakesTheMeanOfTheStartAndEndRadius()
+    {
+        RuntimeAnalytic runtime = Run(AnalyticMachines.Mill(AnalyticMachines.ExactStop),
+            ["RPM_MAX=3000", "VC=200", "CSS=ON", "SPINDLE=CW", "FEED_MODE=PER_REV", "RAPID X=50 Y=0 Z=0"],
+            "LINE X=0 F=0.2",
+            "SPINDLE=OFF");
+
+        double speed = 0.2 * (200000 / (2 * Math.PI * 25)) / 60;
+        Assert.Equal((50 / speed) + (speed / 1000), runtime.TotalSeconds, Precision);
+    }
+
     // VM 8, machine-config 5: a spindle start or stop adds accel_time of that spindle, 2 s each.
     [Fact]
     public void SpindleAccelTime_StartAndStop_AddTheAccelTimeOfTheSpindle()

@@ -292,8 +292,8 @@ internal static class HeidenhainNextElement
     }
 
     // An arc about its centre from the corner point to its end in its direction.
-    // TODO(question): D122, an arc that ends where it starts is a full circle or nothing; the reader keeps a corner
-    // next to it RAW.
+    // D122: an arc whose end is its start is a full circle, and a centre on the start point is an ERROR (radius 0),
+    // so neither is the corner the source meant; the reader keeps a corner next to such an arc RAW (decisions.md).
     private static HeidenhainElement? Arc(HeidenhainPoint point, HeidenhainPoint end, HeidenhainPoint center, bool ccw,
         bool incremental, decimal? radius, out string? problem)
     {

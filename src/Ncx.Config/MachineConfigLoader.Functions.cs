@@ -23,7 +23,7 @@ public static partial class MachineConfigLoader
     // The keys every function table may carry besides its states: the channel binding (D56) and the four keys of the
     // expansion rule (machine-config 5a); a spindle table also carries the machine limits (D64).
     private static readonly string[] s_bindingAndRuleKeys =
-        ["channel", "channels", "pre", "post", "requires", "restore"];
+        ["channel", "channels", "pre", "post", "requires", "restore", "states"];
 
     private static readonly string[] s_ruleKeys = ["pre", "post", "requires", "restore"];
     private static readonly string[] s_spindleLimitKeys = ["rpm_min", "rpm_max", "accel_time"];
@@ -141,9 +141,10 @@ public static partial class MachineConfigLoader
         };
     }
 
-    // The four optional keys of a function state, the tool change or a catalog cycle: pre and post are NCX blocks,
+    // The optional keys of a function table, the tool change or a catalog cycle: pre and post are NCX blocks,
     // requires the state conditions, restore the state variables put back; NCX text carries no native codes and is
-    // kept as written (machine-config 5a, 5).
+    // kept as written (machine-config 5a, 5). A function table may also name the states its rule fires on; without
+    // the key every state of the table fires it (D198). The tool change and a catalog cycle have no states.
     internal static ExpansionRule? ReadRule(ConfigTable table)
     {
         bool hasRule = false;
@@ -159,6 +160,7 @@ public static partial class MachineConfigLoader
 
         return new ExpansionRule
         {
+            States = table.TextList("states"),
             Pre = table.TextList("pre"),
             Post = table.TextList("post"),
             Requires = table.Table("requires")?.Strings(null) ?? new Dictionary<string, string>(),

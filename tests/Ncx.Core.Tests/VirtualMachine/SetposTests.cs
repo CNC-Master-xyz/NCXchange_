@@ -74,6 +74,31 @@ public sealed class SetposTests
         Assert.Equal(1, vm.Count(DiagnosticCodes.SetposAxisUnknown));
     }
 
+    // D127: a block that does not name the axis leaves the permission of D101 standing, so a reader need not keep
+    // HOME C and SETPOS C=0 adjacent.
+    [Fact]
+    public void SetposPermission_BlockBetweenThatDoesNotNameTheAxis_KeepsThePermission()
+    {
+        VmHarness vm = new VmHarness(VmMachines.Default())
+            .Execute("UNITS=MM SPINDLE_MODE:MAIN=AXIS", "HOME C", "COOLANT=OFF", "SETPOS C=0");
+
+        Assert.Equal(0, vm.Count(DiagnosticCodes.SetposAxisUnknown));
+        Assert.Equal(new AxisPosition(0m, PositionFrame.Workpiece, Known: true), vm.Position("C"));
+    }
+
+    // D127: a block that switches the spindle owning the axis back to SPINDLE mode ends the permission, because the
+    // axis then turns as a spindle and no longer stands where the HOME left it.
+    [Fact]
+    public void SetposPermission_SpindleSwitchedBackToSpindleMode_EndsThePermission()
+    {
+        VmHarness vm = new VmHarness(VmMachines.Default())
+            .Execute("UNITS=MM SPINDLE_MODE:MAIN=AXIS", "HOME C", "SPINDLE_MODE:MAIN=SPINDLE",
+                "SPINDLE_MODE:MAIN=AXIS", "SETPOS C=0");
+
+        Assert.Equal(1, vm.Count(DiagnosticCodes.SetposAxisUnknown));
+        Assert.Equal(AxisPosition.Unknown, vm.Position("C"));
+    }
+
     // VM 4: SETPOS on the same axis replaces the setpos shift.
     [Fact]
     public void Setpos_TheSameAxisAgain_TheSecondReplacesTheShift()

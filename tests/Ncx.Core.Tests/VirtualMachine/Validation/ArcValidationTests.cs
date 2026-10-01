@@ -97,14 +97,17 @@ public sealed class ArcValidationTests
     public void Compensation_RepeatedInAnArcBlock_IsNoChange()
     {
         VmHarness vm = new VmHarness(VmMachines.Default())
-            .Execute("UNITS=MM SPINDLE=CW RPM=1000", "RAPID X=0 Y=0", "COMP=LEFT", "ARC=CW X=10 Y=0 R=5 COMP=LEFT");
+            .Execute("UNITS=MM F=100 SPINDLE=CW RPM=1000", "RAPID X=0 Y=0", "COMP=LEFT",
+                "ARC=CW X=10 Y=0 R=5 COMP=LEFT");
 
         vm.AssertNoDiagnostics();
     }
 
-    // An arc from X=0 Y=0, known in the workpiece frame of the XY plane.
+    // An arc from X=0 Y=0, known in the workpiece frame of the XY plane, with a feed set, because an ARC without one
+    // is the ERROR VM201 of D184.
     private static VmHarness FromOrigin(string arc)
     {
-        return new VmHarness(VmMachines.Default()).Execute("UNITS=MM SPINDLE=CW RPM=1000", "RAPID X=0 Y=0", arc);
+        return new VmHarness(VmMachines.Default())
+            .Execute("UNITS=MM F=100 SPINDLE=CW RPM=1000", "RAPID X=0 Y=0", arc);
     }
 }

@@ -45,6 +45,8 @@ internal static class ArcValidation
             ValidationRule.Error(DiagnosticCodes.ArcRadiusZero, "R=0.", "language 4.3"),
             ValidationRule.Error(DiagnosticCodes.ArcAngleNotGreaterThanZero, "ANGLE not greater than 0.",
                 "language 4.3; VM 5; D84"),
+            ValidationRule.Error(DiagnosticCodes.ArcCenterOnTheStart,
+                "A center on the start point: the arc has radius 0.", "language 4.3; VM 3.2, 5; D122"),
             ValidationRule.Error(DiagnosticCodes.CompensationChangeInArc, "COMP change in an ARC block.", "VM 5"),
         ],
     };

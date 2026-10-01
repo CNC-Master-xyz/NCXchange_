@@ -61,6 +61,9 @@ internal static class ArcRules
     /// <returns>The arc in the coordinates of its plane; null when it does not resolve.</returns>
     public static PlaneArc? Execute(BlockContext context, decimal arcTolerance)
     {
+        // D184: an ARC is interpolated at the active feed exactly as a LINE is, so feed.value none is VM201 here too,
+        // with the same suppression inside a subprogram that no program of the file calls (virtual machine 3.9, D99).
+        MotionRules.RequireFeed(context);
         ChannelState state = context.State;
         Plane plane = PlaneOf(state.Frame);
         ArcWords words = ArcWords.Of(context, plane);
@@ -293,6 +296,11 @@ internal static class ArcRules
                 diagnostics.Error(block, DiagnosticCodes.ArcInconsistentCenter,
                     $"{arc}: the start and the end lie at radii from CENTER that differ by more than the arc tolerance "
                     + $"{tolerance}: inconsistent center (virtual machine 3.2, D36).");
+                break;
+            case ArcError.CenterOnTheStart:
+                diagnostics.Error(block, DiagnosticCodes.ArcCenterOnTheStart,
+                    $"{arc}: CENTER lies on the start point, so the arc has radius 0, as R=0 would (language 4.3, "
+                    + "virtual machine 3.2, D122).");
                 break;
             case ArcError.RadiusTooSmall:
                 diagnostics.Error(block, DiagnosticCodes.ArcRadiusTooSmall,

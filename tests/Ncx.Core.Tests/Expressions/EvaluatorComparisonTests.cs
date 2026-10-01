@@ -68,11 +68,24 @@ public sealed class EvaluatorComparisonTests
         Assert.Equal(EvaluationChannel.DecimalOf(expected), channel.NumberOf("$Q1 < $Q2 AND NOT $Q3"));
     }
 
-    // Both operands of AND are evaluated, as for every other operator, so a left operand of 0 does not hide the
-    // division by zero on the right (the reading of the open question in Evaluator.EvaluateBinary).
+    // D168: both operands of AND are evaluated, as for every other operator, so a left operand of 0 does not hide the
+    // division by zero on the right.
     [Fact]
     public void And_LeftOperandZero_StillEvaluatesTheRightOperand()
     {
         Assert.Equal(DiagnosticCodes.DivisionByZero, new EvaluationChannel().ErrorOf("0 AND 1 / 0").Code);
+    }
+
+    // D168: the same for OR, whose left operand of 1 already decides the value, and for the guard the draft names:
+    // {$Q2 != 0 AND $Q1 / $Q2 > 1} with Q2 = 0 is the division by zero, not 0.
+    [Fact]
+    public void NoShortCircuit_LeftOperandDecidesTheValue_StillEvaluatesTheRightOperand()
+    {
+        var channel = new EvaluationChannel();
+        channel.Set("Q1", 5m);
+        channel.Set("Q2", 0m);
+
+        Assert.Equal(DiagnosticCodes.DivisionByZero, channel.ErrorOf("$Q2 != 0 AND $Q1 / $Q2 > 1").Code);
+        Assert.Equal(DiagnosticCodes.DivisionByZero, new EvaluationChannel().ErrorOf("1 OR 1 / 0").Code);
     }
 }

@@ -14,6 +14,12 @@ internal enum ArcError
     InconsistentCenter,
 
     /// <summary>
+    /// CENTER form: the center lies on the start point, so the arc has radius 0 (language 4.3; virtual machine 3.2, 5
+    /// "a center on the start point"; D122).
+    /// </summary>
+    CenterOnTheStart,
+
+    /// <summary>
     /// R form: d > 2|R| plus the arc tolerance, the chord is longer than the diameter (virtual machine 3.2, 5 "radius
     /// too small").
     /// </summary>

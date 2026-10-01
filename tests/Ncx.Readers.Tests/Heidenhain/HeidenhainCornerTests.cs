@@ -207,8 +207,8 @@ public sealed class HeidenhainCornerTests
         Assert.Contains(DiagnosticCodes.KeptAsRaw, Codes(FramedProgram(snippet)));
     }
 
-    // An arc that ends where it starts is a full circle or nothing, which D122 leaves open: a rounding next to it stays
-    // RAW (the TODO(question) of HeidenhainCorners).
+    // D122: an arc that ends where it starts is a full circle and a centre on the start point is an ERROR, neither of
+    // which is the corner the source meant, so a rounding next to such an arc stays RAW.
     [Fact]
     public void Rnd_NextToAnArcThatEndsWhereItStarts_IsKeptAsRaw()
     {

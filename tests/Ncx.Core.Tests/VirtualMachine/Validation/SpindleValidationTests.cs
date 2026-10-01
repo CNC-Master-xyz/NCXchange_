@@ -26,6 +26,32 @@ public sealed class SpindleValidationTests
         RuleAssert.Only(vm, DiagnosticCodes.AxisOfSpindleInSpindleMode);
     }
 
+    // D131: the rule covers every word that positions the axis or declares its position, so the bare C of HOME and a
+    // TILT_AXIS that moves the rotary axes are ERRORs in SPINDLE mode too.
+    [Theory]
+    [InlineData("HOME C")]
+    [InlineData("TILT_AXIS C=180 MOVE=TURN")]
+    [InlineData("TILT_AXIS C=180 MOVE=MOVE")]
+    public void SpindleAxisWords_WordThatPositionsTheAxisInSpindleMode_IsAnError(string block)
+    {
+        VmHarness vm = new VmHarness(VmMachines.MillTurn()).Execute("UNITS=MM", block);
+
+        Assert.Equal(1, vm.Count(DiagnosticCodes.AxisOfSpindleInSpindleMode));
+    }
+
+    // D131: a SHIFT appends a chain entry and moves nothing, and a TILT_AXIS with MOVE=STAY leaves the axes standing;
+    // neither is covered.
+    [Theory]
+    [InlineData("SHIFT C=5")]
+    [InlineData("TILT_AXIS C=180 MOVE=STAY")]
+    [InlineData("TILT_AXIS C=180")]
+    public void SpindleAxisWords_WordThatMovesNothingInSpindleMode_IsNotAnError(string block)
+    {
+        VmHarness vm = new VmHarness(VmMachines.MillTurn()).Execute("UNITS=MM", block);
+
+        Assert.Equal(0, vm.Count(DiagnosticCodes.AxisOfSpindleInSpindleMode));
+    }
+
     // VM 5: spindle OFF before a LINE is a WARNING; on the default machine the tool holder carries the spindle TOOL.
     [Fact]
     public void SpindleOff_BeforeALine_Warns()

@@ -167,7 +167,7 @@ public sealed class ExprParserGrammarTests
     }
 
     // function = "SIN" | "COS" | ... | "MAX": each of the seventeen names of the grammar is its function
-    // (language 4.12).
+    // (language 4.12), called with the number of arguments it takes (D118).
     [Theory]
     [InlineData("SIN", ExprFunction.Sin)]
     [InlineData("COS", ExprFunction.Cos)]
@@ -188,7 +188,8 @@ public sealed class ExprParserGrammarTests
     [InlineData("MAX", ExprFunction.Max)]
     public void Function_EachNameOfTheGrammar_IsItsFunction(string name, ExprFunction function)
     {
-        CallNode call = Assert.IsType<CallNode>(ExprStructure.ParseValid(name + "($A)"));
+        string arguments = function is ExprFunction.Atan2 or ExprFunction.Min or ExprFunction.Max ? "($A, 1)" : "($A)";
+        CallNode call = Assert.IsType<CallNode>(ExprStructure.ParseValid(name + arguments));
 
         Assert.Equal(function, call.Function);
         Assert.Equal(name, ExprSymbols.Of(function));

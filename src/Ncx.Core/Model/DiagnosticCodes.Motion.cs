@@ -13,8 +13,8 @@ public static partial class DiagnosticCodes
     public const string MotionBeforeUnits = "VM200";
 
     /// <summary>
-    /// VM201: LINE while feed.value is none (virtual machine 3.1, 5). Suppressed inside a subprogram that no program of
-    /// the file calls (3.9, D99).
+    /// VM201: LINE or ARC while feed.value is none (virtual machine 3.1, 3.2, 5; D184). Suppressed inside a
+    /// subprogram that no program of the file calls (3.9, D99).
     /// </summary>
     public const string LineWithoutFeed = "VM201";
 
@@ -120,6 +120,12 @@ public static partial class DiagnosticCodes
     /// VM234: ANGLE not greater than 0 (language 4.3, virtual machine 5, D84).
     /// </summary>
     public const string ArcAngleNotGreaterThanZero = "VM234";
+
+    /// <summary>
+    /// VM235: CENTER form, the center lies on the start point, so the arc has radius 0: a center on the start point
+    /// (language 4.3; virtual machine 3.2, 5; D122).
+    /// </summary>
+    public const string ArcCenterOnTheStart = "VM235";
 
     /// <summary>
     /// VM240: RETRACT with a feed (virtual machine 3.1a, 5, D83); other axis words under RETRACT are the parser's ERROR

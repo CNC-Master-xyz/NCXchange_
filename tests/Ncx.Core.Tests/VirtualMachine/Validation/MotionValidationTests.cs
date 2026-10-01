@@ -24,6 +24,29 @@ public sealed class MotionValidationTests
         RuleAssert.Only(vm, DiagnosticCodes.LineWithoutFeed);
     }
 
+    // D184: an ARC is interpolated at the active feed exactly as a LINE is, so an ARC without feed is VM201 too.
+    [Fact]
+    public void Feed_ArcWithoutFeed_IsTheSameErrorAsALine()
+    {
+        VmHarness vm = new VmHarness(VmMachines.Default())
+            .Execute("UNITS=MM SPINDLE=CW", "RAPID X=0 Y=0", "ARC=CW X=20 Y=0 CENTER:X=10 CENTER:Y=0");
+
+        Diagnostic error = RuleAssert.Only(vm, DiagnosticCodes.LineWithoutFeed);
+
+        Assert.Equal("ARC moves at the active feed, and no F is set (virtual machine 3.2, D184).", error.Message);
+    }
+
+    // D184: CYCLE_CALL stays outside the rule, because its feed is CYCLE_F and never F (D29).
+    [Fact]
+    public void Feed_CycleCallWithoutFeed_IsNotTheError()
+    {
+        VmHarness vm = new VmHarness(VmMachines.Default())
+            .Execute("UNITS=MM SPINDLE=CW", "RAPID X=0 Y=0 Z=5",
+                "CYCLE=DRILL DEPTH=-10 CLEARANCE=2 CYCLE_F=100", "CYCLE_CALL X=10 Y=10");
+
+        Assert.Equal(0, vm.Count(DiagnosticCodes.LineWithoutFeed));
+    }
+
     // VM 3.1, 5: IX from an unknown position is an ERROR.
     [Fact]
     public void IncrementalWord_FromAnUnknownPosition_IsAnError()

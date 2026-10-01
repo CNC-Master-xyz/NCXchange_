@@ -86,9 +86,8 @@ internal static class SpindleHandlers
     // machine 2.4, 3.8 rule 5).
     private static void ApplySpindleSync(Word word, BlockContext context)
     {
-        // TODO(question): virtual machine 2.4 gives every spindle a syncPartner and syncPhase without saying on which
-        // of the two they stand; they stand on the following spindle, naming the leading one, so that rule 5 knows
-        // which spindle b is, until D171 is answered.
+        // D171: syncPartner and syncPhase stand on the following spindle only, naming the leading one and carrying
+        // the phase; the leader keeps none, so that rule 5 knows which spindle b is (decisions.md).
         foreach (KeyValuePair<string, SpindleState> spindle in context.State.Spindles)
         {
             spindle.Value.SyncPartner = null;

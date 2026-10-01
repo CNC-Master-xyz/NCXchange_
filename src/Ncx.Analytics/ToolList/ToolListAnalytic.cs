@@ -133,9 +133,20 @@ public sealed partial class ToolListAnalytic : IAnalytic
             use.AddFeed(feed, motion.FeedMode);
         }
 
-        if (SpindleSpeed.RpmOf(motion, _options.Machine) is double rpm && rpm > 0)
+        // D289: the rpm range of a tool spans the extremes of each cutting motion, under CSS the rpm at the start
+        // and at the end X radius each capped by RPM_MAX, so that a facing cut from radius 50 to the centre adds its
+        // low and its capped high rpm and not the mean the runtime estimate times the motion with.
+        if (SpindleSpeed.RpmRangeOf(motion, _options.Machine) is { } rpm)
         {
-            use.AddRpm(rpm);
+            if (rpm.Low > 0)
+            {
+                use.AddRpm(rpm.Low);
+            }
+
+            if (rpm.High > 0)
+            {
+                use.AddRpm(rpm.High);
+            }
         }
     }
 

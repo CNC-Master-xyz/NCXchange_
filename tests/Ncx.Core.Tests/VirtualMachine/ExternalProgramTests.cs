@@ -178,6 +178,38 @@ public sealed class ExternalProgramTests
         Assert.Equal(20m, vm.Position("X").Value);
     }
 
+    // D214: a RETURN in a called external program returns to the caller as its PROGRAM=END does, without the WARNING
+    // of a RETURN in a program with an empty stack and without ending the channel.
+    [Fact]
+    public void CalledProgramEnd_ReturnInACalledExternalProgram_ReturnsToTheCaller()
+    {
+        InterpretedHarness vm = new InterpretedHarness()
+            .WithExternalProgram("O9010", External("RAPID IX=10", "RETURN", "VAR:Q2=1"))
+            .Run(s_caller);
+
+        vm.AssertNoErrors();
+        Assert.Null(vm.Var("Q2"));
+        Assert.Equal(11m, vm.Position("X").Value);
+        Assert.Equal("TEST", vm.State.Program.Name);
+        Assert.Empty(vm.State.Flow.Calls);
+        Assert.Single(vm.Events.LinesOf("PROGRAM_END"));
+    }
+
+    // D214: the PROGRAM=END of a called external program returns and raises no PROGRAM_END of its own, so the run has
+    // one PROGRAM_END, the caller's, and the channel is finished only there.
+    [Fact]
+    public void CalledProgramEnd_ProgramEndOfTheCalledProgram_RaisesNoProgramEndAndDoesNotFinishTheChannel()
+    {
+        InterpretedHarness vm = new InterpretedHarness()
+            .WithExternalProgram("O9010", External("RAPID IX=10"))
+            .Run(s_caller);
+
+        vm.AssertNoDiagnostics();
+        Assert.Single(vm.Events.LinesOf("PROGRAM_END"));
+        Assert.Empty(vm.Events.LinesOf("SUB_END"));
+        Assert.Single(vm.Events.LinesOf("CALL"));
+    }
+
     // An external program O9010 with these lines between its PROGRAM=BEGIN, on line 2, and its PROGRAM=END.
     private static string External(params string[] lines)
     {

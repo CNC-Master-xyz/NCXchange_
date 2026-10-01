@@ -240,8 +240,8 @@ internal sealed partial class Evaluator
     }
 
     // The operators with two operands (language 4.12, orexpr to power), the left operand evaluated before the right.
-    // TODO(question): language 4.12 does not say whether AND and OR skip their right operand when the left one decides
-    // the value; both are evaluated, as for every other operator, so 0 AND 1 / 0 is the division by zero (D168).
+    // D168: AND and OR do not short-circuit; both operands are evaluated, as for every other operator, so
+    // 0 AND 1 / 0 is the division by zero (decisions.md).
     // TODO(question): language 4.12 does not say whether == and != compare strings; every operator takes numbers, and
     // a string is the ERROR of virtual machine 5, until D169 is settled.
     private ExprResult? EvaluateBinary(BinaryNode binary)

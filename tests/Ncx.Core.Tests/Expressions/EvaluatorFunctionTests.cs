@@ -155,12 +155,12 @@ public sealed class EvaluatorFunctionTests
         Assert.Equal(EvaluationChannel.DecimalOf(expected), new EvaluationChannel().NumberOf(expression));
     }
 
-    // Language 4.12: MIN and MAX give the smallest and the largest of their arguments.
+    // Language 4.12: MIN and MAX give the smallest and the largest of their two or more arguments (D118).
     [Theory]
     [InlineData("MIN(3, 1, 2)", "1")]
     [InlineData("MAX(3, 1, 2)", "3")]
     [InlineData("MIN(-1.5, -1)", "-1.5")]
-    [InlineData("MAX(4)", "4")]
+    [InlineData("MAX(4, 2)", "4")]
     public void MinMax_Arguments_IsTheSmallestOrTheLargest(string expression, string expected)
     {
         Assert.Equal(EvaluationChannel.DecimalOf(expected), new EvaluationChannel().NumberOf(expression));
@@ -176,18 +176,4 @@ public sealed class EvaluatorFunctionTests
         Assert.Equal(2m, channel.NumberOf("MAX($A, 2) * SIN(30)"));
     }
 
-    // ATAN2 takes two arguments, MIN and MAX one or more, every other function one (the reading of the open question
-    // in Evaluator.ArgumentCountFits).
-    [Theory]
-    [InlineData("SIN(1, 2)")]
-    [InlineData("ROUND(2.5, 1)")]
-    [InlineData("ATAN2(1)")]
-    [InlineData("ATAN2(1, 2, 3)")]
-    public void Function_WrongNumberOfArguments_IsAnError(string expression)
-    {
-        Diagnostic error = new EvaluationChannel().ErrorOf(expression);
-
-        Assert.Equal(DiagnosticCodes.FunctionArgumentCount, error.Code);
-        Assert.Contains(expression, error.Message, StringComparison.Ordinal);
-    }
 }

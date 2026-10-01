@@ -2,7 +2,8 @@ namespace Ncx.Core.Model;
 
 // The codes of the expression evaluator, VM900-VM949 (the ranges in DiagnosticCodes.cs, D98): one ERROR for each way
 // an expression that parsed can fail when INTERPRETED mode evaluates it (language 4.12, virtual machine 3.6, 5). Every
-// one stops the run on the line of the block the expression stands in.
+// one stops the run on the line of the block the expression stands in. VM904 was the wrong number of arguments of a
+// function; D118 moved that check into the expression parser, where it is PAR111, and the number is not reused.
 public static partial class DiagnosticCodes
 {
     /// <summary>
@@ -27,11 +28,6 @@ public static partial class DiagnosticCodes
     /// machine 2.7, 3.6, D51).
     /// </summary>
     public const string SystemVariableUnknown = "VM903";
-
-    /// <summary>
-    /// VM904: a function called with a number of arguments it does not take, SIN(1, 2), ATAN2(1) (language 4.12).
-    /// </summary>
-    public const string FunctionArgumentCount = "VM904";
 
     /// <summary>
     /// VM905: an operation without a real result, SQRT(-1), LN(0), ASIN(2), TAN(90), ATAN2(0, 0), a negative number to
