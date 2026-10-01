@@ -23,6 +23,9 @@ internal static class FrameValidation
             ValidationRule.Error(DiagnosticCodes.SetposAxisUnknown,
                 "SETPOS with an axis unknown in every frame, except directly after a HOME of that axis that found no "
                 + "reference point.", "VM 3.4, 5; D100, D101"),
+            ValidationRule.Error(DiagnosticCodes.TiltAxisNotRotary,
+                "A TILT_AXIS axis word on an axis the machine does not declare rotary.", "language 4.2; VM 3.4, 5; "
+                + "D117"),
             ValidationRule.Error(DiagnosticCodes.ToleranceWordWithoutTolerance,
                 "TOLERANCE:ROTARY or TOLERANCE_MODE without an active TOLERANCE.", "language 4.1; VM 5; D85"),
             ValidationRule.Error(DiagnosticCodes.SetposWithoutAxis, "SETPOS without an axis word.",

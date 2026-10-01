@@ -2,7 +2,7 @@
 
 Status: Version 1.0 of the specification set, 2026-09-12 (draft 8 in the drafting history of `../decisions/decisions.md`). Sketch level: the schema is finalized when the compiler exists. Companion to `ncx-language.md` and `ncx-virtual-machine.md`.
 
-Templates are strings with `{placeholders}`: `{tool}` (the tool in the spindle after the block, from the VM, so a bare `TOOL` writes the preloaded number, D91), `{name}` (tool name string), `{offset}`, `{next}` (the preloaded next tool), `{kind}` (tool kind from the tool table: rotary or turning, mapped per machine), `{rpm}`, `{axis}` (tool axis letter; in the `[setpos]` and `ROTARY_FEED` templates the axis the call is written for, one call per axis), `{axes}` (the axis list of a `HOME` or `SETPOS` block in the machine's address form), `{angle}`, `{b}` (index angle of the tool carrier from the next positioning block), `{c}` (tool spindle orientation from the next `ORIENT:TOOL`), `{mark}`, `{channels}`, `{paths}`, `{r}` (the reference radius of `CYLINDER=n`, the only source of `{r}`; not the arc key `R`, D96), `{d}` (twice `{r}`: the working diameter that Siemens `TRACYL` takes), `{value}`, `{index}`; for the tilt, retract and tolerance templates `{a}`, `{b}`, `{c}` (the angles of the `TILT` or `TILT_AXIS` block), `{x}`, `{y}`, `{z}`, `{move}` and `{dir}` (from the `MOVE` option), `{distance}`, `{tol}`, `{rotary}`, `{mode}`; in expansion rules `{position:NAME}` (the axis words of a `[positions]` entry, D100). A format suffix pads numbers: `{tool:02}` writes `04`, `{tool:02}.` writes `04.` (the decimal point of the NT NURSE macros is literal text). A missing placeholder value leaves the template unusable and the compiler reports it.
+Templates are strings with `{placeholders}`: `{tool}` (the tool in the spindle after the block, from the VM, so a bare `TOOL` writes the preloaded number, D91), `{name}` (tool name string), `{offset}`, `{next}` (the preloaded next tool), `{kind}` (tool kind from the tool table: rotary or turning, mapped per machine), `{rpm}`, `{axis}` (tool axis letter; in the `[setpos]` and `ROTARY_FEED` templates the axis the call is written for, one call per axis), `{axes}` (the axis list of a `HOME` or `SETPOS` block in the machine's address form), `{angle}`, `{b}` (index angle of the tool carrier from the next positioning block), `{c}` (tool spindle orientation from the next `ORIENT:TOOL`), `{mark}`, `{channels}`, `{paths}`, `{r}` (the reference radius of `CYLINDER=n`, the only source of `{r}`; not the arc key `R`, D96), `{d}` (twice `{r}`: the working diameter that Siemens `TRACYL` takes), `{value}`, `{index}`; for the tilt, retract and tolerance templates `{a}`, `{b}`, `{c}` (the angles of the `TILT` or `TILT_AXIS` block), `{x}`, `{y}`, `{z}`, `{move}` and `{dir}` (from the `MOVE` option), `{distance}`, `{tol}`, `{rotary}`, `{mode}`; in expansion rules `{position:NAME}` (the axis words of a `[positions]` entry, D100). A format suffix pads numbers: `{tool:02}` writes `04`, `{tool:02}.` writes `04.` (the decimal point of the NT NURSE macros is literal text). Reading is the other way round and takes the digits of one address as one number that the placeholders split from the right, as the control does: a padded placeholder that begins a run of digits reads one or more digits, a padded placeholder that follows digits (a literal digit or another placeholder) reads exactly its width. So `T{tool:02}{offset:02}` reads `T0101` and the unpadded `T101` alike as tool 1 with offset 1, and `T12301` as tool 123 with offset 1, while `#11{index:03}` still needs its three digits. Rendering pads and never truncates: a number wider than its width is written in full where it begins the run, and where it follows digits it is an ERROR on the block, because the text would read back as other numbers (D153). A missing placeholder value leaves the template unusable and the compiler reports it.
 
 Everything that differs between two machines lives here and nowhere else. A user copies the file of a similar machine and edits it. One machine, one file. The file is TOML; a large kinematic tree may be split into a second TOML file referenced from the first, so the user still edits one configuration language.
 
@@ -14,7 +14,7 @@ name = "DMU 50"
 controller = "heidenhain"          # fanuc | heidenhain | siemens
 dialect = "iTNC530"                # 30i | 31i-T | 0i-TF | iTNC530 | TNC640 | 840D ...
 builder = "dmg"                    # machine builder id, used by RAW:DMG and by the builder function tables
-gcode_system = "A"                 # Fanuc lathes only: A (G98/G99 feed, U/W incremental, G90 = turning cycle), B or C (G94/G95, G90/G91)
+gcode_system = "A"                 # Fanuc lathes only: A (G98/G99 feed, U/W incremental, G90 = turning cycle), B (G94/G95, G90/G91, cycles G77/G78/G79) or C (as B, with G70/G71 for inch and mm and cycles G20/G21/G24; D174)
 s_binds_to_spindle_word = true     # Fanuc: one S word, owned by the spindle of the M code in the same block; RPM:role is written into that role's SPINDLE block
 limits = "warn"                    # warn | clamp: what the expander does with RPM, F and targets beyond the machine limits (D64)
 channels = [1]
@@ -337,7 +337,7 @@ native = "G71"
 contour = ["P", "Q"]                # first and last block of the contour, the SUB section of CONTOUR=name (D65)
 ```
 
-The built-in drilling family (`DRILL`, `DRILL_DWELL`, `PECK`, `CHIP_BREAK`, `TAP`, `REAM`, `BORE`) is defined in the same way inside NCXchange and can be overridden per machine.
+The built-in drilling family (`DRILL`, `DRILL_DWELL`, `PECK`, `CHIP_BREAK`, `TAP`, `REAM`, `BORE`) is defined in the same way inside NCXchange and can be overridden per machine. Four catalog files ship with `ncx`: `cycles/fanuc.toml` with the mill codes of the Fanuc family, `cycles/fanuc-lathe.toml` with the lathe drilling cycles along Z and along X and the turning cycles, which a Fanuc lathe names instead of the mill file, and `cycles/heidenhain.toml` and `cycles/siemens.toml` (D160). A catalog file is written in the numbers of Fanuc G-code system A, and the reader and the compiler translate them to the system of the machine through `gcode_system`, so no entry key ties an entry to a G-code system (`../controllers/fanuc.md` 3, D174). The `native` of an entry is the native cycle as the control writes it, a number for Heidenhain (`251`) and a string for Siemens and Fanuc (`"CYCLE952"`, `"G71"`, `"G83.5"`); a program that writes the cycle natively gives exactly that text after the controller address of its `CYCLE` word (`CYCLE:FANUC=G71`, `CYCLE:FANUC="G83.5"`; language 4.7, D144).
 
 Besides `name`, `native`, `params`, `absolute_from_surface` and the expansion rule keys of 5a, an entry may carry:
 
@@ -345,14 +345,15 @@ Besides `name`, `native`, `params`, `absolute_from_surface` and the expansion ru
 - `contour`: the native words that carry the contour of `CONTOUR=name` (language 4.7, D65). Two words are the first and the last block of the contour range (Fanuc `P` and `Q`): the reader turns the range into a `SUB` section of the file, the compiler writes the block numbers of that section. One word names the contour subprogram itself (Siemens `CYCLE95` `NPP`).
 - `signature`: every native parameter in the order the control writes it, also those without an NCX word: the positional parameters of a Siemens cycle, the `Q` parameters of a Heidenhain `CYCL DEF` (`../controllers/siemens.md` 12, `heidenhain.md` 8). A Siemens position without a value stays empty and the cycle takes its default (`siemens.md` 7). A native name in `params` that the signature does not list is an address word of its own: Siemens `CYCLE_F = "F"` is the modal `F` before the call that `CYCLE81`..`CYCLE83` use (controller-mapping 5). Fanuc entries, whose parameters are address words of the cycle block, leave it out.
 - `before`: one native line that belongs to the cycle itself and stands directly before the cycle block. The compiler writes it there, the reader folds it into the cycle when it finds it there, and it is a template like the function tables, so it may carry `{rpm}`: the Fanuc `TAP` entry has `before = "M29 S{rpm}"`, the rigid tapping line, which a machine file overrides with its builder's code (Mori Seiki `M329 S{rpm}`) and sets to `""` where a parameter makes the cycle rigid without one. A cycle written without the line is the other machining, tapping with a compensating chuck (D256).
-- `fixed`: native parameters the entry always writes with this value, which tell two entries of one native cycle apart: Siemens `CYCLE83` with `VARI = 1` is `PECK`, with `VARI = 0` `CHIP_BREAK` (controller-mapping 5); the reader takes the entry whose fixed values the source block carries.
+- `fixed`: native parameters the entry always writes with this value, which tell two entries of one native cycle apart: Siemens `CYCLE83` with `VARI = 1` is `PECK`, with `VARI = 0` `CHIP_BREAK` (controller-mapping 5); the reader takes the entry whose fixed values the source block carries. Of two entries on one native cycle the reader takes the first in catalog order whose fixed values the block carries and whose `params` cover its words, so that a Fanuc lathe `G83` with a peck depth `Q` is `PECK` and one without it `DRILL`, the `DRILL` entry standing first (D160).
+- `for_axis`: the drilling axis the entry maps its cycle under. The entry without the key maps the default axis, so a Fanuc lathe gives `DRILL` twice, `G83` along Z and `G87` under `for_axis = "X"`; the reader sets `AXIS` from the entry it matched and the compiler looks an entry up by its name together with `AXIS`. An entry is found, overridden and checked for duplicates by its name and its `for_axis` together (D160).
 
 ## 7. Variables
 
 ```toml
 [variables]
 unassigned = "error"               # error | 0
-map = { Q = "#1", QL = "#", QR = "#5" }   # compile Heidenhain-named variables to Fanuc ranges: Q1 -> #101 (prefix + number), QR1 -> #501
+map = { Q = "#1{index:02}", QL = "#{index}", QR = "#5{index:02}" }   # compile Heidenhain-named variables to Fanuc ranges: Q1 -> #101, QR1 -> #501, QL1 -> #1 (D173)
 declared = ["XMW_1", "GC1_XDREMI"]        # optional: names the machine declares outside the program (Siemens GUD and the builder's variables). The Siemens compiler declares every other name a unit uses with DEF REAL in its definition part and never these, because a DEF of an already defined symbol is an alarm (D261)
 block_cap = 1000000
 call_depth = 8
@@ -364,6 +365,8 @@ SYS_MPOS_B = "#5024"
 SYS_WEAR_Z = "#11{index:03}"       # #11099 = Z wear register 99 in the Nakamura transfer program; Siemens: "$AA_IW[X]", "RG{index}"; Heidenhain: FN 18 ids, "ID270 NR1 IDX1" the X position, "ID240 NR1 IDX1" its REF position, "ID50 NR4 IDX{index}" the length oversize DL of a tool (D182)
 SYS_PART_MAIN = ""                 # part status of the Nakamura G411 machines has no readable variable; G411 stays RAW
 ```
+
+Every entry of `map` is a template of the variable's number with `{index}`, like the entries of `[system_variables]`, because a bare prefix does not state the width the control needs: `Q = "#1{index:02}"` writes `Q1` as `#101`, while the Siemens entry `Q = "R{index}"` writes `R1`, the spelling a SINUMERIK program uses, and not `R01`. An entry without `{index}` is an ERROR of the machine file. A variable name that no entry covers is an ERROR at compile time that names the variable; this includes the Heidenhain `QS` strings, because an R parameter is a field of type REAL and holds no string. Names the source itself wrote, a Siemens `R5` or a declared name, are written as they are (D173).
 
 ## 8. Job manifest and variable start values
 
@@ -444,7 +447,7 @@ my-shop/
     fanuc-vmc.toml
     millturn1.toml
   cycles/
-    heidenhain-cycles.toml
+    heidenhain-cycles.toml   # the shipped files are fanuc.toml, fanuc-lathe.toml (D160), heidenhain.toml and siemens.toml
   programs/
     part-123.ncx
     part-123.vars.toml

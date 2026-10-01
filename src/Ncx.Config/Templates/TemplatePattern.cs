@@ -29,7 +29,8 @@ internal static class TemplatePattern
     // M and G codes compared by number, and a named group per placeholder: an integer group for a padded placeholder,
     // words for the placeholders whose values are words, a signed decimal otherwise, with the point and, where the
     // machine reads it, the comma (phase 2, P2-02; architecture 6).
-    public static Regex Build(IReadOnlyList<string> literals, IReadOnlyList<Placeholder> placeholders, bool readsComma)
+    public static Regex Build(IReadOnlyList<string> literals, IReadOnlyList<Placeholder> placeholders,
+        IReadOnlyList<bool> followsDigits, bool readsComma)
     {
         string numberGroup = NumberGroup(readsComma);
         var pattern = new StringBuilder(TextStart);
@@ -37,7 +38,7 @@ internal static class TemplatePattern
         for (int index = 0; index < placeholders.Count; index++)
         {
             pattern.Append("(?<").Append(GroupName(index)).Append('>');
-            pattern.Append(GroupOf(placeholders[index], numberGroup));
+            pattern.Append(GroupOf(placeholders[index], followsDigits[index], numberGroup));
             pattern.Append(')');
             AppendLiteral(pattern, literals[index + 1]);
         }
@@ -52,11 +53,12 @@ internal static class TemplatePattern
         return "p" + index.ToString(CultureInfo.InvariantCulture);
     }
 
-    // TODO(question): a padded placeholder reads exactly the digits it pads to, so that T{tool:02}{offset:02} splits
-    // T0101 into 01 and 01. Whether it also reads a source that leaves the leading zero out (Fanuc T101 for T0101), and
-    // what a number wider than its suffix renders to (tool 123 in {tool:02} is written 123, which the pattern does not
-    // read back), is open (D153).
-    private static string GroupOf(Placeholder placeholder, string numberGroup)
+    // D153: the digits of one address are one number that the placeholders split from the right, as the control reads
+    // them. A padded placeholder that begins a run of digits therefore reads one or more digits, so that
+    // T{tool:02}{offset:02} reads the unpadded T101 as tool 1 with offset 1 and T12301 as tool 123 with offset 1; one
+    // that follows digits, a literal digit or another placeholder, reads exactly its width, so that #11{index:03}
+    // still needs its three digits (decisions.md; machine-config introduction).
+    private static string GroupOf(Placeholder placeholder, bool followsDigits, string numberGroup)
     {
         if (placeholder.IsText)
         {
@@ -65,10 +67,29 @@ internal static class TemplatePattern
 
         if (placeholder.Width > 0)
         {
-            return "[0-9]{" + placeholder.Width.ToString(CultureInfo.InvariantCulture) + "}";
+            return followsDigits
+                ? "[0-9]{" + placeholder.Width.ToString(CultureInfo.InvariantCulture) + "}"
+                : "[0-9]+";
         }
 
         return numberGroup;
+    }
+
+    /// <summary>
+    /// Whether the padded placeholder at this index follows digits in the template: the literal text before it ends
+    /// with a digit, or there is none between it and the placeholder before it (D153).
+    /// </summary>
+    /// <param name="literals">The literal text before, between and after the placeholders.</param>
+    /// <param name="index">The place of the placeholder.</param>
+    public static bool FollowsDigits(IReadOnlyList<string> literals, int index)
+    {
+        string before = literals[index];
+        if (before.Length > 0)
+        {
+            return char.IsAsciiDigit(before[before.Length - 1]);
+        }
+
+        return index > 0;
     }
 
     // A number as the controls write it: an optional sign, digits with or without a decimal point, or the point

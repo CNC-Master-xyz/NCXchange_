@@ -89,7 +89,7 @@ internal static class ExpansionRules
             return word.Value is IdentValue name && name.Name != "OFF" ? catalog.Find(name.Name) : null;
         }
 
-        return catalog.PassesThrough(word.Addr) ? catalog.FindNative(word.Value.ToCanonical()) : null;
+        return catalog.PassesThrough(word.Addr) ? catalog.FindNative(CycleCatalog.NativeOf(word.Value)) : null;
     }
 
     private static FunctionTable? TableOf(IReadOnlyDictionary<string, FunctionTable> tables, string name)

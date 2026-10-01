@@ -126,7 +126,7 @@ public sealed class TemplateSetTests
         known = ["G411"]
 
         [variables]
-        map = { Q = "#1" }
+        map = { Q = "#1{index:02}" }
 
         [system_variables]
         SYS_POS_X = "#5041"

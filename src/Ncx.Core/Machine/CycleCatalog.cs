@@ -1,3 +1,5 @@
+using Ncx.Core.Model;
+
 namespace Ncx.Core.Machine;
 
 /// <summary>
@@ -40,6 +42,33 @@ public sealed record CycleCatalog
     }
 
     /// <summary>
+    /// The entry of an NCX cycle name under a drilling axis: the entry whose for_axis is that axis where there is
+    /// one, otherwise the entry without a for_axis, which maps the default axis (machine-config 6, D160).
+    /// </summary>
+    /// <param name="ncxName">The cycle name as a program writes it.</param>
+    /// <param name="axis">The drilling axis of the cycle, the NCX name of AXIS.</param>
+    public CycleEntry? Find(string ncxName, string axis)
+    {
+        CycleEntry? defaultAxis = null;
+        foreach (CycleEntry entry in Entries)
+        {
+            if (entry.Name != ncxName)
+            {
+                continue;
+            }
+
+            if (entry.ForAxis == axis)
+            {
+                return entry;
+            }
+
+            defaultAxis ??= entry.ForAxis is null ? entry : null;
+        }
+
+        return defaultAxis;
+    }
+
+    /// <summary>
     /// The first entry of a native cycle in catalog order, "G81", "200", "CYCLE81"; null when the catalog has none.
     /// </summary>
     /// <param name="native">The native cycle as the catalog writes it.</param>
@@ -69,12 +98,20 @@ public sealed record CycleCatalog
     /// </summary>
     /// <param name="native">The native cycle as the catalog writes it.</param>
     /// <param name="nativeValues">The native parameters the source block gives, by native name.</param>
-    public CycleEntry? FindNative(string native, IReadOnlyDictionary<string, decimal> nativeValues)
+    /// <param name="forAxis">The drilling axis the source block cuts along, which picks the entry of that for_axis
+    /// (D160); null where the family has no such entries.</param>
+    public CycleEntry? FindNative(string native, IReadOnlyDictionary<string, decimal> nativeValues,
+        string? forAxis = null)
     {
-        // The reader takes the entry whose fixed values the source block carries (machine-config 6).
+        // The reader takes the first entry in catalog order whose fixed values the source block carries and whose
+        // params cover its words, so that a Fanuc lathe G83 with a peck depth Q is PECK and one without it DRILL
+        // (machine-config 6, D160).
         foreach (CycleEntry entry in Entries)
         {
-            if (entry.Native == native && CarriesFixedValues(nativeValues, entry))
+            if (entry.Native == native
+                && (forAxis is null || entry.ForAxis == forAxis)
+                && CarriesFixedValues(nativeValues, entry)
+                && entry.CoversNativeWords(nativeValues.Keys))
             {
                 return entry;
             }
@@ -95,10 +132,18 @@ public sealed record CycleCatalog
         var overridden = new List<CycleEntry>(Entries);
         foreach (CycleEntry entry in entries)
         {
-            int index = IndexOfName(overridden, entry.Name);
+            int index = IndexOfName(overridden, entry.Name, entry.ForAxis);
             if (index < 0)
             {
-                overridden.Add(entry);
+                // D160: the entries of one name differ only by the drilling axis, so an entry added under a for_axis
+                // carries the same words of a reader or compiler rule as the entry of that name already in the
+                // catalog, which only the built-in family can name (D157).
+                // TODO(question): neither D160 nor D157 says where the rule words of a for_axis entry come from, and a
+                // catalog file cannot name them; the entry of the same name without a for_axis lends them, so that
+                // SURFACE, SAFE, CYCLE_RETRACT and AXIS stand on the X entry of a lathe as on its Z entry.
+                overridden.Add(entry.RuleWords.Count > 0 || Find(entry.Name) is not CycleEntry sibling
+                    ? entry
+                    : entry with { RuleWords = sibling.RuleWords });
             }
             else
             {
@@ -109,9 +154,17 @@ public sealed record CycleCatalog
         return new CycleCatalog { Controller = Controller, Entries = overridden };
     }
 
-    // TODO(question): language 4.7 calls n of CYCLE:<controller>=n "the native cycle number of that family" and shows
-    // Heidenhain only (251); how a Fanuc cycle (G71 or 71) or a Siemens cycle (CYCLE952) is written as n is not in the
-    // documents. FindNative compares n with the native of an entry as the catalog writes it (D144).
+    /// <summary>
+    /// The native cycle a CYCLE:controller=n word names, as the family's catalog writes its <c>native</c>: an integer
+    /// for Heidenhain (251), an identifier for Siemens and Fanuc (CYCLE952, G71), and the content of a string where
+    /// the native is neither (CYCLE:FANUC="G83.5"). FindNative compares this text with the native of an entry (D144).
+    /// </summary>
+    /// <param name="value">The value of the CYCLE word with its controller address.</param>
+    public static string NativeOf(Value value)
+    {
+        return value is StringValue text ? text.Content : value.ToCanonical();
+    }
+
 
     /// <summary>
     /// Whether a native cycle written with this controller address, CYCLE:HEIDENHAIN=251, passes through this catalog:
@@ -143,11 +196,13 @@ public sealed record CycleCatalog
     }
 
     // The place of the entry of a name, or -1 when there is none.
-    private static int IndexOfName(List<CycleEntry> entries, string name)
+    private static int IndexOfName(List<CycleEntry> entries, string name, string? forAxis)
     {
         for (int index = 0; index < entries.Count; index++)
         {
-            if (entries[index].Name == name)
+            // An entry is found by its name together with its for_axis, so that the lathe G83 along Z and the G87
+            // along X are two entries of one name and a later file overrides each on its own (machine-config 6, D160).
+            if (entries[index].Name == name && entries[index].ForAxis == forAxis)
             {
                 return index;
             }

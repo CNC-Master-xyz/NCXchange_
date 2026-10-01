@@ -39,4 +39,10 @@ public static partial class DiagnosticCodes
     /// ERROR: a resource names an axis that no [[axis]] declares (machine-config 4, F23).
     /// </summary>
     public const string UndeclaredAxis = "CFG007";
+
+    /// <summary>
+    /// ERROR: an entry of [variables] map without the placeholder {index} of the variable's number, which a bare
+    /// prefix cannot state the width of (machine-config 7, D173).
+    /// </summary>
+    public const string VariableMapWithoutIndex = "CFG008";
 }

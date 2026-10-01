@@ -105,10 +105,14 @@ internal static partial class SiemensExpressions
     /// map that covers its prefix writes it, "R" for Q turning Q1 into R1; an R parameter and a declared name stay as
     /// they are; a name of a letter and digits other than R is no name the control declares and is an ERROR.
     /// </summary>
-    // TODO(question): D173: machine-config 7 shows [variables] map for Fanuc only, as a prefix plus the number; an
-    // entry with {index} is rendered as a template of the number, as D173 recommends, an entry without it takes the
-    // number behind its value, and a name no entry covers is written as it is where the control can declare it, until
-    // D173 is answered.
+    // D173: an entry of [variables] map is a template of the variable's number with {index}, Q = "R{index}" writing
+    // Q1 as R1, which the R parameter of the manual takes without leading zeros; a name no entry covers is an ERROR,
+    // the QS strings of Heidenhain among them, because an R parameter is a field of type REAL and holds no string
+    // (machine-config 7, decisions.md). The loader holds the {index} form of an entry (CFG008).
+    // TODO(question): D173 makes a name no entry of the map covers an ERROR and names the Heidenhain QS strings, and
+    // it leaves names the source itself wrote (R5, DEF names) as they are, but it does not say how the compiler tells
+    // the two apart. The form decides here: a letter and digits, and the Heidenhain QL, QR and QS names, need an
+    // entry; every other name, a declared one of several letters among them, is written as it is.
     // D261: NCX keeps no type, and a name the control does not declare itself is declared with DEF REAL in the
     // definition part of the unit that uses it (SiemensFlow.WriteDeclarations), because REAL holds every INT and BOOL
     // value and the R parameters are themselves an array of REAL (decisions.md D261).
@@ -119,14 +123,15 @@ internal static partial class SiemensExpressions
             return mapped;
         }
 
-        if (RParameter().IsMatch(name) || !LetterWithNumber().IsMatch(name))
+        if (RParameter().IsMatch(name) || !NeedsMapping().IsMatch(name))
         {
             return name;
         }
 
         write.Error(DiagnosticCodes.SiemensVariableNotMapped,
             $"The variable {name} is no name a SINUMERIK program declares, and no entry of [variables] map of the "
-            + "machine covers it (machine-config 7; controllers siemens.md 8; D173).");
+            + "machine covers it; an R parameter is a field of type REAL, so a QS string has none (machine-config 7; "
+            + "controllers siemens.md 8; D173).");
         return null;
     }
 
@@ -250,14 +255,14 @@ internal static partial class SiemensExpressions
     /// <summary>
     /// True where the unit that uses the name needs no DEF for it: an R parameter, which the control predefines as an
     /// array of REAL; a name an entry of [variables] map covers, which is written as that native name; and a name of
-    /// one letter and digits that no entry covers, which is the ERROR of VariableName where it is used (machine-config
-    /// 7; D173, D261).
+    /// one letter and digits, the Heidenhain QL, QR and QS among them, that no entry covers, which is the ERROR of
+    /// VariableName where it is used (machine-config 7; D173, D261).
     /// </summary>
     /// <param name="write">The block being written.</param>
     /// <param name="name">The NCX variable name.</param>
     public static bool NeedsNoDeclaration(SiemensBlock write, string name)
     {
-        if (RParameter().IsMatch(name) || LetterWithNumber().IsMatch(name))
+        if (RParameter().IsMatch(name) || NeedsMapping().IsMatch(name))
         {
             return true;
         }
@@ -293,13 +298,9 @@ internal static partial class SiemensExpressions
             return null;
         }
 
+        // D173: an entry is a template of the number with {index}; the loader reports an entry without it (CFG008).
         string number = name.Substring(prefix.Length);
         string mapping = write.Machine.Variables.Map[prefix];
-        if (!mapping.Contains("{index", StringComparison.Ordinal))
-        {
-            return mapping + number;
-        }
-
         var values = new TemplateValues();
         values.Set("index", decimal.Parse(number, CultureInfo.InvariantCulture));
         return write.TemplateOf(mapping).Render(values, write.Block, write.Diagnostics);
@@ -372,7 +373,8 @@ internal static partial class SiemensExpressions
     [GeneratedRegex("^R[0-9]+$", RegexOptions.CultureInvariant)]
     private static partial Regex RParameter();
 
-    // A letter and digits, the form of an address: Q1, V105 (controllers siemens.md 1).
-    [GeneratedRegex("^[A-Z][0-9]+$", RegexOptions.CultureInvariant)]
-    private static partial Regex LetterWithNumber();
+    // A variable name that needs an entry of [variables] map: a letter and digits, the form of an address (Q1, V105),
+    // and the Heidenhain names QL5, QR5 and QS5 beside it, which no SINUMERIK program declares (language 4.9; D173).
+    [GeneratedRegex("^(?:Q[LRS]|[A-Z])[0-9]+$", RegexOptions.CultureInvariant)]
+    private static partial Regex NeedsMapping();
 }

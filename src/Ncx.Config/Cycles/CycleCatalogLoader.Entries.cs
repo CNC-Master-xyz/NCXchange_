@@ -8,7 +8,8 @@ public static partial class CycleCatalogLoader
     // The keys of a catalog entry (machine-config 6) and the four keys of its expansion rule (machine-config 5a).
     private static readonly string[] s_entryKeys =
     [
-        "name", "native", "params", "absolute_from_surface", "modal", "contour", "signature", "fixed", "before",
+        "name", "native", "for_axis", "params", "absolute_from_surface", "modal", "contour", "signature",
+        "fixed", "before",
         "pre", "post", "requires", "restore",
     ];
 
@@ -35,16 +36,19 @@ public static partial class CycleCatalogLoader
                 continue;
             }
 
-            // The catalog finds an entry by its name, so one file names each cycle once (machine-config 6).
-            if (names.Contains(entry.Name))
+            // The catalog finds an entry by its name together with its for_axis, so one file names each cycle once
+            // per drilling axis (machine-config 6, D160).
+            string key = entry.ForAxis is null ? entry.Name : entry.Name + " " + entry.ForAxis;
+            if (names.Contains(key))
             {
+                string axis = entry.ForAxis is null ? "" : $" for the axis {entry.ForAxis}";
                 table.Diagnostics.Error(table.Line, DiagnosticCodes.CycleNameTwice,
-                    $"{table.Name} names the cycle {entry.Name} a second time in this file; the catalog finds an entry "
-                    + "by its name (machine-config 6).");
+                    $"{table.Name} names the cycle {entry.Name}{axis} a second time in this file; the catalog finds "
+                    + "an entry by its name and its for_axis (machine-config 6, D160).");
                 continue;
             }
 
-            names.Add(entry.Name);
+            names.Add(key);
             CheckAbsoluteFromSurface(table, entry, family.Find(entry.Name));
             entries.Add(entry);
         }
@@ -65,6 +69,7 @@ public static partial class CycleCatalogLoader
             CheckName(table, name);
         }
 
+        string? forAxis = ReadForAxis(table);
         IReadOnlyDictionary<string, string> parameters = ReadParams(table);
         IReadOnlyList<string> absoluteFromSurface = table.TextList("absolute_from_surface");
         bool modal = table.Flag("modal");
@@ -83,6 +88,7 @@ public static partial class CycleCatalogLoader
         {
             Name = name,
             Native = native,
+            ForAxis = forAxis,
             Params = parameters,
             AbsoluteFromSurface = absoluteFromSurface,
             Modal = modal,
@@ -107,6 +113,23 @@ public static partial class CycleCatalogLoader
         }
 
         return table.PlaceholderValue("native");
+    }
+
+    // for_axis: the drilling axis the entry maps its cycle under, the X of the Fanuc lathe G87 to G89; the entry
+    // without it maps the default axis (machine-config 6, D160). It is an axis name as a program writes AXIS
+    // (language 4.7).
+    private static string? ReadForAxis(ConfigTable table)
+    {
+        string? axis = table.Text("for_axis");
+        if (axis is not null && !IsNcxWord(axis))
+        {
+            table.Diagnostics.Error(table.LineOf("for_axis"), DiagnosticCodes.CycleWordMalformed,
+                $"The for_axis {axis} in {table.Name} is not an axis name, a capital followed by capitals, digits "
+                + "and underscores; no cycle block can name it with AXIS (language 4.7, machine-config 6, D160).");
+            return null;
+        }
+
+        return axis;
     }
 
     // A program names the cycle as the value of CYCLE, so the name is an NCX identifier (language 3, 4.7.1).

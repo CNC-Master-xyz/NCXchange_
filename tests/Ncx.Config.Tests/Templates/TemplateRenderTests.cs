@@ -47,6 +47,41 @@ public sealed class TemplateRenderTests
         Assert.Equal(expected, Render(Parse(text), values));
     }
 
+    // D153: rendering pads and never truncates, so a number wider than its field is written in full where it begins
+    // the run of digits.
+    [Theory]
+    [InlineData("T{tool:02}", "tool", 123, "T123")]
+    [InlineData("G341 T{next:03}", "next", 1234, "G341 T1234")]
+    public void PaddedPlaceholderWidth_NumberWiderThanTheFieldAtTheStartOfTheRun_IsWrittenInFull(
+        string text, string name, int number, string expected)
+    {
+        var values = new TemplateValues();
+        values.Set(name, number);
+
+        Assert.Equal(expected, Render(Parse(text), values));
+    }
+
+    // D153: where the padded placeholder follows digits, a wider number would read back as other numbers, so it is
+    // the CFG ERROR CFG103 on the block and the template is unusable.
+    [Theory]
+    [InlineData("T{tool:02}{offset:02}", "offset", 123)]
+    [InlineData("#11{index:03}", "index", 1234)]
+    public void PaddedPlaceholderWidth_NumberWiderThanAFieldThatFollowsDigits_IsAnError(
+        string text, string name, int number)
+    {
+        var values = new TemplateValues();
+        values.Set("tool", 1);
+        values.Set(name, number);
+        var diagnostics = new Diagnostics(ProgramFile);
+
+        string? rendered = Parse(text).Render(values, ToolBlock(line: 12), diagnostics);
+
+        Assert.Null(rendered);
+        Diagnostic diagnostic = Assert.Single(diagnostics.Items);
+        Assert.Equal(DiagnosticCodes.TemplateNumberWiderThanItsField, diagnostic.Code);
+        Assert.Equal(Severity.Error, diagnostic.Severity);
+    }
+
     // Without a suffix a number is written as given, its sign and its decimals included: the Siemens tilt cycle
     // with {dir} = -1 for MOVE=TURN (machine-config 5).
     [Fact]

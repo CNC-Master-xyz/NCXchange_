@@ -29,6 +29,12 @@ public sealed record CycleEntry
     public required string Native { get; init; }
 
     /// <summary>
+    /// for_axis: the drilling axis the entry maps its cycle under, "X" for the Fanuc lathe G87 to G89; null for the
+    /// entry of the default axis. An entry is found by its name together with this key (machine-config 6, D160).
+    /// </summary>
+    public string? ForAxis { get; init; }
+
+    /// <summary>
     /// params: the NCX word of each parameter and the native name that carries it, DEPTH = "Q201" (machine-config 6).
     /// </summary>
     public IReadOnlyDictionary<string, string> Params { get; init; } = new Dictionary<string, string>();
@@ -143,6 +149,36 @@ public sealed record CycleEntry
     }
 
     /// <summary>
+    /// Whether the entry covers these native words of a source block: of two entries on one native cycle the reader
+    /// takes the first in catalog order that does, so that a Fanuc lathe G83 with a peck depth Q is PECK and one
+    /// without it DRILL (machine-config 6, D160). A word the params map, a word the entry fixes and a position of
+    /// the signature, which the control takes whether or not an NCX word carries it, are all covered.
+    /// </summary>
+    /// <param name="nativeWords">The native names the source block carries beside the cycle code.</param>
+    public bool CoversNativeWords(IEnumerable<string> nativeWords)
+    {
+        foreach (string word in nativeWords)
+        {
+            bool mapped = false;
+            foreach (string native in Params.Values)
+            {
+                if (native == word)
+                {
+                    mapped = true;
+                    break;
+                }
+            }
+
+            if (!mapped && !Fixed.ContainsKey(word) && !Signature.Contains(word))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// The native name that carries an NCX word, DEPTH to "Q201"; null for a word the entry does not map.
     /// </summary>
     /// <param name="word">The NCX word, DEPTH.</param>
@@ -215,6 +251,7 @@ public sealed record CycleEntry
         return new CycleEntry
         {
             Name = Name,
+            ForAxis = ForAxis,
             Native = entry.Writes("native") ? entry.Native : Native,
             Params = entry.Writes("params") ? entry.Params : Params,
             AbsoluteFromSurface = entry.Writes("absolute_from_surface")

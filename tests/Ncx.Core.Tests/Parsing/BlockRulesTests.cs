@@ -87,6 +87,46 @@ public sealed class BlockRulesTests
         Assert.Contains("RAPID, LINE, ARC or CYCLE_CALL", diagnostic.Message);
     }
 
+    // The four frame verbs carry absolute axis words only: a shift stands in the frame active where it is written and
+    // a SETPOS declares a coordinate, so a reader folds a source increment itself (language 5 rule 2, 4.2, 4.3; D117).
+    [Theory]
+    [InlineData("SHIFT IX=5")]
+    [InlineData("SHIFT X=1 IZ=2")]
+    [InlineData("SETPOS IC=0")]
+    [InlineData("SETPOS IZ2=0")]
+    [InlineData("TILT IB=45")]
+    [InlineData("TILT_AXIS IC=180")]
+    public void FrameVerbAxisWords_IncrementalWordUnderAFrameVerb_IsAxisWordWithoutVerb(string text)
+    {
+        var diagnostics = new Diagnostics("test.ncx");
+        ParseText.Block(text, diagnostics);
+
+        Diagnostic diagnostic = ParseText.Single(diagnostics, DiagnosticCodes.AxisWordWithoutVerb);
+        Assert.Equal(Severity.Error, diagnostic.Severity);
+        Assert.Contains("absolute axis words only", diagnostic.Message);
+    }
+
+    // TILT carries the spatial angles A, B and C alone; the rotary axis angles of a machine are TILT_AXIS, which takes
+    // those three and the machine axis names of the D93 form, not a standard linear axis (language 4.2, D117).
+    [Theory]
+    [InlineData("TILT X=1")]
+    [InlineData("TILT A=0 Z=5")]
+    [InlineData("TILT C2=180")]
+    [InlineData("TILT_AXIS X=1")]
+    [InlineData("TILT_AXIS A=-90 Y=0")]
+    public void FrameVerbAxisWords_LinearAxisUnderATiltVerb_IsAxisWordWithoutVerb(string text)
+    {
+        BlockWithError(text, DiagnosticCodes.AxisWordWithoutVerb);
+    }
+
+    // TILT_AXIS gives the rotary axis positions of this machine, so it carries the machine axis names of D93 beside
+    // A, B and C; whether such an axis is rotary is the virtual machine's (language 4.2, D93, D117).
+    [Fact]
+    public void FrameVerbAxisWords_MachineAxisUnderTiltAxis_IsAccepted()
+    {
+        ParseText.CleanBlock("TILT_AXIS A=-90 C2=180 MOVE=TURN");
+    }
+
     // HOME carries bare axis names, a machine axis of the D93 form among them (language 5 rule 2, 4.3, D93).
     [Theory]
     [InlineData("HOME X=0")]

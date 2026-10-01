@@ -33,6 +33,49 @@ public sealed class TemplateMatchesTests
         Assert.Equal(9m, Number(captured, "next"));
     }
 
+    // D153: the digits of one address are one number that the placeholders split from the right, so the unpadded
+    // Fanuc spellings read the same as the padded ones, and a wider number goes to the placeholder that begins the
+    // run; #11{index:03} keeps its three digits, because there the index sits inside a fixed variable number.
+    [Theory]
+    [InlineData("T{tool:02}{offset:02}", "T101", 1, 1)]
+    [InlineData("T{tool:02}{offset:02}", "T0101", 1, 1)]
+    [InlineData("T{tool:02}{offset:02}", "T12301", 123, 1)]
+    [InlineData("T{tool:02}{offset:02}", "T202", 2, 2)]
+    public void PaddedPlaceholderWidth_UnpaddedDigitsOfOneAddress_SplitFromTheRight(
+        string text, string native, int tool, int offset)
+    {
+        Template template = Parse(text);
+
+        Assert.True(template.Matches(native, out TemplateValues captured));
+        Assert.Equal((decimal)tool, Number(captured, "tool"));
+        Assert.Equal((decimal)offset, Number(captured, "offset"));
+    }
+
+    // D153: a padded placeholder that follows digits reads exactly its width, so #11099 is the wear register 99 and
+    // #111234 is no such variable at all (machine-config 7).
+    [Fact]
+    public void PaddedPlaceholderWidth_PlaceholderAfterLiteralDigits_ReadsExactlyItsWidth()
+    {
+        Template template = Parse("#11{index:03}");
+
+        Assert.True(template.Matches("#11099", out TemplateValues captured));
+        Assert.Equal(99m, Number(captured, "index"));
+        Assert.False(template.Matches("#1109", out _));
+        Assert.False(template.Matches("#111234", out _));
+    }
+
+    // D153: the unpadded Nakamura tool change reads like the padded one, G340 T101. A2. like G340 T0101. A02.
+    [Fact]
+    public void PaddedPlaceholderWidth_UnpaddedNakamuraToolChange_CapturesTheSameValues()
+    {
+        Template template = Parse("G340 T{tool:02}{offset:02}. A{next:02}.");
+
+        Assert.True(template.Matches("G340 T101. A2.", out TemplateValues captured));
+        Assert.Equal(1m, Number(captured, "tool"));
+        Assert.Equal(1m, Number(captured, "offset"));
+        Assert.Equal(2m, Number(captured, "next"));
+    }
+
     // G361 B0 D1. performs the change with the index angle 0 and the kind 1., a turning tool (controller-mapping 3).
     [Fact]
     public void Matches_MoriToolChange_ReadsTheIndexAngleAndTheKind()

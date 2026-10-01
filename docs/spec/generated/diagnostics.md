@@ -27,7 +27,7 @@ The file frame, the programs and subprograms, and the words of a block (language
 | `PAR008` | ERROR | A number too large to be kept as a number. | language 3 |
 | `PAR010` | ERROR | Unknown key: neither a catalog word, nor a machine axis word, nor a native parameter of a CYCLE:controller=n block. | VM 3 step 1, 5; D93, D94 |
 | `PAR011` | ERROR | Two verbs in one block. | language 5 rule 1; VM 5 |
-| `PAR012` | ERROR | Axis word without verb, or under a verb that does not carry it: RETRACT with other axis words. | language 5 rule 2; VM 3.1a, 5 |
+| `PAR012` | ERROR | Axis word without verb, or under a verb that does not carry it: RETRACT with other axis words, an incremental word under SHIFT, TILT, TILT_AXIS or SETPOS, a word other than A, B, C under TILT, a standard linear axis under TILT_AXIS. | language 4.2, 5 rule 2; VM 3.1a, 5; D117 |
 | `PAR013` | ERROR | A word in a HOME block that is not a bare axis name. | language 4.3, 5 rule 2 |
 | `PAR014` | ERROR | An axis word without a value outside a HOME block. | language 4.3, 5 rule 2; D93 |
 | `PAR015` | ERROR | Duplicate key: a key twice in one block with one address. | language 5 rule 4; VM 5 |
@@ -75,6 +75,7 @@ SETPOS, the path tolerance and the tilted plane (language 4.1, 4.2; VM 2.1, 3.4,
 | Code | Severity | Rule | Section |
 |---|---|---|---|
 | `VM050` | ERROR | SETPOS with an axis unknown in every frame, except directly after a HOME of that axis that found no reference point. | VM 3.4, 5; D100, D101 |
+| `VM051` | ERROR | A TILT_AXIS axis word on an axis the machine does not declare rotary. | language 4.2; VM 3.4, 5; D117 |
 | `VM420` | ERROR | TOLERANCE:ROTARY or TOLERANCE_MODE without an active TOLERANCE. | language 4.1; VM 5; D85 |
 | `VM421` | ERROR | SETPOS without an axis word. | language 4.2; VM 5 |
 | `VM422` | WARNING | ROT on a target without table kinematics: the machine file has no rotary axis on a table. Not checked without a machine file. | language 4.2; VM 5; D82 |

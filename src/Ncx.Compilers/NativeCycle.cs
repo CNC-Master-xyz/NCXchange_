@@ -14,7 +14,7 @@ public sealed record NativeCycle
     public required string Controller { get; init; }
 
     /// <summary>
-    /// The native cycle as the block writes it, 251 (language 4.7; its form for Fanuc and Siemens is D144).
+    /// The native cycle as the family's catalog writes it, 251, G71, CYCLE952, G83.5 (language 4.7, D144).
     /// </summary>
     public required string Number { get; init; }
 

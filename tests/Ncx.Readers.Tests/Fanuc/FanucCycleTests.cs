@@ -201,6 +201,29 @@ public sealed class FanucCycleTests
             Body("G0 X60. Z-20. C0\nG87 X30. R54. F0.05\nC120.\nG80", Lathe()));
     }
 
+    // D160: of two entries on one native the reader takes the first in catalog order whose params cover the words of
+    // the block, so a lathe G83 with a peck depth Q is PECK and one without it DRILL; the same holds for G87 along X.
+    [Theory]
+    [InlineData("G83 Z-40. R-5. F0.2",
+        "CYCLE=DRILL AXIS=Z SURFACE=0 CLEARANCE=-5 DEPTH=-40 CYCLE_RETRACT=CLEARANCE CYCLE_F=0.2")]
+    [InlineData("G83 Z-40. R-5. Q2000 F0.2",
+        "CYCLE=PECK AXIS=Z SURFACE=0 CLEARANCE=-5 DEPTH=-40 CYCLE_RETRACT=CLEARANCE PECK=2000 CYCLE_F=0.2")]
+    public void LatheDrillingEntry_G83WithAndWithoutQ_IsPeckAndDrill(string source, string cycle)
+    {
+        Assert.Equal(Lines("RAPID Z=5", cycle, "CYCLE_CALL", "CYCLE=OFF"),
+            Body("G0 Z5.\n" + source + "\nG80", Lathe()));
+    }
+
+    // D161: THREAD is G76, the one-shot cycle that cuts the whole thread, and the modal G92, which cuts one pass per
+    // block like G90 and G94, is THREAD_PASS.
+    [Fact]
+    public void FanucThreadCycleNames_G92OfSystemA_IsThreadPass()
+    {
+        Assert.Equal(
+            Lines("RAPID X=70 Z=2", "CYCLE=THREAD_PASS", "CYCLE_CALL X=60 Z=-30", "RAPID X=100 CYCLE=OFF"),
+            Body("G0 X70. Z2.\nG92 X60. Z-30.\nG0 X100.", Lathe()));
+    }
+
     // G90 of system A is the modal turning cycle TURN_OD of the catalog: CYCLE= and a CYCLE_CALL per block with X and
     // Z (language 4.7.1; controller-mapping 5). D187: X(U) and Z(W) are modal data the cycle keeps, and a call leaves
     // the tool at its start point, so the reader writes both end-point words on every call.
@@ -235,7 +258,7 @@ public sealed class FanucCycleTests
     }
 
     // D175: the F of the thread cycle G92 is the thread lead, the word PITCH, while the F of G90 and G94 is the
-    // cutting feed CYCLE_F (decisions.md; language 4.7, the PITCH row; fanuc 6).
+    // cutting feed CYCLE_F (decisions.md; language 4.7, the PITCH row; fanuc 6). G92 is THREAD_PASS (D161).
     [Fact]
     public void Feed_OnTheThreadCycleG92_IsThePitchAndNotTheCycleFeed()
     {
@@ -244,7 +267,7 @@ public sealed class FanucCycleTests
         Assert.Equal(
             Lines(
                 "RAPID X=70 Z=2",
-                "CYCLE=THREAD PITCH=2.0",
+                "CYCLE=THREAD_PASS PITCH=2.0",
                 "CYCLE_CALL X=60 Z=-70",
                 "CYCLE_CALL X=50 Z=-70",
                 "RAPID X=100 CYCLE=OFF"),
@@ -253,8 +276,9 @@ public sealed class FanucCycleTests
         Assert.False(Check(text, Lathe()).HasErrors, Check(text, Lathe()).ToText());
     }
 
-    // D175 gives the taper R of G90, G92 and G94 the catalog word TAPER, which cycles/fanuc.toml maps, but the parser
-    // takes no parameter name of a catalog entry yet (D114): the reader keeps such a block RAW, so nothing is lost
+    // D175 gives the taper R of G90, G92 and G94 the catalog word TAPER, which cycles/fanuc-lathe.toml maps, but the
+    // parser takes no parameter name of a catalog entry yet (D114): the reader keeps such a block RAW, so nothing is
+    // lost
     // (D5) and the text it writes is one that check can run (code-guidelines 4).
     [Fact]
     public void Taper_OnASimpleTurningCycle_KeepsItsBlockRawUntilTheParserTakesTheCatalogWord()

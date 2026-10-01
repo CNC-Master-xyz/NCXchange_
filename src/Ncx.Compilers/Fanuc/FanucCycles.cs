@@ -27,12 +27,24 @@ internal static class FanucCycles
         "PITCH", "CONTOUR",
     ];
 
-    // The simple turning cycles of system A and their codes in system B (controllers fanuc.md 3, 6; D174).
+    // The drilling codes of a Fanuc lathe: G83, G84 and G85 drill along Z, G87, G88 and G89 along X, and nothing else
+    // stands in that group (controllers fanuc.md 6; D160).
+    private static readonly string[] s_latheDrillingCodes = ["G83", "G84", "G85", "G87", "G88", "G89"];
+
+    // The simple turning cycles of system A and their codes in the systems B and C (controllers fanuc.md 3, 6; D174:
+    // the lathe manual gives G90/G92/G94 = G77/G78/G79 = G20/G21/G24).
     private static readonly Dictionary<string, string> s_turningOfSystemB = new(StringComparer.Ordinal)
     {
         ["G90"] = "G77",
         ["G92"] = "G78",
         ["G94"] = "G79",
+    };
+
+    private static readonly Dictionary<string, string> s_turningOfSystemC = new(StringComparer.Ordinal)
+    {
+        ["G90"] = "G20",
+        ["G92"] = "G21",
+        ["G94"] = "G24",
     };
 
     /// <summary>
@@ -91,7 +103,12 @@ internal static class FanucCycles
             // A CYCLE block defines the cycle of NCX on every path from here on (language 4.7).
             write.StatesForLater(Definition, known: true);
             string name = cycle.Value.ToCanonical();
-            CheckCarried(write, name == "OFF" ? null : write.Machine.CycleCatalog.Find(name));
+            // D160: the entry of a name under the drilling axis the block leaves, so that a lathe checks the words
+            // against the G87 entry under AXIS=X (machine-config 6, for_axis).
+            CycleEntry? defined = name == "OFF"
+                ? null
+                : write.Machine.CycleCatalog.Find(name, write.After.Cycle.Axis);
+            CheckCarried(write, defined);
             if (name == "OFF" && write.Target.ActiveOf(FanucCodes.Cycle) != "G80")
             {
                 write.Main.Code(FanucCodes.RankOf(FanucCodes.Cycle), "G80");
@@ -207,8 +224,14 @@ internal static class FanucCycles
             return;
         }
 
-        CycleEntry? entry = cycle.Controller is null ? write.Machine.CycleCatalog.Find(name) : null;
-        string? code = cycle.Controller is null ? CodeOf(write, entry, cycle) : NativeCode(name);
+        // D160: the compiler looks an entry up by its name together with the drilling axis, so that a lathe takes
+        // the G87 entry under AXIS=X and the G83 entry under AXIS=Z (machine-config 6, for_axis).
+        CycleEntry? entry = cycle.Controller is null
+            ? write.Machine.CycleCatalog.Find(name, cycle.Axis)
+            : null;
+        // D144: n of CYCLE:FANUC=n is the native cycle as the family's catalog writes it (G71, "G83.5"), so the
+        // block carries it as written; every native parameter follows as its address with its value in source order.
+        string? code = cycle.Controller is null ? CodeOf(write, entry, cycle) : name;
         if (code is null)
         {
             return;
@@ -327,7 +350,7 @@ internal static class FanucCycles
 
         if (write.IsLathe)
         {
-            return LatheDrillingCode(write, entry, cycle);
+            return LatheDrillingCode(write, entry);
         }
 
         if (cycle.Axis != ToolAxisOf(write.After.Frame.Workplane))
@@ -341,49 +364,44 @@ internal static class FanucCycles
         return entry.Native;
     }
 
-    // G90, G92, G94 of system A are G77, G78, G79 in system B (controllers fanuc.md 3; language 4.7.1).
-    // TODO(question): D174: the codes of system C are G20/G21/G24 in fanuc 3 and G77/G78/G79 in controller-mapping 5
-    // and language 4.7.1; a turning cycle of system C is an ERROR until D174 is answered.
+    // D174: G90, G92, G94 of system A are G77, G78, G79 in system B and G20, G21, G24 in system C, as the lathe
+    // manual gives them; the catalog stays in system A numbers and the compiler translates by gcode_system
+    // (controllers fanuc.md 3; language 4.7.1; decisions.md).
     private static string? TurningCode(FanucBlock write, CycleEntry entry)
     {
         string? code = write.System switch
         {
             GcodeSystem.A => entry.Native,
             GcodeSystem.B => s_turningOfSystemB[entry.Native],
+            GcodeSystem.C => s_turningOfSystemC[entry.Native],
             _ => null,
         };
         if (code is null)
         {
             write.Error(DiagnosticCodes.FanucCycleNotInCatalog,
-                $"CYCLE={entry.Name} is a turning cycle of a Fanuc lathe, and the machine is a mill or a lathe of "
-                + "G-code system C, whose codes D174 asks for (controllers fanuc.md 3, 6).");
+                $"CYCLE={entry.Name} is a turning cycle of a Fanuc lathe, and the machine is a mill (controllers "
+                + "fanuc.md 3, 6).");
         }
 
         return code;
     }
 
-    // Lathes drill along Z with G83 to G85 and along X with G87 to G89 (controllers fanuc.md 6; controller-mapping 5,
-    // AXIS; D59).
-    // TODO(question): D160: the catalog holds no lathe drilling entry; DRILL and PECK are G83 or G87, without and with
-    // Q, TAP G84 or G88 and REAM G85 or G89, as D160 recommends, and the other cycles have no lathe code, until D160 is
-    // answered.
-    private static string? LatheDrillingCode(FanucBlock write, CycleEntry entry, CycleSnapshot cycle)
+    // D160: the canned-cycle group of a Fanuc lathe holds G80 and the two triples G83/G84/G85, which drill along Z,
+    // and G87/G88/G89, which drill along X; the code comes from the catalog entry of the name and the axis, and a
+    // cycle whose entry maps another native has no lathe code (controllers fanuc.md 6; controller-mapping 5, AXIS;
+    // D59, decisions.md). The lathe catalog of the machine carries the entries (cycles/fanuc-lathe.toml).
+    private static string? LatheDrillingCode(FanucBlock write, CycleEntry entry)
     {
-        bool alongX = cycle.Axis == "X";
-        string? code = entry.Name switch
+        if (s_latheDrillingCodes.Contains(entry.Native))
         {
-            "DRILL" or "PECK" => alongX ? "G87" : "G83",
-            "TAP" => alongX ? "G88" : "G84",
-            "REAM" => alongX ? "G89" : "G85",
-            _ => null,
-        };
-        if (code is null)
-        {
-            write.Error(DiagnosticCodes.FanucCycleNotInCatalog,
-                $"CYCLE={entry.Name} has no drilling code of a Fanuc lathe (controllers fanuc.md 6; D160).");
+            return entry.Native;
         }
 
-        return code;
+        write.Error(DiagnosticCodes.FanucCycleNotInCatalog,
+            $"CYCLE={entry.Name} is {entry.Native} in the catalog of the machine, and the canned-cycle group of a "
+            + "Fanuc lathe holds only G83, G84 and G85 along Z and G87, G88 and G89 along X (controllers fanuc.md 6; "
+            + "D160).");
+        return null;
     }
 
     // The definition after the code (controllers fanuc.md 6; controller-mapping 5): G98 or G99 from CYCLE_RETRACT, the
@@ -632,14 +650,6 @@ internal static class FanucCycles
         return spindle.Rpm <= 0 || write.After.Unknown.Contains("RPM:" + id)
             ? $"the speed of {name} is not known here"
             : null;
-    }
-
-    // TODO(question): D144: the form of n in CYCLE:FANUC=n and the parameters of a native Fanuc cycle are open; n is
-    // written as the G code (G71, or G81 for 81) and every native parameter as its address with its value in source
-    // order, until D144 is answered.
-    private static string NativeCode(string name)
-    {
-        return name.Length > 0 && char.IsAsciiDigit(name[0]) ? "G" + name : name;
     }
 
     private static void AddNativeParameters(FanucBlock write, CycleSnapshot cycle)

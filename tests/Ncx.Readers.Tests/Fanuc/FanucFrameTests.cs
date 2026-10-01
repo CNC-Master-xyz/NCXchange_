@@ -18,6 +18,16 @@ public sealed class FanucFrameTests
             Body("G52 X10. Y5.\nG52 X20.\nG52 X0 Y0"));
     }
 
+    // In a G52 block U and W are the lathe spelling of the absolute local origin, not an increment, so the second G52
+    // states the new origin and does not move the old one (controllers fanuc.md 9 rule 6; D117).
+    [Fact]
+    public void Shift_G52UWOnSystemA_WritesTheAbsoluteLocalOrigin()
+    {
+        Assert.Equal(
+            Lines("SHIFT X=2.75 Z=1.25", "SHIFT=RESET", "SHIFT X=1 Z=1"),
+            Body("G52 U2.75 W1.25\nG52 U1. W1.", Lathe()));
+    }
+
     // G53 is FRAME=MACHINE on its block (controllers fanuc.md 9 rule 3).
     [Fact]
     public void G53_IsFrameMachineOnItsBlock()
@@ -89,6 +99,41 @@ public sealed class FanucFrameTests
     public void G50_OnSystemA_IsTheSpeedLimitOrSetpos()
     {
         Assert.Equal(Lines("RPM_MAX=2500", "SETPOS C=0"), Body("G50 S2500\nG50 C0.", Lathe()));
+    }
+
+    // SETPOS carries absolute words only, so the reader folds the G50 U(u) W(w) of system A, under which the current
+    // tool position becomes (x+u, z+w), into the coordinate it declares (D117; language 4.2).
+    [Fact]
+    public void Setpos_G50UWOnSystemA_DeclaresTheCurrentPositionPlusTheValue()
+    {
+        Assert.Equal(
+            Lines("RAPID X=10 Z=10", "SETPOS X=12.75 Z=11.25"),
+            Body("G0 X10. Z10.\nG50 U2.75 W1.25", Lathe()));
+    }
+
+    // The same fold for a G92 under G91 on a mill (D117).
+    [Fact]
+    public void Setpos_G91G92OnAMill_DeclaresTheCurrentPositionPlusTheValue()
+    {
+        Assert.Equal(
+            Lines("RAPID X=10 Y=10 Z=10", "SETPOS X=15 Y=15"),
+            Body("G90 G0 X10. Y10. Z10.\nG91 G92 X5. Y5."));
+    }
+
+    // Where the position the increment is measured from is not known, the block stays RAW (D117, D5).
+    [Fact]
+    public void Setpos_G50UFromAnUnknownPosition_IsKeptAsRaw()
+    {
+        Assert.Equal(Lines("RAW:FANUC=\"G50 U2.75\""), Body("G50 U2.75", Lathe()));
+    }
+
+    // The NCX the fold writes is a program check runs: an incremental word under SETPOS would be the ERROR PAR012
+    // (D117; language 4.3, architecture 3).
+    [Fact]
+    public void Setpos_FoldedFromAnIncrement_PassesCheck()
+    {
+        string text = Text("%\nO0001\nG0 X10. Z10.\nG50 U2.75 W1.25\nG0 X0 Z0\nM30\n%", Lathe());
+        Assert.False(Check(text, Lathe()).HasErrors, Check(text, Lathe()).ToText());
     }
 
     // G68 R rotates the plane, G69 cancels (controller-mapping 1, ROTATE).

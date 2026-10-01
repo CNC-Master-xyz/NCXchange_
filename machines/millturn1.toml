@@ -245,6 +245,7 @@ catalog = "siemens.toml"           # the 840D sl cycle catalog shipped with NCXc
 
 [variables]
 unassigned = "error"
+map = { Q = "R{index}" }           # Heidenhain-named Q variables to the channel R parameters, Q1 -> R1 (siemens 8, machine-config 7, D173)
 block_cap = 1000000
 call_depth = 8
 # declared = [...]: the names the machine declares outside the program (GUD, the builder's variables), which the Siemens compiler must not declare with a DEF of its own (D261); this machine has none.

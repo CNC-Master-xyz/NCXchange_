@@ -228,6 +228,7 @@ C_SYNC = { ON = "M136", OFF = "M137" }                  # C1 and C2 synchronous
 SUB_CHUCK.CLOSE = "workpiece_transfer_to = SUB"        # fallback only; [workpiece] has the native codes
 
 [cycles]
+catalog = "fanuc-lathe.toml"       # the Fanuc lathe catalog: drilling along Z and along X by for_axis, turning cycles in system A numbers (machine-config 6, D160, D174)
 # catalog entries for this builder select the peck behaviour with the PECK_MODE function before G83 (expansion rule, machine-config 5a)
 # [[cycle]] name = "PECK"       native = "G83" pre = ["FUNC:PECK_MODE=RETRACT"]
 # [[cycle]] name = "CHIP_BREAK" native = "G83" pre = ["FUNC:PECK_MODE=CHIP_BREAK"]

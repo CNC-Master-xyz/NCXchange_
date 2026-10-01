@@ -176,16 +176,16 @@ public sealed class HeidenhainSetposTests
             HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainSetposWithoutWorkpiecePosition).Line);
     }
 
-    // The TODO(question) D117 of HeidenhainSetpos.NamedAxes: the virtual machine changes nothing for an incremental
-    // word under SETPOS, which is left unwritten, the ERROR CMP101 (language 2 rule 8).
+    // D117: SETPOS carries absolute axis words only, so an incremental word never reaches the compiler: the parser
+    // refuses it with PAR012 and nothing is written (decisions.md; language 5 rule 2, 4.2).
     [Fact]
-    public void Setpos_WithAnIncrementalWord_IsTheErrorCmp101()
+    public void FrameVerbAxisWords_IncrementalWordUnderSetpos_IsRefusedBeforeTheCompiler()
     {
         CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
             "RAPID X=10 Y=20 Z=5", "SETPOS X=0 IY=2"));
 
         Assert.Empty(result.Files);
-        Assert.Equal(5, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainWordWithoutKlartext).Line);
+        Assert.Equal(5, HeidenhainCompile.Single(result, Ncx.Core.Model.DiagnosticCodes.AxisWordWithoutVerb).Line);
     }
 
     // Controllers heidenhain.md 6 and the TODO(question) of HeidenhainNumbers: the shift of a declared Q parameter is

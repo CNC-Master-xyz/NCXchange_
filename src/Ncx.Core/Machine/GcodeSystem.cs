@@ -16,7 +16,8 @@ public enum GcodeSystem
     B,
 
     /// <summary>
-    /// gcode_system = "C": as B.
+    /// gcode_system = "C": as B, but G70/G71 are inch and millimetre input, the simple turning cycles are
+    /// G20/G21/G24 and the multiple repetitive cycles G72..G78 (controllers fanuc.md 3, D174).
     /// </summary>
     C,
 }

@@ -105,15 +105,26 @@ public sealed class SiemensFlowTests
         Assert.Equal(["CMP590"], CompilerCodes(Run(Program(MillHeader, "VAR:R1=2", "VAR:R2={$R1 ^ 3}"), Mill())));
     }
 
-    // D173: a variable of another controller, Q1, has no SINUMERIK name without [variables] map, an ERROR; with the map
-    // Q = "R" it is R1.
+    // D173: an entry of [variables] map is a template of the variable's number, so Q = "R{index}" writes Q1 as R1,
+    // the spelling the manual's worked assignments use; a name no entry covers is an ERROR that names the variable.
     [Fact]
     public void Variable_OfAnotherController_IsMappedOrAnError()
     {
-        Assert.Equal(["CMP591"], CompilerCodes(Run(Program(MillHeader, "VAR:Q1=5"), Mill())));
-        CompileResult mapped = Run(Program(MillHeader, "VAR:Q1=5", "RAPID X={$Q1}"), Replaced(MillFile,
-            "call_depth = 8", "call_depth = 8\nmap = { Q = \"R\" }"));
+        CompileResult mapped = Run(Program(MillHeader, "VAR:Q1=5", "RAPID X={$Q1}"), Mill());
         Assert.Equal(Lines("R1=5", "G0 X=R1"), Body(mapped));
+        Assert.Equal(["CMP591"], CompilerCodes(Run(Program(MillHeader, "VAR:Q1=5"),
+            Replaced(MillFile, "map = { Q = \"R{index}\" }", "# no map:"))));
+    }
+
+    // D173: an R parameter is a field of type REAL, so no QS string fits one, and the Heidenhain names QL5, QR5 and
+    // QS5, which no SINUMERIK program declares either, are the same ERROR.
+    [Theory]
+    [InlineData("QL5")]
+    [InlineData("QR5")]
+    [InlineData("QS5")]
+    public void VariableMap_HeidenhainNameNoEntryCovers_IsTheErrorCmp591(string name)
+    {
+        Assert.Equal(["CMP591"], CompilerCodes(Run(Program(MillHeader, "VAR:" + name + "=5"), Mill())));
     }
 
     // D261: a name the control does not have already is declared with DEF REAL in the definition part of the unit

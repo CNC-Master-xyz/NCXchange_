@@ -227,7 +227,7 @@ internal static class FanucRead
         CYLINDER_OFF = "G107 C0"
 
         [cycles]
-        catalog = "fanuc.toml"
+        catalog = "fanuc-lathe.toml"
 
         [raw]
         known = ["G411", "G300"]
@@ -404,11 +404,14 @@ internal static class FanucRead
         return WithCatalog(machine);
     }
 
+    // The catalog file the machine names in [cycles], fanuc.toml for a mill and fanuc-lathe.toml for a lathe
+    // (machine-config 6, D160).
     private static MachineConfig WithCatalog(MachineConfig machine)
     {
-        var diagnostics = new Diagnostics("cycles/fanuc.toml");
+        string file = machine.Cycles?.CatalogFile ?? "fanuc.toml";
+        var diagnostics = new Diagnostics("cycles/" + file);
         CycleCatalog? catalog = CycleCatalogLoader.Load(
-            Path.Combine(Fixture.RepositoryRoot(), "cycles", "fanuc.toml"), Controller.Fanuc, diagnostics);
+            Path.Combine(Fixture.RepositoryRoot(), "cycles", file), Controller.Fanuc, diagnostics);
         Assert.True(catalog is not null, diagnostics.ToText());
         return CycleCatalogLoader.WithCatalog(machine, catalog);
     }

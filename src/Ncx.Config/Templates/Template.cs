@@ -24,6 +24,10 @@ public sealed class Template
     // break of the template stays in its piece (machine-config 3).
     private readonly List<string> _literals = [];
     private readonly List<Placeholder> _placeholders = [];
+
+    // D153: per placeholder, whether it follows digits in the template, which decides how wide it reads and whether a
+    // number wider than its field may be written.
+    private readonly List<bool> _followsDigits = [];
     private readonly Regex _pattern;
 
     // The decimal separator the machine writes numbers with, from its [format] (machine-config 2); what a number reads
@@ -59,7 +63,12 @@ public sealed class Template
         Text = text;
         _decimalSeparator = decimalSeparator;
         Parse(text, line, diagnostics, _literals, _placeholders);
-        _pattern = TemplatePattern.Build(_literals, _placeholders, readsComma);
+        for (int index = 0; index < _placeholders.Count; index++)
+        {
+            _followsDigits.Add(TemplatePattern.FollowsDigits(_literals, index));
+        }
+
+        _pattern = TemplatePattern.Build(_literals, _placeholders, _followsDigits, readsComma);
     }
 
     /// <summary>
@@ -92,6 +101,19 @@ public sealed class Template
             string? value = placeholder.Write(values, _decimalSeparator);
             if (value is not null)
             {
+                // D153: rendering pads and never truncates, so a number wider than its field is written in full where
+                // it begins the run of digits; where it follows digits the text would read back as other numbers, and
+                // that is an ERROR on the block (machine-config introduction).
+                if (_followsDigits[index] && placeholder.Width > 0
+                    && Placeholder.IntegerDigits(value) > placeholder.Width)
+                {
+                    diagnostics.Error(block, DiagnosticCodes.TemplateNumberWiderThanItsField,
+                        $"The template {Quoted(Text)} writes {value} for {placeholder}, which is wider than the "
+                        + $"{placeholder.Width} digits of its field and follows digits, so the text would read back "
+                        + "as other numbers (machine-config introduction, D153).");
+                    return null;
+                }
+
                 text.Append(value);
             }
             else if (!missing.Contains(placeholder.Name))
@@ -119,8 +141,10 @@ public sealed class Template
     /// <summary>
     /// Recognizes a native text as this template and captures the values of its placeholders. Blanks between words may
     /// be left out or doubled, blanks at the ends do not count, an M or G code of the literal text compares by number
-    /// (M8 matches M08), a padded placeholder reads the digits it pads to, and a number reads with the point and, on a
-    /// machine that reads the comma, with the comma (architecture 6, D105, controllers heidenhain.md 7 rule 8).
+    /// (M8 matches M08), and a number reads with the point and, on a machine that reads the comma, with the comma
+    /// (architecture 6, D105, controllers heidenhain.md 7 rule 8). A padded placeholder reads exactly the digits it
+    /// pads to only where it follows digits; one that begins a run of digits reads one or more of them, so that
+    /// T{tool:02}{offset:02} reads the unpadded T101 as well as T0101 (D153).
     /// </summary>
     /// <param name="text">The native text, as many lines as the template has: "G340 T0101. A02.".</param>
     /// <param name="captured">The values found, numbers by their number and words as written; empty when the text is

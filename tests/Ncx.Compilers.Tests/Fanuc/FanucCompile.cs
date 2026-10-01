@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Ncx.Compilers.Fanuc;
 using Ncx.Config;
+using Ncx.Config.Cycles;
 using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.Parsing;
@@ -134,7 +135,7 @@ internal static partial class FanucCompile
             OFF = "G5.1 Q0"
 
             [variables]
-            map = { Q = "#1", QL = "#", QR = "#5" }
+            map = { Q = "#1{index:02}", QL = "#{index}", QR = "#5{index:02}" }
 
             [system_variables]
             SYS_POS_X = "#5041"
@@ -170,6 +171,9 @@ internal static partial class FanucCompile
             line_ending = "LF"
             program_end = "M30"
             sub_end = "M99"
+
+            [cycles]
+            catalog = "fanuc-lathe.toml"
 
             [tool_change]
             change = "T{tool:02}{offset:02}"
@@ -263,7 +267,23 @@ internal static partial class FanucCompile
             ?? throw new InvalidOperationException("The test machine does not load:\n" + machineDiagnostics.ToText());
         Assert.False(machineDiagnostics.HasErrors, machineDiagnostics.ToText());
         NcxProgram program = Parser.Parse(ncx, "T.ncx", new ParserOptions());
-        return new FanucCompiler().Compile(program, machine, new CompileOptions());
+        return new FanucCompiler().Compile(program, WithCatalog(machine), new CompileOptions());
+    }
+
+    // The cycle catalog the machine names in [cycles], as ncx loads it (machine-config 6): cycles/fanuc-lathe.toml
+    // for a lathe, cycles/fanuc.toml for a mill (D160). A machine that names none keeps the built-in family.
+    private static MachineConfig WithCatalog(MachineConfig machine)
+    {
+        if (machine.Cycles?.CatalogFile is not string file)
+        {
+            return machine;
+        }
+
+        var diagnostics = new Diagnostics("cycles/" + file);
+        CycleCatalog? catalog = CycleCatalogLoader.Load(
+            Path.Combine(Ncx.Tests.Fixtures.Fixture.RepositoryRoot(), "cycles", file), Controller.Fanuc, diagnostics);
+        Assert.True(catalog is not null, diagnostics.ToText());
+        return CycleCatalogLoader.WithCatalog(machine, catalog);
     }
 
     /// <summary>

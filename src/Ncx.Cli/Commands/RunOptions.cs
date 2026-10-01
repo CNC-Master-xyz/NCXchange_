@@ -12,7 +12,7 @@ namespace Ncx.Cli.Commands;
 internal sealed class RunOptions
 {
     // The block skip switches of language 4.1 are numbered 1 to 9.
-    private const int FirstSwitch = 1;
+    private const int FirstSwitch = 0;
     private const int LastSwitch = 9;
 
     private readonly Argument<string> _file = new("file") { Description = "The NCX file." };
@@ -75,8 +75,9 @@ internal sealed class RunOptions
         return new Option<SkipBlocks>("--skip-blocks")
         {
             Description = "Which SKIP blocks the virtual machine skips: none (the default), all, or the block skip "
-                + "switches that are on, 1,3.",
-            HelpName = "none|all|1,3",
+                + "switches that are on, 0,3. A bare SKIP is switch 0, which is where the switch 1 of a Fanuc "
+                + "operator lands, since / and /1 are one switch on that control.",
+            HelpName = "none|all|0,3",
             DefaultValueFactory = _ => SkipBlocks.None,
             CustomParser = ParseSkipBlocks,
         };
@@ -99,7 +100,8 @@ internal sealed class RunOptions
     }
 
     // --skip-blocks is the run option skip_blocks of virtual machine 3.6 on the command line: none, all, or the numbers
-    // of the block skip switches that are on, 1 to 9, separated by commas, as skip_blocks = [1, 3] (D53, language 4.1).
+    // of the block skip switches that are on, 0 for a bare SKIP and 1 to 9 for SKIP=n, separated by commas, as
+    // skip_blocks = [0, 3] (D53, D133, language 4.1).
     // Anything else is a usage error, exit code 2 before the run starts (D97).
     private static SkipBlocks? ParseSkipBlocks(ArgumentResult result)
     {
@@ -121,8 +123,8 @@ internal sealed class RunOptions
                 || number < FirstSwitch
                 || number > LastSwitch)
             {
-                result.AddError($"--skip-blocks \"{text}\" is neither none nor all nor block skip switches 1 to 9 "
-                    + "separated by commas, as 1,3 (language 4.1, D53)");
+                result.AddError($"--skip-blocks \"{text}\" is neither none nor all nor block skip switches 0 to 9 "
+                    + "separated by commas, as 0,3; 0 is the bare SKIP (language 4.1, D53, D133)");
                 return null;
             }
 

@@ -11,7 +11,7 @@ What an NCXchange engineer needs to know about the controller families before wr
 | `machine-builders.md` | What the machine builders add on top of the controller: Nakamura, Mori Seiki, DMG MORI (GILDEMEISTER), Doosan, Biglia on Fanuc and Siemens, and the Siemens machines of the sample corpus (Monforts, STAMA, Burkhardt+Weber, Pittler, Hermle, INDEX); how each maps to the machine configuration |
 | `sample-corpus.md` | The programs used to test readers: the small set kept in `../spec/examples/sources/`, and the large corpus kept outside the repository with what a survey of it showed |
 
-How this relates to the specification: `../spec/controller-mapping.md` is organized by NCX word and says, per word, what each controller writes; the documents here are organized by controller and say how that controller thinks, including the things NCX keeps as `RAW`. When the two disagree, the mapping is the specification and this folder is the background; fix the background.
+How this relates to the specification: `../spec/controller-mapping.md` is organized by NCX word and says, per word, what each controller writes; the documents here are organized by controller and say how that controller thinks, including the things NCX keeps as `RAW`. When the two disagree, the mapping is the specification and this folder is the background; fix the background. The one exception is a plain fact about a control that a manual settles against the mapping: there the controller decides and the mapping is corrected, as D174 corrects the turning cycle numbers of Fanuc G-code system C, which `fanuc.md` 3 had right.
 
 Sources, by title (none of them is in the repository; all are the official documents of the controller and machine builders and are available from them):
 

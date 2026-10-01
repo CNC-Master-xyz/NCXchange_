@@ -511,25 +511,15 @@ internal static class FanucFrames
     // SETPOS through [setpos], G92 X Z or G50 X Z in system A, {axes} the declared coordinates (language 4.2, SETPOS;
     // controller-mapping 1; D55). G92 takes its words as increments under G91, which HOME leaves active (D101: SETPOS
     // after HOME), so the declared coordinates stand under G90 (language 2 rule 3).
-    // TODO(question): D117: whether SETPOS takes incremental words is open; a SETPOS whose every word is incremental is
-    // written under G91, as the reader reads G91 G92, one that mixes the two forms is CMP323, until D117 is answered.
+    // D117: SETPOS carries absolute axis words only, which the parser holds (PAR012), so there is no incremental form
+    // to write under G91 and the block always stands under G90 (decisions.md).
     private static void WriteSetpos(FanucBlock write)
     {
         write.Written("SETPOS");
         List<FanucAxisWord> declared = FanucAxes.Of(write.Block);
-        bool anyIncremental = declared.Exists(axis => axis.Incremental);
         if (write.System != GcodeSystem.A && declared.Count > 0)
         {
-            if (anyIncremental && declared.Exists(axis => !axis.Incremental))
-            {
-                write.Error(DiagnosticCodes.FanucMixedWordsUnknownTarget,
-                    "SETPOS mixes absolute and incremental words, which one G92 cannot declare under G90 or G91 "
-                    + "(controllers fanuc.md 3, 4; D117).");
-                write.WrittenAll();
-                return;
-            }
-
-            FanucMotion.Change(write, FanucCodes.Distance, anyIncremental ? "G91" : "G90");
+            FanucMotion.Change(write, FanucCodes.Distance, "G90");
         }
 
         var axes = new List<string>();

@@ -55,6 +55,20 @@ public sealed class FanucTokenizerTests
         Assert.Equal(["M"], Addresses(numbered));
     }
 
+    // D133: on this control / and /1 are one switch, BDT1, and the 1 may be left out, so /1 is the bare SKIP, the
+    // first switch, and only /2 to /9 carry a number (controller-mapping 1, SKIP).
+    [Fact]
+    public void FanucBareSkip_SlashOne_IsABareSkipWithoutASwitch()
+    {
+        SourceBlock one = Single("/1 M30");
+        SourceBlock two = Single("/2 M30");
+
+        Assert.True(one.BlockSkip);
+        Assert.Null(one.SkipSwitch);
+        Assert.Equal(["M"], Addresses(one));
+        Assert.Equal(2, two.SkipSwitch);
+    }
+
     // #n variables and [ ] expressions are values of an address (controllers fanuc.md 7).
     [Fact]
     public void Values_VariablesAndBrackets_AreExpressions()

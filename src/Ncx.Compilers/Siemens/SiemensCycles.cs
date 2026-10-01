@@ -410,13 +410,11 @@ internal static partial class SiemensCycles
         return SiemensAxes.DecimalsAddress(write, SiemensAxes.LetterOf(write, cycle.Axis));
     }
 
-    // A native cycle of CYCLE:SIEMENS=n with its native parameters: CYCLE and the number, the parameters at the
-    // positions of the signature where the catalog has the cycle, else in source order (language 4.7.1, D94).
-    // TODO(question): D144: the form of n in CYCLE:SIEMENS=n is open, and the parser takes an integer; n is the number
-    // of CYCLEn, until D144 is answered.
-    private static string? NativeCallOf(SiemensBlock write, CycleSnapshot cycle, string name)
+    // A native cycle of CYCLE:SIEMENS=n with its native parameters: the native name, the parameters at the positions
+    // of the signature where the catalog has the cycle, else in source order (language 4.7.1, D94). D144: n is the
+    // native cycle as the family's catalog writes it (CYCLE952, LONGHOLE), so the call takes it as written.
+    private static string? NativeCallOf(SiemensBlock write, CycleSnapshot cycle, string native)
     {
-        string native = IsDigits(name) ? "CYCLE" + name : name;
         CycleEntry? entry = write.Machine.CycleCatalog.FindNative(native);
         if (entry is null || entry.Signature.Count == 0)
         {
@@ -501,23 +499,6 @@ internal static partial class SiemensCycles
         };
     }
 
-    private static bool IsDigits(string text)
-    {
-        if (text.Length == 0)
-        {
-            return false;
-        }
-
-        foreach (char character in text)
-        {
-            if (!char.IsAsciiDigit(character))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
 
     // MCALL as a word of a line, no part of a longer name; names are case-insensitive (controllers siemens.md 1).
     [GeneratedRegex("(?<![A-Za-z0-9_$])MCALL(?![A-Za-z0-9_])",

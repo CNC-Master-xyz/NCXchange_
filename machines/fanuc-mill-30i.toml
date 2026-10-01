@@ -147,7 +147,7 @@ catalog = "fanuc.toml"             # the Fanuc cycle catalog shipped with NCXcha
 
 [variables]
 unassigned = "error"
-map = { Q = "#1", QL = "#", QR = "#5" }   # Heidenhain-named variables to Fanuc ranges: Q1 -> #101, QR1 -> #501 (machine-config 7, PATTERN_LOOP)
+map = { Q = "#1{index:02}", QL = "#{index}", QR = "#5{index:02}" }   # Heidenhain-named variables to Fanuc ranges, each a template of the number: Q1 -> #101, QR1 -> #501 (machine-config 7, D173, PATTERN_LOOP)
 block_cap = 1000000
 call_depth = 8
 

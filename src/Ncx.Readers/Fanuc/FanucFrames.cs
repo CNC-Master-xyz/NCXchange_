@@ -172,7 +172,9 @@ internal static class FanucFrames
 
     // G92 X Z (mills, systems B and C) and G50 X Z (system A) declare the current position, SETPOS; with S they set
     // the speed limit, RPM_MAX (controllers fanuc.md 4; controller-mapping 1 SETPOS, 4 RPM_MAX; D55). On a mill G50
-    // cancels the scaling, which NCX does not write.
+    // cancels the scaling, which NCX does not write. SETPOS carries absolute words only (language 4.2), so the reader
+    // folds an incremental word, the G50 U(u) W(w) of system A and a G92 under G91, into the coordinate it declares:
+    // the current tool position becomes (x+u, z+w), and where that position is not known the block stays RAW (D117).
     private static void ReadSetpos(FanucBlock block)
     {
         string code = block.System == GcodeSystem.A ? "G50" : "G92";
@@ -202,15 +204,37 @@ internal static class FanucFrames
         }
 
         DraftBlock setpos = block.Draft.Main.WithVerb("SETPOS");
-        foreach (FanucAxisWord axis in axes)
+        foreach (FanucAxisWord word in axes)
         {
-            block.MarkRead(axis.Word);
-            if (FanucMacro.ValueOf(block, axis.Word) is not Value value)
+            block.MarkRead(word.Word);
+            if (FanucMacro.ValueOf(block, word.Word) is not Value value)
             {
                 return;
             }
 
-            setpos.Add(axis.Key, value);
+            FanucAxisWord axis = word;
+            if (axis.Incremental)
+            {
+                if (FanucNumbers.NumberOf(value) is not decimal distance
+                    || !block.State.Positions.TryGetValue(axis.Axis, out decimal position))
+                {
+                    block.Draft.KeepAsRaw($"an incremental word of {code} declares the current position plus its "
+                        + $"value and the position of {axis.Axis} is not known here");
+                    return;
+                }
+
+                value = FanucNumbers.Of(position + distance);
+                axis = axis with { Incremental = false };
+            }
+            else if (block.Fanuc.Unknowns.Groups.Contains(FanucModalGroups.Distance))
+            {
+                // Whether the word is the coordinate or the increment the reader folds depends on G90 or G91, which
+                // the reader may not know here (FanucCallerState).
+                block.Draft.KeepAsRaw(FanucUnknowns.Reason("G90 or G91"));
+                return;
+            }
+
+            setpos.Add(axis.Axis, value);
             FanucMotion.Move(block, axis, value);
         }
     }
@@ -218,9 +242,9 @@ internal static class FanucFrames
     // G52 replaces the earlier G52, so the reader writes SHIFT=RESET before the new SHIFT when one is active; G52 X0 Y0
     // Z0 cancels (controllers fanuc.md 4, 9 rule 6; controller-mapping 1, SHIFT; language 4.2; D31). The axes the new
     // G52 does not name are 0. The control holds the new shift also where the reader keeps the block as RAW.
-    // TODO(question): fanuc 4 does not say what an incremental word of G52 does, U2.75 of system A (controller-mapping
-    // 2, IX=); the reader adds it to that axis of the active shift, and the new G52 replaces the old one as a whole,
-    // until D244 is answered.
+    // In a G52 block U and W are the lathe spelling of that absolute local origin, not increments, and G90 or G91 does
+    // not reach its words either, so rule 1 does not apply to them and the reader writes absolute SHIFT words
+    // (controllers fanuc.md 9 rule 6; controller-mapping 2, IX row; D117).
     // TODO(question): fanuc 4 does not say where the local coordinate system of a G52 stands against an active G68,
     // G68.2 or G51.1, whose entries stand in the chain of NCX (language 4.2): in front of them, behind them, or in the
     // place of the earlier G52; and the SHIFT=RESET of a G52 that replaces the earlier one would remove them. A G52
@@ -244,19 +268,11 @@ internal static class FanucFrames
                 return;
             }
 
-            if (!axis.Incremental && block.Fanuc.Unknowns.Groups.Contains(FanucModalGroups.Distance))
-            {
-                block.Draft.KeepAsRaw(FanucUnknowns.Reason("G90 or G91"));
-                return;
-            }
-
-            chain.Local.TryGetValue(axis.Axis, out decimal active);
-            decimal amount = axis.Incremental ? active + number : number;
-            shift[axis.Axis] = amount;
+            shift[axis.Axis] = number;
             words.Add(new Word
             {
                 Key = axis.Axis,
-                Value = axis.Incremental ? FanucNumbers.Of(amount) : axis.Word.ToNcxNumber()!,
+                Value = axis.Word.ToNcxNumber()!,
             });
         }
 

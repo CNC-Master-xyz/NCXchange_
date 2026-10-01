@@ -257,5 +257,7 @@ TCPM_OFF = "G436"
 TILT_ON = "G368"                   # 3D coordinate conversion cycle, parameters per Nakamura manual
 TILT_OFF = "G369"
 
+[cycles]
+catalog = "fanuc-lathe.toml"       # the Fanuc lathe catalog: drilling along Z and along X by for_axis, turning cycles in system A numbers (machine-config 6, D160, D174)
 [raw]                              # builder macros kept as RAW:NAKAMURA; G471..G486 and G480 are read as JUMP, not RAW
 known = ["G411", "G300", "G131", "G359", "G333", "G200", "G355", "G376", "G377", "G342", "G344", "G350", "G419", "G496", "G497"]

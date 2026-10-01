@@ -173,21 +173,21 @@ public sealed class FanucCyclesTests
         Assert.Equal(DiagnosticCodes.FanucTapFeedNotKnown, error.Code);
     }
 
-    // D175: the catalog entry of G92 maps PITCH to F, the thread lead, so the compiler writes the lead through that
-    // address instead of turning it into a feed per revolution as it does for TAP (decisions.md; fanuc 6;
-    // machine-config 6).
+    // D175: the catalog entry of G92 (THREAD_PASS, D161) maps PITCH to F, the thread lead, so the compiler writes it
+    // through that address instead of turning it into a feed per revolution as it does for TAP (decisions.md;
+    // fanuc 6; machine-config 6).
     [Fact]
-    public void ThreadCycle_WithPitch_WritesTheLeadAsTheFOfTheCycleBlock()
+    public void ThreadPassCycle_WithPitch_WritesTheLeadAsTheFOfTheCycleBlock()
     {
         const string Thread =
-            "[[cycle]]\nname = \"THREAD\"\nnative = \"G92\"\nmodal = true\nparams = { PITCH = \"F\" }";
+            "[[cycle]]\nname = \"THREAD_PASS\"\nnative = \"G92\"\nmodal = true\nparams = { PITCH = \"F\" }";
         string text = FanucCompile.TextOf(FanucCompile.Run(FanucCompile.Lines(
             "FILE=BEGIN NCX=1",
             "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
             "FEED_MODE=PER_REV COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
             "SPINDLE:MAIN=CW RPM:MAIN=500",
             "RAPID X=70 Z=2",
-            "CYCLE=THREAD PITCH=1.5",
+            "CYCLE=THREAD_PASS PITCH=1.5",
             "CYCLE_CALL X=60 Z=-30",
             "CYCLE=OFF",
             "PROGRAM=END",
@@ -197,22 +197,24 @@ public sealed class FanucCyclesTests
     }
 
     // Machine-config 6, language 2 rule 8, D175: an entry of G92 that maps no address to PITCH leaves the thread
-    // cycle cutting with the feed the control has: CMP385, never a thread without its lead.
+    // cycle cutting with the feed the control has: CMP385, never a thread without its lead. D161: G92 is
+    // THREAD_PASS, the modal cycle that cuts one pass per block.
     [Fact]
     public void Thread_WithPitch_IsTheErrorCmp385()
     {
-        const string Thread = "[[cycle]]\nname = \"THREAD\"\nnative = \"G92\"\nmodal = true";
+        const string ThreadPass = "[[cycle]]\nname = \"THREAD_PASS\"\nnative = \"G92\"\nmodal = true\n"
+            + "params = { CYCLE_F = \"F\" }";
         Diagnostic error = FanucCompile.ErrorOf(FanucCompile.Run(FanucCompile.Lines(
             "FILE=BEGIN NCX=1",
             "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
             "FEED_MODE=PER_REV COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
             "SPINDLE:MAIN=CW RPM:MAIN=500",
             "RAPID X=70 Z=2",
-            "CYCLE=THREAD PITCH=1.5",
+            "CYCLE=THREAD_PASS PITCH=1.5",
             "CYCLE_CALL X=60 Z=-30",
             "CYCLE=OFF",
             "PROGRAM=END",
-            "FILE=END"), FanucCompile.Lathe(FanucCompile.DefaultSync, Thread)));
+            "FILE=END"), FanucCompile.Lathe(FanucCompile.DefaultSync, ThreadPass)));
 
         Assert.Equal(DiagnosticCodes.FanucCycleWordNotMapped, error.Code);
     }
@@ -385,5 +387,53 @@ public sealed class FanucCyclesTests
             FanucCompile.Lathe(FanucCompile.DefaultSync, TurnOd)));
 
         Assert.Contains("\nG90 X60. Z-70. F0.3\nX50. Z-70.\nG80\n", text, StringComparison.Ordinal);
+    }
+
+    // D174: the lathe manual gives the simple turning cycles G90, G92, G94 of system A as G77, G78, G79 in system B
+    // and G20, G21, G24 in system C; the catalog keeps the system A numbers and the compiler translates by
+    // gcode_system (controllers fanuc.md 3; decisions.md).
+    [Theory]
+    [InlineData("A", "G90")]
+    [InlineData("B", "G77")]
+    [InlineData("C", "G20")]
+    public void TurningCycleCodes_EveryGcodeSystem_TakeTheCodesOfThatSystem(string system, string code)
+    {
+        string program = FanucCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+            "FEED_MODE=PER_REV COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
+            "RAPID X=70 Z=2",
+            "CYCLE=TURN_OD CYCLE_F=0.3",
+            "CYCLE_CALL X=60 Z=-70",
+            "CYCLE=OFF",
+            "PROGRAM=END",
+            "FILE=END");
+        string machine = FanucCompile.Lathe()
+            .Replace("gcode_system = \"A\"", $"gcode_system = \"{system}\"", StringComparison.Ordinal);
+
+        string text = FanucCompile.TextOf(FanucCompile.Run(program, machine));
+
+        Assert.Contains("\n" + code + " X60. Z-70. F0.3\n", text, StringComparison.Ordinal);
+    }
+
+    // D161: THREAD is Fanuc G76, the one-shot cycle that cuts the whole thread, and G92, the modal cycle that cuts
+    // one pass per block, is THREAD_PASS; the lathe catalog carries both names (decisions.md).
+    [Fact]
+    public void FanucThreadCycleNames_ThreadPassOnALatheOfSystemA_IsG92()
+    {
+        string program = FanucCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+            "FEED_MODE=PER_REV COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
+            "RAPID X=70 Z=2",
+            "CYCLE=THREAD_PASS",
+            "CYCLE_CALL X=60 Z=-30",
+            "CYCLE=OFF",
+            "PROGRAM=END",
+            "FILE=END");
+
+        string text = FanucCompile.TextOf(FanucCompile.Run(program, FanucCompile.Lathe()));
+
+        Assert.Contains("\nG92 X60. Z-30.\nG80\n", text, StringComparison.Ordinal);
     }
 }

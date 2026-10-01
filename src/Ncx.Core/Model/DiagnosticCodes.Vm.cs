@@ -115,6 +115,11 @@ public static partial class DiagnosticCodes
     public const string SetposAxisUnknown = "VM050";
 
     /// <summary>
+    /// VM051: a TILT_AXIS axis word on an axis the machine does not declare rotary (virtual machine 3.4, 5, D117).
+    /// </summary>
+    public const string TiltAxisNotRotary = "VM051";
+
+    /// <summary>
     /// VM060, a WARNING: HOME on an axis without the reference point in the configuration, once per run and axis; the
     /// axis is unknown in every frame afterwards (virtual machine 3 step 5, 5, D100).
     /// </summary>

@@ -1,4 +1,5 @@
 using Ncx.Core.Machine;
+using Ncx.Core.Model;
 
 namespace Ncx.Core.Tests.Machine;
 
@@ -47,6 +48,24 @@ public sealed class CycleCatalogTests
 
         Assert.Equal("CHIP_BREAK", siemens.FindNative("CYCLE83", Values("VARI", 0m))?.Name);
         Assert.Equal("PECK", siemens.FindNative("CYCLE83", Values("VARI", 1m))?.Name);
+    }
+
+    // D144: n of CYCLE:controller=n is the native cycle exactly as the family's catalog writes it, an integer for
+    // Heidenhain, an identifier for Siemens and Fanuc, and the content of a string where the native is neither.
+    [Fact]
+    public void NativeCycleForm_IntegerOrIdentifier_IsTheTextItself()
+    {
+        Assert.Equal("251", CycleCatalog.NativeOf(new IntegerValue(251, "251")));
+        Assert.Equal("G71", CycleCatalog.NativeOf(new IdentValue("G71")));
+        Assert.Equal("CYCLE952", CycleCatalog.NativeOf(new IdentValue("CYCLE952")));
+    }
+
+    // D144: a string carries a native that is neither a number nor an identifier, CYCLE:FANUC="G83.5"; the lookup
+    // compares its content, not the quoted text.
+    [Fact]
+    public void NativeCycleForm_StringValue_IsItsContent()
+    {
+        Assert.Equal("G83.5", CycleCatalog.NativeOf(new StringValue("G83.5")));
     }
 
     // An entry without fixed values fits every block of its native cycle.

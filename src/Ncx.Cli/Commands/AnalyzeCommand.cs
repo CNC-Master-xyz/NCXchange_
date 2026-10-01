@@ -8,7 +8,7 @@ namespace Ncx.Cli.Commands;
 
 /// <summary>
 /// ncx analyze &lt;file&gt; [--machine &lt;toml&gt;] [--vars &lt;toml&gt;] [--from &lt;line&gt;] [--to &lt;line&gt;]
-/// [--analytic tools,runtime] [--static] [--format text|csv] [--skip-blocks none|all|1,3] [--strict]: parse, expand,
+/// [--analytic tools,runtime] [--static] [--format text|csv] [--skip-blocks none|all|0,3] [--strict]: parse, expand,
 /// run the virtual machine INTERPRETED, or STATIC under --static, with the analytics subscribed, and write their
 /// reports over the block range on the standard output, the diagnostics on the standard error (architecture 10;
 /// virtual machine 1, 8; D67; implementation 14, P4-02). Without --machine the built-in default machine (D103). With

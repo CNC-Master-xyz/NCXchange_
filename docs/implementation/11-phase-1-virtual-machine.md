@@ -102,7 +102,7 @@ Tests first: the coolant clutch example (`COOLANT:THROUGH=ON` with `requires = {
 
 ### P1-07 `ncx check`, `ncx trace`, `ncx annotate`
 
-Files: `src/Ncx.Cli/Commands/CheckCommand.cs`, `TraceCommand.cs`, `AnnotateCommand.cs`, `src/Ncx.Cli/Pipeline.cs` (parse, expand, run STATIC, collect), the shared options `--machine` (optional per D103, resolved by name in `machines/` or by path from P2-04 on), `--strict`, `--skip-blocks <none|all|1,3>` (D53), `--expand-cycles` (D37), `--format csv|text` for trace. `trace` writes `channel, block, variable, old, new` per changed state variable per executed block (VM 6); `annotate` writes the program with the previous values as line comments (`LINE X=55.44 ; X 33.22 -> 55.44`), which the parser reads as ordinary comments. Exit codes per D97. Architecture 10 updated to the one CLI table (F28).
+Files: `src/Ncx.Cli/Commands/CheckCommand.cs`, `TraceCommand.cs`, `AnnotateCommand.cs`, `src/Ncx.Cli/Pipeline.cs` (parse, expand, run STATIC, collect), the shared options `--machine` (optional per D103, resolved by name in `machines/` or by path from P2-04 on), `--strict`, `--skip-blocks <none|all|0,3>` (D53; a bare `SKIP` is switch 0, and the help text says that a Fanuc operator's switch 1 is 0 here, D133), `--expand-cycles` (D37), `--format csv|text` for trace. `trace` writes `channel, block, variable, old, new` per changed state variable per executed block (VM 6); `annotate` writes the program with the previous values as line comments (`LINE X=55.44 ; X 33.22 -> 55.44`), which the parser reads as ordinary comments. Exit codes per D97. Architecture 10 updated to the one CLI table (F28).
 
 Cite: VM 6; D16, D37, D53, D97, D103; architecture 10.
 

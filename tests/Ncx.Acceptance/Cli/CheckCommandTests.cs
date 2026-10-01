@@ -3,7 +3,7 @@ using Ncx.Acceptance.Examples;
 namespace Ncx.Acceptance.Cli;
 
 /// <summary>
-/// ncx check &lt;file&gt; [--machine &lt;toml&gt;] [--strict] [--skip-blocks none|all|1,3] [--expand-cycles]: parse,
+/// ncx check &lt;file&gt; [--machine &lt;toml&gt;] [--strict] [--skip-blocks none|all|0,3] [--expand-cycles]: parse,
 /// expand, the STATIC run of the virtual machine, the diagnostics on the standard error in the form of D98, the exit
 /// codes of D97; without --machine against the built-in default machine of D103 (architecture 10; P1-07).
 /// </summary>
@@ -202,11 +202,11 @@ public sealed class CheckCommandTests : IDisposable
         Assert.True(exitCode == expectedExitCode, _cli.Error);
     }
 
-    // --skip-blocks takes none, all or switch numbers 1 to 9 (language 4.1, D53); anything else is a usage error,
-    // exit 2 before the run starts (D97).
+    // --skip-blocks takes none, all or switch numbers 0 to 9, 0 being the bare SKIP (language 4.1, D53, D133);
+    // anything else is a usage error, exit 2 before the run starts (D97).
     [Theory]
     [InlineData("some")]
-    [InlineData("0")]
+    [InlineData("-1")]
     [InlineData("1,10")]
     [InlineData("1,,3")]
     [InlineData("")]
@@ -218,6 +218,21 @@ public sealed class CheckCommandTests : IDisposable
 
         Assert.Equal(2, exitCode);
         Assert.StartsWith("ncx(1): ERROR CLI001: ", _cli.Error, StringComparison.Ordinal);
+    }
+
+    // D133: a bare SKIP is switch 0 of --skip-blocks, so 0 skips the bare SKIP blocks and a list without it leaves
+    // them running; the LINE without feed of the bare SKIP block is the ERROR that decides.
+    [Theory]
+    [InlineData("0", 0)]
+    [InlineData("0,3", 0)]
+    [InlineData("1", 1)]
+    public void BareSkipSwitch_ZeroOnTheCommandLine_SkipsTheBareSkipBlocks(string skipBlocks, int expectedExitCode)
+    {
+        string file = _cli.WriteFile("skip.ncx", CliHarness.OneProgram("UNITS=MM", "SKIP LINE X=10"));
+
+        int exitCode = _cli.Run("check", file, "--skip-blocks", skipBlocks);
+
+        Assert.True(exitCode == expectedExitCode, _cli.Error);
     }
 
     // --expand-cycles is a run option of check as well (D37); the check of the drilling example stays as it was.

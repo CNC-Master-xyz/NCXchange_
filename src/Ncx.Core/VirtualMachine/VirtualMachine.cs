@@ -370,9 +370,8 @@ public sealed partial class VirtualMachine
 
     // Step 4: SHIFT, TILT, TILT_AXIS and SETPOS update the frame (virtual machine 3 step 4, 3.4). Their RESET forms are
     // state words of step 3.
-    // TODO(question): language 5 rule 2 gives the frame verbs their own axis words without saying whether they take
-    // the incremental forms (SHIFT IX=5, SETPOS IC=0); the parser lets them stand (BlockRules), and they change nothing
-    // here until D117 is answered.
+    // D117: the four take absolute axis words only, each the kinds language 4.2 gives it (decisions.md); the parser
+    // refuses an incremental word with PAR012, so the guards below only keep one that reached the VM out of the frame.
     private void ApplyFrameVerb(BlockContext context)
     {
         switch (context.Block.Verb?.Key)
@@ -433,11 +432,25 @@ public sealed partial class VirtualMachine
                 continue;
             }
 
+            string? axis = kind == TransformKind.TiltAxis && context.AxisOf.TryGetValue(word, out string? resolved)
+                ? resolved
+                : null;
+
+            // D117: TILT_AXIS gives the rotary axis positions of this machine, so an axis the machine does not
+            // declare rotary is an ERROR (language 4.2, virtual machine 3.4, 5; decisions.md).
+            if (axis is not null && !_resources.IsRotary(axis))
+            {
+                Diagnostics.Error(block, DiagnosticCodes.TiltAxisNotRotary,
+                    $"TILT_AXIS gives the angles of the rotary axes of this machine, and {axis} is not one (language "
+                    + "4.2, virtual machine 3.4, D117).");
+                continue;
+            }
+
             // An angle from an expression is not evaluated in STATIC mode: the entry holds it as UNKNOWN, and a rotary
             // axis moved to it is unknown (virtual machine 1, the answer of wave-1 question #100).
             decimal? angle = NumberOf(word);
             angles[word.Key] = angle;
-            if (kind == TransformKind.TiltAxis && context.AxisOf.TryGetValue(word, out string? axis))
+            if (axis is not null)
             {
                 axisAngles[axis] = angle;
             }

@@ -50,7 +50,12 @@ public abstract partial class CompilerBase
             }
         }
 
-        return new NativeCycle { Controller = controller, Number = cycle.Value.ToCanonical(), Parameters = parameters };
+        return new NativeCycle
+        {
+            Controller = controller,
+            Number = CycleCatalog.NativeOf(cycle.Value),
+            Parameters = parameters,
+        };
     }
 
     // RAW compiles only to the controller or builder it names, and a CYCLE:controller=n block with its native

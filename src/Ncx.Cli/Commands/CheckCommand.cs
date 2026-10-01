@@ -3,7 +3,7 @@ using System.CommandLine;
 namespace Ncx.Cli.Commands;
 
 /// <summary>
-/// ncx check &lt;file&gt; [--machine &lt;toml&gt;] [--strict] [--skip-blocks none|all|1,3] [--expand-cycles]: the
+/// ncx check &lt;file&gt; [--machine &lt;toml&gt;] [--strict] [--skip-blocks none|all|0,3] [--expand-cycles]: the
 /// static pass of the virtual machine without a target (D91): parse, expand, run STATIC and report what the stages
 /// find on the standard error (D98); nothing else is written. Without --machine the file is checked against the
 /// built-in default machine (D103). ncx check --job &lt;name.ncxjob.toml&gt; checks the files of a job, whose channel

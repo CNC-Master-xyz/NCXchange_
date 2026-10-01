@@ -120,9 +120,8 @@ internal static class FanucExpressions
             return SystemVariable(write, name, index);
         }
 
-        // TODO(question): D173: machine-config 7 maps Q1 to #101 with map Q = "#1", which holds only with the number
-        // padded to two digits, and says so nowhere; the prefix is written with the number padded to two digits, as
-        // Q1 -> #101 and QR1 -> #501 read, until D173 is answered.
+        // D173: an entry of [variables] map is a template of the variable's number with {index}, so Q = "#1{index:02}"
+        // writes Q1 as #101 and QR = "#5{index:02}" writes QR1 as #501 (machine-config 7, decisions.md).
         int digits = name.Length;
         while (digits > 0 && char.IsAsciiDigit(name[digits - 1]))
         {
@@ -133,7 +132,9 @@ internal static class FanucExpressions
         string number = name.Substring(digits);
         if (index is null && number.Length > 0 && machine.Variables.Map.TryGetValue(prefix, out string? native))
         {
-            return native + number.PadLeft(2, '0');
+            var values = new TemplateValues();
+            values.Set("index", decimal.Parse(number, NumberStyles.None, CultureInfo.InvariantCulture));
+            return write.TemplateOf(native).Render(values, write.Block, write.Diagnostics);
         }
 
         write.Error(DiagnosticCodes.FanucVariableNotMapped,

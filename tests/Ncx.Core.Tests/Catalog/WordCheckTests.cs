@@ -43,6 +43,10 @@ public sealed class WordCheckTests
     [InlineData("HOME X Z")]
     [InlineData("HOME C POINT=2")]
     [InlineData("CYCLE:HEIDENHAIN=251")]
+    [InlineData("CYCLE:FANUC=G71")]
+    [InlineData("CYCLE:SIEMENS=CYCLE952")]
+    [InlineData("CYCLE:SIEMENS=LONGHOLE")]
+    [InlineData("CYCLE:FANUC=\"G83.5\"")]
     [InlineData("CYCLE=RECT_POCKET")]
     [InlineData("CYCLE=OFF")]
     [InlineData("ARC=CCW CENTER:IX=-0.534 CENTER:IY=2 ANGLE=737.956")]
@@ -88,7 +92,7 @@ public sealed class WordCheckTests
     [InlineData("IF=1", DiagnosticCodes.WordValueNotAccepted)]
     [InlineData("SPINDLE_SYNC=MAIN", DiagnosticCodes.WordValueNotAccepted)]
     [InlineData("TOLERANCE:ROTARY=OFF", DiagnosticCodes.WordValueNotAccepted)]
-    [InlineData("CYCLE:HEIDENHAIN=POCKET", DiagnosticCodes.WordValueNotAccepted)]
+    [InlineData("CYCLE:FANUC=83.5", DiagnosticCodes.WordValueNotAccepted)]
     [InlineData("CYCLE=251", DiagnosticCodes.WordValueNotAccepted)]
     [InlineData("SKIP=10", DiagnosticCodes.SkipSwitchOutOfRange)]
     [InlineData("SKIP=0", DiagnosticCodes.SkipSwitchOutOfRange)]
@@ -185,7 +189,8 @@ public sealed class WordCheckTests
     [InlineData("SUB=BEGIN NAME=100", "NAME", ValueKinds.Integer | ValueKinds.Ident | ValueKinds.String)]
     [InlineData("PROGRAM=BEGIN NAME=\"SHAFT\"", "NAME", ValueKinds.String)]
     [InlineData("START_CHANNEL=2 NAME=\"SHAFT_OP2\"", "NAME", ValueKinds.String)]
-    [InlineData("CYCLE:HEIDENHAIN=251", "CYCLE", ValueKinds.Integer)]
+    [InlineData("CYCLE:HEIDENHAIN=251", "CYCLE",
+        ValueKinds.Integer | ValueKinds.Ident | ValueKinds.String)]
     [InlineData("CYCLE=DRILL", "CYCLE", ValueKinds.Ident)]
     public void ValueKindsOf_WordInItsBlock_AreThoseItsAddressOrPartnerGive(string text, string key, ValueKinds kinds)
     {

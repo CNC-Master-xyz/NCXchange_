@@ -802,7 +802,7 @@ public sealed class MachineConfigLoaderTests
 
             [variables]
             unassigned = 0
-            map = { Q = "#1", QL = "#", QR = "#5" }
+            map = { Q = "#1{index:02}", QL = "#{index}", QR = "#5{index:02}" }
             block_cap = 5000
             call_depth = 4
 
@@ -812,7 +812,7 @@ public sealed class MachineConfigLoaderTests
             """);
 
         Assert.Equal(UnassignedVariable.Zero, machine.Variables.Unassigned);
-        Assert.Equal("#5", machine.Variables.Map["QR"]);
+        Assert.Equal("#5{index:02}", machine.Variables.Map["QR"]);
         Assert.Equal(5000, machine.Variables.BlockCap);
         Assert.Equal(4, machine.Variables.CallDepth);
         Assert.Equal("#11{index:03}", machine.SystemVariables.Find("SYS_WEAR_Z"));

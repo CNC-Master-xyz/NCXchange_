@@ -26,4 +26,10 @@ public static partial class DiagnosticCodes
     /// introduction).
     /// </summary>
     public const string TemplateFormatUnknown = "CFG102";
+
+    /// <summary>
+    /// A padded placeholder that follows digits is written with a number wider than its field, so that the text would
+    /// read back as other numbers (machine-config introduction, D153).
+    /// </summary>
+    public const string TemplateNumberWiderThanItsField = "CFG103";
 }

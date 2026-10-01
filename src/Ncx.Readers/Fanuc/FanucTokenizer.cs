@@ -57,7 +57,8 @@ internal sealed class FanucTokenizer : ISourceTokenizer
         SkipBlanks();
 
         // / or /n at the block start is the optional block skip; the block runs unless switch n is on (controllers
-        // fanuc.md 1, language 4.1).
+        // fanuc.md 1, language 4.1). D133: on this control / and /1 are one switch, BDT1, and the 1 may be left out,
+        // so /1 is read as a bare SKIP, the first switch, and only /2 to /9 carry a number (decisions.md).
         bool blockSkip = false;
         int? skipSwitch = null;
         if (Current == '/')
@@ -66,7 +67,7 @@ internal sealed class FanucTokenizer : ISourceTokenizer
             _position++;
             if (Current is >= '1' and <= '9')
             {
-                skipSwitch = Current - '0';
+                skipSwitch = Current == '1' ? null : Current - '0';
                 _position++;
             }
         }

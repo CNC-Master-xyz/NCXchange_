@@ -96,11 +96,11 @@ internal static class BlockRules
     // NX NY NZ, which name no axis, still require a motion verb under them. HOME carries bare axis names; under any
     // other verb an axis word has a value. A machine axis word counts as an axis word; a native parameter is none
     // (language 5 rule 2; 4.2, 4.3; D93, D94).
-    // TODO(question): rule 2 gives SHIFT, TILT, TILT_AXIS and SETPOS their own axis words, and the rows of 4.2 name
-    // axis words for SHIFT and SETPOS, the spatial angles A, B, C for TILT and the rotary axis angles of this machine
-    // for TILT_AXIS; neither says whether TILT and TILT_AXIS refuse a linear axis word (TILT X=1) or whether the four
-    // take the incremental forms (SHIFT IX=5). Every axis name, absolute or incremental, standard or of the D93 form,
-    // stands under the four until D117 is answered; only the axis words that name no axis are refused.
+    // D117: the four frame verbs take absolute axis words only, each the kinds language 4.2 gives it (decisions.md).
+    // TILT carries the spatial angles A, B and C alone; TILT_AXIS carries A, B, C and the machine axis names of the
+    // D93 form, the virtual machine reporting an axis that is not rotary; SHIFT and SETPOS carry every absolute axis
+    // word. An incremental word under any of the four is PAR012, because a shift is already relative to the frame it
+    // stands in and a SETPOS declares a coordinate, so a reader folds a source increment itself.
     private static void CheckAxisWords(Block block, Diagnostics diagnostics)
     {
         bool nativeBlock = WordCatalog.IsNativeParameterAllowed(block);
@@ -128,6 +128,10 @@ internal static class BlockRules
                     + $"ANGLE, TX TY TZ and NX NY NZ require a motion verb: {MotionVerbsWithAxisWords} (language 5 "
                     + "rule 2, 4.2).");
             }
+            else if (s_frameVerbs.Contains(verb.Key) && FrameVerbRefusal(verb.Key, word) is string refusal)
+            {
+                diagnostics.Error(block, DiagnosticCodes.AxisWordWithoutVerb, refusal);
+            }
             else if (verb.Key == HomeKey)
             {
                 if (!IsAxisName(word) || word.Value is not NoValue)
@@ -143,6 +147,39 @@ internal static class BlockRules
                     + "bare axis names (language 5 rule 2, 4.3).");
             }
         }
+    }
+
+    // Why a frame verb refuses an axis word that names an axis, null when it carries it (D117): none of the four takes
+    // an incremental form, TILT carries the spatial angles A, B and C alone, and TILT_AXIS carries those three and the
+    // machine axis names of the D93 form, not a standard linear axis (language 4.2, 5 rule 2).
+    private static string? FrameVerbRefusal(string verb, Word word)
+    {
+        if (!IsAxisName(word))
+        {
+            return $"{verb} carries absolute axis words only, not {word.ToCanonical()}: a shift stands in the frame "
+                + "that is active where it is written and a SETPOS declares a coordinate, so a reader folds a source "
+                + "increment itself (language 5 rule 2, 4.2, 4.3; D117).";
+        }
+
+        if (verb == "TILT" && !IsSpatialAngle(word))
+        {
+            return $"TILT carries the spatial angles A, B and C, not {word.ToCanonical()}; the rotary axis angles of "
+                + "this machine are TILT_AXIS (language 5 rule 2, 4.2; D117).";
+        }
+
+        if (verb == "TILT_AXIS" && !IsSpatialAngle(word) && word.Definition is not null)
+        {
+            return $"TILT_AXIS carries A, B, C and the machine axis names of the [[axis]] list, not "
+                + $"{word.ToCanonical()} (language 5 rule 2, 4.2; D93, D117).";
+        }
+
+        return null;
+    }
+
+    // A, B or C written bare, the spatial angles of TILT and the standard rotary names of TILT_AXIS (language 4.2).
+    private static bool IsSpatialAngle(Word word)
+    {
+        return word.Addr is null && word.Definition is not null && word.Key is "A" or "B" or "C";
     }
 
     // The axis words of rule 2: X and IX for every standard axis, CENTER, R, ANGLE, TX TY TZ, NX NY NZ by their catalog

@@ -1,5 +1,5 @@
 # Cycles
 
-The cycle catalogs per controller family in TOML, `fanuc.toml`, `heidenhain.toml` and `siemens.toml` (`../docs/spec/machine-config.md`, section 6); task P2-03 fills this folder.
+The cycle catalogs per controller family in TOML, `fanuc.toml`, `fanuc-lathe.toml`, `heidenhain.toml` and `siemens.toml` (`../docs/spec/machine-config.md`, section 6); task P2-03 fills this folder. `fanuc.toml` holds the mill codes of the Fanuc family and `fanuc-lathe.toml` the lathe drilling cycles along Z and along X and the turning cycles, which a Fanuc lathe names instead of the mill file (D160). Every file is written in the numbers of Fanuc G-code system A; the readers and compilers translate them to the system of the machine through `gcode_system` (D174).
 
 `ncx` finds the catalog that `[cycles] catalog` of a machine names in the cycle folder that `ncx.toml` names, then in `cycles/` of the working directory, then in `cycles/` of the tool's own folder, where the build copies this folder, and nowhere else: unlike `--machine`, the value is no path from the working directory, and a value with a folder in it (`shop/fanuc.toml`) is looked for below each cycle folder. It loads the catalog beneath the `[[cycle]]` entries of the machine file (P2-04, `../src/Ncx.Cli/RunMachine.cs`).

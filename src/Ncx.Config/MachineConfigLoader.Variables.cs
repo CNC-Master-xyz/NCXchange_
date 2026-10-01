@@ -37,7 +37,7 @@ public static partial class MachineConfigLoader
         return new VariablesConfig
         {
             Unassigned = ReadUnassigned(table),
-            Map = table.Table("map")?.Strings(null) ?? new Dictionary<string, string>(),
+            Map = ReadVariableMap(table),
             Declared = Names(table.TextList("declared")),
             BlockCap = table.LongInteger("block_cap") ?? defaults.BlockCap,
             CallDepth = table.Integer("call_depth") ?? defaults.CallDepth,
@@ -54,6 +54,32 @@ public static partial class MachineConfigLoader
         }
 
         return names;
+    }
+
+    // map: the native variable of each NCX variable prefix, as a template of the variable's number with {index}
+    // (machine-config 7, D173): Siemens Q = "R{index}" writes R1, Fanuc Q = "#1{index:02}" writes #101. A bare
+    // prefix cannot state the width the control needs, so an entry without {index} is an ERROR on its line.
+    private static IReadOnlyDictionary<string, string> ReadVariableMap(ConfigTable table)
+    {
+        ConfigTable? map = table.Table("map");
+        if (map is null)
+        {
+            return new Dictionary<string, string>();
+        }
+
+        IReadOnlyDictionary<string, string> entries = map.Strings(null);
+        foreach (KeyValuePair<string, string> entry in entries)
+        {
+            if (!entry.Value.Contains("{index", StringComparison.Ordinal))
+            {
+                map.Diagnostics.Error(map.LineOf(entry.Key), DiagnosticCodes.VariableMapWithoutIndex,
+                    $"The [variables] map entry {entry.Key} = \"{entry.Value}\" has no {{index}}: an entry is a "
+                    + "template of the variable's number, \"R{index}\" or \"#1{index:02}\", because a bare prefix "
+                    + "does not state the width the control needs (machine-config 7, D173).");
+            }
+        }
+
+        return entries;
     }
 
     // Reading an unassigned variable is an ERROR unless the configuration sets unassigned = 0 (virtual machine 3.6,

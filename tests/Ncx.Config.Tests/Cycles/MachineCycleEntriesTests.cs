@@ -19,7 +19,7 @@ public sealed class MachineCycleEntriesTests
         controller = "fanuc"
 
         [cycles]
-        catalog = "fanuc.toml"
+        catalog = "fanuc-lathe.toml"
 
         [[cycle]]
         name = "PECK"

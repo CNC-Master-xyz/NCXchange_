@@ -20,13 +20,15 @@ internal static class CycleWords
             Key = "CYCLE",
             Group = WordKind.Cycle,
             ValueKinds = ValueKinds.Ident,
-            AddressedValueKinds = ValueKinds.Integer,
+            AddressedValueKinds = ValueKinds.Integer | ValueKinds.Ident | ValueKinds.String,
             AddrKind = AddrKind.Controller,
             Scope = Scope.Modal,
             CanonicalRank = CanonicalRanks.Cycle,
             Section = TableSection,
             Description = "Defines the active cycle by name (DRILL, a catalog name, OFF), or natively with a "
-                + "controller address and the cycle number (CYCLE:HEIDENHAIN=251, D94).",
+                + "controller address and the native cycle of that family as its cycle catalog writes it "
+                + "(CYCLE:HEIDENHAIN=251, CYCLE:FANUC=G71, CYCLE:SIEMENS=CYCLE952, CYCLE:FANUC=\"G83.5\"; D94, "
+                + "D144).",
         },
         CycleNumber("SURFACE", CanonicalRanks.Surface,
             "Absolute coordinate of the workpiece surface along the drilling axis (Q203)."),

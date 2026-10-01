@@ -310,6 +310,20 @@ public sealed class StaticRunTests
         Assert.True(vm.State.Coolant["STANDARD"]);
     }
 
+    // D133: a bare SKIP is the first switch and has the number 0, so skip_blocks = [0, 3] skips the bare SKIP blocks
+    // and SKIP=3, and leaves the other numbered ones running.
+    [Fact]
+    public void BareSkipSwitch_ZeroInTheSwitchList_SkipsTheBareSkipBlocks()
+    {
+        var options = new VmOptions { SkipBlocks = SkipBlocks.OnSwitches([0, 3]) };
+        VmHarness vm = new VmHarness(VmMachines.MillTurn(), options)
+            .Execute("SKIP COOLANT=ON", "SKIP=3 SPINDLE=CW", "SKIP=2 RPM=100");
+
+        Assert.False(vm.State.Coolant["STANDARD"]);
+        Assert.Equal(SpindleDirection.Off, vm.State.Spindles["S1"].Direction);
+        Assert.Equal(100m, vm.State.Spindles["S1"].Rpm);
+    }
+
     // Architecture 5: the options a machine file gives, the call depth, the block cap and unassigned of [variables].
     [Fact]
     public void VmOptions_ForAMachine_TakesTheVariablesTable()

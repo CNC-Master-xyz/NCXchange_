@@ -269,6 +269,18 @@ public sealed class FrameChainTests
         Assert.Equal(AxisPosition.Unknown, vm.Position("B"));
     }
 
+    // D117: TILT_AXIS gives the rotary axis positions of this machine, so a machine axis word on an axis the machine
+    // does not declare rotary is the ERROR VM051; Z2 of the mill-turn is the linear slide of the sub spindle.
+    [Fact]
+    public void TiltAxisAxisWords_AnAxisThatIsNotRotary_IsAnError()
+    {
+        VmHarness vm = new VmHarness(VmMachines.MillTurn()).Execute("TILT_AXIS B=30 Z2=5 MOVE=TURN");
+
+        Assert.Equal(1, vm.Count(Ncx.Core.Model.DiagnosticCodes.TiltAxisNotRotary));
+        Assert.Contains("Z2", Assert.Single(vm.Messages(Ncx.Core.Model.DiagnosticCodes.TiltAxisNotRotary)));
+        Assert.Equal(new AxisPosition(30m, PositionFrame.Machine, Known: true), vm.Position("B"));
+    }
+
     // VM 3.4, D57: a WORKPIECE change marks the position unknown in the new holder's frame.
     [Fact]
     public void Workpiece_AnotherHolder_MarksThePositionUnknownInItsFrame()

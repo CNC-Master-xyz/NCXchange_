@@ -27,9 +27,20 @@ public sealed class ShippedCatalogsTests
         { "siemens.toml", Controller.Siemens },
     };
 
-    // P2-03: the three catalogs load, without ERROR and without WARNING.
+    /// <summary>
+    /// The four catalog files, the Fanuc lathe catalog of D160 among them.
+    /// </summary>
+    public static TheoryData<string, Controller> EveryCatalog => new()
+    {
+        { "fanuc.toml", Controller.Fanuc },
+        { "fanuc-lathe.toml", Controller.Fanuc },
+        { "heidenhain.toml", Controller.Heidenhain },
+        { "siemens.toml", Controller.Siemens },
+    };
+
+    // P2-03: the catalogs load, without ERROR and without WARNING; D160 adds cycles/fanuc-lathe.toml.
     [Theory]
-    [MemberData(nameof(Catalogs))]
+    [MemberData(nameof(EveryCatalog))]
     public void ShippedCatalog_EveryFile_LoadsWithoutErrorOrWarning(string fileName, Controller controller)
     {
         var diagnostics = new Diagnostics("cycles/" + fileName);
@@ -83,22 +94,51 @@ public sealed class ShippedCatalogsTests
     }
 
     // P2-03: the Fanuc turning entries are marked modal: G90, G92 and G94 repeat with every following block that
-    // carries X, Z or R, G70..G76 are one-shot (language 4.7.1, fanuc 6).
+    // carries X, Z or R, G70..G76 are one-shot (language 4.7.1, fanuc 6). D160 keeps them in the lathe catalog.
     [Theory]
     [InlineData("TURN_OD", true)]
-    [InlineData("THREAD", true)]
+    [InlineData("THREAD_PASS", true)]
     [InlineData("FACE", true)]
     [InlineData("FINISH", false)]
     [InlineData("ROUGH_TURN", false)]
     [InlineData("ROUGH_FACE", false)]
     [InlineData("GROOVE", false)]
-    [InlineData("COMPOUND_THREAD", false)]
+    [InlineData("THREAD", false)]
     public void FanucTurningCycle_SimpleOrMultipleRepetitive_IsModalOrOneShot(string name, bool modal)
     {
-        CycleEntry? entry = Load("fanuc.toml", Controller.Fanuc).Find(name);
+        CycleEntry? entry = Load("fanuc-lathe.toml", Controller.Fanuc).Find(name);
 
         Assert.NotNull(entry);
         Assert.Equal(modal, entry.Modal);
+    }
+
+    // D161: THREAD is G76, the one-shot cycle that cuts the whole thread as Siemens CYCLE97 does, and the modal G92,
+    // which cuts one pass per block like G90 and G94, is THREAD_PASS; COMPOUND_THREAD is dropped.
+    [Fact]
+    public void FanucThreadCycleNames_G76AndG92_AreThreadAndThreadPass()
+    {
+        CycleCatalog lathe = Load("fanuc-lathe.toml", Controller.Fanuc);
+
+        Assert.Equal("G76", lathe.Find("THREAD")?.Native);
+        Assert.Equal("G92", lathe.Find("THREAD_PASS")?.Native);
+        Assert.Null(lathe.Find("COMPOUND_THREAD"));
+    }
+
+    // D160: the lathe catalog maps each drilling cycle twice, along the default axis Z and, through for_axis = "X",
+    // along X; DRILL stands before PECK on G83 and G87, so a block without a peck depth Q is DRILL.
+    [Theory]
+    [InlineData("DRILL", "G83", "G87")]
+    [InlineData("PECK", "G83", "G87")]
+    [InlineData("TAP", "G84", "G88")]
+    [InlineData("REAM", "G85", "G89")]
+    public void FanucLatheDrilling_EveryCycle_HasAnEntryPerDrillingAxis(string name, string alongZ, string alongX)
+    {
+        CycleCatalog lathe = Load("fanuc-lathe.toml", Controller.Fanuc);
+
+        Assert.Equal(alongZ, lathe.Find(name, "Z")?.Native);
+        Assert.Equal(alongX, lathe.Find(name, "X")?.Native);
+        Assert.Null(lathe.Find(name, "Z")?.ForAxis);
+        Assert.Equal("X", lathe.Find(name, "X")?.ForAxis);
     }
 
     // Language 4.7.1 and controller-mapping 5: G90 (OD/ID) is one cycle, CYCLE=TURN_OD; the specification wins over the
@@ -106,7 +146,7 @@ public sealed class ShippedCatalogsTests
     [Fact]
     public void FanucG90_OuterAndInnerDiameter_IsTheOneCycleTurnOd()
     {
-        CycleCatalog fanuc = Load("fanuc.toml", Controller.Fanuc);
+        CycleCatalog fanuc = Load("fanuc-lathe.toml", Controller.Fanuc);
 
         var namesOfG90 = new List<string>();
         foreach (CycleEntry entry in fanuc.Entries)
@@ -140,14 +180,15 @@ public sealed class ShippedCatalogsTests
     }
 
     // D175: the simple turning cycles carry their taper R as the catalog word TAPER, and the thread cycle G92 its
-    // lead F as PITCH, while G90 and G94 take F as the cutting feed CYCLE_F (decisions.md; fanuc 6).
+    // lead F as PITCH, while G90 and G94 take F as the cutting feed CYCLE_F (decisions.md; fanuc 6). They stand in the
+    // lathe catalog (D160) and G92 is THREAD_PASS (D161).
     [Theory]
     [InlineData("TURN_OD", "CYCLE_F")]
     [InlineData("FACE", "CYCLE_F")]
-    [InlineData("THREAD", "PITCH")]
+    [InlineData("THREAD_PASS", "PITCH")]
     public void FanucSimpleTurningCycle_TaperAndFeed_AreTheWordsTaperAndCycleFOrPitch(string name, string ofTheFeed)
     {
-        CycleEntry? entry = Load("fanuc.toml", Controller.Fanuc).Find(name);
+        CycleEntry? entry = Load("fanuc-lathe.toml", Controller.Fanuc).Find(name);
 
         Assert.NotNull(entry);
         Assert.Equal("R", entry.Params["TAPER"]);
@@ -155,13 +196,15 @@ public sealed class ShippedCatalogsTests
     }
 
     // D176: G74, G75 and G76 take P and Q as infeed steps and thread data, not as a block range, so their entries
-    // carry no contour (decisions.md; the D65 row of decisions.md).
+    // carry no contour (decisions.md; the D65 row of decisions.md). G76 is THREAD (D161) and the entries stand in the
+    // lathe catalog (D160).
     [Theory]
+    [InlineData("FACE_GROOVE")]
     [InlineData("GROOVE")]
-    [InlineData("COMPOUND_THREAD")]
+    [InlineData("THREAD")]
     public void FanucOneShotTurningCycle_WithoutAContourRange_CarriesNoContour(string name)
     {
-        CycleEntry? entry = Load("fanuc.toml", Controller.Fanuc).Find(name);
+        CycleEntry? entry = Load("fanuc-lathe.toml", Controller.Fanuc).Find(name);
 
         Assert.NotNull(entry);
         Assert.Empty(entry.Contour);
@@ -173,7 +216,7 @@ public sealed class ShippedCatalogsTests
     [Fact]
     public void FanucG71_RoughTurn_CarriesTheContourRange()
     {
-        CycleEntry roughTurn = NativeEntry("fanuc.toml", Controller.Fanuc, "G71");
+        CycleEntry roughTurn = NativeEntry("fanuc-lathe.toml", Controller.Fanuc, "G71");
 
         Assert.Equal("ROUGH_TURN", roughTurn.Name);
         Assert.Equal(["P", "Q"], roughTurn.Contour);

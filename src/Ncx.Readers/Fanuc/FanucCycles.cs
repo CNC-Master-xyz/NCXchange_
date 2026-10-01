@@ -25,12 +25,16 @@ internal static class FanucCycles
     // The drilling cycles of a lathe, along Z on the face and along X on the circumference (controllers fanuc.md 6).
     private static readonly string[] s_latheDrilling = ["G83", "G84", "G85", "G87", "G88", "G89"];
 
-    // The simple turning cycles: G90, G92, G94 in system A, G77, G78, G79 in systems B and C (controllers fanuc.md 3).
+    // The simple turning cycles: G90, G92, G94 in system A, G77, G78, G79 in system B and G20, G21, G24 in system C
+    // (controllers fanuc.md 3; D174).
     private static readonly string[] s_turningOfSystemA = ["G90", "G92", "G94"];
-    private static readonly string[] s_turningOfSystemsBAndC = ["G77", "G78", "G79"];
+    private static readonly string[] s_turningOfSystemB = ["G77", "G78", "G79"];
+    private static readonly string[] s_turningOfSystemC = ["G20", "G21", "G24"];
 
-    // The multiple repetitive cycles of a lathe, one-shot with the contour range P Q (controllers fanuc.md 6).
+    // The multiple repetitive cycles of a lathe, one-shot with the contour range P Q: G70 to G76 in the systems A and
+    // B, G72 to G78 in system C (controllers fanuc.md 6; D174).
     private static readonly string[] s_repetitive = ["G70", "G71", "G72", "G73", "G74", "G75", "G76"];
+    private static readonly string[] s_repetitiveOfSystemC = ["G72", "G73", "G74", "G75", "G76", "G77", "G78"];
 
     // The one-shot cycles the manual states a return to the cycle start point for (D187).
     private static readonly string[] s_returnToTheStartPoint = ["G70", "G73", "G76"];
@@ -165,22 +169,26 @@ internal static class FanucCycles
     public static SourceContour? ContourOf(SourceBlock block, MachineConfig machine, out string? problem)
     {
         problem = null;
+        GcodeSystem? system = machine.Machine.GcodeSystem;
         SourceWord? code = null;
         foreach (SourceWord word in block.Words)
         {
-            if (word.Address == "G" && NativeCode.Of(word) is string native && s_repetitive.Contains(native))
+            // D174: the numbers of the multiple repetitive cycles are G70 to G76 in the systems A and B and G72 to
+            // G78 in system C (controllers fanuc.md 3).
+            if (word.Address == "G" && NativeCode.Of(word) is string native
+                && RepetitiveOf(system).Contains(native))
             {
                 code = word;
                 break;
             }
         }
 
-        if (code is null || machine.Machine.GcodeSystem is not (GcodeSystem.A or GcodeSystem.B))
+        if (code is null)
         {
             return null;
         }
 
-        string cycle = NativeCode.Of(code)!;
+        string cycle = SystemANative(NativeCode.Of(code)!, system);
         if (ContourEntry(machine.CycleCatalog, cycle) is not CycleEntry entry)
         {
             problem = $"{cycle} has no cycle with a contour in the catalog of the machine (machine-config 6)";
@@ -221,16 +229,18 @@ internal static class FanucCycles
     // the catalog cycle with CONTOUR=name (language 4.7, CONTOUR; machine-config 6, modal and contour; D65). A cycle
     // whose contour the structure pass made no section of stays RAW with the blocks of its contour, as the control
     // reads them (FanucReader.MarkContour; D5).
-    // TODO(question): the catalog gives G75 (GROOVE) and G76 (COMPOUND_THREAD) a contour as the documents say, which
+    // TODO(question): the catalog gives G75 (GROOVE) and G76 (THREAD, D161) a contour as the documents say, which
     // wave-1 questions #19 and #29 doubt; the reader follows the entry of the catalog.
     private static bool ReadRepetitiveCycle(FanucBlock block)
     {
-        if (block.System is not (GcodeSystem.A or GcodeSystem.B))
+        if (block.System is null)
         {
             return false;
         }
 
-        foreach (string code in s_repetitive)
+        // D174: system C numbers the multiple repetitive cycles G72 to G78; the catalog keeps the system A numbers
+        // and the reader translates by gcode_system (controllers fanuc.md 3).
+        foreach (string code in RepetitiveOf(block.System))
         {
             if (block.FindCode(code) is not SourceWord word)
             {
@@ -239,7 +249,7 @@ internal static class FanucCycles
 
             block.MarkRead(word);
             if (block.Fanuc.Contours.TryGetValue(block.Line, out string? contour)
-                && ContourEntry(block.Machine.CycleCatalog, code) is CycleEntry entry)
+                && ContourEntry(block.Machine.CycleCatalog, SystemANative(code, block.System)) is CycleEntry entry)
             {
                 ReadContourCycle(block, entry, contour);
             }
@@ -356,20 +366,60 @@ internal static class FanucCycles
         {
             null => s_millCycles,
             GcodeSystem.A => [.. s_latheDrilling, .. s_turningOfSystemA],
-            _ => [.. s_latheDrilling, .. s_turningOfSystemsBAndC],
+            GcodeSystem.C => [.. s_latheDrilling, .. s_turningOfSystemC],
+            _ => [.. s_latheDrilling, .. s_turningOfSystemB],
         };
     }
 
     /// <summary>
     /// Tells whether a code starts a cycle in the G-code system: a drilling or turning cycle of the system, and on a
-    /// lathe of systems A and B G70 to G76 (controllers fanuc.md 3, 6).
+    /// lathe the multiple repetitive cycles, G70 to G76 in the systems A and B and G72 to G78 in system C
+    /// (controllers fanuc.md 3, 6; D174).
     /// </summary>
     /// <param name="code">The code without leading zeros, "G81".</param>
     /// <param name="system">The G-code system of the machine; null for a mill.</param>
     public static bool StartsACycle(string code, GcodeSystem? system)
     {
-        return CodesOf(system).Contains(code)
-            || (system is GcodeSystem.A or GcodeSystem.B && s_repetitive.Contains(code));
+        return CodesOf(system).Contains(code) || RepetitiveOf(system).Contains(code);
+    }
+
+    // The multiple repetitive cycles of the G-code system; none on a mill, where the same numbers are drilling cycles
+    // and absolute programming (controllers fanuc.md 3, 6; D174).
+    private static string[] RepetitiveOf(GcodeSystem? system)
+    {
+        return system switch
+        {
+            GcodeSystem.A or GcodeSystem.B => s_repetitive,
+            GcodeSystem.C => s_repetitiveOfSystemC,
+            _ => [],
+        };
+    }
+
+    // The simple turning cycles of the G-code system; none on a mill (controllers fanuc.md 3; D174).
+    private static string[] TurningOf(GcodeSystem? system)
+    {
+        return system switch
+        {
+            GcodeSystem.A => s_turningOfSystemA,
+            GcodeSystem.B => s_turningOfSystemB,
+            GcodeSystem.C => s_turningOfSystemC,
+            _ => [],
+        };
+    }
+
+    // The native of the catalog, which is written in the numbers of system A, for a cycle code of the machine's
+    // G-code system: G77 of system B and G20 of system C are the G90 of the catalog, G72 of system C its G70
+    // (controllers fanuc.md 3; D174).
+    private static string SystemANative(string code, GcodeSystem? system)
+    {
+        int turning = Array.IndexOf(TurningOf(system), code);
+        if (turning >= 0)
+        {
+            return s_turningOfSystemA[turning];
+        }
+
+        int repetitive = Array.IndexOf(RepetitiveOf(system), code);
+        return repetitive >= 0 ? s_repetitive[repetitive] : code;
     }
 
     // A code that ends any cycle: on a mill G0 to G3 (Ends), on a lathe, whose cycles belong to group 01, every other
@@ -449,14 +499,14 @@ internal static class FanucCycles
         string code = NativeCode.Of(word)!;
         FanucCycle? previous = block.Fanuc.Cycle;
         CycleCatalog catalog = block.Machine.CycleCatalog;
-        if (s_turningOfSystemA.Contains(code) || s_turningOfSystemsBAndC.Contains(code))
+        if (TurningOf(block.System).Contains(code))
         {
-            // TODO(question): cycles/fanuc.toml writes the turning cycles of system A only, since the documents
-            // disagree on the codes of system C (wave-1 question #16); G77 to G79 stay RAW.
+            // D174: the catalog is written in system A numbers and the reader translates by gcode_system, so a
+            // G77 of system B and a G20 of system C find the entry of G90 (controllers fanuc.md 3; decisions.md).
             block.Fanuc.Cycle = new FanucCycle
             {
                 Code = code,
-                Entry = block.System == GcodeSystem.A ? ModalEntry(catalog, code) : null,
+                Entry = ModalEntry(catalog, SystemANative(code, block.System)),
                 IsTurning = true,
                 Feed = block.Fanuc.ControlFeed,
             };
@@ -478,7 +528,9 @@ internal static class FanucCycles
         }
 
         string axis = block.IsLathe ? (code is "G87" or "G88" or "G89" ? "X" : "Z") : ToolAxis(block);
-        string native = block.IsLathe ? LatheNative(block, code, previous) : code;
+        CycleEntry? matched = block.IsLathe
+            ? LatheEntry(block, catalog, code, axis, previous)
+            : ModalEntry(catalog, code);
         decimal? initial = previous?.InitialLevel;
         if (initial is null && block.State.Positions.TryGetValue(axis, out decimal level))
         {
@@ -490,7 +542,7 @@ internal static class FanucCycles
         var cycle = new FanucCycle
         {
             Code = code,
-            Entry = ModalEntry(catalog, native),
+            Entry = matched,
             Axis = axis,
             WritesAxis = block.IsLathe,
             InitialLevel = initial,
@@ -535,19 +587,64 @@ internal static class FanucCycles
         };
     }
 
-    // TODO(question): the catalog holds no drilling entry of a lathe, and the documents do not say which NCX cycle a
-    // lathe G85 and G89 is (wave-1 question #15); G83 and G87 read as PECK with a peck depth Q and as DRILL without
-    // one, G84 and G88 as TAP, G85 and G89 as the entry of G85, along Z and along X (D59).
-    private static string LatheNative(FanucBlock block, string code, FanucCycle? previous)
+    // D160: a Fanuc lathe drills with G83/G84/G85 along Z and with G87/G88/G89 along X, and the lathe catalog carries
+    // the two triples as entries of one name that differ by for_axis, the entry without the key mapping the default
+    // axis Z. Of two entries on one native the reader takes the first in catalog order whose params cover the words
+    // of the block, so a G83 with a peck depth Q is PECK and one without it DRILL; Q is modal in the cycle, so a peck
+    // depth of the active cycle counts as well (machine-config 6; controllers fanuc.md 6; decisions.md).
+    private static CycleEntry? LatheEntry(FanucBlock block, CycleCatalog catalog, string code, string axis,
+        FanucCycle? previous)
     {
-        string drilling = code switch
+        string? forAxis = axis == "X" ? "X" : null;
+        List<string> words = CycleWordsOf(block, catalog, code, previous);
+        foreach (CycleEntry entry in catalog.Entries)
         {
-            "G87" => "G83",
-            "G88" => "G84",
-            "G89" => "G85",
-            _ => code,
-        };
-        return drilling == "G83" && block.Find("Q") is null && previous?.Peck is null ? "G81" : drilling;
+            if (entry.Native == code && entry.Modal && entry.ForAxis == forAxis && entry.CoversNativeWords(words))
+            {
+                return entry;
+            }
+        }
+
+        return null;
+    }
+
+    // The native words of the block that an entry of this native cycle may map, Q and P of a lathe drilling block; a
+    // peck depth of the active cycle counts, because Q stays with the cycle (controllers fanuc.md 6; D160).
+    private static List<string> CycleWordsOf(FanucBlock block, CycleCatalog catalog, string code,
+        FanucCycle? previous)
+    {
+        var mappable = new List<string>();
+        foreach (CycleEntry entry in catalog.Entries)
+        {
+            if (entry.Native != code)
+            {
+                continue;
+            }
+
+            foreach (string native in entry.Params.Values)
+            {
+                if (!mappable.Contains(native))
+                {
+                    mappable.Add(native);
+                }
+            }
+        }
+
+        var words = new List<string>();
+        foreach (string native in mappable)
+        {
+            if (block.Find(native) is not null)
+            {
+                words.Add(native);
+            }
+        }
+
+        if (previous?.Peck is not null && mappable.Contains("Q") && !words.Contains("Q"))
+        {
+            words.Add("Q");
+        }
+
+        return words;
     }
 
     // The axis words that position the cycle: every axis but the drilling axis, every axis of a turning cycle.

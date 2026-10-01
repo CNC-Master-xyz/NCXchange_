@@ -230,8 +230,8 @@ internal static class HeidenhainSetpos
     // not known in the frame of the active preset without a datum table (virtual machine 3.4, D35), and virtual machine
     // 3.4 and D101 record the setpos shift against the machine position; how such a SETPOS is folded into cycle 7, a
     // shift against the preset, is not given. It is reported (CMP113) and nothing is guessed.
-    // TODO(question): D117: whether SETPOS takes the incremental forms (SETPOS IX=0) is open, and the virtual machine
-    // changes nothing for them; an incremental word is left unwritten, the ERROR CMP101, as D117 recommends an ERROR.
+    // D117: SETPOS carries absolute axis words only, which the parser holds (PAR012, decisions.md); an incremental
+    // word that still reached here is left unwritten and becomes the ERROR CMP101.
     private static List<string>? NamedAxes(HeidenhainBlock writing)
     {
         var axes = new List<string>();

@@ -1,4 +1,5 @@
 using Ncx.Core.Catalog;
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.State;
 
@@ -43,7 +44,9 @@ internal static class CycleHandlers
         }
 
         CycleState cycle = context.State.Cycle;
-        cycle.Name = word.Value.ToCanonical();
+        // D144: the native cycle of a CYCLE:controller=n block is the text of the family's catalog, so a string
+        // value gives its content (CYCLE:FANUC="G83.5"); a catalog name is the identifier itself.
+        cycle.Name = word.Addr is null ? word.Value.ToCanonical() : CycleCatalog.NativeOf(word.Value);
         cycle.Controller = word.Addr;
         cycle.Parameters.Clear();
         bool nativeBlock = word.Addr is not null;

@@ -57,11 +57,13 @@ internal static class FanucModalGroups
 
     private static readonly Dictionary<string, int> s_mill = Mill();
     private static readonly Dictionary<string, int> s_systemA = SystemA();
-    private static readonly Dictionary<string, int> s_systemB = SystemBOrC(units: ["G20", "G21"]);
+    private static readonly Dictionary<string, int> s_systemB =
+        SystemBOrC(units: ["G20", "G21"], turning: ["G77", "G78", "G79"]);
 
-    // TODO(question): fanuc 3 gives system C its turning cycles as G20, G21, G24, while controller-mapping 5 and
-    // language 4.7.1 give G77, G78, G79 in B and C (wave-1 question #16); system C takes G77 to G79 as B does.
-    private static readonly Dictionary<string, int> s_systemC = SystemBOrC(units: ["G70", "G71"]);
+    // D174: system C numbers the simple turning cycles G20, G21, G24 and the units G70, G71, which the lathe manual
+    // confirms against the "G77, G78, G79 in B and C" of controller-mapping 5 and language 4.7.1 (decisions.md).
+    private static readonly Dictionary<string, int> s_systemC =
+        SystemBOrC(units: ["G70", "G71"], turning: ["G20", "G21", "G24"]);
 
     /// <summary>
     /// The group of every modal code of the G-code system, by the code without leading zeros (D105).
@@ -103,12 +105,12 @@ internal static class FanucModalGroups
         return groups;
     }
 
-    // Systems B and C: G90/G91, G94/G95, G98/G99 as the return level, turning cycles G77, G78, G79 (controllers
-    // fanuc.md 3).
-    private static Dictionary<string, int> SystemBOrC(string[] units)
+    // Systems B and C: G90/G91, G94/G95, G98/G99 as the return level, and the simple turning cycles G77, G78, G79 in
+    // B and G20, G21, G24 in C, whose units are G70, G71 (controllers fanuc.md 3; D174).
+    private static Dictionary<string, int> SystemBOrC(string[] units, string[] turning)
     {
         Dictionary<string, int> groups = Common();
-        Add(groups, Motion, "G77", "G78", "G79");
+        Add(groups, Motion, turning);
         Add(groups, Motion, s_latheDrilling);
         Add(groups, Distance, "G90", "G91");
         Add(groups, FeedMode, "G94", "G95");

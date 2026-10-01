@@ -146,6 +146,23 @@ public sealed record Placeholder
         return written.Replace(Template.DecimalPoint, decimalSeparator, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The digits of the integer part of a rendered value, the sign and anything after the decimal separator left
+    /// out: 3 for "123", 3 for "-123.45" (D153).
+    /// </summary>
+    /// <param name="written">The value as <see cref="Write"/> wrote it.</param>
+    internal static int IntegerDigits(string written)
+    {
+        int digits = 0;
+        int start = written.Length > 0 && written[0] is '-' or '+' ? 1 : 0;
+        for (int index = start; index < written.Length && char.IsAsciiDigit(written[index]); index++)
+        {
+            digits++;
+        }
+
+        return digits;
+    }
+
     // Takes the value the pattern found for this placeholder into the values: words as found, a number by its number,
     // so that M0106 gives the mark 106 and T01 the tool 1 (D105), and a number read with the comma of Klartext as the
     // same number with the point (controllers heidenhain.md 7 rule 8); the pattern lets a comma into a number only on a

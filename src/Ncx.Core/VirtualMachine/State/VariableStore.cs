@@ -211,8 +211,8 @@ internal sealed class VariableStore
     {
         // CALL pushes the local variables V1 to V33; ARG words are assigned to the callee's locals (virtual machine
         // 3.6).
-        // TODO(question): virtual machine 3.6 does not say whether the callee's locals start unassigned or as a copy
-        // of the caller's; they start unassigned, as the locals of a Fanuc G65 macro call do (D148).
+        // D148: the callee's locals start unassigned apart from the ARG values, as the locals of a Fanuc G65 macro
+        // call do, whose level is raised at the call and restored at the return (decisions.md).
         _callerLocals.Push(_locals);
         _locals = new();
     }

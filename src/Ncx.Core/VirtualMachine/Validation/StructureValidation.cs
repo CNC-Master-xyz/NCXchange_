@@ -40,8 +40,9 @@ internal static class StructureValidation
                 + "CYCLE:controller=n block.", "VM 3 step 1, 5; D93, D94"),
             ValidationRule.Error(DiagnosticCodes.TwoVerbs, "Two verbs in one block.", "language 5 rule 1; VM 5"),
             ValidationRule.Error(DiagnosticCodes.AxisWordWithoutVerb,
-                "Axis word without verb, or under a verb that does not carry it: RETRACT with other axis words.",
-                "language 5 rule 2; VM 3.1a, 5"),
+                "Axis word without verb, or under a verb that does not carry it: RETRACT with other axis words, an "
+                + "incremental word under SHIFT, TILT, TILT_AXIS or SETPOS, a word other than A, B, C under TILT, a "
+                + "standard linear axis under TILT_AXIS.", "language 4.2, 5 rule 2; VM 3.1a, 5; D117"),
             ValidationRule.Error(DiagnosticCodes.HomeTakesBareAxisNames,
                 "A word in a HOME block that is not a bare axis name.", "language 4.3, 5 rule 2"),
             ValidationRule.Error(DiagnosticCodes.AxisWordNeedsValue,
