@@ -62,6 +62,22 @@ public static partial class DiagnosticCodes
     public const string FanucModalValueNotHeld = "CMP309";
 
     /// <summary>
+    /// CMP310: a CALL whose ARG words carry both the pass-through of a caller's local, ARG:Vn={$Vn}, which is the M98
+    /// subprogram call of D148, and an argument value, which is the G65 macro call, so the block says neither call
+    /// (controllers fanuc.md 7; controller-mapping 6, CALL and ARG).
+    /// </summary>
+    public const string FanucCallArgumentsOfNoOneCall = "CMP310";
+
+    /// <summary>
+    /// CMP311, a WARNING: a CALL whose ARG words are the pass-through of a caller's locals, ARG:Vn={$Vn}, is written
+    /// as the subprogram call M98, which shares the caller's #1..#33 and carries no arguments (D148), while a G65
+    /// macro call of the same locals converts to the same NCX text and is the local-variable level virtual machine 3.6
+    /// gives a CALL; which of the two the block is, no document says (row 196 of
+    /// ../../../docs/implementation/03-open-questions.md).
+    /// </summary>
+    public const string FanucCallFormOfTheSharedLocals = "CMP311";
+
+    /// <summary>
     /// CMP320: LINE or ARC with FRAME=MACHINE, which G53 would move at rapid (D242).
     /// </summary>
     public const string FanucFeedMotionInMachineFrame = "CMP320";

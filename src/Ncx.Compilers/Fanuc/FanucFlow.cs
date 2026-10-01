@@ -1,4 +1,5 @@
 using System.Globalization;
+using Ncx.Core.Expressions;
 using Ncx.Core.Model;
 
 namespace Ncx.Compilers.Fanuc;
@@ -11,6 +12,18 @@ namespace Ncx.Compilers.Fanuc;
 /// </summary>
 internal static class FanucFlow
 {
+    // Which Fanuc call the ARG words of a CALL say (D148): the subprogram call M98 of a CALL without an ARG, which
+    // shares the caller's #1..#33 and carries no arguments, the macro call G65, whose letters carry argument values,
+    // the pass-through ARG:Vn={$Vn} that both calls write, so that the NCX program does not say which it is, or both
+    // a pass-through and an argument value at once, which no Fanuc call writes.
+    private enum CallForm
+    {
+        Subprogram,
+        Macro,
+        PassThrough,
+        Both,
+    }
+
     // The local variables of G65 and the letters that set them (controllers fanuc.md 7): #1 is A, #2 B, ...
     private static readonly Dictionary<int, string> s_letters = new()
     {
@@ -218,7 +231,9 @@ internal static class FanucFlow
     // M98 P L calls a subprogram L times, G65 P with the letter arguments a macro (controllers fanuc.md 1, 7;
     // controller-mapping 6, CALL and TIMES, CALL and ARG); a subprogram is called by its O number, an external program
     // by the number of its file name O9010 (language 4.9). A call of a program outside the file writes the code of
-    // [format] external_call, M98 where the machine names none (D322).
+    // [format] external_call, M98 where the machine names none (D322). Which of the two calls a CALL whose ARG words
+    // are the pass-through ARG:Vn={$Vn} is, the NCX program does not say: the block is written as the subprogram call
+    // and reported with CMP311 (FormOf, row 196).
     // TODO(question): D215: the file name of CALL="name" is open; a name O followed by digits is called by its number,
     // any other external name is an ERROR, until D215 is answered.
     private static void WriteCall(FanucBlock write, Word call)
@@ -240,9 +255,21 @@ internal static class FanucFlow
             return;
         }
 
+        CallForm form = FormOf(write.Block);
+        if (form == CallForm.Both)
+        {
+            write.Error(DiagnosticCodes.FanucCallArgumentsOfNoOneCall,
+                $"CALL={call.Value.ToCanonical()} carries both the pass-through of a caller's local "
+                + $"({PassThroughWords(write.Block)}) and an argument value, which is neither Fanuc call: M98 shares "
+                + "the caller's #1 to #33 and takes no arguments at all, and under G65 the pass-through would set the "
+                + "locals of a new local-variable level, the difference D148 turns on (controllers fanuc.md 7; "
+                + "controller-mapping 6, CALL and ARG).");
+            return;
+        }
+
         string program = digits.TrimStart('0').PadLeft(4, '0');
         var words = new List<string>();
-        bool macro = write.Block.Has("ARG");
+        bool macro = form == CallForm.Macro;
         bool outside = call.Value is StringValue;
         string code = outside && !macro ? write.Machine.Format?.ExternalCall ?? "M98" : "M98";
         words.Add(macro ? "G65" : code);
@@ -258,7 +285,92 @@ internal static class FanucFlow
             return;
         }
 
-        write.Write(string.Join(" ", words));
+        string block = string.Join(" ", words);
+        if (form == CallForm.PassThrough)
+        {
+            write.Warning(DiagnosticCodes.FanucCallFormOfTheSharedLocals,
+                $"CALL={call.Value.ToCanonical()}, whose ARG words are the pass-through of a caller's locals "
+                + $"({PassThroughWords(write.Block)}), is written as the subprogram call {block}, where those words "
+                + "carry nothing: M98 opens no local-variable level, so the subprogram reads the caller's #1 to #33 "
+                + "itself, which is the shape D148 gives the reader. The same NCX text is what a G65 macro call of "
+                + "those locals reads as, and the G65 level is the one virtual machine 3.6 gives a CALL, whose "
+                + "callee's V1 to V33 the return restores; under M98 a write of #1 to #33 in the subprogram reaches "
+                + "the caller instead. Which of the two Fanuc calls this block is, no document says (row 196 of "
+                + "docs/implementation/03-open-questions.md).");
+        }
+
+        write.Write(block);
+    }
+
+    // Which Fanuc call the ARG words of a CALL say (D148), told apart by what they say and not by their presence:
+    // Macro where every ARG carries an argument value, the letters of G65, which raises the local-variable level;
+    // PassThrough where every ARG is the pass-through of the callee's own local, ARG:Vn={$Vn} with n in 1..33, which
+    // is what the reader writes for the locals an M98 subprogram reads from its caller, since a subprogram call opens
+    // no local-variable level and shares the caller's #1..#33 - but which a G65 Pnnnn A#1 of the same locals reads as
+    // too (controllers fanuc.md 7; controller-mapping 6, CALL and ARG). A CALL without an ARG is a Subprogram.
+    // TODO(question): no word of the NCX program says which of the two Fanuc calls a PassThrough CALL is: the two
+    // sources convert to the same NCX text (G65 P0100 A#1 passes the caller's #1 to the callee's #1 too), so no
+    // reading of the block compiles both back. D148 settles the reader's side alone, the ARG:Vn={$Vn} of an M98, so
+    // the compiler writes the M98 that shape came from and reports every such block with the WARNING CMP311, which
+    // names the G65 reading it does not write and that virtual machine 3.6 gives a CALL; the mixed block, which
+    // neither call writes, stays the ERROR CMP310 (row 196 of ../../../docs/implementation/03-open-questions.md).
+    private static CallForm FormOf(Block block)
+    {
+        bool passThrough = false;
+        bool values = false;
+        foreach (Word argument in block.Words)
+        {
+            if (argument.Key != "ARG")
+            {
+                continue;
+            }
+
+            if (IsPassThrough(argument))
+            {
+                passThrough = true;
+            }
+            else
+            {
+                values = true;
+            }
+        }
+
+        return values
+            ? (passThrough ? CallForm.Both : CallForm.Macro)
+            : (passThrough ? CallForm.PassThrough : CallForm.Subprogram);
+    }
+
+    // ARG:Vn={$Vn}, the local n of the callee taking the local n of the caller, for one of the shared locals #1..#33
+    // (D148). An expression whose tree the parser has not built is compared as the text the writer emits.
+    private static bool IsPassThrough(Word argument)
+    {
+        if (argument.Addr is not string name
+            || !(name.Length > 1 && name[0] == 'V'
+                && int.TryParse(name.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out int local))
+            || local < 1 || local > 33
+            || argument.Value is not ExprValue expression)
+        {
+            return false;
+        }
+
+        return expression.Tree is ExprNode tree
+            ? tree is VariableNode { Index: null } variable && variable.Name == name
+            : expression.Text.Trim() == "$" + name;
+    }
+
+    // The pass-through words of a block, for the messages of CMP310 and CMP311.
+    private static string PassThroughWords(Block block)
+    {
+        var words = new List<string>();
+        foreach (Word argument in block.Words)
+        {
+            if (argument.Key == "ARG" && IsPassThrough(argument))
+            {
+                words.Add("ARG:" + argument.Addr + "=" + argument.Value.ToCanonical());
+            }
+        }
+
+        return string.Join(" ", words);
     }
 
     // ARG:Vn is the letter that sets #n in the standard table (controllers fanuc.md 7; language 4.9).

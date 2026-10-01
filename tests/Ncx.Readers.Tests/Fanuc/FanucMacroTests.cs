@@ -167,6 +167,16 @@ public sealed class FanucMacroTests
         Assert.DoesNotContain("ARG:V2", text, StringComparison.Ordinal);
     }
 
+    // D148: the shared locals are #1..#33, and the letter table of G65 covers only #1..#26, so the pass-through of
+    // #27 stands on the CALL like any other; the compiler tells the M98 form from the G65 form by the pass-through
+    // and writes M98 P0100 back (FanucFlowTests.SharedLocalsArg_OfALocalWithoutAG65Letter_...).
+    [Fact]
+    public void SharedLocals_OfALocalWithoutAG65Letter_StandOnTheCallAsArg()
+    {
+        string text = Text("%\nO0001\n#27=5\nM98 P100\nM30\nO0100\nG90 G1 X#27 F100\nM99\n%\n");
+        Assert.Contains("CALL=100 ARG:V27={$V27}\n", text, StringComparison.Ordinal);
+    }
+
     // D148: a local the M98 subprogram writes back for the caller is one the caller sees on the control, while the
     // CALL of NCX restores the caller's V1..V33 at the return, so the write does not reach the block of the caller
     // that reads it and the reader reports the call (decisions.md; virtual machine 3.6; RDR106).
@@ -202,6 +212,19 @@ public sealed class FanucMacroTests
         string text = Text("%\nO0001\n#1=5\nG65 P9010 A1.\nM30\nO9010\nG90 G1 X#2 F100\nM99\n%\n");
         Assert.Contains("CALL=9010 ARG:V1=1\n", text, StringComparison.Ordinal);
         Assert.DoesNotContain("ARG:V2", text, StringComparison.Ordinal);
+    }
+
+    // Row 196 of ../../../docs/implementation/03-open-questions.md: a G65 whose letter argument is the caller's own
+    // local, G65 P0100 A#1, converts to the very CALL=100 ARG:V1={$V1} that M98 P100 over a subprogram reading #1
+    // converts to (SharedLocals_AnM98SubprogramThatReadsThem_StandOnTheCallAsArg), so the two Fanuc sources are one
+    // NCX text and no compiler can tell them apart; the compiler writes the M98 form and reports the block
+    // (FanucFlowTests.PassThroughArg_ThatAG65SourceConvertsToAsWell_IsTheWarningCmp311OnTheM98Block). The reader is
+    // unchanged by that: this holds the collision the question turns on.
+    [Fact]
+    public void SharedLocals_AG65WhoseArgumentIsTheCallersOwnLocal_IsTheArgOfTheM98FormToo()
+    {
+        string text = Text("%\nO0001\n#1=5\nG65 P0100 A#1\nM30\nO0100\nG90 G1 X#1 F100\nM99\n%\n");
+        Assert.Contains("CALL=100 ARG:V1={$V1}\n", text, StringComparison.Ordinal);
     }
 
     // A program the file does not hold is an external program, called by its file name (language 4.9, CALL).

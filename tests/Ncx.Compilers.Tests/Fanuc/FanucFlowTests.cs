@@ -55,6 +55,118 @@ public sealed class FanucFlowTests
         Assert.Equal("G65 P9010 A1. B2.5 Z-5.\n", body);
     }
 
+    // D148, the M98 half: a subprogram call opens no local-variable level, so the reader writes the caller's locals
+    // an M98 subprogram reads on the CALL as the pass-through ARG:Vn={$Vn}; that shape is written as the subprogram
+    // call again, because M98 shares those very locals and carries no arguments at all (controllers fanuc.md 7). The
+    // NCX line is the one FanucMacroTests.SharedLocals_AnM98SubprogramThatReadsThem_StandOnTheCallAsArg reads from
+    // M98 P100. The block is reported, since a G65 source writes the same NCX text (CMP311, the test below).
+    [Fact]
+    public void SharedLocalsArg_OfACallOfTheFile_IsTheM98SubprogramCall()
+    {
+        CompileResult result = FanucCompile.Run(CallerAndSub("VAR:V1=5", "CALL=100 ARG:V1={$V1}"),
+            FanucCompile.Mill());
+
+        Assert.Contains("\n#1 = 5\nM98 P0100\n", FanucCompile.TextOf(result), StringComparison.Ordinal);
+        Assert.Equal(DiagnosticCodes.FanucCallFormOfTheSharedLocals,
+            Assert.Single(FanucCompile.CompilerDiagnostics(result)).Code);
+    }
+
+    // Hard rule 1: the same NCX text is what a G65 macro call of the caller's own locals converts to - G65 P0100 A#1
+    // over a subprogram that reads #1 gives the very CALL=100 ARG:V1={$V1} that M98 P100 over it gives, the two .ncx
+    // files being identical - so no reading of the block writes both sources back. The compiler writes the M98 that
+    // D148 gives the reader and reports the block, because virtual machine 3.6 gives a CALL the local-variable level
+    // of a G65: the G65 source is changed into the other call, and a write of #1..#33 in the subprogram reaches the
+    // caller where NCX restores it. Row 196 of ../../../docs/implementation/03-open-questions.md.
+    [Fact]
+    public void PassThroughArg_ThatAG65SourceConvertsToAsWell_IsTheWarningCmp311OnTheM98Block()
+    {
+        CompileResult result = FanucCompile.Run(CallerAndSub("VAR:V1=5", "CALL=100 ARG:V1={$V1}"),
+            FanucCompile.Mill());
+
+        Diagnostic warning = Assert.Single(FanucCompile.CompilerDiagnostics(result));
+        Assert.Equal(DiagnosticCodes.FanucCallFormOfTheSharedLocals, warning.Code);
+        Assert.Equal(Severity.Warning, warning.Severity);
+        Assert.Contains("M98 P0100", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("ARG:V1={$V1}", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("G65", warning.Message, StringComparison.Ordinal);
+    }
+
+    // The same for a call of a program outside the file, which the external call code of [format] external_call
+    // writes (D322): the ARG words are dropped there too, so the block carries the same report.
+    [Fact]
+    public void PassThroughArg_OfACallOutsideTheFile_IsTheWarningCmp311OnTheExternalCallBlock()
+    {
+        CompileResult result = FanucCompile.Run(FanucCompile.Program("VAR:V1=5", "CALL=\"O9010\" ARG:V1={$V1}"),
+            FanucCompile.Mill());
+
+        Assert.Contains("\nM98 P9010\n", FanucCompile.TextOf(result), StringComparison.Ordinal);
+        Assert.Equal(DiagnosticCodes.FanucCallFormOfTheSharedLocals,
+            Assert.Single(FanucCompile.CompilerDiagnostics(result)).Code);
+    }
+
+    // D148, the M98 half: the shared locals are #1..#33, and the letter table of G65 has no letter for #27 or #33, so
+    // the pass-through of one of them is a block only the subprogram call writes; deciding by the presence of ARG made
+    // it the ERROR CMP306 and lost a program that converts and compiles without one (controllers fanuc.md 7). The open
+    // call form of CMP311 is reported in its place, and it is a WARNING, so the program still compiles.
+    [Fact]
+    public void SharedLocalsArg_OfALocalWithoutAG65Letter_IsTheM98SubprogramCallWithoutAnError()
+    {
+        CompileResult result = FanucCompile.Run(
+            CallerAndSub("VAR:V27=5", "VAR:V33=7", "CALL=100 ARG:V27={$V27} ARG:V33={$V33} TIMES=2"),
+            FanucCompile.Mill());
+
+        Assert.Contains("\nM98 P0100 L2\n", FanucCompile.TextOf(result), StringComparison.Ordinal);
+        Diagnostic warning = Assert.Single(FanucCompile.CompilerDiagnostics(result));
+        Assert.Equal(DiagnosticCodes.FanucCallFormOfTheSharedLocals, warning.Code);
+        Assert.Equal(Severity.Warning, warning.Severity);
+    }
+
+    // Controller-mapping 6 (CALL and ARG) and fanuc 7 give the letter arguments to G65: an ARG that carries an
+    // argument value, a number or an expression that is not the pass-through of the callee's own local, is the macro
+    // call. The first line is the one FanucMacroTests.SharedLocals_AG65MacroCallWhoseCalleeReadsThem_StandOnNoArg
+    // reads from G65 P9010 A1.
+    [Fact]
+    public void ArgumentValue_OfACallOfTheFile_IsTheG65MacroCall()
+    {
+        CompileResult result = FanucCompile.Run(
+            CallerAndSub("VAR:V1=5", "CALL=100 ARG:V1=1", "CALL=100 ARG:V2={$V1 + 1}", "CALL=100 ARG:V3={$V1}"),
+            FanucCompile.Mill());
+
+        Assert.Contains("\nG65 P0100 A1.\nG65 P0100 B[#1 + 1]\nG65 P0100 C#1\n", FanucCompile.TextOf(result),
+            StringComparison.Ordinal);
+        Assert.Empty(FanucCompile.CompilerDiagnostics(result));
+    }
+
+    // Hard rule 1: a CALL that carries both the pass-through of a caller's local and an argument value says neither
+    // call: M98 carries no arguments at all, and under G65 the pass-through words would sit in a new local-variable
+    // level, which is the difference D148 turns on. No document settles which the block means, so the compiler
+    // reports it instead of writing one of the two (the TODO(question) of FanucFlow).
+    [Fact]
+    public void MixedArg_OfAPassThroughAndAValue_IsTheErrorCmp310()
+    {
+        Diagnostic error = FanucCompile.ErrorOf(FanucCompile.Run(
+            CallerAndSub("VAR:V1=5", "CALL=100 ARG:V1={$V1} ARG:V2=5"), FanucCompile.Mill()));
+
+        Assert.Equal(DiagnosticCodes.FanucCallArgumentsOfNoOneCall, error.Code);
+        Assert.Contains("ARG:V1={$V1}", error.Message, StringComparison.Ordinal);
+    }
+
+    // Hard rule 1: the TODO(question) of the call form is recorded in the open-questions table, with the decision it
+    // waits on (00-method 4).
+    [Fact]
+    public void CallFormQuestion_OfTheFanucCompiler_IsRecordedInTheOpenQuestions()
+    {
+        string path = Path.Combine(Ncx.Tests.Fixtures.Fixture.RepositoryRoot(), "docs", "implementation",
+            "03-open-questions.md");
+        string? row = Array.Find(File.ReadAllLines(path),
+            line => line.Contains("`src/Ncx.Compilers/Fanuc/FanucFlow.cs:", StringComparison.Ordinal)
+                && line.Contains("CMP311", StringComparison.Ordinal));
+
+        Assert.NotNull(row);
+        Assert.Contains("D148", row, StringComparison.Ordinal);
+        Assert.Contains("CMP310", row, StringComparison.Ordinal);
+    }
+
     // D322: a CALL of a program outside the file writes the code of [format] external_call, M98 where the machine
     // names none.
     [Fact]
@@ -360,5 +472,24 @@ public sealed class FanucFlowTests
             FanucCompile.Program("VAR:DEPTH=5"), FanucCompile.Mill()));
 
         Assert.Equal(DiagnosticCodes.FanucVariableNotMapped, error.Code);
+    }
+
+    // A file of one program that calls the subprogram 100 of the file, and that section, so that the call has the
+    // target virtual machine 3.6 asks for (VM072); the mill of the sources writes it as one file.
+    private static string CallerAndSub(params string[] blocks)
+    {
+        var lines = new List<string>
+        {
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+            "FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF",
+        };
+        lines.AddRange(blocks);
+        lines.Add("PROGRAM=END");
+        lines.Add("SUB=BEGIN NAME=100");
+        lines.Add("LINE X=10 F=100");
+        lines.Add("SUB=END");
+        lines.Add("FILE=END");
+        return FanucCompile.Lines(lines.ToArray());
     }
 }
