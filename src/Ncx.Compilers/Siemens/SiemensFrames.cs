@@ -29,11 +29,14 @@ internal static partial class SiemensFrames
     // The words of the transform chain (language 4.2).
     private static readonly string[] s_chainWords = ["SHIFT", "ROTATE", "MIRROR", "TILT", "TILT_AXIS", "MOVE", "ROT"];
 
-    // The values of {dir} per MOVE where [transform] move names none: TURN = -1 positions the rotary axes, STAY = 0
-    // only computes the frame (machine-config 5, move; controller-mapping 1, TILT).
+    // The values of {dir} per MOVE, which never come from [transform] move: _DIR alone decides whether the rotary
+    // axes move at all, -1 onto the smaller rotary-axis value and 0 "Schwenken nein", only computing the swivel
+    // frame; MOVE positions them too, while the tool tip is tracked by the tens digit of _ST (machine-config 5, move;
+    // controller-mapping 1, TILT and MOVE; D262).
     private static readonly Dictionary<TiltMove, string> s_directions = new()
     {
         [TiltMove.Turn] = "-1",
+        [TiltMove.Move] = "-1",
         [TiltMove.Stay] = "0",
     };
 
@@ -407,12 +410,12 @@ internal static partial class SiemensFrames
         write.Write((first ? "MIRROR " : "AMIRROR ") + string.Join(" ", words));
     }
 
-    // CYCLE800 from the template with the angles {a} {b} {c} of the tilt, the origin {x} {y} {z} 0 since the chain
-    // carries the shifts, and {dir} from MOVE: TURN -1, STAY 0 (machine-config 5, TILT_ON and move; controller-mapping
-    // 1, TILT and MOVE; controllers siemens.md 4, 12 rule 4).
-    // TODO(question): machine-config 5 gives {dir} for MOVE=TURN and MOVE=STAY, and the tool tip tracking of MOVE=MOVE
-    // is the tens digit of _ST, which the TILT_ON template writes as a constant; MOVE=MOVE takes the value of
-    // [transform] move where the machine names one, and is an ERROR otherwise, until that is answered.
+    // CYCLE800 from the template with the angles {a} {b} {c} of the tilt and the origin {x} {y} {z} 0 since the
+    // chain carries the shifts. D262: _ST and _DIR are independent parameters of the cycle, so the template writes
+    // {move} in the place of _ST and {dir} in the place of _DIR; {move} comes from [transform] move, which holds the
+    // _ST of each MOVE option with its tens digit, and {dir} from MOVE alone and never from that table. A template
+    // without {dir} cannot write STAY or MOVE, because its constant _DIR turns the rotary axes (machine-config 5,
+    // TILT_ON and move; controller-mapping 1, TILT and MOVE; controllers siemens.md 4, 12 rule 4; decisions.md D262).
     private static void WriteTilt(SiemensBlock write, TransformEntry entry, string? template, string what,
         bool appended)
     {
@@ -441,17 +444,15 @@ internal static partial class SiemensFrames
         if (transform?.Move.TryGetValue(option, out string? move) == true)
         {
             values.Set("move", move);
-            values.Set("dir", move);
         }
-        else if (s_directions.TryGetValue(entry.Move, out string? direction))
-        {
-            values.Set("dir", direction);
-        }
-        else if (write.HasPlaceholder(template, "dir"))
+
+        values.Set("dir", s_directions[entry.Move]);
+        if (entry.Move != TiltMove.Turn && !write.HasPlaceholder(template, "dir"))
         {
             write.Error(DiagnosticCodes.SiemensTiltNotWritable,
-                $"MOVE={option} has no value of {{dir}}: machine-config 5 gives TURN = -1 and STAY = 0, and "
-                + "[transform] move of the machine names none (controller-mapping 1, MOVE).");
+                $"MOVE={option} needs {{dir}} in the place of _DIR of the template, and {what} of the machine writes "
+                + "_DIR as a constant, which turns the rotary axes (machine-config 5; controller-mapping 1, MOVE; "
+                + "D262).");
             return;
         }
 

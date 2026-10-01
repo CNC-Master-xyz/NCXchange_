@@ -24,9 +24,9 @@ internal static class SiemensArcs
     /// negated the arc turns the other way round and the compensation lies on the other side (machine-config 5,
     /// SUB_frame; D57).
     /// </summary>
-    // TODO(question): machine-config 5 says for SUB_frame = "datum" only that "the compiler negates Z"; the compiler
-    // also turns G2 into G3 and G41 into G42 in the planes that hold Z, the ZX and YZ planes, since a Z negated
-    // reflects the path in them, until that is answered.
+    // D298: the holder frame is the main spindle's frame mirrored in Z, not a right-handed frame, so the compiler
+    // negates Z and, in the planes that hold Z, turns G2 into G3 and G41 into G42, exactly as a control does under
+    // its own Z mirror; nothing else changes (decisions.md D298; machine-config 5, SUB_frame).
     public static bool Mirrored(SiemensBlock write)
     {
         return SiemensAxes.IsZNegated(write) && write.After.Frame.Workplane != Workplane.XY;

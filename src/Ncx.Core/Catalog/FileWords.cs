@@ -116,6 +116,17 @@ internal static class FileWords
         },
         new WordDefinition
         {
+            Key = "MESSAGE",
+            Group = WordKind.Program,
+            ValueKinds = ValueKinds.String,
+            Scope = Scope.Block,
+            CanonicalRank = CanonicalRanks.Message,
+            Section = "4.1",
+            Description = "Operator message shown while the program runs (Siemens MSG); MESSAGE=\"\" clears it, and "
+                + "the virtual machine executes nothing for it (D326).",
+        },
+        new WordDefinition
+        {
             Key = "STOP",
             Group = WordKind.Program,
             ValueKinds = ValueKinds.Ident,

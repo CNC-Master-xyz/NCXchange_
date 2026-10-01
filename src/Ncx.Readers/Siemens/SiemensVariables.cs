@@ -6,8 +6,9 @@ namespace Ncx.Readers.Siemens;
 /// <summary>
 /// The variables of a SINUMERIK program (controllers siemens.md 8, 11 rule 9; controller-mapping 6, VAR; language 4.9):
 /// R1=10 and R[1]=10 as VAR:R1=10, an assignment to a DEF name or a name the machine declares (GUD, the builder's
-/// variables) as VAR:NAME, DEF INT and DEF REAL with their values as VAR:NAME=value; DEF of the other types, an
-/// indirect R[R1], a name NCX cannot write stay RAW.
+/// variables) as VAR:NAME, DEF INT, REAL and BOOL with their values as VAR:NAME=value and without a value as
+/// VAR:NAME=0, the start value the control gives a numeric variable (D261); DEF of the other types, an indirect
+/// R[R1], a name NCX cannot write stay RAW.
 /// </summary>
 internal static partial class SiemensVariables
 {
@@ -39,13 +40,13 @@ internal static partial class SiemensVariables
             && Name().IsMatch(address);
     }
 
-    // TODO(question): controller-mapping 6 keeps the type of a DEF for the Siemens compiler, and no NCX word carries a
-    // type; the reader writes VAR:NAME=value without it, and a DEF that gives a name no value stays RAW, since a VAR
-    // needs a value (language 4.9).
+    // D261: NCX keeps no type. A DEF of a numeric type is VAR:NAME=value, and one that gives a name no value is
+    // VAR:NAME=0, the default initialisation value of the control, so that a later read is no D38 ERROR; the Siemens
+    // compiler declares the names a unit uses with DEF REAL in its definition part (decisions.md D261).
 
     /// <summary>
-    /// Reads DEF: a numeric type with a value for every name is VAR:NAME=value; the type stays for the Siemens
-    /// compiler (controller-mapping 6, VAR); every other DEF is RAW (siemens 11 rule 8).
+    /// Reads DEF: a numeric type is VAR:NAME=value for every name, VAR:NAME=0 where the declaration gives none
+    /// (controller-mapping 6, VAR; D261); every other DEF is RAW (siemens 11 rule 8).
     /// </summary>
     /// <param name="block">The block being read.</param>
     /// <param name="statement">The DEF word with the rest of the block.</param>
@@ -68,16 +69,19 @@ internal static partial class SiemensVariables
         {
             int equals = declaration.IndexOf('=', StringComparison.Ordinal);
             string name = (equals < 0 ? declaration : declaration.Substring(0, equals)).Trim().ToUpperInvariant();
-            if (equals < 0 || !Name().IsMatch(name))
+            if (!Name().IsMatch(name))
             {
-                block.Draft.KeepAsRaw($"DEF {type} {name} gives the variable no value, or declares an array, and a "
-                    + "VAR needs a value (language 4.9; controller-mapping 6, VAR)");
+                block.Draft.KeepAsRaw($"DEF {type} {name} declares an array or a name NCX cannot write as a VAR "
+                    + "(language 4.9; controller-mapping 6, VAR)");
                 block.Draft.RawKeepsState = true;
                 return;
             }
 
-            Value? value = SiemensExpression.ValueOf(block, declaration.Substring(equals + 1).Trim(),
-                out string? problem);
+            // A declaration without an initialisation value starts the variable at 0 on the control (D261).
+            string? problem = null;
+            Value? value = equals < 0
+                ? new IntegerValue(0, "0")
+                : SiemensExpression.ValueOf(block, declaration.Substring(equals + 1).Trim(), out problem);
             if (value is null)
             {
                 block.Draft.KeepAsRaw(problem!);

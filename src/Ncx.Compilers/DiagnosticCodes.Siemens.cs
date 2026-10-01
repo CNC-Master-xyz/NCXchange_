@@ -137,6 +137,20 @@ public static partial class DiagnosticCodes
     public const string SiemensJumpToEndInSubprogram = "CMP594";
 
     /// <summary>
+    /// CMP595: a variable that more than one unit of the file uses and that [variables] declared of the machine does
+    /// not name: a SINUMERIK DEF is local to its unit, so the compiler can neither declare the name once nor declare
+    /// it twice (controllers siemens.md 8, 12 rule 7; machine-config 7; D261).
+    /// </summary>
+    public const string SiemensVariableNotDeclarable = "CMP595";
+
+    /// <summary>
+    /// CMP596: a bare F or S block under a modal call that a RAW line armed, which the compiler does not write,
+    /// because S or F with G0 or G1 active calls the modal subprogram and the pattern of the RAW range would drill one
+    /// hole more (controllers siemens.md 7; controller-mapping 5, CYCLE_F; D259).
+    /// </summary>
+    public const string SiemensWordUnderARawModalCall = "CMP596";
+
+    /// <summary>
     /// CMP610: SYNC without a wait template in [sync], or with a mark outside its mark_range (machine-config 5;
     /// controllers siemens.md 9).
     /// </summary>

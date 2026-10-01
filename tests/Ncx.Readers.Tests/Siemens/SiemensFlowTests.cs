@@ -158,15 +158,26 @@ public sealed class SiemensFlowTests
             CheckedBody("EXTCALL(\"/_N_EXT_DIR/_N_EXT1_SPF\")\nEXTCALL(\"EXT2\")"));
     }
 
-    // R parameters and DEF of a numeric type with a value are VAR, the functions of their expressions the NCX ones;
-    // DEF without a value stays RAW (siemens 8; controller-mapping 6, VAR).
+    // R parameters and DEF of a numeric type are VAR, the functions of their expressions the NCX ones; a DEF that
+    // gives a name no value is VAR:NAME=0, the start value of the control (siemens 8; controller-mapping 6, VAR;
+    // D261).
     [Fact]
     public void RParametersAndDef_BecomeVar()
     {
-        Assert.Equal(Lines("VAR:COUNT=3", Raw("DEF REAL A, B=2"), "VAR:R5=1.5", "VAR:COUNT={$COUNT - 1}",
+        Assert.Equal(Lines("VAR:COUNT=3", "VAR:A=0 VAR:B=2", "VAR:R5=1.5", "VAR:COUNT={$COUNT - 1}",
                 "VAR:R1={INT($R2 / 3)}", "VAR:R3={SIN(30) + ((2) ^ 2)}"),
             CheckedBody("DEF INT COUNT=3\nDEF REAL A, B=2\nR[5]=1.5\nCOUNT=COUNT-1\nR1=TRUNC(R2/3)\n"
                 + "R3=SIN(30)+POT(2)"));
+    }
+
+    // D261: a DEF that declares an array, or a name NCX cannot write as a VAR, still stays RAW with its state kept.
+    [Fact]
+    public void Def_OfAnArray_StaysRaw()
+    {
+        NcxProgram program = FramedProgram("DEF REAL FIELD[4]");
+
+        Assert.Equal(Lines(Raw("DEF REAL FIELD[4]")), BodyOf(NcxWriter.Write(program)));
+        Assert.Equal([DiagnosticCodes.KeptAsRaw], Codes(program));
     }
 
     // An end without its structure is an ERROR and stays RAW, a structure without its end a WARNING (siemens 8).

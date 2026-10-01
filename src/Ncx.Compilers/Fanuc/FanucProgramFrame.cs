@@ -60,12 +60,13 @@ internal static class FanucProgramFrame
     }
 
     /// <summary>
-    /// A COMMENT or SECTION of the block as a comment line in parentheses, transliterated per comment_charset
-    /// (controllers fanuc.md 10 rule 5; controller-mapping 1, COMMENT).
+    /// A COMMENT, SECTION or MESSAGE of the block as a comment line in parentheses, transliterated per
+    /// comment_charset (controllers fanuc.md 10 rule 5; controller-mapping 1, COMMENT). A control without a message
+    /// form writes the text of MESSAGE as a comment (language 4.1, MESSAGE; D326).
     /// </summary>
     public static void WriteComment(FanucBlock write)
     {
-        foreach (string key in new[] { "COMMENT", "SECTION" })
+        foreach (string key in new[] { "COMMENT", "SECTION", "MESSAGE" })
         {
             if (write.Block.Find(key)?.Value is StringValue text)
             {

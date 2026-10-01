@@ -32,8 +32,8 @@ public sealed class SiemensToolTests
         Assert.Equal(Lines("T3 D3"), MillTurnBody("TOOL:TURRET1=3 OFFSET:LEN=3 OFFSET:RAD=3"));
     }
 
-    // Controller-mapping 3, OFFSET:LEN: the D of the control is one register; two registers write the length one with a
-    // WARNING (the TODO(question) of SiemensTools).
+    // Controller-mapping 3, OFFSET:LEN: the D of the control is one register; two registers write the length one with
+    // a WARNING (D301).
     [Fact]
     public void OffsetLenAndRad_TwoRegisters_WriteTheLengthWithAWarning()
     {
@@ -41,6 +41,29 @@ public sealed class SiemensToolTests
 
         Assert.Equal(Lines("T3 D3"), Body(result));
         Assert.Equal(["CMP510"], CompilerCodes(result));
+    }
+
+    // D301: a block that sets OFFSET:LEN=0 writes D0, because a D of this control always carries the length, and D0
+    // drops the radius with it; with COMP still on that loss is a WARNING.
+    [Fact]
+    public void OffsetLenZero_WithARadiusRegisterStillSet_IsD0WithAWarningWhileCompIsOn()
+    {
+        CompileResult result = Run(Program(MillTurnHeader, "TOOL:TURRET1=3 OFFSET:LEN=3 OFFSET:RAD=3",
+            "COMP=LEFT LINE X=10 F=0.2", "OFFSET:LEN=0"), MillTurn());
+
+        Assert.Equal(Lines("T3 D3", "G1 G41 X10 F0.2", "D0"), Body(result));
+        Assert.Equal(["CMP510"], CompilerCodes(result));
+    }
+
+    // D301: without a compensation on, the D0 of an OFFSET:LEN=0 block is written without a WARNING.
+    [Fact]
+    public void OffsetLenZero_WithoutACompensation_IsD0WithoutAWarning()
+    {
+        CompileResult result = Run(Program(MillTurnHeader, "TOOL:TURRET1=3 OFFSET:LEN=3 OFFSET:RAD=3",
+            "OFFSET:LEN=0"), MillTurn());
+
+        Assert.Equal(Lines("T3 D3", "D0"), Body(result));
+        Assert.Empty(CompilerCodes(result));
     }
 
     // Controller-mapping 1, FRAME=MACHINE: G0 G53 Z0 D0, the offset cancelled in the block of the retract.

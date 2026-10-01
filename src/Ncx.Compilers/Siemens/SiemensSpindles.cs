@@ -280,6 +280,17 @@ internal static partial class SiemensSpindles
 
         foreach (SpindleText text in texts)
         {
+            // D259: a bare S block under a modal call that a RAW line armed fires the modal subprogram, as a bare F
+            // does, so the compiler does not write it; the speed stands again at the next block that needs it.
+            if (IsBareSpeed(text.Text) && SiemensCycles.RawModalCallStands(write))
+            {
+                write.Warning(DiagnosticCodes.SiemensWordUnderARawModalCall,
+                    $"The block programs {text.Text} alone under a modal call that a RAW line armed, where S with G0 "
+                    + "or G1 active calls the modal subprogram: it is not written here, and stands again at the next "
+                    + "block that needs it (controllers siemens.md 7; D259).");
+                continue;
+            }
+
             if (text.Text.Contains('(', StringComparison.Ordinal) || text.Text.Contains('\n', StringComparison.Ordinal))
             {
                 write.Write(text.Text);
@@ -290,17 +301,35 @@ internal static partial class SiemensSpindles
         }
     }
 
+    // A rendered template that is the speed and nothing else, S1000 or S2=1000; SPOS= and M3 are no bare S.
+    private static bool IsBareSpeed(string text)
+    {
+        string[] words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 0)
+        {
+            return false;
+        }
+
+        foreach (string word in words)
+        {
+            if (word[0] != 'S' || word.Length < 2 || !(char.IsDigit(word[1]) || word[1] == '='))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>
     /// The words of a template in the main line: a G code with the codes, an M function with the functions, the other
     /// words with the spindle words; G96 switches G95 on, G961 the feed per minute, G97 the surface speed off
     /// (controllers siemens.md 2, 5).
     /// </summary>
-    // TODO(question): machine-config 5 gives CSS=ON the VC template, G96 S{value} on the example machines, and G96
-    // switches G95 on, while controller-mapping 4 gives G961 for the constant surface speed with the feed per minute
-    // and G94 would switch it off (siemens 2, group 15); no document says whether the compiler may write G961 for the
-    // G96 of a template. G96 and G961 of a template are written as the code of the feed type the block leaves, G96 per
-    // revolution and G961 per minute, and a FEED_MODE under the surface speed as the other code alone, until that is
-    // answered.
+    // D300: on this control the feed type and the constant surface speed are one G code of group 15, which the
+    // program's FEED_MODE decides and no template can know, so the compiler writes a spindle template's group-15 code
+    // as the code for the feed type the block leaves, G96 per revolution and G961 per minute, and a FEED_MODE change
+    // under the surface speed as that code alone (decisions.md D300; machine-config 5, VC).
     public static void AddToMain(SiemensBlock write, string text)
     {
         foreach (string template in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))

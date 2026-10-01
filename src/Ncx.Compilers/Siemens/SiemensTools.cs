@@ -69,15 +69,21 @@ internal static class SiemensTools
     /// it; else OFFSET:LEN and OFFSET:RAD, which on this control are one register (controller-mapping 3, OFFSET:LEN;
     /// language 4.4, OFFSET).
     /// </summary>
-    // TODO(question): controller-mapping 3 gives the D of the control as one register for length and radius and says
-    // nothing of OFFSET:LEN and OFFSET:RAD that name two; the length register is written, the radius register where
-    // the length is 0, with a WARNING, until that is answered.
+    // D301: equal registers, or the single register that is set, give that D; two different registers give the
+    // length register with the WARNING of ReportTwoRegisters, since one D cannot carry two. A block that sets
+    // OFFSET:LEN=0 writes D0, because a D of this control always carries the length, and D0 drops the radius with it
+    // (decisions.md D301; controller-mapping 3, OFFSET:LEN).
     public static int? EdgeOf(SiemensBlock write)
     {
         ChannelSnapshot after = write.After;
         if (after.LastHolder is not string holder || !after.Holders.TryGetValue(holder, out HolderSnapshot? state))
         {
             return null;
+        }
+
+        if (CancelsLength(write))
+        {
+            return 0;
         }
 
         if (write.Block.Find("OFFSET", null) is not null || state.OffsetCombined != 0)
@@ -88,13 +94,28 @@ internal static class SiemensTools
         return state.OffsetLen != 0 ? state.OffsetLen : state.OffsetRad;
     }
 
+    // True where the block itself cancels the length register, OFFSET:LEN=0 (language 4.4; D301).
+    private static bool CancelsLength(SiemensBlock write)
+    {
+        return write.Block.Find("OFFSET", "LEN") is Word length && length.Value.ToCanonical() == "0";
+    }
+
     /// <summary>
     /// A WARNING where OFFSET:LEN and OFFSET:RAD of the block leave the holder with two registers, of which the one D
-    /// of the control carries the length (controller-mapping 3, OFFSET:LEN).
+    /// of the control carries the length, and where a block that sets OFFSET:LEN=0 writes the D0 that drops the radius
+    /// too while the compensation is still on (controller-mapping 3, OFFSET:LEN; D301).
     /// </summary>
     public static void ReportTwoRegisters(SiemensBlock write)
     {
         ChannelSnapshot after = write.After;
+        if (CancelsLength(write) && after.Motion.Comp != Compensation.Off)
+        {
+            write.Warning(DiagnosticCodes.SiemensOffsetRegistersDiffer,
+                "OFFSET:LEN=0 is written as D0, which cancels the length and the radius of the active tool together, "
+                + $"and COMP={after.Motion.Comp.ToString().ToUpperInvariant()} is still on after the block "
+                + "(controller-mapping 3, OFFSET:LEN; controllers siemens.md 5; D301).");
+        }
+
         if ((write.Block.Find("OFFSET", "LEN") is null && write.Block.Find("OFFSET", "RAD") is null)
             || after.LastHolder is not string holder || !after.Holders.TryGetValue(holder, out HolderSnapshot? state)
             || state.OffsetCombined != 0 || state.OffsetLen == state.OffsetRad || state.OffsetLen == 0

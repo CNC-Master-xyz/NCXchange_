@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
+using Ncx.Core.Expressions;
 using Ncx.Core.Model;
 
 namespace Ncx.Compilers.Siemens;
@@ -7,16 +9,19 @@ namespace Ncx.Compilers.Siemens;
 /// <summary>
 /// What the Siemens compiler knows of the whole NCX file while it writes one block of it (controllers siemens.md 1, 8,
 /// 12 rule 1): the name of the unit of every program and subprogram, the parameters of every subprogram from the
-/// arguments its calls give, the labels of every section and the label before the end of a program that a JUMP=END
-/// reaches.
+/// arguments its calls give, the labels of every section, the label before the end of a program that a JUMP=END
+/// reaches, and the variable names every unit uses, which its definition part declares (siemens.md 12 rule 7, D261).
 /// </summary>
-internal sealed class SiemensFile
+internal sealed partial class SiemensFile
 {
     // The label a JUMP=END goes to, before the program end (controller-mapping 1, JUMP=END).
     private const string EndLabel = "PROGRAM_END";
 
     // A label of an integer, or of a name whose first two characters are not letters (controllers siemens.md 8).
     private const string LabelPrefix = "LABEL_";
+
+    // The prefix of the NCX system variables, which no DEF declares (language 4.12; D51).
+    private const string SystemPrefix = "SYS_";
 
     // The statements of the language of controllers siemens.md 8 and 9, which no label may be.
     private static readonly HashSet<string> s_keywords = new(StringComparer.Ordinal)
@@ -37,6 +42,14 @@ internal sealed class SiemensFile
     // the jump, which the block after the call meets once the subprogram has returned (SiemensFlow).
     private readonly List<(TargetState Target, Dictionary<string, string> AtJump)> _jumpsOverCalls = [];
 
+    // The variable names every unit uses, in the order of their first use, and how many units use each of them
+    // (D261).
+    private readonly Dictionary<Section, List<string>> _names = [];
+    private readonly Dictionary<string, int> _unitsOfName = new(StringComparer.Ordinal);
+
+    // The names a RAW:SIEMENS block of a unit declares itself, DEF REAL LEN the reader kept (D261).
+    private readonly Dictionary<Section, HashSet<string>> _rawDeclared = [];
+
     private SiemensFile(IReadOnlyList<BlockStep> steps)
     {
         _steps = steps;
@@ -54,6 +67,7 @@ internal sealed class SiemensFile
         }
 
         CollectParameters();
+        CollectNames();
     }
 
     /// <summary>
@@ -142,6 +156,36 @@ internal sealed class SiemensFile
         return sub.Name is string name && _parameters.TryGetValue(name, out List<string>? parameters)
             ? parameters
             : [];
+    }
+
+    /// <summary>
+    /// The variable names a program or subprogram uses, in the order of their first use: the addresses of its VAR
+    /// words and the variables its expressions read, without the system variables (D261).
+    /// </summary>
+    /// <param name="unit">The program or subprogram.</param>
+    public IReadOnlyList<string> NamesUsedBy(Section unit)
+    {
+        return _names.TryGetValue(unit, out List<string>? names) ? names : [];
+    }
+
+    /// <summary>
+    /// True where more than one unit of the file uses the name: a DEF is local to its unit, so the value does not
+    /// carry over and the compiler may not declare the name twice (D261).
+    /// </summary>
+    /// <param name="name">The NCX variable name.</param>
+    public bool IsUsedBySeveralUnits(string name)
+    {
+        return _unitsOfName.GetValueOrDefault(name) > 1;
+    }
+
+    /// <summary>
+    /// True where a RAW:SIEMENS block of the unit declares the name itself, a DEF the reader kept (D261).
+    /// </summary>
+    /// <param name="unit">The program or subprogram.</param>
+    /// <param name="name">The NCX variable name.</param>
+    public bool IsDeclaredByRaw(Section unit, string name)
+    {
+        return _rawDeclared.TryGetValue(unit, out HashSet<string>? declared) && declared.Contains(name);
     }
 
     /// <summary>
@@ -303,6 +347,130 @@ internal sealed class SiemensFile
         }
     }
 
+    // The variable names of every unit, in the order of their first use, and the names a RAW:SIEMENS DEF of a unit
+    // declares itself: what the definition part of the unit declares with DEF REAL and what it must leave alone
+    // (controllers siemens.md 12 rule 7; D261).
+    private void CollectNames()
+    {
+        foreach (BlockStep step in _steps)
+        {
+            if (step.Section is not Section unit)
+            {
+                continue;
+            }
+
+            if (step.Block.Find("RAW")?.Value is StringValue raw)
+            {
+                foreach (string declared in NamesDefinedBy(raw.Content))
+                {
+                    if (!_rawDeclared.TryGetValue(unit, out HashSet<string>? names))
+                    {
+                        names = new HashSet<string>(StringComparer.Ordinal);
+                        _rawDeclared.Add(unit, names);
+                    }
+
+                    names.Add(declared);
+                }
+            }
+
+            foreach (Word word in step.Block.Words)
+            {
+                if (word.Key == "VAR" && word.Addr is string assigned)
+                {
+                    AddName(unit, assigned);
+                }
+
+                if (word.Value is ExprValue { Tree: ExprNode tree })
+                {
+                    AddRead(unit, tree);
+                }
+            }
+        }
+    }
+
+    // The variables an expression reads, the system variables of [system_variables] excluded: they are no user
+    // variables and no DEF declares them (language 4.12; D51, D261).
+    private void AddRead(Section unit, ExprNode node)
+    {
+        switch (node)
+        {
+            case VariableNode variable:
+                if (!variable.Name.StartsWith(SystemPrefix, StringComparison.Ordinal))
+                {
+                    AddName(unit, variable.Name);
+                }
+
+                if (variable.Index is ExprNode index)
+                {
+                    AddRead(unit, index);
+                }
+
+                break;
+            case ParenthesesNode parentheses:
+                AddRead(unit, parentheses.Inner);
+                break;
+            case UnaryNode unary:
+                AddRead(unit, unary.Operand);
+                break;
+            case BinaryNode binary:
+                AddRead(unit, binary.Left);
+                AddRead(unit, binary.Right);
+                break;
+            case CallNode call:
+                foreach (ExprNode argument in call.Arguments)
+                {
+                    AddRead(unit, argument);
+                }
+
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void AddName(Section unit, string name)
+    {
+        if (!_names.TryGetValue(unit, out List<string>? names))
+        {
+            names = [];
+            _names.Add(unit, names);
+        }
+
+        if (names.Contains(name))
+        {
+            return;
+        }
+
+        names.Add(name);
+        _unitsOfName[name] = _unitsOfName.GetValueOrDefault(name) + 1;
+    }
+
+    // The names a DEF of a RAW:SIEMENS line declares: "DEF REAL LEN, WIDTH=3" declares LEN and WIDTH (controllers
+    // siemens.md 8; D261).
+    private static List<string> NamesDefinedBy(string raw)
+    {
+        var names = new List<string>();
+        foreach (Match definition in DefLine().Matches(raw))
+        {
+            foreach (string part in definition.Groups[1].Value.Split(','))
+            {
+                string name = part.Split('=')[0].Trim().ToUpperInvariant();
+                int bracket = name.IndexOf('[', StringComparison.Ordinal);
+                if (bracket > 0)
+                {
+                    name = name.Substring(0, bracket);
+                }
+
+                if (name.Length > 0)
+                {
+                    names.Add(name);
+                }
+            }
+        }
+
+        return names;
+    }
+
     // Letters, digits and underscores in capitals (controllers siemens.md 1).
     private static string Written(string name)
     {
@@ -352,4 +520,9 @@ internal sealed class SiemensFile
     {
         return char.IsAsciiLetter(character) || character == '_';
     }
+
+    // A DEF of a RAW line: the type, then the names it declares up to the end of the line.
+    [GeneratedRegex(@"\bDEF\s+(?:INT|REAL|BOOL|CHAR|AXIS|FRAME|STRING\s*\[[^\]]*\])\s+([^\r\n;]*)",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex DefLine();
 }

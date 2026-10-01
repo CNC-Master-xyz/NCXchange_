@@ -5,10 +5,11 @@ using static Ncx.Readers.Tests.Siemens.SiemensRead;
 namespace Ncx.Readers.Tests.Siemens;
 
 /// <summary>
-/// What stays RAW (controllers siemens.md 11 rule 8; controller-mapping 9; D5): MSG, STOPRE, WORKPIECE, DEF of other
+/// What stays RAW (controllers siemens.md 11 rule 8; controller-mapping 9; D5): STOPRE, WORKPIECE, DEF of other
 /// types, the synchronized actions, the interrupts, the orientation and path-control words, the builder cycles the
 /// configuration does not name and the recipe block of the STAMA post, each with a WARNING and kept in place; the
-/// words of a block that NCX has no word for as RAW words of that block.
+/// words of a block that NCX has no word for as RAW words of that block. MSG is the word MESSAGE where it can carry
+/// it, and RAW where it cannot (D326).
 /// </summary>
 public sealed class SiemensRawTests
 {
@@ -18,13 +19,46 @@ public sealed class SiemensRawTests
     {
         string[] statements =
         [
-            "MSG(\"HELLO\")", "STOPRE", "WORKPIECE(,\"\",,\"BOX\",112,0,-50,-80,0,0,100,100)",
+            "STOPRE", "WORKPIECE(,\"\",,\"BOX\",112,0,-50,-80,0,0,100,100)",
             "DEF STRING[20] TXT=\"A\"", "WHEN $AA_IM[X]>10 DO M120", "SETINT(3) PRIO=1 NOTFALL", "ORIWKS", "COMPCAD",
         ];
         NcxProgram program = FramedProgram(string.Join('\n', statements));
 
         Assert.Equal(Lines([.. statements.Select(Raw)]), BodyOf(NcxWriter.Write(program)));
         Assert.Equal([.. statements.Select(_ => DiagnosticCodes.KeptAsRaw)], Codes(program));
+    }
+
+    // D326: MSG("text") is MESSAGE="text" and MSG() is MESSAGE="", the operator message of language 4.1.
+    [Fact]
+    public void Message_OfAnMsgWithATextAndOfMsgAlone_IsTheMessageWord()
+    {
+        NcxProgram program = FramedProgram("MSG(\"OP1 - BOHREN\")\nMSG()");
+
+        Assert.Equal(Lines("MESSAGE=\"OP1 - BOHREN\"", "MESSAGE=\"\""), BodyOf(NcxWriter.Write(program)));
+        Assert.Empty(Codes(program));
+    }
+
+    // D326: the MSG word alone is read; the other words of its block are the other concerns', and nothing is dropped
+    // (D5; controller-mapping 9).
+    [Fact]
+    public void Message_OfAnMsgBlockWithAnotherWord_KeepsThatWord()
+    {
+        NcxProgram program = FramedProgram("MSG(\"HELLO\") M8\nG1 X10 F100");
+
+        Assert.Equal(Lines("COOLANT=ON MESSAGE=\"HELLO\"", "LINE X=10 F=100"), BodyOf(NcxWriter.Write(program)));
+        Assert.Empty(Codes(program));
+    }
+
+    // D326: an MSG with the execution argument, which forces a main-run block of its own, and one whose text is built
+    // with << have no MESSAGE form and stay RAW.
+    [Fact]
+    public void Message_OfAnMsgWithAnExecutionArgumentOrABuiltText_StaysRaw()
+    {
+        string[] statements = ["MSG(\"HALT\",1)", "MSG(\"X=\"<<R12)"];
+        NcxProgram program = FramedProgram(string.Join('\n', statements));
+
+        Assert.Equal(Lines([.. statements.Select(Raw)]), BodyOf(NcxWriter.Write(program)));
+        Assert.Equal([DiagnosticCodes.KeptAsRaw, DiagnosticCodes.KeptAsRaw], Codes(program));
     }
 
     // Rule 8: the path-control and feed words of a motion block are RAW words of that block (siemens 2).
@@ -47,6 +81,18 @@ public sealed class SiemensRawTests
 
         Assert.Equal(Lines(Raw("CYCLE_HERMLE(1,2)")), BodyOf(NcxWriter.Write(program)));
         Assert.Equal([DiagnosticCodes.KeptAsRaw], Codes(program));
+    }
+
+    // D293: an L number that is no unit of the file and no EXTERN is RAW like a name the configuration does not know,
+    // and keeps its leading zeros, which are part of the subprogram name.
+    [Fact]
+    public void CallTarget_AnLNumberOutsideTheFile_IsRawLikeAName()
+    {
+        NcxProgram program = FramedProgram("L798\nL0123\nPOCKET_ROUGH");
+
+        Assert.Equal(Lines(Raw("L798"), Raw("L0123"), Raw("POCKET_ROUGH")), BodyOf(NcxWriter.Write(program)));
+        Assert.Equal([DiagnosticCodes.KeptAsRaw, DiagnosticCodes.KeptAsRaw, DiagnosticCodes.KeptAsRaw],
+            Codes(program));
     }
 
     // The recipe block of the STAMA post between its markers is no NC syntax and stays RAW (machine-builders 2, STAMA;

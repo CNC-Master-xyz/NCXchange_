@@ -13,6 +13,35 @@ internal static class SiemensPatterns
     private const int MaxHoles = 9999;
 
     /// <summary>
+    /// True where the reader can expand the pattern: six numeric arguments and a whole number of holes in range. The
+    /// modal cycle is not part of this test, so that a look-ahead can ask the question before the cycle is read
+    /// (controllers siemens.md 7; D259).
+    /// </summary>
+    /// <param name="pattern">The pattern word with its arguments.</param>
+    public static bool CanExpand(SourceWord pattern)
+    {
+        List<string> arguments = SiemensArguments.Split(pattern.Text);
+        if (arguments.Count < 6)
+        {
+            return false;
+        }
+
+        var values = new List<decimal>();
+        foreach (string argument in arguments.GetRange(0, 6))
+        {
+            if (SiemensNumbers.NumberOf(SiemensNumbers.Parse(argument)) is not decimal number)
+            {
+                return false;
+            }
+
+            values.Add(number);
+        }
+
+        int count = (int)values[5];
+        return count >= 1 && count <= MaxHoles && values[5] == count;
+    }
+
+    /// <summary>
     /// Reads HOLES1 or HOLES2 into the calls of the modal cycle.
     /// </summary>
     /// <param name="block">The block being read.</param>
@@ -36,7 +65,7 @@ internal static class SiemensPatterns
         }
 
         int count = values.Count == 6 ? (int)values[5] : 0;
-        if (cycle is null || values.Count < 6 || count < 1 || count > MaxHoles || values[5] != count)
+        if (cycle is null || !CanExpand(pattern))
         {
             block.Draft.KeepAsRaw($"{pattern.Address} calls the modal cycle of MCALL at positions of numbers; the "
                 + "reader expands it only so (controllers siemens.md 7)");

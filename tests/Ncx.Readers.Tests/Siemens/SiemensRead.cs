@@ -22,11 +22,17 @@ internal static class SiemensRead
     private static readonly Lazy<MachineConfig> s_fiveAxis = new(FiveAxisMachine);
 
     // Two rotary axes of a table that no spindle owns, for the rotary-axes mode of CYCLE800 (controller-mapping 1,
-    // TILT_AXIS).
+    // TILT_AXIS). The [transform] TILT_AXIS_ON template names them in the places of _A and _B, which is where the
+    // reader takes them from (D296).
     private const string RotaryTable = "\n[[axis]]\nid = \"A1\"\nncx = \"A\"\nletter = \"A\"\nkind = \"rotary\"\n"
         + "limits = [-120, 30]\nrapid = 10000\nmax_feed = 5000\nacceleration = 500\nhome = 0\n\n[[axis]]\nid = \"C1\"\n"
         + "ncx = \"C\"\nletter = \"C\"\nkind = \"rotary\"\nrapid = 10000\nmax_feed = 5000\n"
         + "acceleration = 500\nhome = 0\n";
+
+    // The template of the rotary-axes mode: {a} stands in the place of _A and {c} in the place of _B, so the reader
+    // reads those angles into the axes A and C (machine-config 5, TILT_AXIS_ON; D296).
+    private const string RotaryTransform = "\n[transform]\n"
+        + "TILT_AXIS_ON = \"CYCLE800(1,\\\"TABLE\\\",0,192,0,0,0,{a},{c},0,0,0,0,{dir},100,1)\"\n";
 
     /// <summary>
     /// The 840D sl vertical mill of machines/, with the Siemens cycle catalog.
@@ -206,13 +212,33 @@ internal static class SiemensRead
     // The rotary axes join the [[axis]] list of the mill directly behind its linear axes, in front of [positions]:
     // appended behind the other tables of the file, the machine held only the two rotary axes, and check found no X, Y
     // and Z.
+    /// <summary>
+    /// The five-axis mill with another [transform] TILT_AXIS_ON template, or with none where the text is empty: what
+    /// the reader takes the axes of the rotary-axes mode of CYCLE800 from (D296).
+    /// </summary>
+    /// <param name="tiltAxisOn">The template text, empty for a machine without one.</param>
+    public static MachineConfig FiveAxisWith(string tiltAxisOn)
+    {
+        string transform = tiltAxisOn.Length == 0
+            ? "\n[transform]\nTILT_AXIS_ON = \"\"\n"
+            : "\n[transform]\nTILT_AXIS_ON = \"" + tiltAxisOn.Replace("\"", "\\\"", StringComparison.Ordinal)
+                + "\"\n";
+        return FiveAxisMachine(transform);
+    }
+
     private static MachineConfig FiveAxisMachine()
+    {
+        return FiveAxisMachine(RotaryTransform);
+    }
+
+    private static MachineConfig FiveAxisMachine(string transform)
     {
         string text = File.ReadAllText(Path.Combine(Fixture.RepositoryRoot(), "machines", "siemens-840dsl-mill.toml"));
         int positions = text.IndexOf("\n[positions]", StringComparison.Ordinal);
         Assert.True(positions >= 0, "The mill of machines/ has no [positions] table behind its axes.");
         var diagnostics = new Diagnostics("five-axis.toml");
-        MachineConfig? machine = MachineConfigLoader.LoadText(text.Insert(positions, RotaryTable), diagnostics);
+        MachineConfig? machine = MachineConfigLoader.LoadText(text.Insert(positions, RotaryTable) + transform,
+            diagnostics);
         Assert.True(machine is not null && !diagnostics.HasErrors, diagnostics.ToText());
         CycleCatalog? catalog = CycleCatalogLoader.Load(
             Path.Combine(Fixture.RepositoryRoot(), "cycles", "siemens.toml"), Controller.Siemens, diagnostics);

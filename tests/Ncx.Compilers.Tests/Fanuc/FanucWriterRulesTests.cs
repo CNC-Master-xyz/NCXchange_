@@ -120,6 +120,13 @@ public sealed class FanucWriterRulesTests
         Assert.Equal("G17 X70. Y-0.534\n(AENDERUNG)\n", body);
     }
 
+    // D326: Fanuc has no message form, so the text of MESSAGE is written as a comment in parentheses.
+    [Fact]
+    public void Message_OnATargetWithoutAMessageForm_IsACommentInParentheses()
+    {
+        Assert.Equal("(OP1 - BOHREN)\n", FanucCompile.Body("MESSAGE=\"OP1 - BOHREN\""));
+    }
+
     // Fanuc 10 rule 5, fanuc 2 (without calculator-type input R30 is 0.03): the angle of G68, the tool vector of G43.5
     // and the numbers the compiler gives a template carry the point as well, whether [format] decimals lists their
     // address or not.

@@ -48,7 +48,9 @@ internal static class SiemensCycles
 
             if (word.Address is "CYCLE801" or "CYCLE802")
             {
-                // TODO(question): siemens 7 names CYCLE801 and CYCLE802 without their signatures; they stay RAW.
+                // TODO(question): siemens 7 names CYCLE801 and CYCLE802 without their signatures; they stay RAW. D259
+                // keeps the MCALL range RAW with them, so the pattern keeps its drilling cycle; D341 would give the
+                // signatures and let the reader expand them.
                 block.MarkRead(word);
                 block.Draft.KeepAsRaw($"{word.Address} is a pattern whose parameters the documents do not give "
                     + "(controllers siemens.md 7)");
@@ -98,6 +100,86 @@ internal static class SiemensCycles
     }
 
     /// <summary>
+    /// True where the MCALL of the next block of the unit arms a cycle for a pattern the reader cannot expand: the F
+    /// of this block is the drilling feed of every hole of that pattern and stays RAW with the whole modal range, and
+    /// the compiler writes no bare F between an armed MCALL and the pattern, because an F with G0 or G1 active fires
+    /// the modal cycle (controllers siemens.md 7; D259).
+    /// </summary>
+    /// <param name="block">The block being read.</param>
+    public static bool NextArmsRawRange(SiemensBlock block)
+    {
+        SourceBlock? next = block.Siemens.Units.NextInUnit(block.Source);
+        return next is not null && HasMcall(next) && RangeKeepsAPattern(block, next);
+    }
+
+    // True where the modal range an MCALL block arms holds a pattern the reader cannot expand: a look-ahead within
+    // the unit up to the next MCALL, which ends or replaces the modal call (controllers siemens.md 7; D259).
+    private static bool RangeKeepsAPattern(SiemensBlock block, SourceBlock mcall)
+    {
+        SourceBlock? next = block.Siemens.Units.NextInUnit(mcall);
+        while (next is not null && !HasMcall(next))
+        {
+            foreach (SourceWord word in next.Words)
+            {
+                if (word.Address is "CYCLE801" or "CYCLE802" && word.Text.StartsWith('('))
+                {
+                    return true;
+                }
+
+                if (word.Address is "HOLES1" or "HOLES2" && word.Text.StartsWith('(')
+                    && !SiemensPatterns.CanExpand(word))
+                {
+                    return true;
+                }
+            }
+
+            next = block.Siemens.Units.NextInUnit(next);
+        }
+
+        return false;
+    }
+
+    // True where this bare MCALL ends a modal range the reader kept RAW: a look-back within the unit to the MCALL
+    // block before it, which must arm a call, and the same look-ahead over the range between the two (D259).
+    private static bool EndsRawRange(SiemensBlock block)
+    {
+        SourceBlock? armed = block.Siemens.Units.PreviousInUnit(block.Source);
+        while (armed is not null && !HasMcall(armed))
+        {
+            armed = block.Siemens.Units.PreviousInUnit(armed);
+        }
+
+        return armed is not null && Arms(armed) && RangeKeepsAPattern(block, armed);
+    }
+
+    // True where an MCALL block arms a call, MCALL CYCLE81(...), and does not end one.
+    private static bool Arms(SourceBlock block)
+    {
+        foreach (SourceWord word in block.Words)
+        {
+            if (word.Address is not ("N" or ":" or "MCALL"))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasMcall(SourceBlock block)
+    {
+        foreach (SourceWord word in block.Words)
+        {
+            if (word.Address == "MCALL")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// True when the next block defines a cycle that takes the modal F as its feed, MCALL CYCLE81(...) or a direct
     /// call: the F before it is the CYCLE_F (controller-mapping 5, CYCLE_F).
     /// </summary>
@@ -139,6 +221,17 @@ internal static class SiemensCycles
         SiemensFacts facts = block.Facts;
         if (call is null)
         {
+            // D259: the MCALL alone that ends a modal range the reader kept RAW stays RAW with it, so that the
+            // pattern and its drilling cycle travel together; a look-back within the unit finds the MCALL that armed
+            // the range. A bare MCALL under a caller the reader does not know ends no range it kept RAW and stays the
+            // lossless CYCLE=OFF (controllers siemens.md 7, 11 rule 5; D259).
+            if (EndsRawRange(block))
+            {
+                block.Draft.KeepAsRaw("MCALL alone ends the modal call of a pattern the reader kept as RAW, and the "
+                    + "range travels together (controllers siemens.md 7; D259)");
+                return;
+            }
+
             block.Draft.AddState("CYCLE", null, new IdentValue("OFF"));
             facts.ModalCycle = null;
             facts.Unknown.Remove(SiemensFacts.Cycle);
@@ -150,6 +243,16 @@ internal static class SiemensCycles
         {
             block.Draft.KeepAsRaw($"MCALL {call.Address} makes a subprogram modal, which NCX has no word for; "
                 + "CYCLE_CALL calls a cycle (controllers siemens.md 7)");
+            return;
+        }
+
+        // D259: a pattern the reader cannot expand keeps the whole modal range RAW, since RAW keeps source text NCX
+        // cannot express (D5) and here that text is the MCALL range, not the pattern alone.
+        if (RangeKeepsAPattern(block, block.Source))
+        {
+            block.Draft.KeepAsRaw($"MCALL {call.Address} arms the cycle of a pattern the reader cannot expand, and "
+                + "the pattern drills nothing without it (controllers siemens.md 7; D259)");
+            facts.MakeUnknown(SiemensFacts.Cycle);
             return;
         }
 

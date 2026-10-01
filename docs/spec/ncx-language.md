@@ -94,6 +94,7 @@ Words are grouped by area. "Modal" means the value stays until changed. "Block" 
 | `UNITS=MM` | `MM`, `INCH` | Measurement units. Required before the first motion. | modal |
 | `COMMENT="..."` | string | Program comment, kept in the output (`(...)`, `; ...`). | block |
 | `SECTION="..."` | string | Structuring comment (Heidenhain `* -`); plain comment on other controllers. | block |
+| `MESSAGE="..."` | string | Operator message, shown on the control while the program runs (Siemens `MSG("text")`). The message stays on the screen until the next one, so `MESSAGE=""` clears it (`MSG()`). The virtual machine executes nothing for it; a compiler without a message form writes the text as a comment, as `SECTION` is written on the controllers without `* -`. A SINUMERIK shows at most 124 characters, in two lines of 62. D326. | block |
 | `STOP=PROGRAM` | `PROGRAM`, `OPTIONAL` | Program stop M0, optional stop M1. | block |
 | `DWELL=1.5` | number, seconds | Dwell (G4). | block |
 | `RAW:FANUC="..."` | string; addr = controller or builder dialect id from the machine configuration (`RAW:NAKAMURA=`) | Source text NCX could not express, kept verbatim: builder macros such as Nakamura `G411` jump programming or `G300` cut-off check. Compiles only to the same controller or builder; any other target is an ERROR. | block |
@@ -162,8 +163,8 @@ A tool change is two things on most machines and one thing in a careless program
 | `PRELOAD=5` | integer or string | Prepare tool 5 in the magazine (Fanuc `T5` alone, Heidenhain `TOOL DEF 5`, Siemens `T5` on machines that change with M6). Nothing happens to the spindle. `PRELOAD=0` clears a pending preload. | modal until consumed |
 | `TOOL=4` | integer or string; optional addr = holder role | The spindle (or the addressed holder) now carries tool 4. This is the change. The compiler writes what the machine needs: `T4 M6`, `M6` alone when 4 is already preloaded and the machine allows it, `TOOL CALL 4 Z S...`, `T4` on a turret. `TOOL=0` empties the spindle. A reader writes the role of the holder whenever the word does not belong to `default_holder`, since a bare `TOOL` reaches that one (D219; virtual machine 3.8 rule 2). | modal |
 | `TOOL` | no value | Change to the preloaded tool. ERROR when nothing is preloaded. The compilers write the number; `ncx format` keeps the word as written (D91). | |
-| `OFFSET:LEN=4` | integer | Tool length offset register (G43 H). 0 cancels. | modal |
-| `OFFSET:RAD=4` | integer | Tool radius offset register (D). | modal |
+| `OFFSET:LEN=4` | integer | Tool length offset register (G43 H). 0 cancels. On a controller with one register for both, a `OFFSET:LEN=0` block cancels that register and so the radius with it (Siemens `D0`, D301). | modal |
+| `OFFSET:RAD=4` | integer | Tool radius offset register (D). On a controller with one register for both, a block that leaves it different from `OFFSET:LEN` is written with the length register and a WARNING (D301). | modal |
 | `OFFSET=56` | integer | Combined offset register when the controller has one register for geometry and wear of the tool (Fanuc lathe `T0656` = station 6, offset 56; Siemens `D`). Not combinable with `OFFSET:LEN`/`OFFSET:RAD` in the same program. | modal |
 | `COMP=LEFT` | `LEFT`, `RIGHT`, `OFF` | Cutter radius compensation (G41/G42/G40, RL/RR/R0). Applies from the motion of the same block on. | modal |
 
@@ -250,7 +251,7 @@ A program addresses spindles and holders by **role**, never by the machine's own
 
 | Word | Value | Meaning | Scope |
 |---|---|---|---|
-| `WORKPIECE=SUB` | holder role | From here on the program machines the part held by this resource. `ORIGIN` and `SHIFT` refer to it, and so does the one of `A B C` whose letter this holder's rotary axis carries (D147). Many lathes have a native command for it (Nakamura `M427`/`M428` with the spindle's datum, Mori Seiki `M303`/`M304`, Doosan `M34`/`M134`, Biglia `M64`/`M65`, DMG `M813`/`M814`), which the machine configuration maps; where there is none, the chuck function rule of D40 applies, and where even that does not fit (an M code that runs a hidden subprogram on that particular machine), a reader rule from a plugin decides (D40: the detection is modular per machine, `ncx-virtual-machine.md` 7). The transfer itself is `FUNC` words and motions around it. Coordinates under a `WORKPIECE` are always in that holder's own right-handed frame with +Z pointing out of its chuck toward the tool, exactly as for the main spindle; whether the machine achieves this with a Z mirror (Nakamura `G360`/`G361`, Mori Seiki `M396`/`M395`) or with a datum whose Z runs the other way is a machine setting and never visible in the program. D57. | modal |
+| `WORKPIECE=SUB` | holder role | From here on the program machines the part held by this resource. `ORIGIN` and `SHIFT` refer to it, and so does the one of `A B C` whose letter this holder's rotary axis carries (D147). Many lathes have a native command for it (Nakamura `M427`/`M428` with the spindle's datum, Mori Seiki `M303`/`M304`, Doosan `M34`/`M134`, Biglia `M64`/`M65`, DMG `M813`/`M814`), which the machine configuration maps; where there is none, the chuck function rule of D40 applies, and where even that does not fit (an M code that runs a hidden subprogram on that particular machine), a reader rule from a plugin decides (D40: the detection is modular per machine, `ncx-virtual-machine.md` 7). The transfer itself is `FUNC` words and motions around it. Coordinates under a `WORKPIECE` are always in that holder's own right-handed frame, the main spindle's frame mirrored in Z, with +Z pointing out of its chuck toward the tool, exactly as for the main spindle; whether the machine achieves this with a Z mirror (Nakamura `G360`/`G361`, Mori Seiki `M396`/`M395`) or with a datum whose Z runs the other way is a machine setting and never visible in the program. A mirror in Z alone: a compiler that writes the mirrored side negates Z and, in the planes that hold Z, reverses the arc direction and the side of the cutter radius compensation, as a control does under its own Z mirror; nothing else changes. D57, D298. | modal |
 
 ### 4.11 Lathe words
 
@@ -354,7 +355,7 @@ A machine may need more than the program says: a spindle that has to stop before
    14. Channel words: `SYNC`, `WITH`, `START_CHANNEL`, `WAIT_CHANNEL`.
    15. Variable and flow words: `VAR`, `LABEL`, `JUMP`, `CALL`, `ARG`, `TIMES`, `REPEAT`, `RETURN`, `IF`.
    16. `STOP`, `DWELL`, `RAW`.
-   17. `COMMENT` or `SECTION`.
+   17. `COMMENT` or `SECTION`, then `MESSAGE`.
 
    Words of one key with several addresses sort by the address text (`COOLANT:AIR` before `COOLANT:THROUGH`, `VAR:Q1` before `VAR:Q3`).
 7. Canonical layout of a block: the words, then, when the block has a comment, spaces up to column 57 so that the semicolon stands in column 57, or three spaces when the words reach column 54 or later, then the comment. Blank lines and comment-only lines are kept as read (D92).

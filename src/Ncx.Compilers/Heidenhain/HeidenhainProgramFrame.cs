@@ -169,7 +169,8 @@ internal static partial class HeidenhainProgramFrame
     }
 
     // SECTION as the structuring block * - text, COMMENT as the comment block ; text, both in the charset of the
-    // machine (controller-mapping 1, COMMENT and SECTION; machine-config 2).
+    // machine (controller-mapping 1, COMMENT and SECTION; machine-config 2). MESSAGE has no Klartext form of its own,
+    // so its text is written as a comment, as SECTION is on the controllers without * - (language 4.1; D326).
     private static void WriteComments(HeidenhainBlock writing)
     {
         if (writing.Take("SECTION")?.Value is StringValue section)
@@ -180,6 +181,11 @@ internal static partial class HeidenhainProgramFrame
         if (writing.Take("COMMENT")?.Value is StringValue comment)
         {
             writing.Line(CommentMark + writing.CommentText(comment.Content));
+        }
+
+        if (writing.Take("MESSAGE")?.Value is StringValue message)
+        {
+            writing.Line(CommentMark + writing.CommentText(message.Content));
         }
     }
 

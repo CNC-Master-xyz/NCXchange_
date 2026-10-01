@@ -59,6 +59,42 @@ public sealed class SiemensCycleTests
             CheckedBody("G0 X0 Y0 Z10\nF100\nMCALL CYCLE81(10,0,2,-5,)\nHOLES2(0,0,20,0,0,4)\nMCALL"));
     }
 
+    // D259: a pattern the reader cannot expand keeps the whole modal range RAW with it, the F before the MCALL, the
+    // MCALL that armed the cycle and the MCALL alone that ends it, so that the pattern keeps its drilling cycle.
+    [Fact]
+    public void ModalRange_OfAPatternTheReaderCannotExpand_StaysRawAsAWhole()
+    {
+        string[] range =
+        [
+            "F200", "MCALL CYCLE81(10,0,2,-5,)", "CYCLE801(0,0,0,10,10,3,3,0,0,0,0)", "MCALL",
+        ];
+        NcxProgram program = FramedProgram("G0 X0 Y0 Z10\n" + string.Join('\n', range));
+
+        Assert.Equal(Lines("RAPID X=0 Y=0 Z=10", Raw(range[0]), Raw(range[1]), Raw(range[2]), Raw(range[3])),
+            BodyOf(NcxWriter.Write(program)));
+    }
+
+    // D259: only the MCALL that ends a modal range the reader kept RAW stays RAW with it. A bare MCALL in a unit
+    // whose callers the reader cannot all see ends no such range and is the lossless CYCLE=OFF.
+    [Fact]
+    public void ModalRange_ABareMcallUnderACallerTheReaderDoesNotKnow_IsCycleOff()
+    {
+        NcxProgram program = Program("%_N_MAIN_MPF\nG0 X0\nM30\n%_N_HELP_SPF\nPROC HELP\nMCALL\nG0 X5\nRET\n");
+
+        Assert.Contains(Lines("SUB=BEGIN NAME=HELP", "CYCLE=OFF"), NcxWriter.Write(program), StringComparison.Ordinal);
+    }
+
+    // D259: a HOLES1 whose arguments the reader cannot read takes its range with it the same way.
+    [Fact]
+    public void ModalRange_OfAHoles1WithAnUnreadableCount_StaysRawAsAWhole()
+    {
+        string[] range = ["F100", "MCALL CYCLE81(10,0,2,-5,)", "HOLES1(0,0,0,10,10,R5)", "MCALL"];
+        NcxProgram program = FramedProgram("G0 X0 Y0 Z10\n" + string.Join('\n', range));
+
+        Assert.Equal(Lines("RAPID X=0 Y=0 Z=10", Raw(range[0]), Raw(range[1]), Raw(range[2]), Raw(range[3])),
+            BodyOf(NcxWriter.Write(program)));
+    }
+
     // The parameters of CYCLE86 that the catalog entry BORE names no word for are not written, with a WARNING
     // (machine-config 6).
     [Fact]

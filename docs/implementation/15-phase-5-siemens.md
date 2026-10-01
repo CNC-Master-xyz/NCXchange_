@@ -8,7 +8,7 @@ Phase 3 closed (the reader and compiler frameworks, the acceptance project, the 
 
 ## Decisions needed first
 
-D104 answered. Expected to arise, recorded as drafts and not implemented: a `MESSAGE="..."` word for `MSG("text")` (controller-mapping 11 already names it as a candidate; until then `RAW:SIEMENS`); whether `G700`/`G710` versus `G70`/`G71` is remembered for the compiler (controller-mapping 1 says the reader reports which pair the source used; a `[format]` key is the likely home). D68 holds: GILDEMEISTER structure programming stays documentation; nothing in this phase may prevent it.
+D104 answered. Expected to arise, recorded as drafts: a `MESSAGE="..."` word for `MSG("text")`, settled 2026-10-01 as D326 and now a word of language 4.1; whether `G700`/`G710` versus `G70`/`G71` is remembered for the compiler (controller-mapping 1 says the reader reports which pair the source used; a `[format]` key is the likely home). D68 holds: GILDEMEISTER structure programming stays documentation; nothing in this phase may prevent it.
 
 ## Tasks
 
@@ -47,7 +47,7 @@ produces a program with the generic words of the example's own comments (`COUPON
 ## Exit checklist
 
 - `phases.md` row 5: `MILLTURN_TRANSFER` compiles for `millturn1.toml`; the Hermle and Burkhardt+Weber programs read without loss and compile back; the `.mpf` corpus report shows zero crashes.
-- Decision drafts for the constructs the corpus raised (`MESSAGE`, the inch pair) written in `rationale.md`, unanswered or answered.
+- Decision drafts for the constructs the corpus raised (`MESSAGE`, settled as D326; the inch pair) written in `rationale.md`, unanswered or answered.
 - P5-01, P5-02 in `done/`.
 
 ## Log

@@ -226,9 +226,10 @@ POLAR_ON = "TRANSMIT"              # face transformation
 POLAR_OFF = "TRAFOOF"
 TCPM_ON = "TRAORI"
 TCPM_OFF = "TRAFOOF"
-TILT_ON = "CYCLE800(1,\"TC1\",0,57,0,0,0,{a},{b},{c},0,0,0,{dir},100,1)"   # spatial angles, kinematics name TC1; {dir} from MOVE: TURN = -1, STAY = 0
+TILT_ON = "CYCLE800(1,\"TC1\",{move},57,0,0,0,{a},{b},{c},0,0,0,{dir},100,1)"   # spatial angles, kinematics name TC1; {move} is _ST and {dir} is _DIR (D262)
 TILT_OFF = "CYCLE800()"
 TILT_AXIS_ON = ""                  # empty: TILT_AXIS needs the kinematics module (ERROR at compile time, D82)
+move = { TURN = "0", MOVE = "10", STAY = "0" }   # _ST per MOVE option: the tens digit 1 tracks the tool tip (D262); {dir} comes from MOVE alone, TURN and MOVE -1, STAY 0
 
 [retract]                          # the RETRACT verb (D83)
 MAX = ""                           # empty: computed machine-frame move when the kinematics is known, else ERROR
@@ -246,3 +247,4 @@ catalog = "siemens.toml"           # the 840D sl cycle catalog shipped with NCXc
 unassigned = "error"
 block_cap = 1000000
 call_depth = 8
+# declared = [...]: the names the machine declares outside the program (GUD, the builder's variables), which the Siemens compiler must not declare with a DEF of its own (D261); this machine has none.

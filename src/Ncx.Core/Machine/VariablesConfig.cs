@@ -18,6 +18,13 @@ public sealed record VariablesConfig
     public IReadOnlyDictionary<string, string> Map { get; init; } = new Dictionary<string, string>();
 
     /// <summary>
+    /// declared: the names the machine declares outside the program, the Siemens GUD and the builder's variables
+    /// (XMW_1, GC1_XDREMI); the Siemens compiler never declares one of them with a DEF, which would be an alarm, and
+    /// declares every other name a unit uses (machine-config 7, D261). Empty when left out.
+    /// </summary>
+    public IReadOnlyList<string> Declared { get; init; } = [];
+
+    /// <summary>
     /// block_cap: the blocks INTERPRETED mode executes before the ERROR "possible endless loop"; 1 000 000 when left
     /// out (virtual machine 3.6).
     /// </summary>

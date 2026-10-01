@@ -84,7 +84,12 @@ internal static class SiemensCalls
 
         foreach (SourceWord word in block.Unread())
         {
-            if (word.Address == "L" && word.Number is not null && word.Expression is null)
+            // D293: one rule for both call forms. A target the file does not hold and EXTERN does not announce is
+            // RAW, an L number included: the control resolves a name and an L number along the same search path,
+            // whose last steps are the user-, builder- and standard-cycle directories, so a builder cycle cannot be
+            // told from a subprogram of another file (controllers siemens.md 8, 11 rules 6 and 8).
+            if (word.Address == "L" && word.Number is not null && word.Expression is null
+                && IsKnown(block, "L" + word.Text))
             {
                 Call(block, word, "L" + word.Text, null);
             }
@@ -92,12 +97,17 @@ internal static class SiemensCalls
             {
                 ReadExtcall(block, word);
             }
-            else if (IsName(word) && (block.Siemens.Units.FindSub(word.Address) is not null
-                || block.Siemens.Externs.Contains(word.Address)))
+            else if (IsName(word) && IsKnown(block, word.Address))
             {
                 Call(block, word, word.Address, word.Text.StartsWith('(') ? word.Text : null);
             }
         }
+    }
+
+    // A call target the reader may write as CALL: a unit of the file, or a name EXTERN announced (D293).
+    private static bool IsKnown(SiemensBlock block, string name)
+    {
+        return block.Siemens.Units.FindSub(name) is not null || block.Siemens.Externs.Contains(name);
     }
 
     /// <summary>

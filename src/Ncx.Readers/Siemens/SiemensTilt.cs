@@ -20,6 +20,7 @@ internal static class SiemensTilt
     private const int Swivel = 2;
     private const int Mode = 3;
     private const int FirstAngle = 7;
+    private const int SecondAngle = 8;
     private const int Direction = 13;
     private const int RetractDistance = 14;
 
@@ -150,9 +151,11 @@ internal static class SiemensTilt
     // axis-wise modes 27 and 39 as TILT "with the angles in the order the mode gives" without a conversion between the
     // orders; the reader writes TILT for mode 57, the order of TILT, for the spatial angles, and for any order where at
     // most one angle turns, and keeps the other orders and the projection angles as RAW.
-    // TODO(question): which rotary axes _A and _B of the rotary-axes mode name is not in the documents; the reader
-    // names the two rotary axes of the machine that no spindle owns, in the order of [[axis]], and keeps the block RAW
-    // on a machine without exactly two.
+    // D296: _A and _B of the rotary-axes mode are the angles of rotary axis 1 and 2 of the swivel data record _TC
+    // names, and which machine axes those are belongs to the commissioned kinematics, not to the program; the reader
+    // takes their NCX names from the machine's [transform] TILT_AXIS_ON template, the placeholder in the place of _A
+    // first and the one in the place of _B second, and keeps the block RAW where the machine has no such template
+    // (decisions.md D296).
     private static SiemensDraftBlock? Entry(SiemensBlock block, int mode, decimal?[] angles)
     {
         int kind = (mode >> 6) & 3;
@@ -284,20 +287,59 @@ internal static class SiemensTilt
         block.Siemens.ForgetPositions();
     }
 
-    // The rotary axes of a swivel head or table: the rotary axes that no spindle owns, two of them.
+    // The rotary axes the rotary-axes mode names: the placeholders the [transform] TILT_AXIS_ON template of the
+    // machine puts in the places of _A and _B of CYCLE800, in that order; null where the machine has no such
+    // template, where it names no placeholder there, or where the name is no rotary axis of the machine (D296;
+    // machine-config 5, TILT_AXIS_ON).
     private static List<string>? RotaryAxes(MachineConfig machine)
     {
+        List<string> arguments = ArgumentsOf(machine.Transform?.TiltAxisOn);
+        if (arguments.Count <= SecondAngle)
+        {
+            return null;
+        }
+
         var axes = new List<string>();
+        foreach (int index in new[] { FirstAngle, SecondAngle })
+        {
+            string placeholder = arguments[index];
+            if (placeholder.Length <= 2 || placeholder[0] != '{' || placeholder[^1] != '}')
+            {
+                return null;
+            }
+
+            string name = placeholder.Substring(1, placeholder.Length - 2).ToUpperInvariant();
+            if (!IsRotary(machine, name))
+            {
+                return null;
+            }
+
+            axes.Add(name);
+        }
+
+        return axes;
+    }
+
+    // The positional arguments of the one call of a template, "CYCLE800(1,\"TC\",0,192,...)"; none where the
+    // template is empty or writes no call.
+    private static List<string> ArgumentsOf(string? template)
+    {
+        int open = template is null ? -1 : template.IndexOf('(', StringComparison.Ordinal);
+        int close = template is null ? -1 : template.LastIndexOf(')');
+        return open < 0 || close < open ? [] : SiemensArguments.Split(template!.Substring(open, close - open + 1));
+    }
+
+    private static bool IsRotary(MachineConfig machine, string name)
+    {
         foreach (AxisDef axis in machine.Axes)
         {
-            if (axis.Kind == AxisKind.Rotary
-                && (axis.Owner is null || machine.FindResource(axis.Owner)?.IsSpindle != true))
+            if (axis.Kind == AxisKind.Rotary && string.Equals(axis.NcxName, name, StringComparison.Ordinal))
             {
-                axes.Add(axis.NcxName);
+                return true;
             }
         }
 
-        return axes.Count == 2 ? axes : null;
+        return false;
     }
 
     private static bool ReferencePointsAreZero(List<string> arguments)

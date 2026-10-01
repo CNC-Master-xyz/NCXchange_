@@ -113,9 +113,8 @@ internal static class SiemensMotion
     {
         // G93 to G97 and G961 are one group, feed type and constant surface speed, one of them active (controllers
         // siemens.md 2, group 15): under the constant surface speed of the virtual machine the feed type is G96 per
-        // revolution or G961 per minute (siemens 5; controller-mapping 4, CSS; the TODO(question) of
-        // SiemensSpindles.AddToMain), where the control has it in that group or its group is not known, in a
-        // subprogram or after RAW (D99).
+        // revolution or G961 per minute (siemens 5; controller-mapping 4, CSS; D300), where the control has it in that
+        // group or its group is not known, in a subprogram or after RAW (D99).
         string? active = write.ActiveOf(FeedTypeGroup);
         bool surfaceSpeed = SurfaceSpeedOn(write.After) && (active is null || IsSurfaceSpeed(active));
         string code = surfaceSpeed ? SurfaceSpeedCode(write)
@@ -202,11 +201,25 @@ internal static class SiemensMotion
         string? verb = block.Verb?.Key;
         if (verb is null || !s_motions.Contains(verb))
         {
-            if (block.Has("F"))
+            if (!block.Has("F"))
             {
-                WriteFeed(write);
+                return;
             }
 
+            // D259: a bare F block under a modal call that a RAW line armed fires the modal subprogram, so the
+            // compiler does not write it; the F stands again at the next block that needs it, and where a RAW line
+            // before the next one takes the modal feed, it takes the feed the control had before this block.
+            if (SiemensCycles.RawModalCallStands(write))
+            {
+                write.Written("F");
+                write.Warning(DiagnosticCodes.SiemensWordUnderARawModalCall,
+                    "The block programs F alone under a modal call that a RAW line armed, where F with G0 or G1 "
+                    + "active calls the modal subprogram: the F is not written here, and stands again at the next "
+                    + "block that needs it (controllers siemens.md 7; D259).");
+                return;
+            }
+
+            WriteFeed(write);
             return;
         }
 

@@ -16,7 +16,8 @@ namespace Ncx.Acceptance.Examples;
 /// <summary>
 /// The Siemens reader end to end (phase 5, P5-01): a hand-written 840D sl program with the constructs of the task
 /// converts through ncx convert with machines/siemens-840dsl-mill.toml by name, its STATIC check finds no ERROR, its
-/// output formats to itself and keeps RAW only for MSG, WORKPIECE and STOPRE (controllers siemens.md 11 rule 8). Under
+/// output formats to itself and keeps RAW only for WORKPIECE and STOPRE (controllers siemens.md 11 rule 8; MSG is the
+/// word MESSAGE since D326). Under
 /// NCX_CORPUS every .mpf of the corpus converts without a crash, and the Hermle C22 U program and the Burkhardt+Weber
 /// programs read into programs that format to themselves; the report of the batch runner (P3-07) under
 /// tests/corpus-reports/ is the evidence that they convert without loss.
@@ -26,8 +27,8 @@ public sealed class SiemensReaderTests : IDisposable
     // A main program and a subprogram in one archive with the constructs of P5-01: the unit headers and ;$PATH, N
     // numbers, G groups, AC() and IC(), CHF and RND, CR, I=AC(), CIP, CT, AR, FB, the polar coordinates, ANG, G58,
     // ATRANS, AROT, AMIRROR, TRANS, CYCLE800, MCALL with CYCLE81 and CYCLE83 and HOLES1, CYCLE832, R parameters, FOR,
-    // IF ELSE, WHILE, REPEAT UNTIL, CASE, PROC with a parameter and its calls, G53 with D0, SPOS, G74, and the RAW
-    // statements MSG, WORKPIECE and STOPRE.
+    // IF ELSE, WHILE, REPEAT UNTIL, CASE, PROC with a parameter and its calls, G53 with D0, SPOS, G74, MSG as
+    // MESSAGE (D326), and the RAW statements WORKPIECE and STOPRE.
     private const string HandWritten = """
         %_N_P501_MPF
         ;$PATH=/_N_WKS_DIR/_N_P501_WPD
@@ -114,7 +115,8 @@ public sealed class SiemensReaderTests : IDisposable
     // 11; controller-mapping, the Siemens column; D31, D58, D82, D83, D157).
     private static readonly string[] s_constructs =
     [
-        "PROGRAM=BEGIN NAME=\"P501\"", "; $PATH=/_N_WKS_DIR/_N_P501_WPD", "PRELOAD=1", "TOOL=1", "OFFSET=1", "ORIGIN=1",
+        "PROGRAM=BEGIN NAME=\"P501\"", "; $PATH=/_N_WKS_DIR/_N_P501_WPD", "MESSAGE=\"ROUGHING\"", "PRELOAD=1", "TOOL=1",
+        "OFFSET=1", "ORIGIN=1",
         "SPINDLE=CW RPM=3000", "LINE X=38.586 Y=0", "LINE X=40 Y=1.414", "ARC=CCW X=37 Y=40 R=3",
         "ARC=CW X=0 Y=30 R=10", "ARC=CCW X=10 Y=20 CENTER:X=10 CENTER:Y=30", "ARC=CW X=30 Y=0 CENTER:X=30 CENTER:Y=10",
         "ARC=CCW X=20 Y=-10 CENTER:X=30 CENTER:Y=-10", "ARC=CW CENTER:X=20 CENTER:Y=0 ANGLE=90", "LINE X=0 Y=0 F=200",
@@ -263,7 +265,7 @@ public sealed class SiemensReaderTests : IDisposable
     }
 
     // P5-01: every construct of the hand-written program reads into its NCX words, and RAW stays where siemens 11 rule
-    // 8 keeps it: MSG, WORKPIECE and STOPRE.
+    // 8 keeps it: WORKPIECE and STOPRE. MSG is the word MESSAGE (D326).
     [Fact]
     public void Read_HandWrittenProgram_ReadsEveryConstructAndKeepsRawWhereTheDocumentSays()
     {
@@ -276,7 +278,7 @@ public sealed class SiemensReaderTests : IDisposable
         }
 
         Assert.Equal(["RAW:SIEMENS=\"N20 WORKPIECE(,\\\"\\\",,\\\"BOX\\\",112,0,-50,-80,0,0,100,100)\"",
-            "RAW:SIEMENS=\"N30 MSG(\\\"ROUGHING\\\")\"", "RAW:SIEMENS=\"N640 STOPRE\""],
+            "RAW:SIEMENS=\"N640 STOPRE\""],
             lines.Where(line => line.StartsWith("RAW", StringComparison.Ordinal)));
     }
 

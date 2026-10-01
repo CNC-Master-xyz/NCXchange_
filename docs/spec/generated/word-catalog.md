@@ -132,5 +132,6 @@ variable) sort under their rank by the address text. The ten verbs share one ran
 | 1100 | `RAW` | string |  |  | controller, required | block | 4.1 | Source text NCX could not express, kept verbatim; the address is the controller or builder dialect, and the text compiles to that one only (D5). |
 | 1110 | `COMMENT` | string |  |  |  | block | 4.1 | Program comment, kept in the output. |
 | 1120 | `SECTION` | string |  |  |  | block | 4.1 | Structuring comment (Heidenhain * -), a plain comment on other controllers. |
-| 1130 | `@SAVE` (internal) | state key |  |  |  | block | 4.15 | Pushes the value of the state variable its state key names on the restore stack; generated blocks only (virtual machine 3.10, D95). |
-| 1140 | `@RESTORE` (internal) | state key |  |  |  | block | 4.15 | Pops that value and applies it again as if the program had written the word; generated blocks only (virtual machine 3.10, D95). |
+| 1130 | `MESSAGE` | string |  |  |  | block | 4.1 | Operator message shown while the program runs (Siemens MSG); MESSAGE="" clears it, and the virtual machine executes nothing for it (D326). |
+| 1140 | `@SAVE` (internal) | state key |  |  |  | block | 4.15 | Pushes the value of the state variable its state key names on the restore stack; generated blocks only (virtual machine 3.10, D95). |
+| 1150 | `@RESTORE` (internal) | state key |  |  |  | block | 4.15 | Pops that value and applies it again as if the program had written the word; generated blocks only (virtual machine 3.10, D95). |

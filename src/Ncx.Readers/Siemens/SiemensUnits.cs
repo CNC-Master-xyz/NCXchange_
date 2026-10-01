@@ -214,6 +214,21 @@ internal sealed partial class SiemensUnits
     }
 
     /// <summary>
+    /// The block the unit of a block holds before it, in file order.
+    /// </summary>
+    /// <param name="block">A block of a unit.</param>
+    public SourceBlock? PreviousInUnit(SourceBlock block)
+    {
+        if (UnitOf(block) is not SiemensUnit unit)
+        {
+            return null;
+        }
+
+        int index = unit.Blocks.IndexOf(block);
+        return index > 0 ? unit.Blocks[index - 1] : null;
+    }
+
+    /// <summary>
     /// The block number as a label, "N" and the number without leading zeros.
     /// </summary>
     public static string NumberLabel(string digits)

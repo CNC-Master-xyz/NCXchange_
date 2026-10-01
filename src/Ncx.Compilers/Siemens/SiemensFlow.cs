@@ -329,6 +329,39 @@ internal static class SiemensFlow
     }
 
     /// <summary>
+    /// DEF REAL name in the definition part of a unit, after its EXTERN lines and before its first executable block,
+    /// for every variable the unit uses that the control does not have already: an R parameter, a name [variables]
+    /// map covers, a parameter of the PROC, a name a RAW DEF of the unit declares and a name of [variables] declared
+    /// are left out. A name more than one unit uses and declared does not name is an ERROR, since a DEF is local to
+    /// its unit and the value would not carry over (controllers siemens.md 8, 12 rule 7; machine-config 7; D261).
+    /// </summary>
+    /// <param name="write">The block being written, the head of the unit.</param>
+    /// <param name="unit">The program or subprogram.</param>
+    public static void WriteDeclarations(SiemensBlock write, Section unit)
+    {
+        IReadOnlyList<string> parameters = write.File.ParametersOf(unit);
+        foreach (string name in write.File.NamesUsedBy(unit))
+        {
+            if (SiemensExpressions.NeedsNoDeclaration(write, name) || parameters.Contains(name)
+                || write.Machine.Variables.Declared.Contains(name) || write.File.IsDeclaredByRaw(unit, name))
+            {
+                continue;
+            }
+
+            if (write.File.IsUsedBySeveralUnits(name))
+            {
+                write.Error(DiagnosticCodes.SiemensVariableNotDeclarable,
+                    $"The variable {name} is used by more than one unit of the file, and a SINUMERIK DEF is local to "
+                    + $"its unit; name {name} in [variables] declared of the machine, so that the control declares it "
+                    + "outside the program (machine-config 7; controllers siemens.md 8; D261).");
+                continue;
+            }
+
+            write.Write("DEF REAL " + name);
+        }
+    }
+
+    /// <summary>
     /// EXTERN NAME(REAL, REAL) for every subprogram with parameters that the blocks of a unit call (controllers
     /// siemens.md 8).
     /// </summary>

@@ -221,6 +221,10 @@ internal static class SiemensMotion
             return;
         }
 
+        // TODO(question): a block with a position while the reader does not know what MCALL armed, after the RAW
+        // MCALL of a pattern range (D259) or after MCALL of a subprogram, still calls that modal subprogram on the
+        // control; the reader keeps the least committal form and reads it as a plain motion, so the output loses the
+        // call. No decision covers it: D259 settles the range of a pattern, not a position inside an unknown one.
         if (facts.ModalCycle is not null && !arc)
         {
             SiemensCycles.CallAt(block, axes);
@@ -464,6 +468,17 @@ internal static class SiemensMotion
         }
 
         block.Facts.ControlFeed = feed;
+
+        // D259: the F before an MCALL whose pattern stays RAW is the drilling feed of that pattern and belongs to the
+        // RAW range; the control keeps it, and NCX writes no F of its own.
+        if (SiemensCycles.NextArmsRawRange(block))
+        {
+            block.Draft.KeepAsRaw("the F before an MCALL whose pattern stays RAW is the drilling feed of every hole "
+                + "of that pattern and belongs to the RAW range (controllers siemens.md 7; D259)");
+            block.Draft.RawKeepsState = true;
+            return;
+        }
+
         if (SiemensCycles.DefinesNext(block))
         {
             return;

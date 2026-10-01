@@ -119,6 +119,46 @@ internal static partial class SiemensCycles
     }
 
     /// <summary>
+    /// MCALL alone before a RAW line, but only where the compiler itself armed the modal call: a block with a position
+    /// in the RAW text would call it. Where the modal call is merely unknown, a RAW line before this one armed it on
+    /// the control, and an MCALL alone between two RAW lines would take the drilling cycle away from a pattern that
+    /// follows (controllers siemens.md 7; D259).
+    /// </summary>
+    /// <param name="write">The block being written.</param>
+    public static void EndModalCallBeforeRaw(SiemensBlock write)
+    {
+        if (write.ActiveOf(ModalCall) is not null)
+        {
+            EndModalCall(write);
+        }
+    }
+
+    /// <summary>
+    /// True while a modal call that a RAW line armed stands over this block and the block does not end it: a bare F or
+    /// S block fires the modal subprogram there, since S or F programmed with G0 or G1 active calls it without any
+    /// path motion, and the pattern of the RAW range would drill one hole more. The compiler writes neither there
+    /// (controllers siemens.md 7; controller-mapping 5, CYCLE_F; D259).
+    /// </summary>
+    /// <param name="write">The block being written.</param>
+    // TODO(question): D259 says the compiler writes no bare F or S block between two RAW lines; it does not say what
+    // becomes of the feed or the speed there. The word is left out with the WARNING CMP596 and written again at the
+    // next block that needs it, which loses the drilling feed where a RAW pattern of the range takes the modal F,
+    // until that is answered.
+    public static bool RawModalCallStands(SiemensBlock write)
+    {
+        if (write.ActiveOf(ModalCall) is not null)
+        {
+            // Off, or a call this compiler armed itself and ends or uses in this block.
+            return false;
+        }
+
+        Block block = write.Block;
+        bool ends = (block.Verb is Word verb && (s_motions.Contains(verb.Key) || verb.Key == "CYCLE_CALL"))
+            || block.Has("CALL") || block.Has("CYCLE", null, "OFF");
+        return !ends;
+    }
+
+    /// <summary>
     /// A program starts without a modal call, as the cycle of the virtual machine starts OFF (virtual machine 2.6); a
     /// subprogram as well, since every call of this compiler stands after MCALL alone where a modal call may be armed
     /// (SiemensFlow, the calls), so that no caller of the file enters it with one (controllers siemens.md 7; D99).

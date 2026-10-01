@@ -109,8 +109,9 @@ internal static partial class SiemensExpressions
     // entry with {index} is rendered as a template of the number, as D173 recommends, an entry without it takes the
     // number behind its value, and a name no entry covers is written as it is where the control can declare it, until
     // D173 is answered.
-    // TODO(question): controller-mapping 6 keeps the type of a DEF for the Siemens compiler and no NCX word carries it
-    // (the reader's question on DEF); a declared name is written as it is, without its DEF, until that is answered.
+    // D261: NCX keeps no type, and a name the control does not declare itself is declared with DEF REAL in the
+    // definition part of the unit that uses it (SiemensFlow.WriteDeclarations), because REAL holds every INT and BOOL
+    // value and the R parameters are themselves an array of REAL (decisions.md D261).
     public static string? VariableName(SiemensBlock write, string name)
     {
         if (MappedName(write, name) is string mapped)
@@ -244,6 +245,33 @@ internal static partial class SiemensExpressions
         }
 
         return write.TemplateOf(template).Render(values, write.Block, write.Diagnostics) ?? variable.Name;
+    }
+
+    /// <summary>
+    /// True where the unit that uses the name needs no DEF for it: an R parameter, which the control predefines as an
+    /// array of REAL; a name an entry of [variables] map covers, which is written as that native name; and a name of
+    /// one letter and digits that no entry covers, which is the ERROR of VariableName where it is used (machine-config
+    /// 7; D173, D261).
+    /// </summary>
+    /// <param name="write">The block being written.</param>
+    /// <param name="name">The NCX variable name.</param>
+    public static bool NeedsNoDeclaration(SiemensBlock write, string name)
+    {
+        if (RParameter().IsMatch(name) || LetterWithNumber().IsMatch(name))
+        {
+            return true;
+        }
+
+        foreach (string key in write.Machine.Variables.Map.Keys)
+        {
+            if (name.Length > key.Length && name.StartsWith(key, StringComparison.Ordinal)
+                && IsDigits(name.Substring(key.Length)))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // An entry of [variables] map whose key is the prefix of the name, the longest first: QL before Q.

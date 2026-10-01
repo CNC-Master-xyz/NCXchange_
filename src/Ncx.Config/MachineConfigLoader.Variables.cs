@@ -6,7 +6,8 @@ namespace Ncx.Config;
 public static partial class MachineConfigLoader
 {
     private static readonly string[] s_cyclesKeys = ["catalog"];
-    private static readonly string[] s_variablesKeys = ["unassigned", "map", "block_cap", "call_depth"];
+    private static readonly string[] s_variablesKeys =
+        ["unassigned", "map", "declared", "block_cap", "call_depth"];
     private static readonly string[] s_unassignedValues = ["error", "0"];
     private static readonly string[] s_nodeKeys = ["id", "parent", "type", "direction"];
 
@@ -37,9 +38,22 @@ public static partial class MachineConfigLoader
         {
             Unassigned = ReadUnassigned(table),
             Map = table.Table("map")?.Strings(null) ?? new Dictionary<string, string>(),
+            Declared = Names(table.TextList("declared")),
             BlockCap = table.LongInteger("block_cap") ?? defaults.BlockCap,
             CallDepth = table.Integer("call_depth") ?? defaults.CallDepth,
         };
+    }
+
+    // declared: the names of [variables] declared in capitals, as a variable name is written (language 4.9, D261).
+    private static List<string> Names(IReadOnlyList<string> written)
+    {
+        var names = new List<string>();
+        foreach (string name in written)
+        {
+            names.Add(name.ToUpperInvariant());
+        }
+
+        return names;
     }
 
     // Reading an unassigned variable is an ERROR unless the configuration sets unassigned = 0 (virtual machine 3.6,

@@ -187,7 +187,7 @@ CCW = "M4"
 OFF = "M5"
 ORIENT = "M19"                     # or "M19 S{angle}" where the angle is programmable
 RPM = "S{rpm}"
-VC = "G96 S{value}"
+VC = "G96 S{value}"                # Siemens: the compiler writes the group-15 code of the template as the code for the feed type the block leaves, G96 per revolution and G961 per minute (D300)
 CSS_OFF = "G97"
 RPM_MAX = "G50 S{value}"
 rpm_min = 45                       # machine limits, not the program's RPM_MAX clamp: the expander warns or clamps (D64)
@@ -219,8 +219,8 @@ channel = 2                        # D56: the machine accepts these codes only f
 [workpiece]                        # native selection of the spindle the turret works on, and how that side is programmed (D57)
 MAIN = "M428"                      # Mori Seiki: "M303", Doosan: "M34", Biglia: "M64", DMG: "M814"; the selection code alone, never the datum, which is ORIGIN (D222)
 SUB = "M427"                       # Mori Seiki: "M304", Doosan: "M134", Biglia: "M65", DMG: "M813"; a control without a selection code leaves the key out and WORKPIECE then writes nothing (D222)
-SUB_frame = "datum"                # datum: the sub spindle datum runs Z the other way and the compiler negates Z; mirror: the compiler writes the mirror cycle
-# SUB_mirror = { ON = "G360", OFF = "G361" }   # Nakamura Z mirror cycles (M700/M701); Mori Seiki: { ON = "M396", OFF = "M395" }
+SUB_frame = "datum"                # datum: the sub spindle datum runs Z the other way and the compiler negates Z; mirror: the compiler writes the mirror cycle. Both are the same frame, the main spindle's mirrored in Z (D57, D298)
+# SUB_mirror = { ON = "G360", OFF = "G361" }   # Nakamura Z mirror cycles (M700/M701); Mori Seiki: { ON = "M396", OFF = "M395" }; a Z mirror also reverses G2/G3 and G41/G42 in the planes that hold Z, which the compiler does for SUB_frame = "datum" as well
 
 [sync]
 wait = "M{mark}"                   # Fanuc wait M code; with paths: "M{mark} P{paths}"
@@ -255,12 +255,14 @@ POLAR_ON = "G12.1"                 # Siemens: "TRANSMIT", DMG: "TRANSMIT_S4"
 POLAR_OFF = "G13.1"
 TCPM_ON = "G43.4 H{offset}"        # Nakamura: "G435", Siemens: "TRAORI", Heidenhain: "FUNCTION TCPM F TCP AXIS POS"
 TCPM_OFF = "G49"                   # Nakamura: "G436", Siemens: "TRAFOOF", Heidenhain: "FUNCTION RESET TCPM"
-TILT_ON = "G68.2 X{x} Y{y} Z{z} I{a} J{b} K{c}"   # Siemens: "CYCLE800(1,\"TC1\",0,57,0,0,0,{a},{b},{c},0,0,0,{dir},100,1)", Heidenhain: "PLANE SPATIAL SPA{a} SPB{b} SPC{c} {move}"
+TILT_ON = "G68.2 X{x} Y{y} Z{z} I{a} J{b} K{c}"   # Siemens: "CYCLE800(1,\"TC1\",{move},57,0,0,0,{a},{b},{c},0,0,0,{dir},100,1)" ({move} in the place of _ST, {dir} in the place of _DIR: one placeholder per native parameter, D262), Heidenhain: "PLANE SPATIAL SPA{a} SPB{b} SPC{c} {move}"
 TILT_OFF = "G69"                   # Siemens: "CYCLE800()", Heidenhain: "PLANE RESET STAY"
 TILT_AXIS_ON = ""                  # empty = the target cannot write TILT_AXIS without the kinematics module (ERROR at compile time, D82)
                                    # Heidenhain: "PLANE AXIAL A{a} B{b} C{c} {move}"; Siemens: CYCLE800 with the rotary-axes mode (bits 7 and 6 set) and {dir}
+                                   # On Siemens the two placeholders in the places of _A and _B also name the rotary axes the reader reads that mode into, in that order; without the template a CYCLE800 in the rotary-axes mode stays RAW (D296)
 TILT_TURN = "G53.1"                # written after TILT_ON for MOVE=TURN where the control positions the axes in a second block (Fanuc); Heidenhain and Siemens use {move} and {dir}
-move = { TURN = "TURN FMAX", MOVE = "MOVE ABST50 FMAX", STAY = "STAY" }   # values of {move} per MOVE option (Heidenhain); Siemens {dir}: TURN = -1, STAY = 0
+move = { TURN = "TURN FMAX", MOVE = "MOVE ABST50 FMAX", STAY = "STAY" }   # values of {move} per MOVE option (Heidenhain); Siemens: the _ST of CYCLE800 with the tens digit 1 for MOVE, e.g. { TURN = "0", MOVE = "10", STAY = "0" }
+# {dir} never comes from this table: it is -1 for TURN and MOVE and 0 for STAY, and a Siemens template without {dir} is an ERROR for any MOVE but TURN (D262)
                                    # no retract here: a RETRACT before the tilt is its own block, the Heidenhain MB and the Siemens _FR (D228, D83)
 ROTARY_PATH_SHORTEST = "M126"      # D86; Siemens: rotary axes with DC() by the compiler, Fanuc: roll-over axis setting (empty = WARNING, kept as written)
 ROTARY_PATH_FULL = "M127"
@@ -351,6 +353,7 @@ Besides `name`, `native`, `params`, `absolute_from_surface` and the expansion ru
 [variables]
 unassigned = "error"               # error | 0
 map = { Q = "#1", QL = "#", QR = "#5" }   # compile Heidenhain-named variables to Fanuc ranges: Q1 -> #101 (prefix + number), QR1 -> #501
+declared = ["XMW_1", "GC1_XDREMI"]        # optional: names the machine declares outside the program (Siemens GUD and the builder's variables). The Siemens compiler declares every other name a unit uses with DEF REAL in its definition part and never these, because a DEF of an already defined symbol is an alarm (D261)
 block_cap = 1000000
 call_depth = 8
 

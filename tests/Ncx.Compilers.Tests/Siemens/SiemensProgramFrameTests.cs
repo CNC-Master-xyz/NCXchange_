@@ -169,6 +169,14 @@ public sealed class SiemensProgramFrameTests
             MillBody("SECTION=\"SCHRUPPEN\"", "COMMENT=\"ÄNDERUNG\""));
     }
 
+    // D326: MESSAGE is MSG("text") in a block of its own, MESSAGE="" is MSG(), both in the charset of the machine.
+    [Fact]
+    public void Message_OfABlock_IsAnMsgLineInTheCharsetOfTheMachine()
+    {
+        Assert.Equal(Lines("MSG(\"BOHREN AENDERUNG\")", "MSG()"),
+            MillBody("MESSAGE=\"BOHREN ÄNDERUNG\"", "MESSAGE=\"\""));
+    }
+
     // Controller-mapping 1, SKIP: / skips on the first level, /n on level n (siemens 1).
     [Fact]
     public void Skip_FirstAndThirdLevel_IsTheSlashInFrontOfTheBlock()

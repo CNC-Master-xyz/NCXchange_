@@ -41,4 +41,4 @@ FILE=END                                                ; end of file
 ; 1. DIAMETER=ON: X=40 is a diameter; the VM stores the radius 20.
 ; 2. The transfer is machine functions and motions around SPINDLE_SYNC and WORKPIECE; NCX does not model it as one command.
 ; 3. Z2 is a machine axis named in the program on purpose; a program that addresses the sub spindle axis is machine specific by intent (D30).
-; 4. After WORKPIECE=SUB the coordinates are in the sub spindle's own frame, +Z out of its chuck toward the tool (D57); whether the machine mirrors Z or uses a datum with the opposite Z is a configuration setting.
+; 4. After WORKPIECE=SUB the coordinates are in the sub spindle's own frame, the main frame mirrored in Z, +Z out of its chuck toward the tool (D57, D298); whether the machine mirrors Z or uses a datum with the opposite Z is a configuration setting.

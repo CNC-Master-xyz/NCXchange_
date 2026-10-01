@@ -392,16 +392,18 @@ public sealed class SiemensReader : ReaderBase
     }
 
     // A word no concern reads is none the reader maps; the block is kept as RAW, nothing is dropped (D5).
-    // TODO(question): siemens 8 calls a subprogram by its name alone or with its arguments, and siemens 11 rule 8 keeps
-    // every builder cycle the configuration does not name as RAW; a name that is neither a subprogram of the file nor
-    // announced by EXTERN cannot be told from a builder cycle, and stays RAW.
+    // D293: a name and an L number are the same construct on the control, resolved along one search path whose last
+    // steps are the user-, builder- and standard-cycle directories, so a builder cycle cannot be told from a
+    // subprogram of another file; a call target that is neither a unit of the file, nor announced by EXTERN, nor
+    // named by the machine configuration stays RAW with a WARNING (decisions.md D293).
     private static void KeepUnreadAsRaw(SiemensBlock reading)
     {
         List<SourceWord> unread = reading.Unread();
         if (unread.Count > 0)
         {
             reading.Draft.KeepAsRaw($"{reading.SpanOf(unread[0])} has no NCX word the Siemens reader maps here; a "
-                + "builder cycle the configuration does not name stays RAW (controllers siemens.md 11 rule 8)");
+                + "call target the file and the configuration do not know, a builder cycle or an L number outside the "
+                + "file among them, stays RAW (controllers siemens.md 11 rule 8; D293)");
         }
     }
 

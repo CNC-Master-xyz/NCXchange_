@@ -61,6 +61,34 @@ public sealed class SiemensCycleTests
             MillBody("RAW:SIEMENS=\"MCALL L706\"", "RAPID X=10", "RAPID X=20"));
     }
 
+    // D259: the RAW range of a pattern and its modal cycle is written back line by line, with no MCALL alone between
+    // its lines, which would take the drilling cycle away from the pattern.
+    [Fact]
+    public void ModalRange_KeptAsRaw_IsWrittenBackWithoutAnMcallBetweenItsLines()
+    {
+        Assert.Equal(Lines("G0 X0 Y0 Z10", "F200", "MCALL CYCLE81(10,0,2,-5,)",
+                "CYCLE801(0,0,0,10,10,3,3,0,0,0,0)", "MCALL"),
+            MillBody("RAPID X=0 Y=0 Z=10", "RAW:SIEMENS=\"F200\"", "RAW:SIEMENS=\"MCALL CYCLE81(10,0,2,-5,)\"",
+                "RAW:SIEMENS=\"CYCLE801(0,0,0,10,10,3,3,0,0,0,0)\"", "RAW:SIEMENS=\"MCALL\""));
+    }
+
+    // D259: a bare F or S block between two RAW lines fires the modal subprogram that the first RAW line armed, since
+    // S or F with G0 or G1 active calls it without any path motion, so the compiler writes neither there and says so;
+    // the feed and the speed stand again at the next block that needs them.
+    [Fact]
+    public void ModalRange_AFeedOrSpeedBlockUnderARawMcall_IsNotWritten()
+    {
+        CompileResult result = Run(Program(MillHeader, "RAPID X=0 Y=0 Z=10",
+            "RAW:SIEMENS=\"MCALL CYCLE81(10,0,2,-5,)\"", "F=200", "RPM:TOOL=1200",
+            "RAW:SIEMENS=\"CYCLE801(0,0,0,10,10,3,3,0,0,0,0)\"", "RAW:SIEMENS=\"MCALL\""), Mill());
+
+        Assert.Equal(Lines("G0 X0 Y0 Z10", "MCALL CYCLE81(10,0,2,-5,)", "CYCLE801(0,0,0,10,10,3,3,0,0,0,0)", "MCALL"),
+            Body(result));
+        Assert.Equal(
+            [DiagnosticCodes.SiemensWordUnderARawModalCall, DiagnosticCodes.SiemensWordUnderARawModalCall],
+            CompilerCodes(result));
+    }
+
     // Siemens 7 and virtual machine 1: the STATIC walk does not follow the jump back, which arrives at the label
     // without the modal call that the block before the label armed, so the call at a position after the label arms it
     // again (controller-mapping 5, CYCLE_CALL).

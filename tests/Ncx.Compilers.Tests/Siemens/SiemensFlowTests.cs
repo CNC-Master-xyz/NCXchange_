@@ -116,6 +116,50 @@ public sealed class SiemensFlowTests
         Assert.Equal(Lines("R1=5", "G0 X=R1"), Body(mapped));
     }
 
+    // D261: a name the control does not have already is declared with DEF REAL in the definition part of the unit
+    // that uses it; an R parameter needs no declaration, since the control predefines it as an array of REAL.
+    [Fact]
+    public void Declarations_OfTheNamesAUnitUses_StandInItsDefinitionPart()
+    {
+        CompileResult result = Run(Program(MillHeader, "VAR:LEN=10 VAR:R1=1", "RAPID X={$LEN + $R1}"), Mill());
+
+        Assert.Equal(Lines("%_N_T_MPF", "DEF REAL LEN", "G17 G40 G90 G94 G71", "LEN=10 R1=1", "G0 X=LEN+R1", "M30"),
+            TextOf(result));
+    }
+
+    // D261: a name a RAW DEF of the unit declares itself is not declared a second time, which would be alarm 12200.
+    [Fact]
+    public void Declarations_OfANameARawDefOfTheUnitDeclares_AreLeftOut()
+    {
+        CompileResult result = Run(Program(MillHeader, "RAW:SIEMENS=\"DEF REAL LEN\"", "VAR:LEN=10"), Mill());
+
+        Assert.Equal(Lines("%_N_T_MPF", "G17 G40 G90 G94 G71", "DEF REAL LEN", "LEN=10", "M30"), TextOf(result));
+    }
+
+    // D261: a DEF is local to its unit, so a name two units use is an ERROR unless [variables] declared of the machine
+    // names it, which makes the control declare it outside the program.
+    [Fact]
+    public void Declarations_OfANameSeveralUnitsUse_AreAnErrorUnlessTheMachineDeclaresIt()
+    {
+        string program = """
+            FILE=BEGIN NCX=1
+            PROGRAM=BEGIN NAME="T"
+            FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF
+            VAR:XMW_1=10
+            CALL=SHARED
+            PROGRAM=END
+            SUB=BEGIN NAME=SHARED
+            RAPID X={$XMW_1}
+            SUB=END
+            FILE=END
+            """ + "\n";
+
+        Assert.Equal(["CMP595", "CMP595"], CompilerCodes(Run(program, Mill())));
+        CompileResult declared = Run(program, Replaced(MillFile, "call_depth = 8",
+            "call_depth = 8\ndeclared = [\"XMW_1\"]"));
+        Assert.DoesNotContain("DEF REAL XMW_1", TextOf(declared), StringComparison.Ordinal);
+    }
+
     // Controller-mapping 6, CALL and TIMES: NAME P3 repeats the call three times.
     [Fact]
     public void Call_WithTimes_IsNameP()

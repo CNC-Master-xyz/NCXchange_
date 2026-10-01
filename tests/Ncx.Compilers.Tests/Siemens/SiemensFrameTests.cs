@@ -57,9 +57,9 @@ public sealed class SiemensFrameTests
         Assert.Equal(Lines("G54", "TRANS X10", "TRANS", "G55"), MillBody("ORIGIN=1", "SHIFT X=10", "ORIGIN=2"));
     }
 
-    // Siemens 12 rule 4: CYCLE800(...) from the [transform] template of millturn1.toml, {dir} from MOVE, TURN -1 and
-    // STAY 0, the angles of the tilt; TILT=RESET is TILT_OFF, CYCLE800() (machine-config 5; controller-mapping 1,
-    // TILT).
+    // Siemens 12 rule 4: CYCLE800(...) from the [transform] template of millturn1.toml, {move} in the place of _ST
+    // from [transform] move and {dir} in the place of _DIR from MOVE, TURN and MOVE -1 and STAY 0, the angles of the
+    // tilt; TILT=RESET is TILT_OFF, CYCLE800() (machine-config 5; controller-mapping 1, TILT; D262).
     [Fact]
     public void Tilt_TurnThenReset_IsCycle800WithDirMinusOneThenCycle800()
     {
@@ -75,11 +75,25 @@ public sealed class SiemensFrameTests
             MillTurnBody("TILT A=10 B=20 C=30 MOVE=STAY"));
     }
 
-    // The TODO(question) of SiemensFrames: MOVE=MOVE has no {dir} of machine-config 5, an ERROR.
+    // D262: MOVE=MOVE is the tens digit 1 of _ST, which tracks the tool tip, together with _DIR -1, which positions
+    // the rotary axes; the two parameters are independent on the control.
     [Fact]
-    public void Tilt_Move_IsAnError()
+    public void Tilt_Move_IsTheTensDigitOfStWithDirMinusOne()
     {
-        Assert.Equal(["CMP532"], CompilerCodes(Run(Program(MillTurnHeader, "TILT B=45 MOVE=MOVE"), MillTurn())));
+        Assert.Equal(Lines("CYCLE800(1,\"TC1\",10,57,0,0,0,0,45,0,0,0,0,-1,100,1)"),
+            MillTurnBody("TILT B=45 MOVE=MOVE"));
+    }
+
+    // D262: a template whose _DIR is a constant cannot write STAY or MOVE, since that constant turns the rotary axes;
+    // an ERROR, while MOVE=TURN still compiles.
+    [Fact]
+    public void Tilt_WithoutDirInTheTemplate_IsAnErrorForEveryMoveButTurn()
+    {
+        MachineConfig constant = Replaced(MillTurnFile, "{dir},100,1)\"", "-1,100,1)\"");
+
+        Assert.Equal(["CMP532"], CompilerCodes(Run(Program(MillTurnHeader, "TILT B=45 MOVE=STAY"), constant)));
+        Assert.Equal(Lines("CYCLE800(1,\"TC1\",0,57,0,0,0,0,45,0,0,0,0,-1,100,1)"),
+            Body(Run(Program(MillTurnHeader, "TILT B=45 MOVE=TURN"), constant)));
     }
 
     // D82: TILT_AXIS without TILT_AXIS_ON needs the kinematics module, an ERROR.

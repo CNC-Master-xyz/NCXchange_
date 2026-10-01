@@ -88,6 +88,15 @@ public sealed class HeidenhainProgramFrameTests
             HeidenhainCompile.LinesOf(HeidenhainCompile.TextOf(result)));
     }
 
+    // D326: Klartext has no message form, so the text of MESSAGE is written as a comment block.
+    [Fact]
+    public void Message_OnATargetWithoutAMessageForm_IsACommentBlock()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program("MESSAGE=\"OP1 - BOHREN\""));
+
+        Assert.Equal("; OP1 - BOHREN", HeidenhainCompile.Body(result));
+    }
+
     // Controller-mapping 1, COMMENT and SECTION: SECTION is the structuring block * - text, COMMENT the comment block
     // ; text (controllers heidenhain.md 1).
     [Fact]

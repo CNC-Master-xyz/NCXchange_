@@ -1,8 +1,10 @@
+using Ncx.Core.Model;
+
 namespace Ncx.Readers.Siemens;
 
 /// <summary>
 /// The SINUMERIK statements NCX keeps as whole RAW blocks, verbatim with a WARNING, in their place (controllers
-/// siemens.md 11 rule 8; controller-mapping 9; D5): MSG, STOPRE, WORKPIECE, SETAL, the synchronized actions, the
+/// siemens.md 11 rule 8; controller-mapping 9; D5): STOPRE, WORKPIECE, SETAL, the synchronized actions, the
 /// interrupts, the axis exchange between channels, the marks set without waiting, the file functions, PCALL and
 /// ISOCALL, the frame arithmetic, the programmable tool offsets, the coupling definitions, the writes to system
 /// variables such as $P_UIFR, and the recipe block of the STAMA post. The RAW modal words of the G groups are
@@ -21,13 +23,21 @@ internal static class SiemensRaw
     };
 
     /// <summary>
-    /// Keeps a block whose statement NCX has no word for as RAW, with the reason.
+    /// Keeps a block whose statement NCX has no word for as RAW, with the reason; MSG becomes MESSAGE where the word
+    /// can carry it (D326).
     /// </summary>
     /// <param name="block">The block being read.</param>
     public static void Read(SiemensBlock block)
     {
         foreach (SourceWord word in block.Source.Words)
         {
+            if (word.Address == "MSG" && ReadMessage(block, word))
+            {
+                // Only the MSG word is read: the other words of the block are the other concerns', and what none of
+                // them reads keeps the block RAW, so that nothing is dropped (D5; controller-mapping 9).
+                continue;
+            }
+
             if (Reason(word) is not string reason)
             {
                 continue;
@@ -38,6 +48,37 @@ internal static class SiemensRaw
             block.Draft.RawKeepsState = s_harmless.Contains(word.Address);
             return;
         }
+    }
+
+    // MSG("text") is MESSAGE="text" and MSG() is MESSAGE="", an operator message the virtual machine executes nothing
+    // for (language 4.1; controller-mapping 1, COMMENT; D326). MSG("text",1) forces a main-run block of its own and
+    // interrupts continuous path, and an MSG built with << has no plain text: both have no MESSAGE form and stay RAW.
+    private static bool ReadMessage(SiemensBlock block, SourceWord word)
+    {
+        if (!word.Text.StartsWith('('))
+        {
+            return false;
+        }
+
+        List<string> arguments = SiemensArguments.Split(word.Text);
+        if (arguments.Count > 1 || (arguments.Count == 1 && !IsPlainString(arguments[0])))
+        {
+            return false;
+        }
+
+        block.MarkRead(word);
+        string text = arguments.Count == 0 ? "" : SiemensArguments.StringOf(arguments[0])!;
+        block.Draft.Main.Add("MESSAGE", new StringValue(text));
+        return true;
+    }
+
+    // One string literal and nothing else: the quotes stand at the ends and nowhere between, so a text built with the
+    // concatenation operator ("A"<<R1<<"B") is none (controllers siemens.md 8).
+    private static bool IsPlainString(string argument)
+    {
+        string trimmed = argument.Trim();
+        return trimmed.Length >= 2 && trimmed[0] == '"' && trimmed[^1] == '"'
+            && !trimmed.AsSpan(1, trimmed.Length - 2).Contains('"');
     }
 
     // Why a word keeps its block RAW; null for a word the other concerns read.
@@ -67,11 +108,10 @@ internal static class SiemensRaw
     {
         var statements = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            // TODO(question): controller-mapping 11 names MSG("...") before every operation of the corpus as the
-            // candidate for a word of its own, MESSAGE="..."; a new construct becomes a question with a recommendation
-            // (controllers sample-corpus 3), and until it is answered MSG stays RAW:SIEMENS.
-            ["MSG"] = "MSG shows an operator message at run time, which NCX keeps as RAW:SIEMENS until a message word "
-                + "exists (controller-mapping 1, COMMENT, and 11)",
+            // D326: MSG is MESSAGE where the word can carry it (ReadMessage); this reason is left for the forms it
+            // cannot, MSG("text",1) and a text built with <<.
+            ["MSG"] = "MSG with an execution argument, or with a text built from values, has no MESSAGE form and "
+                + "stays RAW:SIEMENS (language 4.1, MESSAGE; decisions.md D326)",
             ["STOPRE"] = "STOPRE stops the block preparation until the block is executed (controllers siemens.md 8; "
                 + "controller-mapping 6)",
             ["WORKPIECE"] = "WORKPIECE defines the blank for the simulation, header information like BLK FORM "

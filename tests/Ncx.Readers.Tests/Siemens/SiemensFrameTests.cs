@@ -107,13 +107,35 @@ public sealed class SiemensFrameTests
         Assert.Equal([DiagnosticCodes.KeptAsRaw], Codes(program));
     }
 
-    // CYCLE800 in the rotary-axes mode (_MODE bits 7 and 6 = 11) is TILT_AXIS on the rotary axes of the machine,
-    // CYCLE800() resets it (controller-mapping 1, TILT_AXIS; D82).
+    // CYCLE800 in the rotary-axes mode (_MODE bits 7 and 6 = 11) is TILT_AXIS on the rotary axes the [transform]
+    // TILT_AXIS_ON template names, CYCLE800() resets it (controller-mapping 1, TILT_AXIS; D82, D296).
     [Fact]
     public void CYCLE800RotaryAxesMode_BecomesTiltAxis()
     {
         Assert.Equal(Lines("RETRACT", "TILT_AXIS A=-30 C=90 MOVE=TURN", "TILT_AXIS=RESET"),
             CheckedBody("CYCLE800(1,\"TABLE\",0,192,0,0,0,-30,90,0,0,0,0,-1,100,1)\nCYCLE800()", FiveAxis()));
+    }
+
+    // D296: the axes of the rotary-axes mode come from the places of _A and _B in the TILT_AXIS_ON template, not from
+    // the order of the [[axis]] list, so a template that names C first reads the first angle into C (the canonical
+    // order then writes A before C, language 5 rule 6).
+    [Fact]
+    public void RotaryAxesMode_TakesItsAxesFromTheTiltAxisOnTemplate_NotFromTheAxisOrder()
+    {
+        string template = "CYCLE800(1,\"TABLE\",0,192,0,0,0,{c},{a},0,0,0,0,{dir},100,1)";
+
+        Assert.Equal(Lines("TILT_AXIS A=90 C=-30 MOVE=TURN"),
+            CheckedBody("CYCLE800(0,\"TABLE\",0,192,0,0,0,-30,90,0,0,0,0,-1,100,1)", FiveAxisWith(template)));
+    }
+
+    // D296: without a TILT_AXIS_ON template the machine does not say which axes the mode names, and the block stays
+    // RAW with its WARNING.
+    [Fact]
+    public void RotaryAxesMode_OnAMachineWithoutATiltAxisOnTemplate_StaysRaw()
+    {
+        string source = "CYCLE800(0,\"TABLE\",0,192,0,0,0,-30,90,0,0,0,0,-1,100,1)";
+
+        Assert.Equal(Lines(Raw(source)), Body(source, FiveAxisWith("")));
     }
 
     // ROTS turns by two spatial angles, TILT with the third 0, and AROTS appends (siemens 4; controller-mapping 1,
