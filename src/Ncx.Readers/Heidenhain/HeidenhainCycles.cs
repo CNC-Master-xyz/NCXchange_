@@ -242,17 +242,19 @@ internal static partial class HeidenhainCycles
         return true;
     }
 
-    // A call of the active definition: where NCX has the cycle off, the definition is written again first, since the
-    // control keeps it until the next CYCL DEF (controllers heidenhain.md 5; language 4.7). Afterwards the plane axes
-    // stand at the call point and the drilling axis at the plane the cycle returns to (virtual machine 3.3).
-    private static bool Call(HeidenhainBlock block, HeidenhainDraftBlock target)
+    // The definition a CYCL CALL, an M99 or a CYCL CALL PAT calls, with the report every call without one owes its
+    // source: the RAW of a definition the reader cannot know (virtual machine 3.9), the ERROR RDR302 and the RAW of a
+    // call before any CYCL DEF (controllers heidenhain.md 5), and the RAW a definition kept as RAW passes to its calls
+    // (heidenhain 7 rule 9). Every path that needs the definition asks here, so no call is ever dropped without a word
+    // (D5; language 2 rule 8).
+    private static HeidenhainDefinition? CalledDefinition(HeidenhainBlock block)
     {
         HeidenhainState state = block.Heidenhain;
         if (state.DefinitionUnknown)
         {
             block.Draft.KeepAsRaw("the cycle it calls is defined by a caller of the subprogram or in a called "
                 + "subprogram, which the reader does not know (virtual machine 3.9)");
-            return false;
+            return null;
         }
 
         if (state.Definition is not HeidenhainDefinition definition)
@@ -261,15 +263,28 @@ internal static partial class HeidenhainCycles
                 "The block calls a cycle and no CYCL DEF of a machining cycle stands before it; the block is kept as "
                 + "RAW (controllers heidenhain.md 5).");
             block.Draft.KeepAsRaw("no cycle is defined");
-            return false;
+            return null;
         }
 
-        // A definition kept as RAW stays the one its calls call, and they stay RAW with it (heidenhain 7 rule 9).
         if (definition.RawReason is not null)
         {
             block.Draft.KeepAsRaw(definition.Native.Length > 0
                 ? $"the definition of cycle {definition.Native} it calls is kept as RAW"
                 : "the CYCL DEF it calls is kept as RAW");
+            return null;
+        }
+
+        return definition;
+    }
+
+    // A call of the active definition: where NCX has the cycle off, the definition is written again first, since the
+    // control keeps it until the next CYCL DEF (controllers heidenhain.md 5; language 4.7). Afterwards the plane axes
+    // stand at the call point and the drilling axis at the plane the cycle returns to (virtual machine 3.3).
+    private static bool Call(HeidenhainBlock block, HeidenhainDraftBlock target)
+    {
+        HeidenhainState state = block.Heidenhain;
+        if (CalledDefinition(block) is not HeidenhainDefinition definition)
+        {
             return false;
         }
 
@@ -387,11 +402,12 @@ internal static partial class HeidenhainCycles
     }
 
     // The CYCLE block of the active definition with SURFACE, CLEARANCE, DEPTH and SAFE shifted by the surface of a
-    // PATTERN DEF position (D254; controllers heidenhain.md 5); null where a shifted word is no number, which keeps
-    // the pattern call RAW.
+    // PATTERN DEF position (D254; controllers heidenhain.md 5); null where a shifted word is no number or the call has
+    // no definition to shift, each of which keeps the pattern call RAW with its reason, since this stands before the
+    // Call of the first point (D5).
     private static HeidenhainDraftBlock? Shifted(HeidenhainBlock block, decimal surface)
     {
-        if (block.Heidenhain.Definition is not HeidenhainDefinition definition)
+        if (CalledDefinition(block) is not HeidenhainDefinition definition)
         {
             return null;
         }

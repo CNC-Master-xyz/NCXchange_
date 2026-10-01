@@ -1,5 +1,6 @@
 using Ncx.Core.Model;
 using Ncx.Core.Writing;
+using Ncx.Tests.Fixtures;
 using static Ncx.Readers.Tests.Fanuc.FanucRead;
 
 namespace Ncx.Readers.Tests.Fanuc;
@@ -34,11 +35,27 @@ public sealed class FanucMacroTests
             Body("#1=FIX[#2]\n#3=FUP[#4]"));
     }
 
-    // ATAN[a]/[b] is the arc tangent of a over b.
+    // ATAN[a]/[b] is the arc tangent of a over b, in the argument order of NCX ATAN2 (D119).
     [Fact]
     public void AtanOfTwoBrackets_IsAtan2()
     {
         Assert.Equal(Lines("VAR:V1={ATAN2($V2, $V3)}"), Body("#1=ATAN[#2]/[#3]"));
+    }
+
+    // D119 puts the range conversion of the two-argument ATAN on the Fanuc reader as well as on the Fanuc compiler,
+    // and makes it wait on a machine-file key that says which range the control uses; no key carries that, so the
+    // reader writes the value unconverted. A deferral of a settled decision is recorded, like the compiler's in row 60
+    // of wave 3: the open-questions table names the reader's marker and the decision it waits on (00-method 4).
+    [Fact]
+    public void D119Rows_TheRangeConversionOfTheFanucReader_AreRecordedAsTheOpenQuestionItIs()
+    {
+        string path = Path.Combine(Fixture.RepositoryRoot(), "docs", "implementation", "03-open-questions.md");
+        string? row = Array.Find(File.ReadAllLines(path),
+            line => line.Contains("`src/Ncx.Readers/Fanuc/FanucExpression.cs:272`", StringComparison.Ordinal));
+
+        Assert.NotNull(row);
+        Assert.Contains("D119", row, StringComparison.Ordinal);
+        Assert.Contains("range", row, StringComparison.Ordinal);
     }
 
     // IF [ ] GOTO n is JUMP=n with IF, EQ is == (controller-mapping 6; language 4.9).

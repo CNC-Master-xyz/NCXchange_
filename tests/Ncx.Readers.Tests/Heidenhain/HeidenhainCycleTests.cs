@@ -185,6 +185,30 @@ public sealed class HeidenhainCycleTests
                 + "\n3 CYCL CALL PAT FMAX"));
     }
 
+    // The shift of D254 stands before the call of the first point, so a pattern call whose first point shifts the
+    // surface must still report what every other call without a definition reports: the ERROR of a call before any
+    // CYCL DEF and the RAW of the source block, since nothing of the program is lost (D5; language 2 rule 8).
+    [Fact]
+    public void CyclCallPat_WithoutADefinitionAndAShiftedSurface_IsAnErrorAndKeptAsRaw()
+    {
+        Assert.Equal([DiagnosticCodes.HeidenhainCycleCallWithoutDefinition, DiagnosticCodes.KeptAsRaw],
+            Codes(FramedProgram("1 PATTERN DEF ~\n    POS1 (X+25 Y+33,5 Z-3)\n2 CYCL CALL PAT FMAX")));
+    }
+
+    // The same for a definition a caller of the subprogram gives, which leaves it null as well: the RAW of virtual
+    // machine 3.9, and no ERROR, since the source may be right (heidenhain 7 rule 9; D5).
+    [Fact]
+    public void CyclCallPat_WithAnUnknownDefinitionAndAShiftedSurface_IsKeptAsRawWithoutAnError()
+    {
+        NcxProgram program = Program("0 BEGIN PGM S MM\n" + Drill + "\n3 CALL LBL 1\n4 PATTERN DEF ~\n"
+            + "    POS1 (X+25 Y+33,5 Z-3)\n5 CYCL CALL PAT FMAX\n6 M30\n7 LBL 1\n8 CYCL DEF\n9 LBL 0\n"
+            + "10 END PGM S MM\n");
+
+        Assert.DoesNotContain(DiagnosticCodes.HeidenhainCycleCallWithoutDefinition, Codes(program));
+        Assert.DoesNotContain(program.Blocks, block => block.Verb?.Key == "CYCLE_CALL");
+        Assert.Equal([DiagnosticCodes.KeptAsRaw, DiagnosticCodes.KeptAsRaw], Codes(program));
+    }
+
     // A PATTERN DEF no CYCL CALL PAT calls stays RAW (heidenhain 7 rule 9).
     [Fact]
     public void PatternDef_WithoutACall_IsKeptAsRaw()

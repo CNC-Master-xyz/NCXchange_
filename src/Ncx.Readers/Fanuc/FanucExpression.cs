@@ -260,8 +260,8 @@ internal sealed class FanucExpression
     }
 
     // FUP raises the fraction to the next integer away from zero, INT plus the sign of the fraction.
-    // TODO(question): language 4.12 does not define FRAC of a negative number (wave-1 question #85); with FRAC(x) =
-    // x - INT(x) this form gives FUP[-1.2] = -2, the rounding away from zero.
+    // D119: FRAC(x) = x - INT(x) keeps the sign of x, as the TNC's FRAC beside its truncating INT does, so this form
+    // gives FUP[-1.2] = -2, the rounding away from zero (decisions.md; wave-1 question #85).
     private string RoundedUp()
     {
         string argument = Argument("FUP");
@@ -269,8 +269,12 @@ internal sealed class FanucExpression
     }
 
     // ATAN[a]/[b] and ATAN[a,b] are the arc tangent of a over b, ATAN[a] the one of a single argument.
-    // TODO(question): the argument order of ATAN2 is not defined (wave-1 question #86); the reader writes ATAN2(a, b)
-    // for ATAN[a]/[b], the order of ATAN2(y, x).
+    // D119: ATAN2(y, x) takes the ordinate first, which is the argument order of Fanuc's two-argument ATAN too, so
+    // ATAN[a]/[b] reads as ATAN2(a, b) (decisions.md; wave-1 question #86).
+    // TODO(question): D119 has the Fanuc reader convert the range as well: the control gives 0 to 360 degrees unless
+    // bit 0 (NAT) of parameter 6004 is 1, while NCX ATAN2 runs above -180 up to 180, and the program does not carry
+    // that bit, so the conversion waits on the machine-file key D119 asks for and no key of machine-config 7 carries.
+    // Until then the value is read unconverted, as the Fanuc compiler writes it unconverted (FanucExpressions.Call).
     private string ArcTangent()
     {
         string first = Argument("ATAN");
