@@ -103,6 +103,24 @@ public sealed class ExampleMachinesTests
         Assert.NotNull(machine);
     }
 
+    // D182: the iTNC 530 maps the SYS_ names to the FN 18 ids of its manual, the position in the active coordinate
+    // system as ID270 NR1 IDX<axis>, the nominal position in the REF system as ID240 NR1 IDX<axis> and the length
+    // oversize DL of the tool table as ID50 NR4 IDX<tool> (machine-config 7; controllers heidenhain.md 6).
+    [Fact]
+    public void SystemVariables_HeidenhainMill_AreTheFn18IdsOfTheITnc530()
+    {
+        var diagnostics = new Diagnostics("machines/heidenhain-itnc530.toml");
+
+        MachineConfig? machine = MachineConfigLoader.Load(ShippedPath("heidenhain-itnc530.toml"), diagnostics);
+
+        Assert.NotNull(machine);
+        Assert.Equal("ID270 NR1 IDX1", machine.SystemVariables.Find("SYS_POS_X"));
+        Assert.Equal("ID270 NR1 IDX3", machine.SystemVariables.Find("SYS_POS_Z"));
+        Assert.Equal("ID240 NR1 IDX2", machine.SystemVariables.Find("SYS_MPOS_Y"));
+        Assert.Equal("ID50 NR4 IDX{index}", machine.SystemVariables.Find("SYS_WEAR_Z"));
+        Assert.Equal("ID200 NR2", machine.SystemVariables.Find("SYS_TOOL_LEN"));
+    }
+
     // P2-01: the WARNINGs of the eight files are listed in a committed file, each one a gap in a file.
     [Fact]
     public void MachineFiles_Warnings_AreTheCommittedList()

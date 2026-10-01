@@ -211,8 +211,11 @@ internal static class FanucExpressions
 
     // The functions of custom macro B take their argument in brackets; INT truncates toward zero as FIX does, and
     // ATAN2(a, b) is ATAN[a]/[b] as the reader reads it (controllers fanuc.md 7, language 4.12).
-    // TODO(question): D119: the argument order and the range of ATAN2 are open; ATAN2(a, b) is written as
-    // ATAN[a]/[b], the form the reader reads into it, until D119 is answered.
+    // D119: ATAN2(y, x) takes the ordinate first and runs above -180 up to 180 degrees, the argument order Fanuc's
+    // two-argument ATAN has too, so ATAN2(a, b) is written as ATAN[a]/[b] (decisions.md).
+    // TODO(question): the Fanuc result runs 0 to 360 unless bit 0 (NAT) of parameter 6004 is 1, and D119 has the
+    // compiler convert the range from what the machine file says the control uses; no key of machine-config 7 carries
+    // that, so the range is written unconverted.
     private static string? Call(FanucBlock write, CallNode call)
     {
         string? name = call.Function switch

@@ -330,7 +330,7 @@ call_depth = 8
 SYS_POS_X = "#5041"                # workpiece coordinates
 SYS_MPOS_X = "#5021"               # machine coordinates; the Nakamura transfer program reads #5024 and #5025 for the sub spindle slide
 SYS_MPOS_B = "#5024"
-SYS_WEAR_Z = "#11{index:03}"       # #11099 = Z wear register 99 in the Nakamura transfer program; Siemens: "$AA_IW[X]", "RG{index}"; Heidenhain: FN 18 ids
+SYS_WEAR_Z = "#11{index:03}"       # #11099 = Z wear register 99 in the Nakamura transfer program; Siemens: "$AA_IW[X]", "RG{index}"; Heidenhain: FN 18 ids, "ID270 NR1 IDX1" the X position, "ID240 NR1 IDX1" its REF position, "ID50 NR4 IDX{index}" the length oversize DL of a tool (D182)
 SYS_PART_MAIN = ""                 # part status of the Nakamura G411 machines has no readable variable; G411 stays RAW
 ```
 

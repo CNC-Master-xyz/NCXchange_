@@ -93,7 +93,7 @@ Files in `src/Ncx.Readers/Heidenhain/`: `HeidenhainTokenizer` (numbered blocks, 
 
 Cite: controllers `heidenhain.md` 1 to 7; controller-mapping (the Heidenhain column); D7, D31, D58, D81 to D86.
 
-Tests first: one test per rule of `heidenhain.md` 7; the acceptance: `2.5D_FRAESEN.h` converts to the `.ncx` (blocks equal; the WARNING about the missing `M30`); `BOHREN.h` converts to the same `Expected/BOHREN.ncx` as the Fanuc source. This is the real test of milestone M6 and the place where the two readers will disagree: `BOHREN.h` has `Q204=5` (second clearance) where the Fanuc source has `G99` and `R5.`; whether the Heidenhain reader emits `SAFE=5 CYCLE_RETRACT=SAFE` or `CYCLE_RETRACT=CLEARANCE` when `SAFE` equals `CLEARANCE` is decided in the task log with a note in controller-mapping 5, and the expected file follows the decision. `3D_FRAESEN.h` (833 blocks) converts in well under a second. Under `NCX_CORPUS`, every Heidenhain file converts without a crash and `PLANE AXIAL`, `CP IPA`, `LN`, `M140` read into their words.
+Tests first: one test per rule of `heidenhain.md` 7; the acceptance: `2.5D_FRAESEN.h` converts to the `.ncx` (blocks equal; the WARNING about the missing `M30`); `BOHREN.h` converts to the same `Expected/BOHREN.ncx` as the Fanuc source. This is the real test of milestone M6 and the place where the two readers will disagree: `BOHREN.h` has `Q204=5` (second clearance) where the Fanuc source has `G99` and `R5.`; a `Q204` from 0 up to `Q200` reads as `CYCLE_RETRACT=CLEARANCE` without `SAFE`, because the second clearance acts only above the first (D226), so both sources give `CYCLE_RETRACT=CLEARANCE` and the expected file stays as frozen. `3D_FRAESEN.h` (833 blocks) converts in well under a second. Under `NCX_CORPUS`, every Heidenhain file converts without a crash and `PLANE AXIAL`, `CP IPA`, `LN`, `M140` read into their words.
 
 ### P3-06 Fanuc compiler
 
@@ -117,7 +117,7 @@ Acceptance: the project is green; the maintainer runs the batch over the corpus 
 
 ## Risks and open ends
 
-- The two readers producing the same `BOHREN.ncx` is the first place where the language's cycle model meets two real controllers; expect to discover a rule the mapping does not state (the `SAFE` question above is one). Each such rule becomes a sentence in controller-mapping 5 and a test, and a decision when it changes a word's meaning.
+- The two readers producing the same `BOHREN.ncx` is the first place where the language's cycle model meets two real controllers; expect to discover a rule the mapping does not state (the `SAFE` question above was one, settled by D226). Each such rule becomes a sentence in controller-mapping 5 and a test, and a decision when it changes a word's meaning.
 - The comparison rules are deliberately strict on word order inside motion blocks; the first Fanuc round trip of `2.5D_FRAESEN` will show whether the source's own habits (`G43 Z2. H1`, `G0 G17 X50.4`) can be reproduced from the machine file's settings or need a `[format]` option (`G17` on the first motion, `G43` in the first Z block). Add the option, not a special case.
 - `3D_FRAESEN` and the megabyte corpus files are the performance gate for the whole chain (reader, writer, parser, VM with snapshots, compiler); measure at P3-06 and fix before phase 4.
 - The corpus is customer property; the batch runner writes only counts and codes into the report, never source lines.

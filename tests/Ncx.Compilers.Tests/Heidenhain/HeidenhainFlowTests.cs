@@ -84,8 +84,8 @@ public sealed class HeidenhainFlowTests
         Assert.Equal("LBL 3\nFN 11: IF +Q1 GT +0 GOTO LBL 4\nL X+0 Y+0 R0 FMAX\nLBL 4", HeidenhainCompile.Body(result));
     }
 
-    // Controllers heidenhain.md 1; controller-mapping 6, REPEAT: CALL LBL n REP k; the TODO(question) D212 of
-    // HeidenhainFlow.WriteRepeat writes the count 1 for a REPEAT without TIMES.
+    // Controllers heidenhain.md 1; controller-mapping 6, REPEAT: CALL LBL n REP k; D212: TIMES is optional and
+    // defaults to 1, so HeidenhainFlow.WriteRepeat writes REP 1 for a REPEAT without TIMES.
     [Fact]
     public void Repeat_IsCallLblRep()
     {

@@ -6,8 +6,8 @@ namespace Ncx.Compilers.Heidenhain;
 /// <summary>
 /// The Q parameters of a CYCL DEF from the words of its CYCLE block (controllers heidenhain.md 5; 8 rule 7;
 /// controller-mapping 5; machine-config 6): the words of the entry's params, the planes relative to the surface Q203,
-/// Q204 from CYCLE_RETRACT, and the rules for the Q parameters of the signature that no word carries (D163, D164,
-/// D226).
+/// Q204 from CYCLE_RETRACT, and the rules for the Q parameters of the signature that no word carries (D163, D226 and
+/// the open D164).
 /// </summary>
 internal static class HeidenhainCycleValues
 {
@@ -73,8 +73,9 @@ internal static class HeidenhainCycleValues
         switch (word)
         {
             // CYCLE_RETRACT=SAFE becomes Q204 (heidenhain 8 rule 7): SAFE = Q203 + Q204.
-            // TODO(question): D226: which Q204 the compiler writes for CYCLE_RETRACT=CLEARANCE is open; as its
-            // recommendation says, Q204 equals Q200, the clearance above the surface.
+            // D226: for CYCLE_RETRACT=CLEARANCE the compiler writes Q204 equal to Q200, the clearance above the
+            // surface, which ends the tool there because the second clearance acts only above the first
+            // (decisions.md).
             case Safe:
                 bool toSafe = writing.Block.Find("CYCLE_RETRACT")?.Value is IdentValue { Name: Safe };
                 string plane = toSafe ? Safe : Clearance;
@@ -82,8 +83,8 @@ internal static class HeidenhainCycleValues
                     ? Signed(writing, parameter, entry.ToNative(Safe, level, surface))
                     : null;
 
-            // TODO(question): D163: both DRILL and DRILL_DWELL are cycle 200, told apart by Q211; as its recommendation
-            // says, Q211 is CYCLE_DWELL, or 0 when the block has none.
+            // D163: both DRILL and DRILL_DWELL are cycle 200, told apart by Q211, the dwell at the hole bottom:
+            // Q211 is CYCLE_DWELL, or 0 when the block has none (decisions.md).
             case CycleDwell:
                 return Signed(writing, parameter, words.TryGetValue(CycleDwell, out decimal dwell) ? dwell : 0m);
 
@@ -99,11 +100,13 @@ internal static class HeidenhainCycleValues
         }
     }
 
+    // D163: Q213, the number of chip breaks before the control retracts, tells PECK from CHIP_BREAK on cycle 203:
+    // 0 for PECK, which retracts fully after every infeed, and the number of infeeds, the depth over PECK rounded up,
+    // for CHIP_BREAK, which the drilling never reaches (decisions.md).
+    //
     // TODO(question): D164: the values of the Q parameters of the signature that no NCX word carries are open; as its
     // recommendation says, the compiler writes the values of examples/sources/BOHREN.h: Q202 of cycle 200 the full
     // depth, Q205 of 203 equal to Q202, Q208 of 201 equal to Q206 and of 203 MAX, Q210 and Q212 zero, Q256 0.6.
-    // TODO(question): D163: Q213 tells PECK from CHIP_BREAK on cycle 203; as its recommendation says, the compiler
-    // writes 0 for PECK and the number of infeeds, the depth over PECK rounded up, for CHIP_BREAK.
     private static string? Unmapped(HeidenhainBlock writing, CycleEntry entry, string parameter,
         Dictionary<string, decimal> words, decimal surface)
     {

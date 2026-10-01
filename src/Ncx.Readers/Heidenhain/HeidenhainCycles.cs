@@ -71,19 +71,28 @@ internal static partial class HeidenhainCycles
             }
         }
 
-        // The reader turns the cycle into the entry of the catalog that maps it; of two entries of one cycle, DRILL and
-        // DRILL_DWELL on cycle 200, PECK and CHIP_BREAK on cycle 203, the first
-        // (controller-mapping 5; machine-config 6).
-        // TODO(question): which Q211 makes a cycle 200 a DRILL and which Q256 or Q213 makes a cycle 203 a CHIP_BREAK
-        // is open (wave-1 questions #20 and #72); the first entry is taken.
-        CycleEntry? entry = block.Machine.CycleCatalog.FindNative(native);
-        HeidenhainDefinition definition = entry is null
-            ? new HeidenhainDefinition
+        // The reader turns the cycle into the entry of the catalog that maps it; of two entries of one cycle, DRILL
+        // and DRILL_DWELL on cycle 200, PECK and CHIP_BREAK on cycle 203, the one its Q parameters name
+        // (controller-mapping 5; machine-config 6; heidenhain 7 rule 7, D163).
+        CycleEntry? first = block.Machine.CycleCatalog.FindNative(native);
+        HeidenhainDefinition definition;
+        if (first is null)
+        {
+            definition = new HeidenhainDefinition
             {
                 Native = native,
                 RawReason = $"cycle {native} has no entry in the cycle catalog of the machine (machine-config 6)",
-            }
-            : Define(block, entry, native, parameters);
+            };
+        }
+        else if (ChosenEntry(block, first, parameters) is not CycleEntry entry)
+        {
+            definition = Native(block, native, parameters);
+        }
+        else
+        {
+            definition = Define(block, entry, native, parameters);
+        }
+
         if (!Activate(block, definition))
         {
             return;
@@ -100,7 +109,8 @@ internal static partial class HeidenhainCycles
 
     /// <summary>
     /// Reads CYCL CALL, the call at the current position, and CYCL CALL PAT, one call per point of the PATTERN DEF
-    /// (heidenhain 7 rule 7).
+    /// (heidenhain 7 rule 7). A bare CYCL CALL becomes a bare CYCLE_CALL: the reader writes the axis words the source
+    /// block carries and no others (D220).
     /// </summary>
     /// <param name="block">The block being read, whose first words are CYCL CALL.</param>
     public static void ReadCall(HeidenhainBlock block)
@@ -109,6 +119,8 @@ internal static partial class HeidenhainCycles
         string form = block.Keyword(2);
         if (form == "POS")
         {
+            // D189: the tool-axis coordinate of a CYCL CALL POS block is neither a depth nor a plain move but an
+            // additional datum shift on the whole cycle, so the block has no CYCLE_CALL form (decisions.md).
             block.Draft.KeepAsRaw("heidenhain 7 rule 7 reads CYCL CALL, M99 and CYCL CALL PAT as calls; CYCL CALL POS "
                 + "is kept as RAW");
             return;
@@ -334,6 +346,64 @@ internal static partial class HeidenhainCycles
         }
     }
 
+    // D163: cycle 200 with Q211 = 0 is DRILL and with any other Q211 DRILL_DWELL with CYCLE_DWELL = Q211; cycle 203
+    // with Q213 = 0 retracts fully after every infeed, which is PECK, and with a Q213 of at least the number of
+    // infeeds, ceil(|Q201| / Q202), never retracts, which is CHIP_BREAK (decisions.md; heidenhain 7 rule 7). A Q213
+    // between the two is the mixed form, which has no NCX cycle: null, so that the definition is written natively as
+    // CYCLE:HEIDENHAIN=203 (D94). Every other entry is the one the catalog found.
+    private static CycleEntry? ChosenEntry(HeidenhainBlock block, CycleEntry first, List<SourceWord> parameters)
+    {
+        switch (first.Name)
+        {
+            case "DRILL" or "DRILL_DWELL":
+                decimal dwell = NumberOfParameter(block, parameters, first.NativeOf("CYCLE_DWELL")) ?? 0m;
+                return Sibling(block, first, dwell == 0 ? "DRILL" : "DRILL_DWELL");
+
+            case "PECK" or "CHIP_BREAK":
+                decimal breaks = NumberOfParameter(block, parameters, "Q213") ?? 0m;
+                if (breaks == 0)
+                {
+                    return Sibling(block, first, "PECK");
+                }
+
+                decimal? infeeds = Infeeds(block, first, parameters);
+                return infeeds is decimal count && breaks >= count
+                    ? Sibling(block, first, "CHIP_BREAK")
+                    : null;
+
+            default:
+                return first;
+        }
+    }
+
+    // The number of infeeds of a cycle 203, ceil(|Q201| / Q202); null when the definition gives neither a depth nor an
+    // infeed depth to count with (D163).
+    private static decimal? Infeeds(HeidenhainBlock block, CycleEntry entry, List<SourceWord> parameters)
+    {
+        decimal? depth = NumberOfParameter(block, parameters, entry.NativeOf("DEPTH"));
+        decimal? peck = NumberOfParameter(block, parameters, entry.NativeOf("PECK"));
+        return depth is decimal below && peck is decimal step && step > 0
+            ? Math.Ceiling(Math.Abs(below) / step)
+            : null;
+    }
+
+    // The entry of a name beside the one the catalog found, both being entries of the same native cycle; the one found
+    // when the machine's catalog has no such name.
+    private static CycleEntry? Sibling(HeidenhainBlock block, CycleEntry first, string name)
+    {
+        CycleEntry? named = block.Machine.CycleCatalog.Find(name);
+        return named is not null && named.Native == first.Native ? named : first;
+    }
+
+    // The number a Q parameter of the definition carries, Q211 of a cycle 200; null for a parameter the definition
+    // does not write or whose value is no plain number.
+    private static decimal? NumberOfParameter(HeidenhainBlock block, List<SourceWord> parameters, string? name)
+    {
+        return FindParameter(parameters, name) is SourceWord word
+            ? HeidenhainNumbers.NumberOf(ValueOf(block, word, out _))
+            : null;
+    }
+
     // The CYCLE block of a definition through its catalog entry. A cycle of the built-in drilling family, and a catalog
     // cycle whose every Q parameter the entry maps to a word of the language, is the catalog name with its words, the
     // coordinates along the tool axis made absolute: SURFACE = Q203, CLEARANCE = Q203 + Q200, DEPTH = Q203 + Q201, SAFE
@@ -391,18 +461,19 @@ internal static partial class HeidenhainCycles
             words.Add(new Word { Key = parameter.Key, Value = value });
         }
 
-        AddRetract(entry, parameters, words, family);
+        AddRetract(block, entry, parameters, words, family);
         WarnUnmapped(block, entry, native, unmapped);
         return new HeidenhainDefinition { Native = native, Words = words };
     }
 
-    // CYCLE_RETRACT is the cycle with or without Q204 (controller-mapping 5): with Q204 the tool returns to SAFE = Q203
-    // + Q204, the second set-up clearance, the retract height after the cycle (heidenhain 5), without it to CLEARANCE.
-    // TODO(question): controller-mapping 5 does not say whether a definition whose Q204 puts SAFE on CLEARANCE,
-    // BOHREN.h with Q200=5 and Q204=5 against G99 and R5. of the Fanuc source, or whose Q204 is 0, reads as
-    // CYCLE_RETRACT=CLEARANCE; the reader writes SAFE and CYCLE_RETRACT=SAFE for every definition with Q204, which
-    // keeps Q204, and Expected/BOHREN.ncx keeps the Fanuc reading until D226 is answered (phase 3, P3-05).
-    private static void AddRetract(CycleEntry entry, List<SourceWord> parameters, List<Word> words, bool family)
+    // CYCLE_RETRACT is where the tool ends after each hole (language 4.7; controller-mapping 5): the tool returns to
+    // SAFE = Q203 + Q204, the second set-up clearance, or to CLEARANCE (heidenhain 5).
+    // D226: the second set-up clearance acts only when it is programmed greater than the first, so a Q204 from 0 up to
+    // Q200 ends the tool at the set-up clearance and reads as CYCLE_RETRACT=CLEARANCE without SAFE, and only a Q204
+    // greater than Q200 reads as SAFE with CYCLE_RETRACT=SAFE (decisions.md; heidenhain 7 rule 7). Where the two
+    // cannot be compared, a Q204 or a Q200 that is no plain number, the Q204 stands and the retract is SAFE.
+    private static void AddRetract(HeidenhainBlock block, CycleEntry entry, List<SourceWord> parameters,
+        List<Word> words, bool family)
     {
         string? safe = entry.NativeOf("SAFE");
         if (!family && safe is null)
@@ -411,7 +482,23 @@ internal static partial class HeidenhainCycles
         }
 
         bool toSafe = safe is not null && FindParameter(parameters, safe) is not null;
+        if (toSafe && ActsAboveTheClearance(block, entry, parameters, safe!) == false)
+        {
+            toSafe = false;
+            words.RemoveAll(word => word.Key == "SAFE" && word.Addr is null);
+        }
+
         words.Add(new Word { Key = "CYCLE_RETRACT", Value = new IdentValue(toSafe ? "SAFE" : "CLEARANCE") });
+    }
+
+    // Whether the second set-up clearance Q204 is programmed greater than the set-up clearance Q200 and so acts at all
+    // (D226); null where the two cannot be compared.
+    private static bool? ActsAboveTheClearance(HeidenhainBlock block, CycleEntry entry, List<SourceWord> parameters,
+        string safe)
+    {
+        decimal? second = NumberOfParameter(block, parameters, safe);
+        decimal? first = NumberOfParameter(block, parameters, entry.NativeOf("CLEARANCE"));
+        return second is decimal above && first is decimal clearance ? above > clearance : null;
     }
 
     // TODO(question): a Q parameter of a drilling definition that no word of its catalog entry carries (Q202 and Q210
@@ -434,6 +521,13 @@ internal static partial class HeidenhainCycles
     }
 
     // CYCLE:HEIDENHAIN=n with every Q parameter as written, in source order (language 4.7.1, D94).
+    // TODO(question): D115, which asks what a catalog parameter that is no word of language 4.7 may carry, and D164,
+    // which writes Q208=MAX back. A native parameter takes a number or an expression (language 4.7.1, D94), so a Q
+    // parameter whose value is a control literal has no NCX value and the whole definition is kept as RAW (heidenhain
+    // 7 rule 9); the mixed cycle 203 that D163 sends here then does not reach CYCLE:HEIDENHAIN=203. The one such block
+    // the repository owns is the Q208=MAX of docs/spec/examples/sources/BOHREN.h, whose definition and five calls stay
+    // RAW. Until D115 widens "a number or an expression" to the literals of the family, RAW is the reading that
+    // commits to nothing (03-open-questions, wave 2 question 94).
     private static HeidenhainDefinition Native(HeidenhainBlock block, string native, List<SourceWord> parameters)
     {
         var words = new List<Word>

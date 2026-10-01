@@ -184,8 +184,9 @@ internal static class FanucCycles
 
         if (positions.Exists(position => position.Axis == cycle.Axis) && cycle.Controller is null)
         {
-            // TODO(question): D189: a word on the drilling axis in a CYCLE_CALL block has two meanings, the depth on
-            // Fanuc and a pre-positioning after Heidenhain M99; the block is an ERROR until D189 is answered.
+            // D189: a word on the drilling axis in a CYCLE_CALL block of the built-in family is an ERROR of the
+            // virtual machine (VM253); this check stays as the compiler's guard, because a Fanuc cycle block would
+            // take the word as its depth (decisions.md).
             write.Error(DiagnosticCodes.FanucCycleWordNotMapped,
                 $"CYCLE_CALL names the drilling axis {cycle.Axis}, which a Fanuc cycle block takes as its depth "
                 + "(language 4.7, CYCLE_CALL; D189).");

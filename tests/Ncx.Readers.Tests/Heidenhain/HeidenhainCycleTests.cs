@@ -13,8 +13,9 @@ public sealed class HeidenhainCycleTests
     private const string Drill = "2 CYCL DEF 200 BOHREN ~\n    Q200=2 ~\n    Q201=-10 ~\n    Q206=100 ~\n    Q203=0 ~\n"
         + "    Q204=2";
 
+    // Q204 equals Q200 here, so the second clearance does not act and the retract is CLEARANCE (D226).
     private const string DrillWords =
-        "CYCLE=DRILL SURFACE=0 CLEARANCE=2 DEPTH=-10 SAFE=2 CYCLE_RETRACT=SAFE CYCLE_F=100";
+        "CYCLE=DRILL SURFACE=0 CLEARANCE=2 DEPTH=-10 CYCLE_RETRACT=CLEARANCE CYCLE_F=100";
 
     // The definition becomes CYCLE with SURFACE = Q203, CLEARANCE = Q203 + Q200, DEPTH = Q203 + Q201, SAFE = Q203 +
     // Q204 (heidenhain 5, 7 rule 7); the Q parameters no word carries are reported.
@@ -22,12 +23,71 @@ public sealed class HeidenhainCycleTests
     public void CyclDef200_BecomesDrillWithCoordinatesAbsoluteFromQ203()
     {
         NcxProgram program = FramedProgram("1 CYCL DEF 200 BOHREN ~\n    Q200=+2 ~\n    Q201=-20 ~\n    Q206=+150 ~\n"
-            + "    Q202=+5 ~\n    Q210=+0 ~\n    Q203=-10 ~\n    Q204=+50 ~\n    Q211=+0,5\n2 CYCL CALL");
+            + "    Q202=+5 ~\n    Q210=+0 ~\n    Q203=-10 ~\n    Q204=+50 ~\n    Q211=+0\n2 CYCL CALL");
 
         Assert.Equal(Lines(
-            "CYCLE=DRILL SURFACE=-10 CLEARANCE=-8 DEPTH=-30 SAFE=40 CYCLE_RETRACT=SAFE CYCLE_F=150 CYCLE_DWELL=0.5",
+            "CYCLE=DRILL SURFACE=-10 CLEARANCE=-8 DEPTH=-30 SAFE=40 CYCLE_RETRACT=SAFE CYCLE_F=150 CYCLE_DWELL=0",
             "CYCLE_CALL"), BodyOf(Ncx.Core.Writing.NcxWriter.Write(program)));
         Assert.Equal([DiagnosticCodes.HeidenhainCycleParameterNotCarried], Codes(program));
+    }
+
+    // D163: cycle 200 with Q211 = 0 is DRILL, and with any other Q211 it is DRILL_DWELL with CYCLE_DWELL = Q211
+    // (controllers heidenhain.md 7 rule 7; controller-mapping 5).
+    [Fact]
+    public void CyclDef200_WithADwellAtTheBottom_IsDrillDwellWithTheDwell()
+    {
+        Assert.Equal(Lines("CYCLE=DRILL_DWELL SURFACE=0 CLEARANCE=2 DEPTH=-10 CYCLE_RETRACT=CLEARANCE CYCLE_F=100 "
+            + "CYCLE_DWELL=0.5"),
+            Body("1 CYCL DEF 200 BOHREN ~\n    Q200=2 ~\n    Q201=-10 ~\n    Q206=100 ~\n    Q203=0 ~\n"
+                + "    Q204=2 ~\n    Q211=0,5"));
+    }
+
+    // D163: cycle 203 with Q213 = 0 retracts fully after every infeed, which is PECK, and with a Q213 of at least the
+    // number of infeeds, ceil(|Q201| / Q202), it never retracts, which is CHIP_BREAK.
+    [Fact]
+    public void CyclDef203_WithQ213Zero_IsPeck()
+    {
+        Assert.Equal(Lines("CYCLE=PECK SURFACE=0 CLEARANCE=2 DEPTH=-20 CYCLE_RETRACT=CLEARANCE PECK=5 CYCLE_F=100 "
+            + "CYCLE_DWELL=0"),
+            Body(Universal(breaks: 0)));
+    }
+
+    [Fact]
+    public void CyclDef203_WithQ213AtLeastTheNumberOfInfeeds_IsChipBreak()
+    {
+        Assert.Equal(Lines("CYCLE=CHIP_BREAK SURFACE=0 CLEARANCE=2 DEPTH=-20 CYCLE_RETRACT=CLEARANCE PECK=5 "
+            + "CYCLE_F=100 CYCLE_DWELL=0"),
+            Body(Universal(breaks: 4)));
+    }
+
+    // D163: a Q213 between 0 and the number of infeeds is the mixed form, which has no NCX cycle and is written
+    // natively (language 4.7.1, D94).
+    [Fact]
+    public void CyclDef203_WithQ213BetweenZeroAndTheInfeeds_IsWrittenNatively()
+    {
+        Assert.StartsWith("CYCLE:HEIDENHAIN=203", Body(Universal(breaks: 3)), StringComparison.Ordinal);
+    }
+
+    // D163 sends the mixed form to CYCLE:HEIDENHAIN=203, which the test above pins. A native parameter takes a number
+    // or an expression (language 4.7.1, D94), so a Q parameter that carries a literal of the control instead has no
+    // NCX value and the definition is kept as RAW with its calls (heidenhain 7 rule 9): that is the Q208=MAX of the
+    // fourth operation of BOHREN.h, the one such block the repository owns. Whether a parameter may carry such a
+    // literal at all is the open D115, and D164 writes Q208=MAX back (03-open-questions, wave 2 question 94).
+    [Fact]
+    public void MixedCycle203_WithAQParameterThatIsAControlLiteral_IsKeptAsRaw()
+    {
+        string body = Body(Universal(breaks: 3, retract: "MAX"));
+
+        Assert.StartsWith("RAW:HEIDENHAIN=\"1 CYCL DEF 203", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("CYCLE:HEIDENHAIN=203", body, StringComparison.Ordinal);
+    }
+
+    // A cycle 203 of four infeeds, Q201 = -20 over Q202 = 5, with the given number of chip breaks and retract feed.
+    private static string Universal(int breaks, string retract = "100")
+    {
+        return "1 CYCL DEF 203 UNIVERSAL-BOHREN ~\n    Q200=2 ~\n    Q201=-20 ~\n    Q206=100 ~\n    Q202=5 ~\n"
+            + "    Q210=0 ~\n    Q203=0 ~\n    Q204=2 ~\n    Q212=0 ~\n    Q213=" + breaks + " ~\n    Q205=5 ~\n"
+            + "    Q211=0 ~\n    Q208=" + retract + " ~\n    Q256=0,6";
     }
 
     // Without Q204 the cycle returns to CLEARANCE (controller-mapping 5, CYCLE_RETRACT); cycle 207 is TAP with Q239 as
@@ -39,12 +99,20 @@ public sealed class HeidenhainCycleTests
             Body("1 CYCL DEF 207 GEW.-BOHREN GS NEU ~\n    Q200=2 ~\n    Q201=-20 ~\n    Q239=1,5 ~\n    Q203=0"));
     }
 
-    // Q204 that puts SAFE on CLEARANCE is SAFE with CYCLE_RETRACT=SAFE until the question of phase 3 P3-05 is answered
-    // (controller-mapping 5; Expected/BOHREN.ncx keeps the Fanuc reading).
+    // D226: the second set-up clearance acts only when it is programmed greater than the first, so a Q204 from 0 up
+    // to Q200 reads as CYCLE_RETRACT=CLEARANCE without SAFE (controllers heidenhain.md 7 rule 7).
     [Fact]
-    public void Q204_EqualToTheClearance_IsSafeWithCycleRetractSafe()
+    public void Q204_NotGreaterThanQ200_IsCycleRetractClearanceWithoutSafe()
     {
         Assert.Equal(Lines(DrillWords), Body(Drill));
+    }
+
+    [Fact]
+    public void Q204_GreaterThanQ200_IsSafeWithCycleRetractSafe()
+    {
+        Assert.Equal(Lines("CYCLE=DRILL SURFACE=0 CLEARANCE=2 DEPTH=-10 SAFE=50 CYCLE_RETRACT=SAFE CYCLE_F=100"),
+            Body("2 CYCL DEF 200 BOHREN ~\n    Q200=2 ~\n    Q201=-10 ~\n    Q206=100 ~\n    Q203=0 ~\n"
+                + "    Q204=50"));
     }
 
     // M99 in a rapid positioning in the plane is the CYCLE_CALL at its position; the definition stays until the next

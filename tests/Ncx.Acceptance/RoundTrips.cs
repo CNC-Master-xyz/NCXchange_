@@ -267,8 +267,7 @@ public sealed class RoundTrips : IDisposable
         {
             "BOHREN.h" =>
             [
-                ChipBreaks("24"),
-                ChipBreaks("3"),
+                ChipBreaks("24", "19"),
             ],
             _ => [],
         };
@@ -291,16 +290,17 @@ public sealed class RoundTrips : IDisposable
             : [HeidenhainCompilerTests.StockDefinition("BLK FORM 0.1 Z X0 Y0 Z-55", "BLK FORM 0.2 X100 Y100 Z0")];
     }
 
-    // D163 with wave-1 question #20: the Klartext reader reads every cycle 203 as PECK, the first entry of the catalog
-    // for it, whose Q213 it does not keep (RDR301), and the compiler writes Q213=0 for PECK; BOHREN.h writes 24 and 3.
-    private static NcException ChipBreaks(string breaks)
+    // D163: a cycle 203 whose Q213 is at least the number of infeeds is CHIP_BREAK, whose Q213 the reader does not
+    // keep (RDR301), and the compiler writes the number of infeeds back, ceil(21,732 / 1,2) = 19; BOHREN.h writes 24.
+    // Its Q213=3 is the mixed form, which stays RAW and comes back as it is.
+    private static NcException ChipBreaks(string breaks, string written)
     {
         return new NcException
         {
-            Grounds = $"D163 and wave-1 question #20: cycle 203 with Q213={breaks} reads as PECK and compiles with "
-                + "Q213=0",
+            Grounds = $"D163: cycle 203 with Q213={breaks} is CHIP_BREAK and compiles with Q213={written}, the number "
+                + "of infeeds",
             Source = [HeidenhainCompilerTests.Cycle203("565,487", breaks)],
-            Compiled = [HeidenhainCompilerTests.Cycle203("565,487", "0")],
+            Compiled = [HeidenhainCompilerTests.Cycle203("565,487", written)],
         };
     }
 

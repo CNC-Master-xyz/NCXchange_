@@ -263,8 +263,8 @@ internal static class SiemensFlow
     // REPEAT: it reads as REPEAT where it ends directly before, and is lowered to a SUB section otherwise, which the
     // structure pass makes of a copy of the range and the REPEAT calls P times, CALL=name TIMES=3 (controller-mapping
     // 6, REPEAT + TIMES; controllers siemens.md 11 rule 6).
-    // TODO(question): D212, a REPEAT without TIMES; a REPEAT without P writes none, which repeats the blocks once, as
-    // D212 recommends, and its CALL none, which calls the SUB section once.
+    // D212: TIMES is optional and defaults to 1, and a Sinumerik REPEAT without P repeats the part exactly once, so
+    // a REPEAT without P writes no TIMES and its lowered CALL none either (decisions.md).
     private static void ReadRepeat(SiemensBlock block, SourceWord statement)
     {
         block.MarkRead(statement);

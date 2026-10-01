@@ -22,10 +22,15 @@ public static partial class DrillingFamily
     private static readonly string[] s_cycle207 = ["Q200", "Q201", "Q239", "Q203", "Q204"];
     private static readonly string[] s_cycle201 = ["Q200", "Q201", "Q206", "Q211", "Q208", "Q203", "Q204"];
 
+    // Cycle 202 in the control's order, from the NC-example block of the iTNC 530 cycle manual (D178).
+    private static readonly string[] s_cycle202 =
+        ["Q200", "Q201", "Q206", "Q211", "Q208", "Q203", "Q204", "Q214", "Q336"];
+
     // DRILL and DRILL_DWELL are cycle 200, PECK and CHIP_BREAK cycle 203, TAP 207, REAM 201, BORE 202
-    // (controller-mapping 5). The signature of cycle 202 is not in the documents.
-    // TODO(question): which Q211 makes a cycle 200 a DRILL and which Q256 or Q213 makes a cycle 203 a CHIP_BREAK is not
-    // in the documents (cycles/heidenhain.toml); FindNative takes the first entry (D163).
+    // (controller-mapping 5).
+    // D163: cycle 200 with Q211 = 0 is DRILL and with any other Q211 DRILL_DWELL, cycle 203 with Q213 = 0 is PECK and
+    // with a Q213 of at least the number of infeeds CHIP_BREAK (decisions.md); the Heidenhain reader picks the entry,
+    // FindNative still answers with the first of the two.
     private static CycleCatalog HeidenhainFamily()
     {
         return new CycleCatalog
@@ -39,7 +44,7 @@ public static partial class DrillingFamily
                 HeidenhainEntry("CHIP_BREAK", "203", s_cycle203, HeidenhainPeckParams()),
                 HeidenhainEntry("TAP", "207", s_cycle207, HeidenhainTapParams()),
                 HeidenhainEntry("REAM", "201", s_cycle201, HeidenhainDrillParams()),
-                HeidenhainEntry("BORE", "202", [], HeidenhainDrillParams()),
+                HeidenhainEntry("BORE", "202", s_cycle202, HeidenhainDrillParams()),
             ],
         };
     }

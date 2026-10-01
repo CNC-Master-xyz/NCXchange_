@@ -6,8 +6,8 @@
 # TODO(question): machine-config 6 has no key for the kind of a parameter ("Params with their kinds", phase 2 P2-03); every parameter of this file is a number or an expression (D115).
 #
 # The Q parameters (heidenhain 5): Q200 safety clearance above the surface, Q201 depth (incremental, negative), Q202 infeed depth, Q203 surface coordinate
-# (absolute), Q204 second clearance (retract height after the cycle), Q206 feed, Q210/Q211 dwells at the top and at the bottom, Q207 tapping feed, Q239 pitch
-# (cycle 207), Q256 retract for chip breaking (203), Q257 chip breaking depth, Q208 retraction feed.
+# (absolute), Q204 second clearance (retract height after the cycle, acting only above Q200), Q206 plunge feed, Q210/Q211 dwells at the top and at the bottom,
+# Q207 milling feed of the milling cycles, Q239 pitch (207, 209), Q256 retract for chip breaking (203), Q257 chip breaking depth, Q208 retraction feed (D178).
 # The reader converts to absolute coordinates along the tool axis: SURFACE = Q203, CLEARANCE = Q203 + Q200, DEPTH = Q203 + Q201, SAFE = Q203 + Q204
 # (heidenhain 5, controller-mapping 5). CLEARANCE, DEPTH and SAFE are therefore absolute_from_surface wherever they are mapped: NCX = Q203 + native.
 #
@@ -15,13 +15,15 @@
 # - A definition is called by CYCL CALL, by M99 in a positioning block or by CYCL CALL PAT, and stays active until the next CYCL DEF; there is no cancel word,
 #   the reader emits CYCLE=OFF before the next non-cycle motion (heidenhain 5). The definition never calls itself: no entry is modal.
 # - The drilling axis is the tool axis of the TOOL CALL (controller-mapping 5, AXIS); no Q parameter carries AXIS.
-# - CYCLE_RETRACT=SAFE becomes Q204 (heidenhain 8.7); CYCLE_RETRACT=CLEARANCE is the cycle without Q204 (controller-mapping 5). CYCLE_RETRACT has no Q parameter
+# - CYCLE_RETRACT=SAFE becomes a Q204 above Q200 (heidenhain 8.7); CYCLE_RETRACT=CLEARANCE becomes a Q204 equal to Q200, and a Q204 from 0 up to Q200 reads
+#   back as CLEARANCE, because the second clearance acts only above the first (D226). CYCLE_RETRACT has no Q parameter
 #   of its own: the NCX words of a drilling entry are its params plus this rule, and the words that CYCL DEF 200, G81 and CYCLE81 share (phase 2 P2-03) are
 #   compared with the rules of each family included (see cycles/fanuc.toml).
 # - The compiler writes the Q parameters in the order of signature (heidenhain 8.7).
 # TODO(question): heidenhain.md does not say which value the compiler writes for a Q parameter of the signature that no NCX word carries (Q202 of a DRILL, Q210,
 # Q212, Q213, Q205, Q208); BOHREN.h writes 0 for the dwells, Q202 equal to the depth for a simple drilling, Q208=MAX or the feed (D164).
-# TODO(question): the signatures of the cycles 202, 204 to 206, 208, 209, 240, 241 and 251 to 257 are not in the documents; those entries have none (D178).
+# D178: the signatures below are the orders of the NC-example blocks of the iTNC 530 cycle manual, which is the order the control writes (heidenhain 5,
+# decisions.md). A Q parameter of a signature that no NCX word carries still needs a value from the compiler, which D164 settles.
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------
 # Drilling family (controller-mapping 5: DRILL and DRILL_DWELL 200, PECK and CHIP_BREAK 203, TAP 207, REAM 201, BORE 202; CYCLE_F Q206, CYCLE_DWELL Q211)
@@ -39,25 +41,25 @@ native = 200                                                                    
 signature = ["Q200", "Q201", "Q206", "Q202", "Q210", "Q203", "Q204", "Q211"]
 params = { CLEARANCE = "Q200", DEPTH = "Q201", CYCLE_F = "Q206", SURFACE = "Q203", SAFE = "Q204", CYCLE_DWELL = "Q211" }
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
-# TODO(question): DRILL and DRILL_DWELL are both cycle 200 and differ by Q211 (controller-mapping 5); the documents do not say which Q211 makes a cycle 200 a DRILL
-# (both examples write Q211=0), and no key tells the reader which entry to take (D163).
+# D163: DRILL and DRILL_DWELL are both cycle 200 and differ by Q211, the dwell at the hole bottom: Q211=0 is DRILL, any other Q211 is DRILL_DWELL with
+# CYCLE_DWELL=Q211 (decisions.md). The rule lives in the reader and the compiler, not in a key of this file.
 
 [[cycle]]
 name = "PECK"
-native = 203                                                                           # CYCL DEF 203 UNIVERSALBOHREN, with retract (controller-mapping 5)
+native = 203                                                                           # CYCL DEF 203 UNIVERSALBOHREN, Q213=0 (controller-mapping 5)
 signature = ["Q200", "Q201", "Q206", "Q202", "Q210", "Q203", "Q204", "Q212", "Q213", "Q205", "Q211", "Q208", "Q256"]   # BOHREN.h
 params = { CLEARANCE = "Q200", DEPTH = "Q201", CYCLE_F = "Q206", PECK = "Q202", SURFACE = "Q203", SAFE = "Q204", CYCLE_DWELL = "Q211" }
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
 
 [[cycle]]
 name = "CHIP_BREAK"
-native = 203                                                                           # CYCL DEF 203 with Q256 (controller-mapping 5)
+native = 203                                                                           # CYCL DEF 203 with Q213 at least the number of infeeds (controller-mapping 5)
 signature = ["Q200", "Q201", "Q206", "Q202", "Q210", "Q203", "Q204", "Q212", "Q213", "Q205", "Q211", "Q208", "Q256"]
 params = { CLEARANCE = "Q200", DEPTH = "Q201", CYCLE_F = "Q206", PECK = "Q202", SURFACE = "Q203", SAFE = "Q204", CYCLE_DWELL = "Q211" }
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
 # Q212 (decrement), Q213 (number of chip breaks) and Q205 (minimum infeed) are in the signature as BOHREN.h writes them; heidenhain.md does not describe them.
-# TODO(question): controller-mapping 5 tells PECK and CHIP_BREAK apart by Q256, but BOHREN.h writes Q256=0,6 in both and differs in Q213 (0 for the full retract
-# of G83, 24 for the chip breaking of G73); no key tells the reader which entry to take, and Q256 has no NCX word (D163).
+# D163: PECK and CHIP_BREAK are told apart by Q213, the number of chip breaks before the control retracts, not by Q256: Q213=0 retracts fully after every
+# infeed (G83, PECK), a Q213 of at least ceil(|Q201|/Q202) never retracts (G73, CHIP_BREAK), anything between is the mixed form and stays native (decisions.md).
 
 [[cycle]]
 name = "TAP"
@@ -78,98 +80,115 @@ absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
 [[cycle]]
 name = "BORE"
 native = 202                                                                           # boring (heidenhain 5)
+signature = ["Q200", "Q201", "Q206", "Q211", "Q208", "Q203", "Q204", "Q214", "Q336"]   # iTNC 530 cycle manual (D178)
 params = { CLEARANCE = "Q200", DEPTH = "Q201", CYCLE_F = "Q206", CYCLE_DWELL = "Q211", SURFACE = "Q203", SAFE = "Q204" }   # controller-mapping 5
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------
 # Further drilling cycles as catalog cycles (heidenhain 5: 204 back boring, 205 universal pecking, 206 tapping with a compensating chuck, 208 bore milling,
 # 209 tapping with chip breaking, 240 centering, 241 single-lip deep hole). Mapped are the Q parameters of heidenhain 5 that the cycle carries.
-# TODO(question): the own parameters of these cycles (back boring depth and offsets, bore diameter, helix infeed, centering diameter, deep hole speeds) and their
-# order are not in heidenhain.md; they are written natively as CYCLE:HEIDENHAIN=n (D94) until the catalog knows them (D178).
+# D178: the orders are the control's own, from the NC-example blocks of the iTNC 530 cycle manual (heidenhain 5). The own parameters of these cycles (back
+# boring depth and offsets, bore diameter, helix infeed, centering diameter, deep hole speeds) have no NCX word, so a definition that carries one is still read
+# natively as CYCLE:HEIDENHAIN=n (D94) and the value the compiler writes for it is D164.
 
 [[cycle]]
 name = "BACK_BORE"
 native = 204
+signature = ["Q200", "Q249", "Q250", "Q251", "Q252", "Q253", "Q254", "Q255", "Q203", "Q204", "Q214", "Q336"]
 params = { CLEARANCE = "Q200", SURFACE = "Q203", SAFE = "Q204" }
 absolute_from_surface = ["CLEARANCE", "SAFE"]
-# TODO(question): the depth, feed and dwell of back boring are not given by heidenhain.md; DEPTH, CYCLE_F and CYCLE_DWELL are not mapped (D178).
+# D178: cycle 204 carries neither Q201 nor Q206 nor Q211; its depth is Q249, its feeds Q253 and Q254, its dwell Q255, none of which has an NCX word, so
+# DEPTH, CYCLE_F and CYCLE_DWELL stay unmapped (decisions.md).
 
 [[cycle]]
 name = "UNIVERSAL_PECK"
 native = 205
+signature = ["Q200", "Q201", "Q206", "Q202", "Q203", "Q204", "Q212", "Q205", "Q258", "Q259", "Q257", "Q256", "Q211", "Q379", "Q253"]
 params = { CLEARANCE = "Q200", DEPTH = "Q201", CYCLE_F = "Q206", PECK = "Q202", SURFACE = "Q203", SAFE = "Q204", CYCLE_DWELL = "Q211" }
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
 
 [[cycle]]
 name = "TAP_COMPENSATING"
 native = 206                                                                           # the name CYCLE840 has in cycles/siemens.toml
-params = { CLEARANCE = "Q200", DEPTH = "Q201", SURFACE = "Q203", SAFE = "Q204", CYCLE_DWELL = "Q211" }
+signature = ["Q200", "Q201", "Q206", "Q211", "Q203", "Q204"]
+params = { CLEARANCE = "Q200", DEPTH = "Q201", CYCLE_F = "Q206", SURFACE = "Q203", SAFE = "Q204", CYCLE_DWELL = "Q211" }
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
-# TODO(question): heidenhain 5 gives Q206 as the feed and Q207 as the tapping feed without naming the cycle; CYCLE_F of cycle 206 is not mapped (D178).
+# D178: cycle 206 takes its plunge feed from Q206, so CYCLE_F maps to it; Q207 is the milling feed and belongs to the milling cycles (decisions.md).
 
 [[cycle]]
 name = "BORE_MILL"
 native = 208
+signature = ["Q200", "Q201", "Q206", "Q334", "Q203", "Q204", "Q335", "Q342", "Q351"]
 params = { CLEARANCE = "Q200", DEPTH = "Q201", CYCLE_F = "Q206", SURFACE = "Q203", SAFE = "Q204" }
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
 
 [[cycle]]
 name = "TAP_CHIP_BREAK"
 native = 209
-params = { CLEARANCE = "Q200", DEPTH = "Q201", SURFACE = "Q203", SAFE = "Q204" }
+signature = ["Q200", "Q201", "Q239", "Q203", "Q204", "Q257", "Q256", "Q336", "Q403"]
+params = { CLEARANCE = "Q200", DEPTH = "Q201", PITCH = "Q239", SURFACE = "Q203", SAFE = "Q204" }
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
-# TODO(question): heidenhain 5 gives Q239 as the pitch of cycle 207 only; PITCH of cycle 209 and its chip breaking (Q256, Q257) are not mapped (D178).
+# D178: cycle 209 takes its pitch from Q239, as 207 does; its chip breaking (Q257 depth, Q256 retract) has no NCX word (decisions.md).
 
 [[cycle]]
 name = "CENTERING"
 native = 240
+signature = ["Q200", "Q343", "Q201", "Q344", "Q206", "Q211", "Q203", "Q204"]
 params = { CLEARANCE = "Q200", DEPTH = "Q201", CYCLE_F = "Q206", SURFACE = "Q203", SAFE = "Q204", CYCLE_DWELL = "Q211" }
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
 
 [[cycle]]
 name = "SINGLE_LIP_DRILL"
 native = 241
+signature = ["Q200", "Q201", "Q206", "Q211", "Q203", "Q204", "Q379", "Q253", "Q208", "Q426", "Q427", "Q428", "Q429", "Q430", "Q435"]
 params = { CLEARANCE = "Q200", DEPTH = "Q201", CYCLE_F = "Q206", SURFACE = "Q203", SAFE = "Q204", CYCLE_DWELL = "Q211" }
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------
 # Pockets, slots and studs (heidenhain 5: 251 rectangular pocket, 252 circular pocket, 253 slot, 254 circular slot, 256/257 studs)
 # RECT_POCKET is the entry of machine-config 6, completed by SAFE = Q204; the others map the same Q parameters of heidenhain 5.
-# TODO(question): the own dimensions of 252 to 257 (diameters, slot length and width, stud sizes), the Q215 of 251 (language 4.7.1) and the allowances and
-# milling feeds of all of them are not in heidenhain.md; they are written natively as CYCLE:HEIDENHAIN=n (D94) until the catalog knows them (D178).
+# D178: the orders below are the control's own. The own dimensions of 252 to 257 (diameters, slot length and width, stud sizes), the Q215 of 251
+# (language 4.7.1), the allowances and the milling feed Q207 have no NCX word, so such a definition is read natively as CYCLE:HEIDENHAIN=n (D94) and the value
+# the compiler writes for the unmapped parameters is D164. CYCLE_F stays the plunge feed Q206 beside the milling feed Q207 (decisions.md).
 
 [[cycle]]
 name = "RECT_POCKET"
 native = 251
+signature = ["Q215", "Q218", "Q219", "Q220", "Q368", "Q224", "Q367", "Q207", "Q351", "Q201", "Q202", "Q369", "Q206", "Q338", "Q200", "Q203", "Q204", "Q370", "Q366", "Q385"]
 params = { LENGTH = "Q218", WIDTH = "Q219", DEPTH = "Q201", PECK = "Q202", CYCLE_F = "Q206", SURFACE = "Q203", CLEARANCE = "Q200", SAFE = "Q204" }
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
 
 [[cycle]]
 name = "CIRC_POCKET"
 native = 252
+signature = ["Q215", "Q223", "Q368", "Q207", "Q351", "Q201", "Q202", "Q369", "Q206", "Q338", "Q200", "Q203", "Q204", "Q370", "Q366", "Q385"]
 params = { DEPTH = "Q201", PECK = "Q202", CYCLE_F = "Q206", SURFACE = "Q203", CLEARANCE = "Q200", SAFE = "Q204" }
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
 
 [[cycle]]
 name = "SLOT"
 native = 253
+signature = ["Q215", "Q218", "Q219", "Q368", "Q374", "Q367", "Q207", "Q351", "Q201", "Q202", "Q369", "Q206", "Q338", "Q200", "Q203", "Q204", "Q366", "Q385"]
 params = { DEPTH = "Q201", PECK = "Q202", CYCLE_F = "Q206", SURFACE = "Q203", CLEARANCE = "Q200", SAFE = "Q204" }
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
 
 [[cycle]]
 name = "CIRC_SLOT"
 native = 254
+signature = ["Q215", "Q219", "Q368", "Q375", "Q367", "Q216", "Q217", "Q376", "Q248", "Q378", "Q377", "Q207", "Q351", "Q201", "Q202", "Q369", "Q206", "Q338", "Q200", "Q203", "Q204", "Q366", "Q385"]
 params = { DEPTH = "Q201", PECK = "Q202", CYCLE_F = "Q206", SURFACE = "Q203", CLEARANCE = "Q200", SAFE = "Q204" }
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
 
 [[cycle]]
 name = "RECT_STUD"
 native = 256
+signature = ["Q218", "Q424", "Q219", "Q425", "Q220", "Q368", "Q224", "Q367", "Q207", "Q351", "Q201", "Q202", "Q206", "Q200", "Q203", "Q204", "Q370"]
 params = { DEPTH = "Q201", PECK = "Q202", CYCLE_F = "Q206", SURFACE = "Q203", CLEARANCE = "Q200", SAFE = "Q204" }
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
 
 [[cycle]]
 name = "CIRC_STUD"
 native = 257
+signature = ["Q223", "Q222", "Q368", "Q207", "Q351", "Q201", "Q202", "Q206", "Q200", "Q203", "Q204", "Q370"]
 params = { DEPTH = "Q201", PECK = "Q202", CYCLE_F = "Q206", SURFACE = "Q203", CLEARANCE = "Q200", SAFE = "Q204" }
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]

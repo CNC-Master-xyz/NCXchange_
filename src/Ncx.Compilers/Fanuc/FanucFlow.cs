@@ -125,7 +125,8 @@ internal static class FanucFlow
         {
             // TODO(question): controller-mapping 6 writes REPEAT with TIMES as "counter variable and IF GOTO
             // (compiler)" and names no variable for the counter, which may clash with a variable of the program; the
-            // block is an ERROR until that is answered (D212, D213).
+            // block is an ERROR until that is answered (D213). D212 settles only what a missing TIMES means, the
+            // count 1.
             write.Written(repeat);
             write.Written("TIMES");
             write.Error(DiagnosticCodes.FanucRepeatNotWritten,

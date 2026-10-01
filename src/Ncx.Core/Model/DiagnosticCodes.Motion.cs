@@ -144,4 +144,10 @@ public static partial class DiagnosticCodes
     /// drilling cycle (language 4.7, virtual machine 3.3, 5, D59).
     /// </summary>
     public const string CycleAxisNotLinear = "VM252";
+
+    /// <summary>
+    /// VM253: CYCLE_CALL of a built-in drilling cycle with a word on its drilling axis (language 4.7, virtual machine
+    /// 3.3, 5, D189).
+    /// </summary>
+    public const string CycleCallOnTheDrillingAxis = "VM253";
 }

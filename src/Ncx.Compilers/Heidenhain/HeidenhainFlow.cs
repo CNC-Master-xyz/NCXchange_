@@ -252,7 +252,7 @@ internal static class HeidenhainFlow
 
     // CALL LBL n REP k repeats the part between LBL n and the call k more times (controllers heidenhain.md 1;
     // controller-mapping 6, REPEAT).
-    // TODO(question): D212: REPEAT without TIMES is open; as its recommendation says, the compiler writes the count 1.
+    // D212: TIMES is optional and defaults to 1, so a REPEAT without it is written as REP 1 (decisions.md).
     private static void WriteRepeat(HeidenhainBlock writing)
     {
         if (writing.Take("REPEAT") is not Word repeat)

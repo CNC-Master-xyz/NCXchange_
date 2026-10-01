@@ -206,7 +206,7 @@ A cycle is defined once (modal) and executed by `CYCLE_CALL` at each position. `
 | `PITCH=1.5` | number | Thread pitch for `TAP` (Q239; Fanuc F/S in rigid tapping). | with `CYCLE` |
 | `CONTOUR=FACE_A` | sub name: the `NAME` of a `SUB` section of the file | Contour reference of a multiple repetitive turning cycle (Fanuc `G70`..`G76`, 4.7.1): the subprogram section of the file that holds the contour blocks, named on the cycle block. D65, D90. | with `CYCLE` |
 | `AXIS=X` | axis name | Drilling axis of the cycle. Default: the tool axis of the active `WORKPLANE`. Lathes drill along Z on the face (`G83`..`G85`, `AXIS=Z`) and along X on the circumference (`G87`..`G89`, `AXIS=X`) with the C axis as the positioning axis; on a lathe under `DIAMETER=ON` the X values of `SURFACE`, `CLEARANCE` and `DEPTH` are diameters like every other X. D59. | with `CYCLE` |
-| `CYCLE_CALL` | **verb** | Execute the active cycle at the position given by the axis words, or at the current position when there are none (CYCL CALL, M99, a Fanuc position block under an active G8x, a Fanuc `X`/`Z`/`R` block under an active `G90`/`G92`/`G94` turning cycle). | block |
+| `CYCLE_CALL` | **verb** | Execute the active cycle at the position given by the axis words, or at the current position when there are none (CYCL CALL, M99, a Fanuc position block under an active G8x, a Fanuc `X`/`Z`/`R` block under an active `G90`/`G92`/`G94` turning cycle). A word on the drilling axis of the built-in family is an ERROR: the cycle's own planes move that axis, and a pre-positioning is a `RAPID` of its own (D189). A reader writes the axis words its source block carries, so a defining block that carries no position becomes a bare `CYCLE_CALL` (D220). | block |
 
 #### 4.7.1 Cycle catalog
 
@@ -239,8 +239,8 @@ A job (which programs run on which channel) is described in a job manifest next 
 | `RETURN` | | Return to the caller before `SUB=END` is reached, for example under a condition. In a program (not in a subprogram) it is a WARNING and treated as `JUMP=END`. | block |
 | `CALL=100` | sub name, or string for an external program | Call a subprogram of the file by its `NAME` (`M98 P100`, `CALL LBL 100`, `L100`) or an external program by file name (`CALL="O9010"`, `CALL PGM`, `EXTCALL`). | block |
 | `ARG:A=1` | number or expression; addr = argument name | Argument of the `CALL` in the same block (`G65 P9010 A1`). The callee sees it as a local variable. | block |
-| `TIMES=3` | integer or expression | Repeat count for `CALL` (`M98 P100 L3`) or `REPEAT`. | block |
-| `REPEAT=1` | label | Repeat the blocks from the label to this block `TIMES` more times (`CALL LBL 1 REP 3`, `REPEAT LABEL P=3`). | block |
+| `TIMES=3` | integer or expression | Repeat count for `CALL` (`M98 P100 L3`) or `REPEAT`; 1 when it is missing (D212). | block |
+| `REPEAT=1` | label | Repeat the blocks from the label to this block `TIMES` more times, once when `TIMES` is missing (`CALL LBL 1 REP 3`, `REPEAT LABEL P=3`; D212). | block |
 
 Variable names follow `ADDR`. Readers keep native names where possible: Heidenhain `Q5`, `QL5`, `QR5`, `QS5`; Siemens `R5` and declared names; Fanuc `#105` becomes `V105` because `#` is not a legal character, and G65 letter arguments map to `V1`..`V33` by the standard table. The compiler maps names back through the machine configuration.
 
@@ -280,6 +280,8 @@ function    = "SIN" | "COS" | "TAN" | "ASIN" | "ACOS" | "ATAN" | "ATAN2" | "SQRT
 ```
 
 Angles in degrees. `INT` truncates toward zero, `ROUND` rounds half away from zero, `MOD` keeps the sign of the dividend. Comparisons yield 1 or 0. Division by zero is an ERROR. Whitespace inside `{}` is free. Expressions may stand wherever a number is allowed.
+
+`ATAN2(y, x)` takes the ordinate first and is the angle of the point `(x, y)` from +X, above -180 and up to 180 degrees, as Siemens `ATAN2()` gives it; Fanuc's two-argument `ATAN[y]/[x]` takes the same argument order but a range its parameter 6004 selects (controllers fanuc.md 7). `FRAC(x)` is `x - INT(x)` and keeps the sign of `x`, so that `INT(x) + FRAC(x)` is `x`, as the TNC's `FRAC` beside its truncating `INT` does. A function without a real result is an ERROR, as division by zero is: `ATAN2(0, 0)`, `SQRT` of a negative number, `LN` of zero or less, `ASIN` or `ACOS` outside -1 to 1, `TAN` of 90 and 270 degrees. D119.
 
 System variables: names starting with `SYS_` are reserved for values the control provides (current position `$SYS_POS_X`, machine position `$SYS_MPOS_B`, tool offsets `$SYS_TOOL_LEN`, wear registers with an index `$SYS_WEAR_Z[99]`, active tool `$SYS_TOOL`, part status `$SYS_PART_MAIN`). The index selects a register or table row and may itself be an expression. Readers map the native names (Fanuc `#5021`..`#5025` machine positions, `#11099` = Z wear register 99 in the Nakamura transfer program, Siemens `$AA_IW[X]`, `RG` parameters, Heidenhain `FN 18` ids) through the machine configuration; unmapped ones become `RAW`. D51.
 
@@ -394,11 +396,14 @@ PRELOAD=5
 Drilling, Fanuc `G81 G99 Z-21.732 R5. F565` then `X30.`, Heidenhain `CYCL DEF 200 ... ` then `CYCL CALL` and `L X30 FMAX M99`:
 
 ```
+RAPID X=10 Y=10
 CYCLE=DRILL SURFACE=0 CLEARANCE=5 DEPTH=-21.732 CYCLE_RETRACT=CLEARANCE CYCLE_F=565
-CYCLE_CALL X=10 Y=10
+CYCLE_CALL
 CYCLE_CALL X=30
 CYCLE=OFF
 ```
+
+The first call carries no axis word because the defining block carries none: it drills where the tool stands, at X10 Y10 (D220).
 
 Tilted plane by rotary axis angles with the table turned, then a retract along the tool axis, Heidenhain `PLANE AXIAL A-90 C180 TURN FMAX` ... `M140 MB MAX`:
 

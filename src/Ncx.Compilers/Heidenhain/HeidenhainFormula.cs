@@ -183,6 +183,9 @@ internal sealed class HeidenhainFormula
     // A variable is a Q parameter by its name; an index, a string parameter and every other name have no Klartext
     // form (controllers heidenhain.md 6; language 4.9: the compiler maps names back through the machine configuration,
     // and a Heidenhain machine names none).
+    // TODO(question): D182 gives the FN 18 ids of the iTNC 530 for the SYS_ names and says the read stands in a block
+    // of its own, FN 18: SYSREAD Qn = ID.. NR.. IDX.., before the block that uses Qn; which Q parameter that block
+    // assigns into is not settled, so a $SYS_ name is still refused here.
     private string Variable(VariableNode variable)
     {
         if (variable.Index is not null)

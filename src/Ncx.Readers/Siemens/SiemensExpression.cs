@@ -237,8 +237,8 @@ internal static partial class SiemensExpression
         }
         else if (s_functions.TryGetValue(name, out string? ncx))
         {
-            // TODO(question): D119, the argument order of ATAN2; the arguments stay in the order the source writes
-            // them.
+            // D119: NCX ATAN2 is Siemens ATAN2, the angle referred to the second argument over four quadrants, so
+            // the arguments stay in the order the source writes them (decisions.md).
             output.Append(ncx).Append('(').Append(arguments).Append(')');
         }
         else

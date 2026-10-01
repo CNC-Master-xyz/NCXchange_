@@ -39,8 +39,8 @@ public sealed class HeidenhainCycleTests
         Assert.EndsWith("    Q211=+0,5", body, StringComparison.Ordinal);
     }
 
-    // The TODO(question) D226 of HeidenhainCycleValues: CYCLE_RETRACT=CLEARANCE writes Q204 equal to Q200; every plane
-    // relative to the surface Q203.
+    // D226: CYCLE_RETRACT=CLEARANCE writes Q204 equal to Q200, which ends the tool at the set-up clearance because
+    // the second clearance acts only above the first; every plane relative to the surface Q203.
     [Fact]
     public void Rule7_CycleRetractClearance_WritesQ204EqualToQ200()
     {
@@ -52,8 +52,8 @@ public sealed class HeidenhainCycleTests
             HeidenhainCompile.Body(result), StringComparison.Ordinal);
     }
 
-    // Controller-mapping 5, PECK: cycle 203; the TODO(question) D163 and D164 of HeidenhainCycleValues: Q213=0 for
-    // PECK, Q205 equal to Q202, Q208=MAX, Q256 0.6, Q210 and Q212 zero.
+    // Controller-mapping 5, PECK: cycle 203 with Q213=0, which retracts fully after every infeed (D163); the
+    // TODO(question) D164 of HeidenhainCycleValues: Q205 equal to Q202, Q208=MAX, Q256 0.6, Q210 and Q212 zero.
     [Fact]
     public void Rule7_Peck_IsCycle203WithQ213Zero()
     {
@@ -67,8 +67,8 @@ public sealed class HeidenhainCycleTests
             HeidenhainCompile.Body(result), StringComparison.Ordinal);
     }
 
-    // The TODO(question) D163 of HeidenhainCycleValues: Q213 of CHIP_BREAK is the number of infeeds, the depth over
-    // PECK rounded up, 19 for 21.732 over 1.2.
+    // D163: Q213 of CHIP_BREAK is the number of infeeds, the depth over PECK rounded up, 19 for 21.732 over 1.2, a
+    // count the drilling never reaches, so the control never retracts.
     [Fact]
     public void Rule7_ChipBreak_IsCycle203WithTheNumberOfInfeedsAsQ213()
     {
@@ -106,15 +106,18 @@ public sealed class HeidenhainCycleTests
             HeidenhainCompile.Body(result), StringComparison.Ordinal);
     }
 
-    // The TODO(question) D178 of HeidenhainCycles: the signature of cycle 202 is not in the documents, and compiling
-    // an entry without one is CMP103.
+    // D178: the catalog carries the control's order for cycle 202, Q200 Q201 Q206 Q211 Q208 Q203 Q204 Q214 Q336, so
+    // the entry no longer fails for a missing signature; Q208, Q214 and Q336 carry no NCX word, and which value the
+    // compiler writes for them is the open D164, so a BORE is the ERROR CMP104 of the first of them.
     [Fact]
-    public void Rule7_BoreWithoutSignature_IsTheErrorCmp103()
+    public void Rule7_BoreWhoseSignatureHasUnmappedParameters_IsTheErrorCmp104()
     {
         CompileResult result = Run("CYCLE=BORE SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_F=100");
 
         Assert.Empty(result.Files);
-        Assert.Equal(6, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainCycleWithoutSignature).Line);
+        var reported = HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainCycleParameterWithoutValue);
+        Assert.Equal(6, reported.Line);
+        Assert.Contains("Q208 of cycle 202", reported.Message, StringComparison.Ordinal);
     }
 
     // Controllers heidenhain.md 8 rule 7, heidenhain 5: Q203 is the surface every plane is relative to, so a cycle

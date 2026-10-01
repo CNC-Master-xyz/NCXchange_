@@ -222,11 +222,10 @@ internal static class SiemensFlow
             + "ends the program: a GOTOF goes to a label of its own unit (controllers siemens.md 8).");
     }
 
-    // REPEAT=label TIMES=n as REPEAT LABEL P=n, the blocks from the label to this one n more times; without TIMES once
-    // more, as D212 recommends (controllers siemens.md 8; controller-mapping 6, REPEAT + TIMES). MCALL alone stands
-    // before it where a modal call may be armed, as before a jump (WriteJump).
-    // TODO(question): D212: REPEAT without TIMES repeats the blocks once more and is written without P, until D212 is
-    // answered.
+    // REPEAT=label TIMES=n as REPEAT LABEL P=n, the blocks from the label to this one n more times; without TIMES
+    // once more, which a Sinumerik REPEAT without P does too, so none is written (controllers siemens.md 8;
+    // controller-mapping 6, REPEAT + TIMES; D212, decisions.md). MCALL alone stands before it where a modal call may
+    // be armed, as before a jump (WriteJump).
     private static void WriteRepeat(SiemensBlock write)
     {
         if (write.Block.Find("REPEAT") is not Word repeat)

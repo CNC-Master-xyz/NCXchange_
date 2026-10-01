@@ -109,7 +109,7 @@ CW = "M3"
 CCW = "M4"
 OFF = "M5"
 RPM = "TOOL CALL S{rpm}"           # a speed change without a tool (heidenhain 4); with TOOL the compiler folds RPM into the TOOL CALL (heidenhain 8 rule 3)
-# TODO(question): heidenhain 4 and controller-mapping 3 allow TOOL CALL S without a tool number on newer controls; whether the iTNC 530 is one of them is not said (D180).
+# D180: the iTNC 530 accepts TOOL CALL S without a tool number (decisions.md); repeating the tool number would run the tool-change macro (heidenhain 8 rule 3).
 # No ORIENT: controller-mapping 4 gives the Heidenhain ORIENT as an M function with angle from the machine file, and heidenhain 4 calls M19 the builder's, so no generic ORIENT is written here (wave-1 question #9).
 # No VC, CSS_OFF, RPM_MAX: constant surface speed is FUNCTION TURNDATA SPIN of the TNC 640 turning mode (heidenhain 4), not a word of this milling control.
 rpm_min = 20                       # machine limits, not the program's RPM_MAX clamp: the expander warns or clamps (D64)
@@ -136,4 +136,15 @@ catalog = "heidenhain.toml"        # the Heidenhain cycle catalog shipped with N
 unassigned = "error"
 block_cap = 1000000
 call_depth = 8
-# TODO(question): no [system_variables] table: machine-config 7 points to FN 18 ids for Heidenhain, and heidenhain.md lists none (D182).
+
+[system_variables]                 # NCX SYS_ names to the FN 18 ids of the iTNC 530 (machine-config 7; heidenhain 6; D182)
+SYS_POS_X = "ID270 NR1 IDX1"       # position in the active coordinate system; the index runs X Y Z A B C U V W
+SYS_POS_Y = "ID270 NR1 IDX2"
+SYS_POS_Z = "ID270 NR1 IDX3"
+SYS_MPOS_X = "ID240 NR1 IDX1"      # nominal position in the REF system
+SYS_MPOS_Y = "ID240 NR1 IDX2"
+SYS_MPOS_Z = "ID240 NR1 IDX3"
+SYS_WEAR_Z = "ID50 NR4 IDX{index}" # the length oversize DL of the tool table, the index being the tool number
+SYS_TOOL_LEN = "ID200 NR2"         # the active tool length including the delta values
+# D182: a read is written as a block of its own, FN 18: SYSREAD Qn = ID.. NR.. IDX.., before the block that uses Qn (decisions.md).
+# TODO(question): which Q parameter that block assigns into is not settled; the Heidenhain compiler therefore still refuses a $SYS_ name.

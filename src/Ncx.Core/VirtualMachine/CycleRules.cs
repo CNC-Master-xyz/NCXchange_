@@ -111,9 +111,9 @@ internal static class CycleRules
         bool toSafe = ParameterOf(cycle, CycleRetractKey) is Word retract && BlockContext.IdentOf(retract) == SafeKey;
         AxisPosition retractPlane = toSafe ? PlaneAt(state, SafeKey, drillingAxis, frame) : clearance;
 
-        // TODO(question): the other axis words of the call block position the hole (virtual machine 3.3); what a word
-        // on the drilling axis itself does in the call block is not said. It moves its axis with the rapid to the
-        // hole, before the sequence, until D189 is answered.
+        // D189: a word on the drilling axis in the call block of the built-in family is an ERROR; the cycle's own
+        // planes move that axis, and a pre-positioning is a RAPID of its own (virtual machine 3.3, 5; decisions.md).
+        ReportDrillingAxisWord(context, drillingAxis);
         Dictionary<string, AxisPosition> hole = PositionTheHole(context);
         state.Motion.Position[drillingAxis] = retractPlane;
         if (!expandCycles)
@@ -177,6 +177,22 @@ internal static class CycleRules
         }
 
         return pecks;
+    }
+
+    // A word on the drilling axis in the call block of the built-in family: the cycle's own planes move that axis, so
+    // the word has no meaning of its own and is an ERROR (virtual machine 3.3, 5; D189).
+    private static void ReportDrillingAxisWord(BlockContext context, string drillingAxis)
+    {
+        foreach (Word word in context.Block.Words)
+        {
+            if (context.AxisOf.TryGetValue(word, out string? axis) && axis == drillingAxis)
+            {
+                context.Diagnostics.Error(context.Block, DiagnosticCodes.CycleCallOnTheDrillingAxis,
+                    $"{word.Key} stands on the drilling axis {drillingAxis} of the cycle; the cycle moves that axis "
+                    + "itself, and a pre-positioning is a RAPID of its own (language 4.7, virtual machine 3.3, D189).");
+                return;
+            }
+        }
     }
 
     // The axis words of the call block position the hole, each moving its axis as a RAPID does (virtual machine 3.1,

@@ -86,8 +86,9 @@ internal static class HeidenhainCycles
             writing.Take(key);
         }
 
-        // TODO(question): D178: the signatures of the cycles 202, 204 to 206, 208, 209, 240, 241 and 251 to 257 are
-        // not in the documents; as its recommendation says, compiling an entry without a signature is a CMP ERROR.
+        // D178: the catalog carries the control's own order for every cycle of heidenhain 5; an entry that still has
+        // no signature, one a machine file adds, cannot be written in the control's order and is a CMP ERROR
+        // (decisions.md).
         string name = cycle.Value.ToCanonical();
         CycleEntry? entry = writing.Machine.CycleCatalog.Find(name);
         if (entry is null || entry.Signature.Count == 0)

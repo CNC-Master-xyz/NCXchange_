@@ -43,11 +43,12 @@ public sealed partial class HeidenhainReaderTests
     // block), and the Heidenhain reading. Every comment line of the expected file, a comment of the Fanuc source
     // (D92), is a * - block of the Klartext source, SECTION (controller-mapping 1). The differences: the program number
     // of O0001 and BLK FORM (as for 2.5D_FRAESEN); the offsets with the TOOL CALL and the speed in it (D7, heidenhain 7
-    // rule 2); the R0 of the first positioning; SAFE and CYCLE_RETRACT=SAFE from Q204 against G99 and R5. (the open
-    // question of controller-mapping 5), the plunge feed Q206=565,487 against F565, the dwell Q211=0 that G81 does not
-    // write, cycle 203 as PECK where the Fanuc source writes G73 (wave-1 question #20); the fourth operation, a cycle
-    // 203 in Klartext and single moves in the Fanuc source; M29 S500 of the Fanuc tapping; M91 moves against G28
-    // (2.5D_FRAESEN note 4).
+    // rule 2); the R0 of the first positioning; the plunge feed Q206=565,487 against F565 and the dwell Q211=0 that
+    // G81 does not write; the fourth operation, whose Q213=3 is the mixed form of cycle 203 that D163 reads natively
+    // and whose Q208=MAX has no NCX value, so the Klartext blocks stay RAW where the Fanuc source writes single moves
+    // (wave-2 question 94); M29 S500 of the Fanuc tapping; M91 moves against G28 (2.5D_FRAESEN note 4). Q204=5
+    // beside Q200=5 is no difference any more: the second clearance acts only above the first, so both sources give
+    // CYCLE_RETRACT=CLEARANCE (D226), and cycle 203 with Q213=24 is the CHIP_BREAK of the Fanuc G73 (D163).
     private static readonly BohrenDifference[] s_bohrenReading =
     [
         new("PROGRAM=BEGIN NAME=\"BOHREN\" NUMBER=1", null, "PROGRAM=BEGIN NAME=\"BOHREN\""),
@@ -57,12 +58,12 @@ public sealed partial class HeidenhainReaderTests
         new("SPINDLE=CW RPM=10000", null, "SPINDLE=CW"),
         new("RAPID X=10 Y=10", null, "RAPID X=10 Y=10 COMP=OFF"),
         new("RAPID Z=5 OFFSET:LEN=1", null, "RAPID Z=5"),
-        new(Cycle("DRILL", "", "CLEARANCE", "CYCLE_F=565"), null,
-            Cycle("DRILL", "", "SAFE", "CYCLE_F=565.487 CYCLE_DWELL=0")),
-        new(Cycle("CHIP_BREAK", "PECK=1.2 ", "CLEARANCE", "CYCLE_F=565"), null, Peck()),
-        new(Cycle("PECK", "PECK=1.2 ", "CLEARANCE", "CYCLE_F=565"), null, Peck()),
-        new("LINE Z=3.8 F=565", "HOME Z", Peck() + "\nCYCLE_CALL\nCYCLE_CALL X=30\nCYCLE_CALL X=50\nCYCLE_CALL X=70\n"
-            + "CYCLE_CALL X=90\nCYCLE=OFF\nRAPID Z=5"),
+        new(Cycle("DRILL", "", "CYCLE_F=565"), null, Cycle("DRILL", "", "CYCLE_F=565.487 CYCLE_DWELL=0")),
+        new(Cycle("CHIP_BREAK", "PECK=1.2 ", "CYCLE_F=565"), null,
+            Cycle("CHIP_BREAK", "PECK=1.2 ", "CYCLE_F=565.487 CYCLE_DWELL=0")),
+        new(Cycle("PECK", "PECK=1.2 ", "CYCLE_F=565"), null,
+            Cycle("PECK", "PECK=1.2 ", "CYCLE_F=565.487 CYCLE_DWELL=0")),
+        new("LINE Z=3.8 F=565", "HOME Z", RawMixedCycle203() + "\nRAPID Z=5"),
         new("HOME Z", null, "RAPID Z=0 FRAME=MACHINE"),
         new("HOME X Y", null, "RAPID X=0 Y=0 FRAME=MACHINE"),
         new("TOOL=2", null, "TOOL=2 OFFSET:LEN=2 OFFSET:RAD=2 RPM=500"),
@@ -70,14 +71,14 @@ public sealed partial class HeidenhainReaderTests
         new("RAPID Z=5 OFFSET:LEN=2", null, "RAPID Z=5"),
         new("RPM=500 FUNC:RIGID_TAP=ON", null, ""),
         new("CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE CYCLE_F=750 CYCLE_DWELL=0 PITCH=1.5",
-            null, "CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20 SAFE=5 CYCLE_RETRACT=SAFE PITCH=1.5"),
+            null, "CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE PITCH=1.5"),
         new("HOME Z", null, "RAPID Z=0 FRAME=MACHINE"),
         new("HOME X Y", null, "RAPID X=0 Y=0 FRAME=MACHINE"),
         new("TOOL=3", null, "TOOL=3 OFFSET:LEN=3 OFFSET:RAD=3 RPM=8000"),
         new("SPINDLE=CW RPM=8000", null, "SPINDLE=CW"),
         new("RAPID Z=5 OFFSET:LEN=3", null, "RAPID Z=5"),
         new("CYCLE=REAM SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE CYCLE_F=420", null,
-            "CYCLE=REAM SURFACE=0 CLEARANCE=5 DEPTH=-20 SAFE=5 CYCLE_RETRACT=SAFE CYCLE_F=420 CYCLE_DWELL=0"),
+            "CYCLE=REAM SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE CYCLE_F=420 CYCLE_DWELL=0"),
         new("HOME Z", null, "RAPID Z=0 FRAME=MACHINE"),
         new("HOME X Y", null, "RAPID X=0 Y=0 FRAME=MACHINE"),
     ];
@@ -106,8 +107,8 @@ public sealed partial class HeidenhainReaderTests
     }
 
     // M6: BOHREN.h reads into the blocks of Expected/BOHREN.ncx, frozen from the Fanuc source, except the blocks the
-    // two sources write otherwise (s_bohrenReading); the expected file follows the Fanuc reading until the question of
-    // SAFE is answered (phase 3, P3-05).
+    // two sources write otherwise (s_bohrenReading); D226 took the SAFE blocks out of that list, so the two readers
+    // now agree on CYCLE_RETRACT (phase 3, P3-05).
     [Fact]
     public void Convert_Bohren_ReadsIntoTheExpectedFileExceptTheListedBlocks()
     {
@@ -300,17 +301,52 @@ public sealed partial class HeidenhainReaderTests
         return codes;
     }
 
-    // A drilling cycle of BOHREN with the words both sources share.
-    private static string Cycle(string name, string peck, string retract, string tail)
+    // A drilling cycle of BOHREN with the words both sources share; Q204=5 beside Q200=5 does not act, so every
+    // cycle of the file retracts to CLEARANCE (D226).
+    private static string Cycle(string name, string peck, string tail)
     {
-        string safe = retract == "SAFE" ? "SAFE=5 " : "";
-        return $"CYCLE={name} SURFACE=0 CLEARANCE=5 DEPTH=-21.732 {safe}CYCLE_RETRACT={retract} {peck}{tail}";
+        return $"CYCLE={name} SURFACE=0 CLEARANCE=5 DEPTH=-21.732 CYCLE_RETRACT=CLEARANCE {peck}{tail}";
     }
 
-    // Cycle 203 of BOHREN.h, the first entry of the catalog for it (wave-1 question #20).
-    private static string Peck()
+    // The fourth operation of BOHREN.h: a cycle 203 whose Q213=3 lies between 0 and the number of infeeds, the mixed
+    // form that has no NCX cycle and is read natively as CYCLE:HEIDENHAIN=203 (D163). It does not get there, because a
+    // native parameter takes a number or an expression (language 4.7.1, D94) and Q208=MAX is a literal of the control,
+    // so the definition and the five calls that follow it stay RAW (heidenhain 7 rule 9). The blocks below are that
+    // residue, not the decided reading: it waits for D115, which asks what a parameter may carry, and D164, which
+    // writes Q208=MAX back (03-open-questions, wave 2 question 94; the marker in HeidenhainCycles.Native). Where every
+    // Q parameter has an NCX value the native form is written, which the reader test
+    // CyclDef203_WithQ213BetweenZeroAndTheInfeeds_IsWrittenNatively pins.
+    private static string RawMixedCycle203()
     {
-        return Cycle("PECK", "PECK=1.2 ", "SAFE", "CYCLE_F=565.487 CYCLE_DWELL=0");
+        string[] lines =
+        [
+            "38 CYCL DEF 203 UNIVERSALBOHREN ~",
+            "    Q200=5 ;SICHERHEITSABSTAND ~",
+            "    Q201=-21,732 ;TIEFE ~",
+            "    Q206=565,487 ;VORSCHUBTYP FUR TAUCHEN ~",
+            "    Q202=1,2 ;TIEFENZUSTELLUNG ~",
+            "    Q210=0 ;VERWEILZEIT AN HOCHSTEM PUNKT ~",
+            "    Q203=0 ;OBERFLACHENKOORDINATE ~",
+            "    Q204=5 ;2. SICHERHEITSABSTAND ~",
+            "    Q212=0 ;DEKREMENT ~",
+            "    Q213=3 ;BRUCHANZAHL ~",
+            "    Q205=1,2 ;MIN. TIEFENZUSTELLUNG ~",
+            "    Q211=0 ;VERWEILZEIT AN TIEFSTEM PUNKT ~",
+            "    Q208=MAX ;RUCKZUGSVORSCHUBTYP ~",
+            "    Q256=0,6 ;ABSTAND FUR SPANBRECHEN",
+            "39 CYCL CALL",
+            "40 L X30 FMAX M99",
+            "41 L X50 FMAX M99",
+            "42 L X70 FMAX M99",
+            "43 L X90 FMAX M99",
+        ];
+        var blocks = new List<string>();
+        foreach (string line in lines)
+        {
+            blocks.Add($"RAW:HEIDENHAIN=\"{line}\"");
+        }
+
+        return string.Join('\n', blocks);
     }
 
     [GeneratedRegex(@"PLANE\s+AXIAL", RegexOptions.CultureInvariant)]

@@ -201,6 +201,50 @@ public sealed class ShippedCatalogsTests
         Assert.False(Load("siemens.toml", Controller.Siemens).PassesThrough("HEIDENHAIN"));
     }
 
+    // D178: the Heidenhain catalog carries the Q parameters of every cycle in the control's own order, the order of
+    // the NC-example block of the iTNC 530 cycle programming manual (controllers heidenhain.md 5).
+    [Theory]
+    [InlineData("200", "Q200 Q201 Q206 Q202 Q210 Q203 Q204 Q211")]
+    [InlineData("201", "Q200 Q201 Q206 Q211 Q208 Q203 Q204")]
+    [InlineData("202", "Q200 Q201 Q206 Q211 Q208 Q203 Q204 Q214 Q336")]
+    [InlineData("203", "Q200 Q201 Q206 Q202 Q210 Q203 Q204 Q212 Q213 Q205 Q211 Q208 Q256")]
+    [InlineData("204", "Q200 Q249 Q250 Q251 Q252 Q253 Q254 Q255 Q203 Q204 Q214 Q336")]
+    [InlineData("205", "Q200 Q201 Q206 Q202 Q203 Q204 Q212 Q205 Q258 Q259 Q257 Q256 Q211 Q379 Q253")]
+    [InlineData("206", "Q200 Q201 Q206 Q211 Q203 Q204")]
+    [InlineData("207", "Q200 Q201 Q239 Q203 Q204")]
+    [InlineData("208", "Q200 Q201 Q206 Q334 Q203 Q204 Q335 Q342 Q351")]
+    [InlineData("209", "Q200 Q201 Q239 Q203 Q204 Q257 Q256 Q336 Q403")]
+    [InlineData("240", "Q200 Q343 Q201 Q344 Q206 Q211 Q203 Q204")]
+    [InlineData("241", "Q200 Q201 Q206 Q211 Q203 Q204 Q379 Q253 Q208 Q426 Q427 Q428 Q429 Q430 Q435")]
+    [InlineData("251", "Q215 Q218 Q219 Q220 Q368 Q224 Q367 Q207 Q351 Q201 Q202 Q369 Q206 Q338 Q200 Q203 Q204 Q370 "
+        + "Q366 Q385")]
+    [InlineData("252", "Q215 Q223 Q368 Q207 Q351 Q201 Q202 Q369 Q206 Q338 Q200 Q203 Q204 Q370 Q366 Q385")]
+    [InlineData("253", "Q215 Q218 Q219 Q368 Q374 Q367 Q207 Q351 Q201 Q202 Q369 Q206 Q338 Q200 Q203 Q204 Q366 Q385")]
+    [InlineData("254", "Q215 Q219 Q368 Q375 Q367 Q216 Q217 Q376 Q248 Q378 Q377 Q207 Q351 Q201 Q202 Q369 Q206 Q338 "
+        + "Q200 Q203 Q204 Q366 Q385")]
+    [InlineData("256", "Q218 Q424 Q219 Q425 Q220 Q368 Q224 Q367 Q207 Q351 Q201 Q202 Q206 Q200 Q203 Q204 Q370")]
+    [InlineData("257", "Q223 Q222 Q368 Q207 Q351 Q201 Q202 Q206 Q200 Q203 Q204 Q370")]
+    public void HeidenhainCycle_Signature_IsTheControlsOrderOfTheCycleManual(string native, string order)
+    {
+        CycleEntry entry = NativeEntry("heidenhain.toml", Controller.Heidenhain, native);
+
+        Assert.Equal(order.Split(' '), entry.Signature);
+    }
+
+    // D178: Q206 is the plunge feed, which cycle 206 takes too, and Q239 the pitch of cycles 207 and 209; Q207 is the
+    // milling feed of the milling cycles and carries no NCX word.
+    [Fact]
+    public void HeidenhainCycle_FeedAndPitch_AreQ206AndQ239OnTheCyclesThatCarryThem()
+    {
+        CycleCatalog catalog = Load("heidenhain.toml", Controller.Heidenhain);
+
+        Assert.Equal("Q206", catalog.FindNative("206")!.NativeOf("CYCLE_F"));
+        Assert.Equal("Q239", catalog.FindNative("207")!.NativeOf("PITCH"));
+        Assert.Equal("Q239", catalog.FindNative("209")!.NativeOf("PITCH"));
+        Assert.Equal("Q206", catalog.FindNative("251")!.NativeOf("CYCLE_F"));
+        Assert.DoesNotContain("Q207", catalog.FindNative("251")!.Params.Values);
+    }
+
     // The catalogs live in cycles/ of the repository, found from the test assembly (tests/README.md).
     private static string CatalogPath(string fileName)
     {

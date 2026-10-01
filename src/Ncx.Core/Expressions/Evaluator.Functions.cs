@@ -64,9 +64,9 @@ internal sealed partial class Evaluator
             // INT truncates toward zero (language 4.12): INT(-2.7) is -2.
             ExprFunction.Int => ExprResult.Of(decimal.Truncate(first)),
 
-            // FRAC is the part after the decimal point (language 4.12).
-            // TODO(question): language 4.12 does not define FRAC of a negative number; FRAC(-2.7) is -0.7, with the
-            // sign of the number, so that INT(x) + FRAC(x) is x, until D119 is settled.
+            // FRAC is the part after the decimal point (language 4.12): FRAC(x) = x - INT(x), with the sign of the
+            // number, so that INT(x) + FRAC(x) is x, as the TNC's FRAC beside its truncating INT does (D119,
+            // decisions.md).
             ExprFunction.Frac => ExprResult.Of(first - decimal.Truncate(first)),
 
             // ROUND rounds half away from zero (language 4.12): ROUND(2.5) is 3, ROUND(-2.5) is -3.
@@ -195,10 +195,9 @@ internal sealed partial class Evaluator
         return FromDouble(call, Degrees(Math.Acos((double)cosine)));
     }
 
-    // ATAN2(y, x): the angle of the point x, y in degrees (language 4.12).
-    // TODO(question): language 4.12 names ATAN2 without the order of its arguments, the range of its value or its
-    // value at 0, 0; it takes (y, x) and gives -180 to 180, as Siemens ATAN2 and the C library do, and ATAN2(0, 0) is
-    // an ERROR, until D119 is settled.
+    // ATAN2(y, x): the angle of the point x, y in degrees, above -180 and up to 180, the ordinate first, as Siemens
+    // ATAN2 and the C library give it; the point 0, 0 has no angle and is the ERROR of a function without a real
+    // result (language 4.12; D119, decisions.md).
     private ExprResult? ArcTangent2(CallNode call, decimal y, decimal x)
     {
         if (y == 0 && x == 0)

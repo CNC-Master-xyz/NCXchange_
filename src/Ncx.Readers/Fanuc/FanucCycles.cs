@@ -755,10 +755,10 @@ internal static class FanucCycles
         return true;
     }
 
-    // TODO(question): language 6 writes the call of a defining block without a position, G81 G99 Z-21.732 R5. F565, as
-    // CYCLE_CALL X=10 Y=10, the point the tool stands at, while language 4.7 calls a CYCLE_CALL without axis words at
-    // the current position; the reader writes the axis words the block has, none there, as the CYCL CALL of Klartext
-    // reads, until D220 is answered. A CYCLE_CALL at the position of the block, K times; under G91 each repeat moves by
+    // D220: the reader writes the axis words the source block carries and no others, so a defining block without a
+    // position, G81 G99 Z-21.732 R5. F565, becomes a bare CYCLE_CALL, which drills where the tool stands
+    // (language 4.7; decisions.md); the Fanuc cycle positions in the plane only where the block carries the words for
+    // it. A CYCLE_CALL at the position of the block, K times; under G91 each repeat moves by
     // the incremental words (controllers fanuc.md 6; controller-mapping 5, CYCLE_CALL and repeats; language 4.7). The
     // plane axes stand at the call point afterwards and the drilling axis at the level the cycle returns to (virtual
     // machine 3.3).
