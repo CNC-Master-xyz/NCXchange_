@@ -19,6 +19,15 @@ public sealed class FanucSystemATests
         "PROGRAM=END",
         "FILE=END");
 
+    // A program whose one block selects the datum and the side (D222).
+    private static readonly string WorkpieceProgram = FanucCompile.Lines(
+        "FILE=BEGIN NCX=1",
+        "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+        "FEED_MODE=PER_REV COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
+        "ORIGIN=1 WORKPIECE=MAIN",
+        "PROGRAM=END",
+        "FILE=END");
+
     // Fanuc 3, system A: no G90 in the header, G99 for the feed per revolution, U and W for the incremental words,
     // G28 U0 W0, G50 for SETPOS, T0101 for TOOL=1 OFFSET=1.
     [Fact]
@@ -54,23 +63,25 @@ public sealed class FanucSystemATests
             + "G2 Z-5. X30. K0. I-5. F0.1\nG2 Z-5. X10. K0. I-5.\nM30\n%\n", text);
     }
 
-    // D222: a [workpiece] template that carries the datum, G54 M428 as on the Nakamura, beside ORIGIN=1 of the same
-    // block writes G54 once, G54 M428 on one line.
+    // D222: a [workpiece] template holds the selection code alone, so ORIGIN=1 WORKPIECE=MAIN of one block stands as
+    // G54 M428 on one line, the datum from ORIGIN and the code from the template.
     [Fact]
-    public void Workpiece_TemplateWithTheDatumOfTheBlock_WritesTheDatumOnce()
+    public void Workpiece_TemplateOfTheSelectionCode_StandsBesideTheDatumOfTheBlock()
     {
-        string program = FanucCompile.Lines(
-            "FILE=BEGIN NCX=1",
-            "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
-            "FEED_MODE=PER_REV COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
-            "ORIGIN=1 WORKPIECE=MAIN",
-            "PROGRAM=END",
-            "FILE=END");
-        string lathe = FanucCompile.Lathe(extra: "[workpiece]\nMAIN = \"G54 M428\"");
+        string lathe = FanucCompile.Lathe(extra: "[workpiece]\nMAIN = \"M428\"");
 
-        string text = FanucCompile.TextOf(FanucCompile.Run(program, lathe));
+        string text = FanucCompile.TextOf(FanucCompile.Run(WorkpieceProgram, lathe));
 
         Assert.Equal("%\nO0001 (T)\nG18 G99 G40 G80\nG54 M428\nM30\n%\n", text);
+    }
+
+    // D222: a control without a selection code names no template for the role, and WORKPIECE then writes nothing.
+    [Fact]
+    public void Workpiece_RoleWithoutATemplate_WritesNothing()
+    {
+        string text = FanucCompile.TextOf(FanucCompile.Run(WorkpieceProgram, FanucCompile.Lathe()));
+
+        Assert.Equal("%\nO0001 (T)\nG18 G99 G40 G80\nG54\nM30\n%\n", text);
     }
 
     // Fanuc 3, system B: G91 blocks and G95 instead of U W and G99.

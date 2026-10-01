@@ -8,8 +8,8 @@ public static partial class CycleCatalogLoader
     // The keys of a catalog entry (machine-config 6) and the four keys of its expansion rule (machine-config 5a).
     private static readonly string[] s_entryKeys =
     [
-        "name", "native", "params", "absolute_from_surface", "modal", "contour", "signature", "fixed", "pre", "post",
-        "requires", "restore",
+        "name", "native", "params", "absolute_from_surface", "modal", "contour", "signature", "fixed", "before",
+        "pre", "post", "requires", "restore",
     ];
 
     // The word that the words of absolute_from_surface are relative to (machine-config 6, language 4.7).
@@ -89,6 +89,7 @@ public static partial class CycleCatalogLoader
             Contour = contour,
             Signature = signature,
             Fixed = fixedValues,
+            Before = table.Has("before") ? table.Template("before") ?? "" : null,
             Rule = rule,
             WrittenKeys = WrittenKeys(table),
         };

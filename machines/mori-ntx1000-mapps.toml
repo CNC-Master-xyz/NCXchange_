@@ -24,6 +24,7 @@ block_numbers = { enabled = true, start = 10, step = 10 }
 line_ending = "CRLF"
 program_end = "M30"                # written for PROGRAM=END (D48)
 sub_end = "M99"
+external_call = "M198"             # the M code list has M198 (option) as the subprogram call in the external I/O device (D322)
 
 [roles]
 MAIN = "S1"

@@ -83,7 +83,7 @@ internal static class FanucRead
         STANDARD = { ON = "M8", OFF = "M9" }
 
         [func]
-        RIGID_TAP = { ON = "M29" }
+        TAP_REVERSE = { ON = "M94", OFF = "M95" }
 
         [cycles]
         catalog = "fanuc.toml"
@@ -209,8 +209,8 @@ internal static class FanucRead
         PHASE = "M92"
 
         [workpiece]
-        MAIN = "G54 M428"
-        SUB = "G59 M427"
+        MAIN = "M428"
+        SUB = "M427"
 
         [sync]
         wait = "M{mark} P{paths}"
@@ -245,11 +245,29 @@ internal static class FanucRead
     }
 
     /// <summary>
+    /// The test mill with further tables of the machine file, "[format]\nexternal_call = \"M200\"".
+    /// </summary>
+    /// <param name="extra">The tables to add to the file.</param>
+    public static MachineConfig MillWith(string extra)
+    {
+        return Load(MillToml + "\n" + extra + "\n", "mill.toml");
+    }
+
+    /// <summary>
     /// The test lathe with the Fanuc cycle catalog.
     /// </summary>
     public static MachineConfig Lathe()
     {
         return Load(LatheToml, "lathe.toml");
+    }
+
+    /// <summary>
+    /// The test lathe with further tables of the machine file, "[format]\nexternal_call = \"M198\"".
+    /// </summary>
+    /// <param name="extra">The tables to add to the file.</param>
+    public static MachineConfig LatheWith(string extra)
+    {
+        return Load(LatheToml + "\n" + extra + "\n", "lathe.toml");
     }
 
     /// <summary>

@@ -70,6 +70,12 @@ internal sealed class FanucState
     public HashSet<int> TurnsOfTilts { get; } = [];
 
     /// <summary>
+    /// The NCX name of the catalog entry whose "before" line a block is, by the line of that block: the block stands
+    /// directly in front of the entry's cycle block and belongs to the cycle (machine-config 6, D256).
+    /// </summary>
+    public Dictionary<int, string> CycleBefore { get; } = [];
+
+    /// <summary>
     /// The lines of the blocks in the contour range of a G70 to G76 cycle of a lathe that stay RAW with their cycle.
     /// </summary>
     public HashSet<int> ContourLines { get; } = [];

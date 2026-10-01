@@ -7,7 +7,8 @@ namespace Ncx.Core.Machine;
 public sealed record WorkpieceConfig
 {
     /// <summary>
-    /// The selection template per holder role, MAIN = "G54 M428", SUB = "G59 M427".
+    /// The selection template per holder role, MAIN = "M428", SUB = "M427": the selection code alone, never the
+    /// datum, which is ORIGIN (D222). A role the machine gives no template writes nothing.
     /// </summary>
     public IReadOnlyDictionary<string, string> Templates { get; init; } = new Dictionary<string, string>();
 

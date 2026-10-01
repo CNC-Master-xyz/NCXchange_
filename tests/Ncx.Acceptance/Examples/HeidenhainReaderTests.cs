@@ -69,7 +69,6 @@ public sealed partial class HeidenhainReaderTests
         new("TOOL=2", null, "TOOL=2 OFFSET:LEN=2 OFFSET:RAD=2 RPM=500"),
         new("SPINDLE=CW RPM=500", null, "SPINDLE=CW"),
         new("RAPID Z=5 OFFSET:LEN=2", null, "RAPID Z=5"),
-        new("RPM=500 FUNC:RIGID_TAP=ON", null, ""),
         new("CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE CYCLE_F=750 CYCLE_DWELL=0 PITCH=1.5",
             null, "CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE PITCH=1.5"),
         new("HOME Z", null, "RAPID Z=0 FRAME=MACHINE"),

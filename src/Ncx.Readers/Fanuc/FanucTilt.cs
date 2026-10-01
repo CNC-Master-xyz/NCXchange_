@@ -27,9 +27,9 @@ internal static class FanucTilt
             return;
         }
 
-        // TODO(question): controller-mapping 1 reads G68.1 with G53.1 as TILT_AXIS (D82), and G68.1 turns the
-        // coordinate system about an axis (fanuc 4) while TILT_AXIS takes the rotary axis positions of the machine; the
-        // documents do not say how the words of G68.1 become the axis angles. G68.1 stays RAW until D246 is answered.
+        // D246: G68.1 is the lathe form of the G68 coordinate rotation, a rotation about the axis direction I J K
+        // through the centre Xp Yp Zp, and names no rotary axis position, so it is no source form of TILT_AXIS and
+        // stays RAW in 1.0 (fanuc 4; controller-mapping 1; decisions.md, D82 clarified).
         if (block.TakeCode("G68.1"))
         {
             block.Draft.KeepAsRaw("G68.1, the 3D coordinate conversion, is kept as RAW");

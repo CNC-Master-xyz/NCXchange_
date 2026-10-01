@@ -14,8 +14,9 @@ namespace Ncx.Readers.Fanuc;
 /// </summary>
 internal static class FanucBuilder
 {
-    // The M codes of the controller itself, which the structure pass, the calls and the tool change read.
-    private static readonly string[] s_ownCodes = ["M0", "M1", "M2", "M30", "M6", "M98", "M99", "M198"];
+    // The M codes of the controller itself, which the structure pass, the calls and the tool change read; the code of
+    // an external call is not among them, because it is a fact of the machine, [format] external_call (D322).
+    private static readonly string[] s_ownCodes = ["M0", "M1", "M2", "M30", "M6", "M98", "M99"];
 
     // The G codes the reader maps in every G-code system (controllers fanuc.md 3, 4; controller-mapping 1, 2).
     private static readonly string[] s_commonCodes =
@@ -104,10 +105,12 @@ internal static class FanucBuilder
     /// <param name="word">The M word.</param>
     public static bool Names(FanucBlock block, SourceWord word)
     {
-        // M200 P of the builder nakamura calls a program as M98 does, which FanucMacro reads (controller-mapping 6, 8).
+        // M200 P of the builder nakamura calls a program as M98 does, which FanucMacro reads (controller-mapping 6, 8),
+        // and the external call code the machine names is read there too (D322).
         string? code = NativeCode.Of(word);
         return code is null
             || s_ownCodes.Contains(code)
+            || code == FanucMacro.ExternalCallCode(block.Machine)
             || (code == "M200" && FanucMacro.IsBuilderNakamura(block.Machine))
             || FanucFunctions.Of(block, word, out _) is not null
             || WorkpieceOf(block, code) is not null
@@ -197,9 +200,9 @@ internal static class FanucBuilder
 
     // The M code of a [workpiece] template selects the holder the program machines, WORKPIECE=role (controller-mapping
     // 4, WORKPIECE; language 4.10; D40, D57).
-    // TODO(question): [workpiece] writes the spindle's datum with the code, "G54 M428" (machine-config 5), and the
-    // source writes them in separate blocks, N100 M428 and G54 G18 of the Nakamura program; the reader takes the M code
-    // of the template as WORKPIECE and reads the datum as ORIGIN where it stands, until D222 is answered.
+    // D222: a template holds the selection code alone, so the reader matches it in whatever block the code stands
+    // and reads G54..G59 as ORIGIN where the source writes them (machine-config 5; controller-mapping 1, 4;
+    // decisions.md).
     private static string? WorkpieceOf(FanucBlock block, string code)
     {
         if (block.Machine.Workpiece is not WorkpieceConfig workpiece)

@@ -20,8 +20,8 @@ public static partial class MachineConfigLoader
     private static readonly string[] s_formatKeys =
     [
         "decimal_separator", "decimals", "trailing_zeros", "block_numbers", "line_ending", "program_end", "sub_end",
-        "program_layout", "max_line_length", "comment_charset", "header", "plane_with_first_motion",
-        "motion_code_after_tool_change", "length_offset_with_tool_axis", "channel_files",
+        "program_layout", "max_line_length", "comment_charset", "external_call", "header",
+        "plane_with_first_motion", "motion_code_after_tool_change", "length_offset_with_tool_axis", "channel_files",
     ];
 
     private static readonly string[] s_blockNumberKeys = ["enabled", "start", "step"];
@@ -120,6 +120,7 @@ public static partial class MachineConfigLoader
             },
             MaxLineLength = table.Integer("max_line_length"),
             CommentCharset = table.Text("comment_charset"),
+            ExternalCall = table.Template("external_call"),
 
             // TODO(question): the options of the Fanuc output habits that phase 3 asks for (implementation 13, Risks),
             // which machine-config 2 does not name; the header is a template like program_end (D105).

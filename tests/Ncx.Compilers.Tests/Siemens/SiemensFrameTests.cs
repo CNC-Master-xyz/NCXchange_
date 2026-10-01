@@ -1,3 +1,4 @@
+using Ncx.Core.Machine;
 using static Ncx.Compilers.Tests.Siemens.SiemensCompile;
 
 namespace Ncx.Compilers.Tests.Siemens;
@@ -249,11 +250,12 @@ public sealed class SiemensFrameTests
     }
 
     // Machine-config 5, SUB_frame = "datum": on the sub spindle side the datum runs Z the other way and the compiler
-    // negates Z, G55 the datum of that side on millturn1.toml (D57; virtual machine 3.4).
+    // negates Z (D57; virtual machine 3.4). millturn1.toml names no selection code, so WORKPIECE writes nothing
+    // there (D222).
     [Fact]
     public void ZOnTheSubSpindleSide_WithADatum_IsNegated()
     {
-        Assert.Equal(Lines("G0 X40 Z5", "G55", "G0 X40 Z-5", "G1 Z=IC(2) F0.1"),
+        Assert.Equal(Lines("G0 X40 Z5", "G0 X40 Z-5", "G1 Z=IC(2) F0.1"),
             MillTurnBody("RAPID X=40 Z=5", "WORKPIECE=SUB", "RAPID X=40 Z=5", "LINE IZ=-2 F=0.1"));
     }
 
@@ -261,7 +263,18 @@ public sealed class SiemensFrameTests
     [Fact]
     public void ArcOnTheSubSpindleSide_WithADatum_TurnsTheOtherWay()
     {
-        Assert.Equal(Lines("G55", "G0 X40 Z-5", "G3 X50 Z-10 CR=5 F0.1"),
+        Assert.Equal(Lines("G0 X40 Z-5", "G3 X50 Z-10 CR=5 F0.1"),
             MillTurnBody("WORKPIECE=SUB", "RAPID X=40 Z=5", "ARC=CW X=50 Z=10 R=5 F=0.1"));
+    }
+
+    // D222: a [workpiece] template holds the selection code alone, so a machine that names one writes it where
+    // WORKPIECE stands and the datum of the program stays ORIGIN.
+    [Fact]
+    public void Workpiece_TemplateOfTheSelectionCode_WritesItWithTheOriginOfTheProgram()
+    {
+        MachineConfig machine = Replaced(MillTurnFile, "# no MAIN and no SUB:", "SUB = \"M813\"   #");
+
+        Assert.Equal(Lines("G54", "M813", "G0 X40 Z-5"),
+            Body(Run(Program(MillTurnHeader, "ORIGIN=1", "WORKPIECE=SUB", "RAPID X=40 Z=5"), machine)));
     }
 }

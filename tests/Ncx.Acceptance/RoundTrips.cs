@@ -165,9 +165,7 @@ public sealed class RoundTrips : IDisposable
         string machine)
     {
         string text = program == "2.5D_FRAESEN.ncx" ? Fixture.ReadText(program) : ExpectedFile(program);
-        string ncx = _cli.WriteFile(program, program == "BOHREN.ncx"
-            ? HeidenhainCompilerTests.WithoutRigidTap(text)
-            : text);
+        string ncx = _cli.WriteFile(program, text);
 
         string compiled = Compile(ncx, machine);
 

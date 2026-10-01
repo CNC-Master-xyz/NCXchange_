@@ -1,4 +1,5 @@
 using System.Globalization;
+using Ncx.Config.Templates;
 using Ncx.Core.Machine;
 using Ncx.Core.Model;
 
@@ -39,6 +40,38 @@ internal static class FanucCycles
     // The word of the thread lead F of a simple turning cycle (D175).
     private const string PitchWord = "PITCH";
     private static readonly IntegerValue s_zero = new(0, "0");
+
+    /// <summary>
+    /// Reads the "before" line of a catalog entry, the native line that belongs to the cycle itself and stands
+    /// directly in front of its cycle block: the Fanuc M29 S of rigid tapping is part of CYCLE=TAP, and its S becomes
+    /// RPM only where it differs from the speed the spindle runs at (machine-config 6; controllers fanuc.md 6, 9 rule
+    /// 9; D256).
+    /// </summary>
+    /// <param name="block">The block being read.</param>
+    public static void ReadBeforeLine(FanucBlock block)
+    {
+        if (block.Draft.IsRaw
+            || !block.Fanuc.CycleBefore.TryGetValue(block.Line, out string? name)
+            || block.Machine.CycleCatalog.Find(name) is not CycleEntry entry
+            || !FanucTemplates.TryMatch(block, entry.Before, out TemplateValues values))
+        {
+            return;
+        }
+
+        if (!values.TryGetNumber("rpm", out decimal rpm))
+        {
+            return;
+        }
+
+        string? role = block.State.LastSpindle;
+        if (block.Fanuc.Rpm.GetValueOrDefault(role ?? "") == rpm)
+        {
+            return;
+        }
+
+        block.Draft.AddState("RPM", FanucFunctions.SpindleAddress(block, role), FanucNumbers.Of(rpm));
+        block.Fanuc.Rpm[role ?? ""] = rpm;
+    }
 
     /// <summary>
     /// Reads the cycle words of a block: the end of a cycle, a new cycle, its modal values and its calls.
@@ -371,8 +404,8 @@ internal static class FanucCycles
 
     // A cycle ends with G80; on a lathe, where the cycles belong to group 01, with the next code of that group
     // (controllers fanuc.md 3, 6).
-    // TODO(question): fanuc 6 says G80 cancels, "or a G0/G1 on some controls"; the reader ends the cycle of a mill at a
-    // G0 to G3 as well, so that such a block moves and does not drill, until D247 is answered.
+    // D247: any code of group 01 (G0 to G3) ends a canned cycle and leaves the same state as G80, on the mill and on
+    // the lathe, so such a block moves and does not drill (fanuc 6, 9 rule 5; controller-mapping 5; decisions.md).
     private static bool Ends(FanucBlock block, SourceWord? code)
     {
         if (block.Fanuc.Cycle is null || code is not null)

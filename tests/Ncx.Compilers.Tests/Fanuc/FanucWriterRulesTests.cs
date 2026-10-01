@@ -63,7 +63,7 @@ public sealed class FanucWriterRulesTests
     // Fanuc 10 rule 3, D49: the program end is the program_end of the machine; the subprograms follow it as O programs
     // ending with M99, each once however often it is called, written from an unknown target state so that every modal
     // code stands at its first use inside it (D99), G80 before its first motion, since a caller may have left a canned
-    // cycle active (the TODO(question) of D247).
+    // cycle active (D247: a code of group 01 ends it too, and G80 says so in the text).
     [Fact]
     public void Rule3_ProgramEndAndSubprograms_StandAfterTheEndAsOPrograms()
     {

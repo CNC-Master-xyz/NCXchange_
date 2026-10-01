@@ -463,12 +463,12 @@ internal static class FanucFrames
     // HOME through [home] (machine-config 3; controllers fanuc.md 4; controller-mapping 1, HOME): G28 to the reference
     // point, the point template for POINT=2 and further; {axes} are the named axes with an incremental 0, U0 W0 in
     // system A, and G91 standing in front on the other systems, as fanuc 4 writes G91 G28 Z0.
-    // TODO(question): machine-config 3 expands {axes} to "G91 X0 Y0 Z0" in the template "G28 {axes}", which writes G28
-    // G91 Z0, while fanuc 4 and the sources write G91 G28 Z0; G91 is written as the modal code of the block in front of
-    // the template and {axes} holds the axis words, until that is answered.
-    // TODO(question): D243: what an absolute word of G28 means is open; D243 recommends that only an incremental 0 is
-    // no intermediate move, so HOME of an axis without an incremental letter in system A (B of G28 B0) has no form and
-    // is CMP321, until D243 is answered.
+    // D281: {axes} holds the named axes with an incremental 0, U0 W0 in system A and X0 Y0 Z0 otherwise, and outside
+    // system A the compiler writes G91 into the block in front of the template, G91 G28 Z0 (machine-config 3; fanuc 4;
+    // decisions.md).
+    // TODO(question): D243 settles the reader, where only an incremental 0 is no intermediate move; it does not say
+    // how the compiler writes HOME of an axis that has no incremental letter in G-code system A (B of G28 B0), which
+    // stays CMP321.
     private static void WriteHome(FanucBlock write)
     {
         write.Written("HOME");

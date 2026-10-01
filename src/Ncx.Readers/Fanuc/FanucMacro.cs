@@ -9,7 +9,8 @@ namespace Ncx.Readers.Fanuc;
 /// ... to VAR:Vn (D33), a [ ] expression to { }, IF GOTO to JUMP with IF, IF THEN and WHILE DO END lowered to LABEL,
 /// JUMP and IF, GOTO to JUMP, JUMP=END to a block that ends the program, the NT NURSE branch commands of the builder
 /// nakamura to JUMP with IF, M98 P L to CALL with TIMES, and M200 P{times}{nnnn} of the builder nakamura the same, G65
-/// with its letter arguments to CALL with ARG, M198 to the call of an external program. G66 and G67 stay RAW
+/// with its letter arguments to CALL with ARG, and the external call code of the machine, [format] external_call, to
+/// the call of an external program; a machine that names none has no external call (D322). G66 and G67 stay RAW
 /// (controller-mapping 9).
 /// </summary>
 internal static class FanucMacro
@@ -82,6 +83,35 @@ internal static class FanucMacro
     }
 
     /// <summary>
+    /// The code that calls a program outside the file on this machine, [format] external_call, which the control takes
+    /// from parameter 6030 (controllers fanuc.md 1; controller-mapping 6; D322); null where the machine names none,
+    /// and then the reader reads no external call at all. D322: a machine that uses M198 for the call names it, and a
+    /// machine whose wait range covers the code must not, so the wait mark keeps the code there.
+    /// </summary>
+    /// <param name="machine">The machine being read for.</param>
+    public static string? ExternalCallCode(MachineConfig machine)
+    {
+        string? code = machine.Format?.ExternalCall;
+        if (string.IsNullOrEmpty(code))
+        {
+            return null;
+        }
+
+        return IsWaitMark(machine, code) ? null : code;
+    }
+
+    // A code the mark range of [sync] covers is a wait mark of the machine, M198 of a Nakamura, never the external
+    // call (controllers fanuc.md 8; machine-config 5; D322).
+    private static bool IsWaitMark(MachineConfig machine, string code)
+    {
+        return machine.Sync?.MarkRange is MarkRange range
+            && code.Length > 1
+            && (code[0] == 'M' || code[0] == 'm')
+            && int.TryParse(code.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out int number)
+            && number >= range.First && number <= range.Last;
+    }
+
+    /// <summary>
     /// Tells whether a G code is an NT NURSE branch command of the machine, G480, G471 to G476 or G481 to G486 of the
     /// builder nakamura, which the reader reads as JUMP with IF and does not keep as RAW (controller-mapping 6, 9).
     /// </summary>
@@ -128,13 +158,13 @@ internal static class FanucMacro
     }
 
     /// <summary>
-    /// The number of the program an M98 P, a G65 P, an M198 P or an M200 P of the builder nakamura calls: the digits of
-    /// P, and in the older form of M98 and in M200, P with more than four digits and no L, the last four (controllers
-    /// fanuc.md 1 and 7, controller-mapping 6); null when P is no program number.
+    /// The number of the program an M98 P, a G65 P, an external call P or an M200 P of the builder nakamura calls:
+    /// the digits of P, and in the older form of M98 and in M200, P with more than four digits and no L, the last four
+    /// (controllers fanuc.md 1 and 7, controller-mapping 6); null when P is no program number.
     /// </summary>
     /// <param name="program">The P word.</param>
     /// <param name="olderForm">True for an M98 or an M200 without L, whose P may carry the count in front of the
-    /// program number; G65 P and M198 P are the program number as written.</param>
+    /// program number; G65 P and an external call P are the program number as written.</param>
     public static long? CalledProgram(SourceWord program, bool olderForm)
     {
         string digits = Digits(program);
@@ -156,9 +186,9 @@ internal static class FanucMacro
     }
 
     /// <summary>
-    /// The programs a block calls: M98 P, G65 P, M198 P, and on a machine of the builder nakamura M200 P, the same as
-    /// M98 for NCX (controllers fanuc.md 1, 7; controller-mapping 6, CALL and TIMES; controller-mapping 8); none for a
-    /// P that names no program.
+    /// The programs a block calls: M98 P, G65 P, the external call code of the machine P, and on a machine of the
+    /// builder nakamura M200 P, the same as M98 for NCX (controllers fanuc.md 1, 7; controller-mapping 6, CALL and
+    /// TIMES; controller-mapping 8); none for a P that names no program.
     /// </summary>
     /// <param name="block">A source block.</param>
     /// <param name="machine">The machine with its builder.</param>
@@ -172,13 +202,15 @@ internal static class FanucMacro
         }
 
         SourceWord? times = block.Find("L");
+        string? external = ExternalCallCode(machine);
         foreach (SourceWord word in block.Words)
         {
             string? code = word.Address is "G" or "M" ? NativeCode.Of(word) : null;
             bool older = code == "M98" || (code == "M200" && IsBuilderNakamura(machine));
-            if ((older || code is "G65" or "M198") && CalledProgram(program, older && times is null) is long called)
+            if ((older || code == "G65" || (external is not null && code == external))
+                && CalledProgram(program, older && times is null) is long called)
             {
-                calls.Add(new FanucCall(called, Repeats(program, times, older), code == "M198"));
+                calls.Add(new FanucCall(called, Repeats(program, times, older), code == external));
             }
         }
 
@@ -200,16 +232,17 @@ internal static class FanucMacro
             && whole / 10000 > 1;
     }
 
-    // M98 P L calls a subprogram L times, M198 P an external program, G65 P L a macro with letter arguments
-    // (controllers fanuc.md 1, 7; controller-mapping 6); Nakamura M200 P{times}{nnnn} calls a program from the memory
-    // card, the same as M98 for NCX (controller-mapping 6, CALL and TIMES; controller-mapping 8).
+    // M98 P L calls a subprogram L times, the external call code of the machine P an external program, G65 P L a
+    // macro with letter arguments (controllers fanuc.md 1, 7; controller-mapping 6; D322); Nakamura M200
+    // P{times}{nnnn} calls a program from the memory card, the same as M98 for NCX (controller-mapping 6, CALL and
+    // TIMES; controller-mapping 8).
     private static void ReadCalls(FanucBlock block)
     {
         SourceWord? m98 = block.FindCode("M98");
-        SourceWord? m198 = block.FindCode("M198");
+        SourceWord? external = ExternalCallCode(block.Machine) is string code ? block.FindCode(code) : null;
         SourceWord? g65 = block.FindCode("G65");
         SourceWord? m200 = IsBuilderNakamura(block.Machine) ? block.FindCode("M200") : null;
-        if (m98 is null && m198 is null && g65 is null && m200 is null)
+        if (m98 is null && external is null && g65 is null && m200 is null)
         {
             // D221: M99 Pn in a section that no block of the file calls returns to the block Nn of that section, a
             // JUMP=n to the LABEL=n the structure pass writes there; in a subprogram a block of the file calls, P
@@ -233,11 +266,11 @@ internal static class FanucMacro
             return;
         }
 
-        foreach (SourceWord? code in new[] { m98, m198, g65, m200 })
+        foreach (SourceWord? word in new[] { m98, external, g65, m200 })
         {
-            if (code is not null)
+            if (word is not null)
             {
-                block.MarkRead(code);
+                block.MarkRead(word);
             }
         }
 
@@ -252,7 +285,7 @@ internal static class FanucMacro
         }
 
         DraftBlock main = block.Draft.Main;
-        main.Add("CALL", m198 is not null ? External(called) : Target(block, called));
+        main.Add("CALL", external is not null ? External(called) : Target(block, called));
         if (times is not null)
         {
             if (ValueOf(block, times) is Value count)

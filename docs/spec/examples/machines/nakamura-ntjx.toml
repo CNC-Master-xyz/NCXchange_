@@ -208,8 +208,8 @@ PHASE = "M92"                      # phase-synchronous run; M93 sets the phase p
 channel = 2                        # the codes go into the program of the path that owns the second spindle (lower unit on NTJX and WY)
 
 [workpiece]
-MAIN = "G54 M428"                  # written with the spindle's datum, as in the WY sample programs
-SUB = "G59 M427"
+MAIN = "M428"                      # the selection code alone; the datum of the side is ORIGIN where the program writes it (D222)
+SUB = "M427"
 SUB_frame = "datum"                # G59 side programmed in machine Z; or mirror with the G360/G361 cycles (M700/M701), then datum and offsets carry inverted signs
 # SUB_mirror = { ON = "G360", OFF = "G361" }
 
@@ -238,8 +238,7 @@ EJECTOR = { FORWARD = "M484" }
 BAR_LOADER = { CHANGE = "M58", FEED = "M61" }
 DOOR = { OPEN = "M62", CLOSE = "M63" }
 Y_REFERENCE = { CLAMP = "M370", FREE = "M371" }
-RIGID_TAP = { ON = "M29" }
-TAP_REVERSE = { ON = "M94", OFF = "M95" }
+TAP_REVERSE = { ON = "M94", OFF = "M95" }   # M29, the rigid tapping line, is the "before" of the TAP entry of the catalog (D256)
 THREAD_CHAMFER = { ON = "M23", OFF = "M24" }
 LOAD_MONITOR = { ON = "M300", OFF = "M301" }
 TOOL_COUNTER = { ON = "M303", OFF = "M304" }

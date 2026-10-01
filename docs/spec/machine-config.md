@@ -55,6 +55,10 @@ program_layout = "one_file"        # one_file: all programs and subprograms of a
                                    # file_per_program: one output file per program, subprograms copied after the M30 of every caller (Heidenhain)
 max_line_length = 0                # 0 = unlimited
 comment_charset = "ASCII"          # umlauts are transliterated before writing
+# external_call = "M198"          # optional, Fanuc: the code that calls a program outside the file, parameter 6030 on the control; the compiler writes it
+                                  # in place of M98 for a CALL of an external program and the reader reads it as CALL. Without the key the compiler writes
+                                  # M98 and the reader reads no external call; a machine that calls with M198 names it, and a machine whose [sync]
+                                  # mark_range covers the code must not, because the code is a wait mark there (D322)
 ```
 
 ## 3. Tool change
@@ -91,7 +95,8 @@ When `change` contains `{next}`, a `PRELOAD` word that follows the `TOOL` block 
 
 ```toml
 [home]
-template = "G28 {axes}"           # Fanuc: {axes} expands to "U0 W0" (incremental letters) or "G91 X0 Y0 Z0" per gcode_system
+template = "G28 {axes}"           # Fanuc: {axes} is the named axes with an incremental 0, "U0 W0" in G-code system A and "X0 Y0 Z0" otherwise;
+                                  # outside system A the compiler writes G91 in front of the template where G90 is active, "G91 G28 Z0" (D281)
 point = "G30 P{point} {axes}"     # second and further reference points; Nakamura NT NURSE: "G330 A{point}."
 # DMG structure programming: template = "L711({order})" (X, Z, Y tool change point), "L713(0)" on the counter spindle side
 # Heidenhain: no template; the compiler writes "L {axes} M91" with the reference coordinates of the [[axis]] table
@@ -212,8 +217,8 @@ channel = 2                        # D56: the machine accepts these codes only f
 # channels = "all"                 # D56: the code must stand in every channel program behind a SYNC (Mori Seiki M34/M35); a word every channel program already writes between the same two marks is left as it stands, and two channels writing such words between the same two marks is an ERROR (D312)
 
 [workpiece]                        # native selection of the spindle the turret works on, and how that side is programmed (D57)
-MAIN = "G54 M428"                  # Mori Seiki: "M303", Doosan: "M34", Biglia: "M64", DMG: "M814"; the datum may be part of the template
-SUB = "G59 M427"                   # Mori Seiki: "M304", Doosan: "M134", Biglia: "M65", DMG: "M813"
+MAIN = "M428"                      # Mori Seiki: "M303", Doosan: "M34", Biglia: "M64", DMG: "M814"; the selection code alone, never the datum, which is ORIGIN (D222)
+SUB = "M427"                       # Mori Seiki: "M304", Doosan: "M134", Biglia: "M65", DMG: "M813"; a control without a selection code leaves the key out and WORKPIECE then writes nothing (D222)
 SUB_frame = "datum"                # datum: the sub spindle datum runs Z the other way and the compiler negates Z; mirror: the compiler writes the mirror cycle
 # SUB_mirror = { ON = "G360", OFF = "G361" }   # Nakamura Z mirror cycles (M700/M701); Mori Seiki: { ON = "M396", OFF = "M395" }
 
@@ -300,7 +305,7 @@ pre = ["FUNC:PECK_MODE=RETRACT"]   # Doosan M291 before G83, as an NCX word so t
 ```
 
 - `states`: the states of the function table whose words trigger the rule, `states = ["ON"]` on the clutch of the through-spindle coolant, so that the sequence runs when the coolant is switched on and not when it is switched off. Without the key every state of the table triggers it. One rule per table: a word triggers the state it sets, under the state names this section gives its table, so `SPINDLE=CW` triggers `CW`, `RPM`, `ORIENT` and `RPM_MAX` their own state, `CSS=ON` and `VC` the state `VC` and `CSS=OFF` the state `CSS_OFF`, `SPINDLE_MODE`, `COOLANT` and `FUNC` their value, `SPINDLE_SYNC` with two roles `ON` and `SPINDLE_SYNC=OFF` the state `OFF`, and `PHASE` the state `PHASE` (D198). The tool change and a catalog cycle have no states and take no key.
-- `pre` and `post`: lists of NCX blocks inserted before and after the block. They are NCX text, not native lines, so the VM executes them and the reader can recognize them; native text goes through `RAW:BUILDER`. A block may contain `{position:NAME}`, which expands to the axis words of that entry of `[positions]`, e.g. `pre = ["RAPID {position:tool_change} FRAME=MACHINE"]` (D100).
+- `pre` and `post`: lists of NCX blocks inserted before and after the block. They are NCX text, not native lines, so the VM executes them and the reader can recognize them; native text goes through `RAW:BUILDER`. A native line that is part of the cycle rather than a word of the program is the `before` key of section 6 (D256). A block may contain `{position:NAME}`, which expands to the axis words of that entry of `[positions]`, e.g. `pre = ["RAPID {position:tool_change} FRAME=MACHINE"]` (D100).
 - `requires`: state conditions that must hold while the function is written, as state variable = value (`SPINDLE = "OFF"`, `COOLANT = "OFF"`, `SPINDLE_MODE = "AXIS"`). The expander inserts the words that establish them, preceded by `@SAVE` of the variables named in `restore`.
 - `restore`: the state variables to put back after the block, through `@RESTORE`; the VM re-applies the saved value from its own snapshot, so the rule never has to know the speed the spindle had. Restoring costs cycle time (a spindle stop and start), which the runtime estimate counts and a WARNING reports at compile time.
 
@@ -337,6 +342,7 @@ Besides `name`, `native`, `params`, `absolute_from_surface` and the expansion ru
 - `modal = true`: the native cycle stays active after its block and every following block with a position calls it again, as Fanuc `G81`..`G89` and the simple turning cycles `G90`, `G92`, `G94` do; the reader emits `CYCLE=` and one `CYCLE_CALL` per such block and the compiler writes the repeat blocks back the same way (language 4.7.1). The default `false` is a native block that runs once where it stands (Fanuc `G70`..`G76`). Heidenhain and Siemens entries leave it out: their calls are words of their own (`CYCL CALL`, `M99`, `MCALL`).
 - `contour`: the native words that carry the contour of `CONTOUR=name` (language 4.7, D65). Two words are the first and the last block of the contour range (Fanuc `P` and `Q`): the reader turns the range into a `SUB` section of the file, the compiler writes the block numbers of that section. One word names the contour subprogram itself (Siemens `CYCLE95` `NPP`).
 - `signature`: every native parameter in the order the control writes it, also those without an NCX word: the positional parameters of a Siemens cycle, the `Q` parameters of a Heidenhain `CYCL DEF` (`../controllers/siemens.md` 12, `heidenhain.md` 8). A Siemens position without a value stays empty and the cycle takes its default (`siemens.md` 7). A native name in `params` that the signature does not list is an address word of its own: Siemens `CYCLE_F = "F"` is the modal `F` before the call that `CYCLE81`..`CYCLE83` use (controller-mapping 5). Fanuc entries, whose parameters are address words of the cycle block, leave it out.
+- `before`: one native line that belongs to the cycle itself and stands directly before the cycle block. The compiler writes it there, the reader folds it into the cycle when it finds it there, and it is a template like the function tables, so it may carry `{rpm}`: the Fanuc `TAP` entry has `before = "M29 S{rpm}"`, the rigid tapping line, which a machine file overrides with its builder's code (Mori Seiki `M329 S{rpm}`) and sets to `""` where a parameter makes the cycle rigid without one. A cycle written without the line is the other machining, tapping with a compensating chuck (D256).
 - `fixed`: native parameters the entry always writes with this value, which tell two entries of one native cycle apart: Siemens `CYCLE83` with `VARI = 1` is `PECK`, with `VARI = 0` `CHIP_BREAK` (controller-mapping 5); the reader takes the entry whose fixed values the source block carries.
 
 ## 7. Variables

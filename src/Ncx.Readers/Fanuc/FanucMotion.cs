@@ -217,7 +217,9 @@ internal static class FanucMotion
     // controller-mapping 2).
     private static void ReadMotion(FanucBlock block)
     {
-        string? motion = block.State.ActiveCode(FanucModalGroups.Motion);
+        // A G53 block moves at rapid traverse whatever group 01 holds and leaves that code as it was (fanuc 4, 9 rule
+        // 3; controller-mapping 1, FRAME=MACHINE; D242).
+        string? motion = block.MachineFrame ? "G0" : block.State.ActiveCode(FanucModalGroups.Motion);
         bool arc = motion is "G2" or "G3";
         bool vector = block.Fanuc.VectorTcpm && motion == "G1";
         List<FanucAxisWord> axes = FanucAxes.Unread(block);
@@ -304,7 +306,7 @@ internal static class FanucMotion
     {
         FanucUnknowns unknown = block.Fanuc.Unknowns;
         bool planar = arc || block.Find(",C") is not null || block.Find(",R") is not null;
-        if (unknown.Groups.Contains(FanucModalGroups.Motion))
+        if (!block.MachineFrame && unknown.Groups.Contains(FanucModalGroups.Motion))
         {
             return "the code of group 01, G0 to G3";
         }
@@ -333,9 +335,8 @@ internal static class FanucMotion
     }
 
     // G0 is RAPID, G1 LINE, G2 ARC=CW, G3 ARC=CCW (controller-mapping 2).
-    // TODO(question): the documents do not give the code of group 01 that is active before the source writes one (a
-    // parameter of the control); a block with axis words before any G0 to G3, G53 X#528 of the Nakamura program, moves
-    // at RAPID until D242 is answered.
+    // D242: group 01 comes up and resets to G0 unless bit 0 of parameter 3402 selects G1, so a block with axis words
+    // before any G0 to G3 moves at RAPID (fanuc 3, 9 rule 1; decisions.md).
     private static string? VerbOf(string? motion, out Value value)
     {
         value = motion switch
@@ -396,8 +397,8 @@ internal static class FanucMotion
             return;
         }
 
-        // TODO(question): fanuc 4 does not say what an arc is whose I or J is left out, and the VM needs both axes of
-        // the centre (virtual machine 3.2); the reader takes a centre word left out as 0 until D241 is answered.
+        // D241: a centre word of the plane that is left out is 0, "I0, J0 and K0 can be omitted" (fanuc 4,
+        // controller-mapping 2; decisions.md).
         Value zero = new IntegerValue(0, "0");
         Value? firstValue = firstWord is null ? zero : FanucMacro.ValueOf(block, firstWord);
         Value? secondValue = secondWord is null ? zero : FanucMacro.ValueOf(block, secondWord);

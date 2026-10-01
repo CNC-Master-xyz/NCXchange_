@@ -112,8 +112,8 @@ internal static class FanucMotion
         bool machineFrame = block.Has("FRAME", null, "MACHINE");
         if (machineFrame)
         {
-            // TODO(question): D242: the rate of G53 is open; a G53 block moves at rapid whatever group 01 holds, as
-            // D242 recommends, so LINE and ARC in machine coordinates have no Fanuc form, until D242 is answered.
+            // D242: a G53 block moves at rapid traverse whatever group 01 holds, so LINE and ARC in machine
+            // coordinates have no Fanuc form (fanuc 4, 9 rule 3; controller-mapping 1; decisions.md).
             write.Written("FRAME");
             if (verb != "RAPID")
             {

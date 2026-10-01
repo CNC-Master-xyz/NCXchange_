@@ -212,7 +212,7 @@ EJECTOR = { ON = "M116", FORWARD = "M226", BACK = "M227" }
 BAR_LOADER = { FEED = "M51" }
 DOOR = { OPEN = "M52", CLOSE = "M53" }
 CHIP_CONVEYOR = { ON = "M24", OFF = "M25" }
-RIGID_TAP = { ON = "M29", REVERSE_ON = "M176", REVERSE_OFF = "M177" }
+TAP_REVERSE = { ON = "M176", OFF = "M177" }             # M29, the rigid tapping line, is the "before" of the TAP entry of the catalog (D256)
 INTERFERENCE_CHECK = { ON = "M111", OFF = "M110" }
 TOOL_MONITOR = { ON = "M201", OFF = "M200" }
 TORQUE_MONITOR = { ON = "M86", OFF = "M87" }

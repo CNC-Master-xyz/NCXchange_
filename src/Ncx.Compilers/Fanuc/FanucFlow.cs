@@ -217,7 +217,8 @@ internal static class FanucFlow
 
     // M98 P L calls a subprogram L times, G65 P with the letter arguments a macro (controllers fanuc.md 1, 7;
     // controller-mapping 6, CALL and TIMES, CALL and ARG); a subprogram is called by its O number, an external program
-    // by the number of its file name O9010 (language 4.9).
+    // by the number of its file name O9010 (language 4.9). A call of a program outside the file writes the code of
+    // [format] external_call, M98 where the machine names none (D322).
     // TODO(question): D215: the file name of CALL="name" is open; a name O followed by digits is called by its number,
     // any other external name is an ERROR, until D215 is answered.
     private static void WriteCall(FanucBlock write, Word call)
@@ -242,7 +243,9 @@ internal static class FanucFlow
         string program = digits.TrimStart('0').PadLeft(4, '0');
         var words = new List<string>();
         bool macro = write.Block.Has("ARG");
-        words.Add(macro ? "G65" : "M98");
+        bool outside = call.Value is StringValue;
+        string code = outside && !macro ? write.Machine.Format?.ExternalCall ?? "M98" : "M98";
+        words.Add(macro ? "G65" : code);
         words.Add("P" + program);
         if (write.Block.Find("TIMES") is Word times
             && FanucExpressions.WordValue(write, "L", times.Value, 1m) is string count)

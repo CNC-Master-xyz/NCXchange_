@@ -23,7 +23,7 @@ N410 M2
 - `( ... )` is a comment, anywhere in the block. Nothing else is. Some controls restrict the character set to ASCII capitals.
 - `/` or `/n` at the block start is the optional block skip: the block runs unless switch n is on.
 - `M30` ends and rewinds, `M2` ends; `M99` in a main program jumps back to its first block (this is how bar-work programs loop). `M0` stops, `M1` stops when the optional stop switch is on.
-- Subprograms are `O` programs of their own (after the main program's `M30` in the same file, or in their own file) that end with `M99`; `M98 P0100` calls, `M98 P0100 L3` calls three times (older form `M98 P30100`: three times program 0100), `M99 P30` returns to block 30 of the caller, and in a section no block of the file calls to block 30 of that section (D221). `M198` calls a program from external memory; `G65 P9010 A1 B2` calls a macro with letter arguments (section 7).
+- Subprograms are `O` programs of their own (after the main program's `M30` in the same file, or in their own file) that end with `M99`; `M98 P0100` calls, `M98 P0100 L3` calls three times (older form `M98 P30100`: three times program 0100), `M99 P30` returns to block 30 of the caller, and in a section no block of the file calls to block 30 of that section (D221). `M198` calls a program from external memory, where the code itself sits in parameter 6030 and a builder may set another one (Nakamura `M200`, which leaves `M198` a wait code of `M100`..`M199`), so the machine configuration carries it and a machine that names none has no external call (D322); `G65 P9010 A1 B2` calls a macro with letter arguments (section 7).
 - One `G` per group and up to three `M` codes per block on 30i (one on older controls). The words in a block execute together; `S` and `M3` in a motion block start the spindle before the motion.
 
 ## 2. Numbers
@@ -35,7 +35,7 @@ N410 M2
 
 ## 3. Modality and the G groups
 
-Every G belongs to a group; one value per group is active until another G of the same group appears. The groups that matter for the readers:
+Every G belongs to a group; one value per group is active until another G of the same group appears. Group 01 comes up and resets to `G0` unless bit 0 of parameter 3402 selects `G1`, so a block with axis words before the source writes a code of group 01 moves at rapid (D242). The groups that matter for the readers:
 
 | Group | Codes | Meaning |
 |---|---|---|
@@ -46,7 +46,7 @@ Every G belongs to a group; one value per group is active until another G of the
 | 06 | `G20 G21` (`G70 G71` in lathe system C) | inch or metric |
 | 07 | `G40 G41 G42` | cutter radius compensation |
 | 08 | `G43 G44 G49` | tool length offset (mills) |
-| 09 | `G73 G74 G76 G80 G81..G89` | canned cycles (mills); `G80` cancels |
+| 09 | `G73 G74 G76 G80 G81..G89` | canned cycles (mills); `G80` or any code of group 01 cancels (D247) |
 | 10 | `G98 G99` | return to the initial level or the R level after a cycle (mills; the same numbers mean feed mode on lathe system A) |
 | 12 | `G54..G59`, `G54.1 Pn` | workpiece coordinate system |
 | 13 | `G61 G62 G63 G64` | exact stop, tapping, cutting mode |
@@ -61,9 +61,9 @@ Lathe G-code systems: Fanuc lathes come in three G-code systems selected by a pa
 
 ## 4. Motion and frames
 
-- `G0` rapid, `G1` at `F`, `G2`/`G3` arcs with the end point and `I J K` (center, incremental from the start point, in the plane of `G17`/`G18`/`G19`) or `R` (radius; negative for the arc over 180 degrees; a full circle needs `I J`). A third axis in the arc block makes a helix.
-- `G90`/`G91` modal (B, C, mills). `G91 G28 Z0` is the idiom for a reference point return of Z (the `0` is an incremental distance of zero on the way to the reference point); `G28 U0 W0` the lathe form; `G30 P2` the second reference point. `G28` with a real distance moves to the intermediate point first.
-- `G53` in the block: machine coordinates for that block, also with macro variables (`G53 X#528`).
+- `G0` rapid, `G1` at `F`, `G2`/`G3` arcs with the end point and `I J K` (center, incremental from the start point, in the plane of `G17`/`G18`/`G19`) or `R` (radius; negative for the arc over 180 degrees; a full circle needs `I J`). A centre word of the plane that is left out is 0 (`I0`, `J0` and `K0` can be omitted), so the arc turns about a centre on that axis of the start point (D241). A third axis in the arc block makes a helix.
+- `G90`/`G91` modal (B, C, mills). `G91 G28 Z0` is the idiom for a reference point return of Z (the `0` is an incremental distance of zero on the way to the reference point); `G28 U0 W0` the lathe form; `G30 P2` the second reference point. The words of `G28` and `G30` are the intermediate point, reached at rapid before the return: only an incremental 0 means no intermediate move, while an absolute word, `0` included, moves there first, and an address without an incremental twin is always absolute, so `G28 B0` of system A moves B to 0 on the way (D243).
+- `G53` in the block: machine coordinates for that block, also with macro variables (`G53 X#528`). The move is at rapid traverse whatever group 01 holds, and `G53` is effective in its own block alone and leaves group 01 as it was; it wants an absolute value, and an incremental one makes it ignored (D242). `G53.2` is the separate machine-coordinate positioning at a feedrate.
 - `G54`..`G59` workpiece coordinate systems, `G54.1 P1`..`P48` (or `P300`) the additional ones; `G10 L2 P1 X.. Z..` writes them from the program (a data setting the reader keeps as `RAW`).
 - `G52 X Y Z` local coordinate system (a shift inside the active `G54`); a new `G52` replaces the old one, `G52 X0 Y0 Z0` cancels.
 - `G92 X Z` (B, C) or `G50 X Z` (A) declares the current position to be these coordinates without moving; `G50 C0` after `G28 H0` is the common C-axis reset before polar interpolation.
@@ -92,7 +92,7 @@ Spindles: `M3`/`M4`/`M5` with `S`. Fanuc has one `S` address; on a machine with 
 
 ## 6. Cycles
 
-Mill canned cycles are one block that defines and calls: `G81 G99 Z-21.732 R5. F565` drills at the current X Y to Z-21.732 (absolute under `G90`), starting the feed at `R5.` and returning to R (`G99`) or to the initial level (`G98`); every following block with a position calls the cycle again at that position; `G80` (or a `G0`/`G1` on some controls) cancels. `G82` adds a dwell `P` (milliseconds), `G83` pecks with `Q`, `G73` chip-breaks, `G84` taps (`M29 S` before it makes it rigid; the pitch is `F`, or `F`/`S` in per-minute mode), `G85` reams, `G86` bores, `G76` fine bores with a shift, `G74` left-hand taps, `G87`..`G89` back boring and variants. `K3` on the cycle block repeats it three times at incremental steps under `G91`. The reader converts `R` and `Z` to the absolute `CLEARANCE` and `DEPTH` of NCX and keeps the modal call behaviour by emitting a `CYCLE_CALL` per position.
+Mill canned cycles are one block that defines and calls: `G81 G99 Z-21.732 R5. F565` drills at the current X Y to Z-21.732 (absolute under `G90`), starting the feed at `R5.` and returning to R (`G99`) or to the initial level (`G98`); every following block with a position calls the cycle again at that position; `G80` or any code of group 01 (`G0` to `G3`) cancels and leaves the same state (D247), so a group 01 code and a cycle code never stand in one block, and a control may keep the `R` level and the initial point after a group 01 cancel that `G80` clears. `G82` adds a dwell `P` (milliseconds), `G83` pecks with `Q`, `G73` chip-breaks, `G84` taps (`M29 S` directly before it makes it rigid, which is the `before` line of the `TAP` entry of the catalog and part of `CYCLE=TAP`, D256; an `S` word or an axis motion between the two alarms PS0203, and a `G84` without the line is tapping with a compensating chuck; the pitch is `F`, or `F`/`S` in per-minute mode), `G85` reams, `G86` bores, `G76` fine bores with a shift, `G74` left-hand taps, `G87`..`G89` back boring and variants. `K3` on the cycle block repeats it three times at incremental steps under `G91`. The reader converts `R` and `Z` to the absolute `CLEARANCE` and `DEPTH` of NCX and keeps the modal call behaviour by emitting a `CYCLE_CALL` per position.
 
 Lathe drilling cycles: `G83`/`G84`/`G85` drill along Z at a `C` position on the face, `G87`/`G88`/`G89` along X on the circumference (NCX `AXIS=X`); Mori Seiki adds deep-hole variants `G83.5`/`G87.5`. Turning cycles: `G90` (OD/ID), `G92` (thread), `G94` (face) in system A (`G77`/`G78`/`G79` in B) are modal like the drilling cycles, a following block with only `X`, `Z`, `R` (or `U`, `W`) repeats them — `X(U)`, `Z(W)` and `R` are modal data the three share, so a word left out keeps its last value; `G70`..`G76` (finish, rough OD, rough face, pattern repeat, face cut-off, OD groove, compound thread) are one-shot blocks. `G70`..`G73` name the block range of the finishing contour with `P` and `Q`, which NCX carries as a subprogram section referenced by `CONTOUR=`; `G74` and `G75` take `P` as the step along the second plane axis and `Q` as the step along the first, and `G76` takes `P` and `Q` as thread data, so those three carry no contour (D176). The NCX names of the two the documents had none for are `PATTERN_REPEAT` for `G73`, with a contour, and `FACE_GROOVE` for `G74`, without one; both belong to the lathe catalog, since `G73` and `G74` are `CHIP_BREAK` and left-hand tapping on a mill (D176).
 
@@ -129,14 +129,15 @@ A two-path lathe runs one program per path (turret, or head and turret). The pat
 
 ## 9. Rules for the reader
 
-1. Resolve every block against the source-side state: verb from group 01, absolute or incremental from group 03 or the `U W` addresses, plane from group 02, feed mode from group 05 or `G98`/`G99` on system A.
+1. Resolve every block against the source-side state: verb from group 01, which starts at `G0` (D242), absolute or incremental from group 03 or the `U W` addresses, plane from group 02, feed mode from group 05 or `G98`/`G99` on system A.
 2. `T`, `M6` and the offsets per section 5; `S` binds to the spindle of the M code in the same block, else to the last selected spindle.
-3. `G91 G28 Z0` and `G28 U0 W0` are `HOME`; `G30 P2` is `HOME POINT=2`; `G53` is `FRAME=MACHINE` on the block.
+3. `G91 G28 Z0` and `G28 U0 W0` are `HOME`; `G30 P2` is `HOME POINT=2`; an absolute word of `G28` or `G30`, `0` included, is the intermediate point and becomes a `RAPID` to it in front of the `HOME` (D243). `G53` is `FRAME=MACHINE` on the block and `RAPID`, whatever group 01 holds (D242).
 4. An `O` section a block of the file calls is a subprogram; one that no block calls is a program when it holds an `M30` or `M2`, a skipped one included, and a subprogram otherwise, except that where no section of the file is a program the first uncalled one is, with an INFO naming that reading (D210). `M99` in the main program is a jump to a label after the header; `/M30` is `SKIP JUMP=END`; `GOTO` to a block below `M30` and back becomes a section in front of `PROGRAM=END` behind `JUMP=END`. A program that has no end at all, one that runs into the closing `%`, is ended after its last block with a WARNING, as a Klartext program without `M30` is (D211).
-5. `G81`..`G89` define and call; following position blocks call; `G80` cancels; `R` and `Z` become absolute `CLEARANCE` and `DEPTH`; `K` repeats expand.
+5. `G81`..`G89` define and call; following position blocks call; `G80` or any `G0` to `G3` cancels (D247); `R` and `Z` become absolute `CLEARANCE` and `DEPTH`; `K` repeats expand.
 6. `G52` replaces the previous `G52`, so the reader writes `SHIFT=RESET` before the new `SHIFT`.
 7. `G10`, `G65`/`G66` calls of unknown macros, probing (`G31`, `G38`), builder G macros not in the configuration: `RAW` with a WARNING, never dropped.
 8. Numbers are taken as written; a trailing or leading dot is accepted.
+9. The `before` line of a catalog entry standing directly in front of its cycle block belongs to the cycle: `M29 S500` before a `G84` is read into `CYCLE=TAP`, and the `S` becomes `RPM` only where it differs from the running speed (machine-config 6, D256).
 
 ## 10. Rules for the writer
 
@@ -146,3 +147,4 @@ A two-path lathe runs one program per path (turret, or head and turret). The pat
 4. Wait marks from the `[sync]` table with the path form the machine uses (list or bitmask).
 5. Decimal point on every real number per `[format]` (`decimals`, `trailing_zeros`); comments in parentheses, transliterated to ASCII (`comment_charset`).
 6. Numbers, names and file names per `[format]`; block numbers per `format.block_numbers`.
+7. The `before` line of a catalog entry stands in its own line directly before the cycle block, `M29 S500` before `G84 G99 Z-20. R5. F750` (machine-config 6, D256).

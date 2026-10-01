@@ -14,6 +14,11 @@ public static partial class DrillingFamily
     // (controller-mapping 5).
     private static readonly string[] s_fanucTapRuleWords = ["SURFACE", "SAFE", "CYCLE_RETRACT", "AXIS", "PITCH"];
 
+    // The rigid tapping line of G84 stands directly before the cycle block and belongs to the cycle; a machine file
+    // overrides it with its builder's code and sets it to "" where a parameter makes G84 rigid without one
+    // (machine-config 6; fanuc 6; D256).
+    private const string FanucTapBefore = "M29 S{rpm}";
+
     // The cycle block defines and calls at its own position, every following block with a position calls again, G80
     // cancels: every entry is modal (fanuc 6, 9.5).
     private static CycleCatalog FanucFamily()
@@ -27,7 +32,7 @@ public static partial class DrillingFamily
                 FanucEntry("DRILL_DWELL", "G82", peck: false, s_fanucRuleWords),  // G82 adds a dwell P
                 FanucEntry("PECK", "G83", peck: true, s_fanucRuleWords),          // G83 pecks with Q, full retract
                 FanucEntry("CHIP_BREAK", "G73", peck: true, s_fanucRuleWords),    // G73 chip-breaks
-                FanucEntry("TAP", "G84", peck: false, s_fanucTapRuleWords),       // G84 G99 Z-20. R5. P0 F750
+                FanucEntry("TAP", "G84", peck: false, s_fanucTapRuleWords, FanucTapBefore),
                 FanucEntry("REAM", "G85", peck: false, s_fanucRuleWords),         // G85 G99 Z-20. R5. F420
                 FanucEntry("BORE", "G86", peck: false, s_fanucRuleWords),         // G86 bores
             ],
@@ -38,7 +43,8 @@ public static partial class DrillingFamily
     // own feed and dwell, which never touch the modal F of the program (fanuc 6, controller-mapping 5, D29).
     // TODO(question): fanuc 6 names the dwell P for G82 only; P stands on every entry as controller-mapping 5 writes
     // "F and P on the G8x block", as cycles/fanuc.toml does (D177).
-    private static CycleEntry FanucEntry(string name, string native, bool peck, string[] ruleWords)
+    private static CycleEntry FanucEntry(string name, string native, bool peck, string[] ruleWords,
+        string? before = null)
     {
         var parameters = new Dictionary<string, string>
         {
@@ -58,6 +64,7 @@ public static partial class DrillingFamily
             Native = native,
             Modal = true,
             Params = parameters,
+            Before = before,
             RuleWords = ruleWords,
         };
     }

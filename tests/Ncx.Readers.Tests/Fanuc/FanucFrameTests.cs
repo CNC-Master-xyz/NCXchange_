@@ -25,6 +25,14 @@ public sealed class FanucFrameTests
         Assert.Equal(Lines("RAPID Z=0 FRAME=MACHINE"), Body("G53 G0 Z0"));
     }
 
+    // D242: a G53 block moves at rapid traverse whatever code of group 01 is active, and leaves that code as it was.
+    [Fact]
+    public void G53_UnderAnActiveG1_IsRapidOnItsBlock()
+    {
+        Assert.Equal(Lines("LINE X=10 F=200", "RAPID Z=0 FRAME=MACHINE", "LINE X=20"),
+            Body("G90 G1 X10. F200\nG53 Z0\nX20."));
+    }
+
     // G91 G28 Z0 is HOME Z; G28 X0 Y0 under G91 HOME X Y (controllers fanuc.md 9 rule 3; examples/2.5D_FRAESEN note 4).
     [Fact]
     public void G91G28Z0_BecomesHomeZ()
@@ -51,6 +59,22 @@ public sealed class FanucFrameTests
     public void G28U0W0_OnSystemA_BecomesHomeXZ()
     {
         Assert.Equal(Lines("HOME X Z", "HOME C"), Body("G28 U0 W0\nG28 H0", Lathe()));
+    }
+
+    // D243: an absolute word of G28, a 0 included, is the intermediate point and becomes a RAPID to it in front of
+    // the HOME; only an incremental 0 means no intermediate move.
+    [Fact]
+    public void G28_WithAnAbsoluteZero_MovesToTheIntermediatePointFirst()
+    {
+        Assert.Equal(Lines("RAPID Z=50", "RAPID Z=0", "HOME Z"), Body("G90 G0 Z50.\nG28 Z0"));
+    }
+
+    // D243: B of G-code system A has no incremental letter, so G28 B0 is the absolute intermediate point B0 and the
+    // reader writes a RAPID to it in front of the HOME (the Nakamura path 2 blocks).
+    [Fact]
+    public void G28B0_OnSystemA_MovesBToZeroFirst()
+    {
+        Assert.Equal(Lines("RAPID B=0", "HOME X B"), Body("G28 U0 B0", Lathe()));
     }
 
     // G92 X Y declares the current position on a mill, SETPOS (controller-mapping 1, D55).

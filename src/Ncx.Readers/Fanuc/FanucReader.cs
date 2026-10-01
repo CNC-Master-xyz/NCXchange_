@@ -151,8 +151,8 @@ public sealed partial class FanucReader : ReaderBase
             Jump(fanuc, block, target, labelsUsed);
         }
 
-        // M98 P, G65 P and the M200 P of the builder nakamura enter a subprogram of the file; M198 P calls a program
-        // from external memory (controller-mapping 6, 8).
+        // M98 P, G65 P and the M200 P of the builder nakamura enter a subprogram of the file; the external call code
+        // of the machine P calls a program from external memory (controller-mapping 6, 8; D322).
         foreach (FanucCall call in FanucMacro.CallsOf(block, Machine))
         {
             if (!call.External)
@@ -417,6 +417,7 @@ public sealed partial class FanucReader : ReaderBase
             {
                 FanucMacro.Read(reading);
                 FanucFrames.Read(reading);
+                FanucCycles.ReadBeforeLine(reading);
                 FanucToolWords.Read(reading);
                 FanucCycles.Read(reading);
                 FanucMotion.Read(reading);
@@ -737,6 +738,13 @@ public sealed partial class FanucReader : ReaderBase
                 fanuc.TurnsOfTilts.Add(blocks[index + 1].Line);
             }
 
+            // The "before" line of a catalog entry stands directly in front of the entry's cycle block and belongs
+            // to the cycle, Fanuc M29 S before a G84 (machine-config 6, D256).
+            if (index + 1 < blocks.Count && BeforeOf(blocks[index + 1]) is string entry)
+            {
+                fanuc.CycleBefore[block.Line] = entry;
+            }
+
             // The contour of a G70 to G76 is the SUB section the structure pass made of it (language 4.7.1, D65).
             if (ContourOf(block) is string contour)
             {
@@ -816,6 +824,21 @@ public sealed partial class FanucReader : ReaderBase
                 return;
             }
         }
+    }
+
+    // The NCX name of the catalog entry whose cycle this block starts and that carries a "before" line; null for
+    // every other block (machine-config 6, D256).
+    private string? BeforeOf(SourceBlock block)
+    {
+        foreach (CycleEntry entry in Machine.CycleCatalog.Entries)
+        {
+            if (!string.IsNullOrEmpty(entry.Before) && HasCode(block, entry.Native))
+            {
+                return entry.Name;
+            }
+        }
+
+        return null;
     }
 
     private static bool HasCode(SourceBlock block, string code)

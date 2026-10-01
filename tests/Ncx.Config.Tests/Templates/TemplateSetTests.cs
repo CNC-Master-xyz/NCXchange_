@@ -205,7 +205,8 @@ public sealed class TemplateSetTests
         VC = "G96 S{value}"
         """;
 
-    // Every template text of EveryTable, each once: M9 stands in two coolant channels and is one template.
+    // Every template text of EveryTable, each once: M9 stands in two coolant channels and is one template, and
+    // "M29 S{rpm}" is the before line of the TAP entry of the built-in Fanuc drilling family (D256).
     private static readonly string[] s_templatesOfEveryTable =
     [
         "M30", "M99",
@@ -224,6 +225,7 @@ public sealed class TemplateSetTests
         "G69", "", "G53.1", "M126", "M127", "M116", "M117",
         "M140 MB MAX", "M140 MB{distance}",
         "G5.1 Q1", "G5.1 Q0",
+        "M29 S{rpm}",
         "#5041", "#11{index:03}",
     ];
 

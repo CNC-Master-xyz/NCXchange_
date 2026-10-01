@@ -58,8 +58,10 @@ name = "TAP"
 native = "G84"
 modal = true
 params = { DEPTH = "Z", CLEARANCE = "R", CYCLE_DWELL = "P", CYCLE_F = "F" }           # G84 G99 Z-20. R5. P0 F750 (BOHREN.fanuc.nc)
-# PITCH has no address of its own: it is F / S in per-minute mode and F in per-revolution mode (controller-mapping 5). M29 S before the cycle makes the
-# tapping rigid (fanuc 6); that is a function of the machine file (a pre rule of an overriding entry, machine-config 5a).
+before = "M29 S{rpm}"                                                                # the rigid-tapping line directly before the cycle block, part of CYCLE=TAP (D256)
+# PITCH has no address of its own: it is F / S in per-minute mode and F in per-revolution mode (controller-mapping 5). A machine file overrides "before" with its
+# builder's code (Mori Seiki "M329 S{rpm}") and sets it to "" where parameter 5200 bit 0 makes G84 rigid without a line; a G84 without it is tapping with a
+# compensating chuck (fanuc 6, machine-config 6, D256).
 
 [[cycle]]
 name = "REAM"

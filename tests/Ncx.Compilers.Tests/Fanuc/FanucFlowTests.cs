@@ -55,6 +55,21 @@ public sealed class FanucFlowTests
         Assert.Equal("G65 P9010 A1. B2.5 Z-5.\n", body);
     }
 
+    // D322: a CALL of a program outside the file writes the code of [format] external_call, M98 where the machine
+    // names none.
+    [Fact]
+    public void ExternalCall_WithTheCodeOfTheMachine_WritesThatCode()
+    {
+        string machine = FanucCompile.Mill(
+            options: FanucCompile.SourceHabits + "\nexternal_call = \"M198\"");
+
+        string text = FanucCompile.TextOf(FanucCompile.Run(FanucCompile.Program("CALL=\"O9010\""), machine));
+        string plain = FanucCompile.Body("CALL=\"O9010\"");
+
+        Assert.Contains("\nM198 P9010\n", text, StringComparison.Ordinal);
+        Assert.Equal("M98 P9010\n", plain);
+    }
+
     // Language 4.9 JUMP=END, controller-mapping 1: a conditional end jumps to the block number of the program end,
     // which the end carries.
     [Fact]
@@ -84,7 +99,7 @@ public sealed class FanucFlowTests
 
     // Virtual machine 1 (the STATIC walk does not follow JUMP), controllers fanuc.md 10 rule 1: a jump reaches the
     // label with the modal codes of the block it jumps from, here the G0 of the RAPID, so the LINE after the label
-    // writes G1, the plane, G90, G94 and F again, with G80 before it (the TODO(question) of D247).
+    // writes G1, the plane, G90, G94 and F again, with G80 before it (D247).
     [Fact]
     public void Label_ThatAJumpReaches_WritesTheModalCodesOfTheNextMotionAgain()
     {

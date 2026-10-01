@@ -81,6 +81,37 @@ public sealed class FanucCycleTests
             Body("S500 M3\nG0 X0 Y0 Z10.\nG84 G99 Z-20. R5. F750\nG80"));
     }
 
+    // D256, BOHREN.fanuc.nc N3100 and N3110: the M29 S of rigid tapping directly before the G84 is the before line
+    // of the TAP entry of the catalog and belongs to CYCLE=TAP, and its S writes no RPM where the spindle already
+    // runs at that speed.
+    [Fact]
+    public void RigidTapLine_BeforeTheCycleBlock_IsReadIntoTheTapCycle()
+    {
+        Assert.Equal(
+            Lines(
+                "SPINDLE=CW RPM=500",
+                "RAPID X=0 Y=0 Z=10",
+                "CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE CYCLE_F=750 PITCH=1.5",
+                "CYCLE_CALL",
+                "CYCLE=OFF"),
+            Body("S500 M3\nG0 X0 Y0 Z10.\nM29 S500\nG84 G99 Z-20. R5. F750\nG80"));
+    }
+
+    // D256: the S of the before line is the speed the tapping runs at, so a speed other than the running one is RPM.
+    [Fact]
+    public void RigidTapLine_WithAnotherSpeed_WritesThatRpm()
+    {
+        Assert.Equal(
+            Lines(
+                "SPINDLE=CW RPM=500",
+                "RAPID X=0 Y=0 Z=10",
+                "RPM=300",
+                "CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE CYCLE_F=750 PITCH=2.5",
+                "CYCLE_CALL",
+                "CYCLE=OFF"),
+            Body("S500 M3\nG0 X0 Y0 Z10.\nM29 S300\nG84 G99 Z-20. R5. F750\nG80"));
+    }
+
     // K3 under G91 repeats the cycle three times at incremental steps: three CYCLE_CALL blocks; R and Z under G91 are
     // made absolute from the initial level (controller-mapping 5, repeats; controllers fanuc.md 6).
     [Fact]

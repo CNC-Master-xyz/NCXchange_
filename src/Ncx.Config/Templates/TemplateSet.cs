@@ -260,6 +260,16 @@ public sealed class TemplateSet
         AddText(texts, machine.Tolerance?.On);
         AddText(texts, machine.Tolerance?.Off);
 
+        // The native line a catalog entry writes directly before its cycle block, "M29 S{rpm}" (machine-config 6,
+        // D256).
+        foreach (CycleEntry entry in machine.CycleCatalog.Entries)
+        {
+            if (!string.IsNullOrEmpty(entry.Before))
+            {
+                texts.Add(entry.Before);
+            }
+        }
+
         // The native system variables, SYS_WEAR_Z = "#11{index:03}" (machine-config 7).
         texts.AddRange(machine.SystemVariables.Entries.Values);
         return texts;

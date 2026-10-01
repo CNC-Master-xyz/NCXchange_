@@ -23,8 +23,10 @@ namespace Ncx.Acceptance.Jobs;
 /// </summary>
 // TODO(question): the Fanuc compiler (P3-06) writes G97 of the sub spindle from [spindle.SUB] CSS_OFF, which
 // nakamura-ntjx.toml does not give (the TODO(question) of FanucToolWords.WriteSpindleLines), and G28 B0 only with an
-// incremental letter of B, which it does not give either (D243). The job is compiled for the machine with the two
-// filled in, CSS_OFF = "G97" and B as the incremental letter of B, until those are answered.
+// incremental letter of B, which it does not give either. D243 settles the reader, where B of system A has no
+// incremental twin and is the absolute intermediate point; how the compiler writes HOME of such an axis it does not
+// say. The job is compiled for the machine with the two filled in, CSS_OFF = "G97" and B as the incremental letter
+// of B, until those are answered.
 public sealed partial class NakamuraJobCompileTests
 {
     // The wait marks of the Nakamura, M100 to M199 ([sync] mark_range), and its spindle synchronization, M96, M97 and

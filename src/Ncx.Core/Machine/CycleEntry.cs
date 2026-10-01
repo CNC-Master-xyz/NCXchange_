@@ -60,6 +60,14 @@ public sealed record CycleEntry
     public IReadOnlyList<string> Signature { get; init; } = [];
 
     /// <summary>
+    /// before: one native line that belongs to the cycle itself and stands directly before the cycle block, the
+    /// Fanuc "M29 S{rpm}" that makes a G84 rigid tapping; the compiler writes it there and the reader folds it into
+    /// the cycle (machine-config 6, D256). Null when the entry has no such line, and empty on a machine whose
+    /// parameter makes the cycle so without one.
+    /// </summary>
+    public string? Before { get; init; }
+
+    /// <summary>
     /// fixed: native parameters the entry always writes with this value, which tell two entries of one native cycle
     /// apart, VARI = 1 for PECK on CYCLE83 (machine-config 6, controller-mapping 5).
     /// </summary>
@@ -216,6 +224,7 @@ public sealed record CycleEntry
             Contour = entry.Writes("contour") ? entry.Contour : Contour,
             Signature = entry.Writes("signature") ? entry.Signature : Signature,
             Fixed = entry.Writes("fixed") ? entry.Fixed : Fixed,
+            Before = entry.Writes("before") ? entry.Before : Before,
             Rule = OverriddenRule(entry),
             RuleWords = entry.RuleWords.Count > 0 ? entry.RuleWords : RuleWords,
             WrittenKeys = writtenKeys,

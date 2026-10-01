@@ -111,9 +111,10 @@ internal static class FanucFrames
     // G28 returns the named axes to the reference point, G30 P to the P-th one, POINT=P, the second by default; the
     // axes are unknown in the workpiece frame afterwards (controllers fanuc.md 4, 9 rule 3; controller-mapping 1, HOME;
     // virtual machine 3.4).
-    // TODO(question): fanuc 4 says G28 "with a real distance" moves to the intermediate point first, and the documents
-    // read G28 B0 of system A, where B is absolute, as HOME B; a value of 0 is no intermediate point in either mode and
-    // any other value is one, absolute under G90 and incremental under G91 or by U W, until D243 is answered.
+    // D243: the words of G28 and G30 are the intermediate point, reached at rapid before the return; only an
+    // incremental 0 means no intermediate move, and an absolute word, 0 included, writes a RAPID to it first. An
+    // address with no incremental twin is always absolute, so G28 B0 of system A is RAPID B=0 then HOME B
+    // (decisions.md).
     private static void ReadHome(FanucBlock block)
     {
         bool reference = block.TakeCode("G28");
@@ -140,16 +141,16 @@ internal static class FanucFrames
                 return;
             }
 
-            if (FanucNumbers.NumberOf(value) != 0m)
+            // Whether an absolute address is absolute or incremental is G90 or G91, which the reader may not know
+            // here (FanucCallerState).
+            if (!axis.Incremental && block.Fanuc.Unknowns.Groups.Contains(FanucModalGroups.Distance))
             {
-                // The distance of an absolute address is absolute or incremental by G90 or G91, which the reader may
-                // not know here (FanucCallerState).
-                if (!axis.Incremental && block.Fanuc.Unknowns.Groups.Contains(FanucModalGroups.Distance))
-                {
-                    block.Draft.KeepAsRaw(FanucUnknowns.Reason("G90 or G91"));
-                    return;
-                }
+                block.Draft.KeepAsRaw(FanucUnknowns.Reason("G90 or G91"));
+                return;
+            }
 
+            if (!axis.Incremental || FanucNumbers.NumberOf(value) != 0m)
+            {
                 intermediate.Add(axis.Key, value);
             }
 

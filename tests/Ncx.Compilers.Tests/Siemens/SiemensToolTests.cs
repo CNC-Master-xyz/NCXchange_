@@ -240,10 +240,10 @@ public sealed class SiemensToolTests
         Assert.Equal(["CMP513"], CompilerCodes(result));
     }
 
-    // Language 4.10, WORKPIECE: the [workpiece] template of the role, G55 on millturn1.toml, and an ORIGIN of the same
-    // datum is not written again (the TODO(question) of SiemensFunctions, D222).
+    // Language 4.10, WORKPIECE, and D222: millturn1.toml names no selection code, so WORKPIECE writes nothing and
+    // the datum of the side comes from the ORIGIN of the program.
     [Fact]
-    public void WorkpieceSub_IsTheTemplateAndTheOriginAfterItIsNotWrittenAgain()
+    public void WorkpieceSub_WithoutATemplate_WritesNothingAndTheOriginWritesTheDatum()
     {
         Assert.Equal(Lines("G55"), MillTurnBody("WORKPIECE=SUB", "ORIGIN=2"));
     }

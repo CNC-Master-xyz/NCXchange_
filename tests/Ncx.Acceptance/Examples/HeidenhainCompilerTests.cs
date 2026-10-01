@@ -23,9 +23,6 @@ public sealed partial class HeidenhainCompilerTests : IDisposable
 {
     private const string MachineName = "heidenhain-itnc530";
 
-    // The block of Expected/BOHREN.ncx that the Fanuc tapping M29 S500 reads into.
-    private const string RigidTap = "RPM=500 FUNC:RIGID_TAP=ON";
-
     private readonly ProjectHarness _project = new(Fixture.RepositoryRoot());
 
     // What the last compile wrote to the standard error: the diagnostics (D98).
@@ -53,10 +50,8 @@ public sealed partial class HeidenhainCompilerTests : IDisposable
 
     // P3-04: Expected/BOHREN.ncx, from the Fanuc source (P3-02), compiles to a program equivalent to BOHREN.h, except
     // the differences listed here with their questions; the two WARNINGs are the feed and the dwell of the tapping,
-    // which cycle 207 has no Q parameter for (CMP105).
-    // TODO(question): FUNC:RIGID_TAP=ON, the M29 S500 of the Fanuc tapping, names no function of [func] of
-    // heidenhain-itnc530.toml, which the virtual machine reports as the ERROR VM006, and cycle 207 taps rigidly without
-    // it (heidenhain 5); its block, whose RPM=500 changes nothing, is taken out of the program before it is compiled.
+    // which cycle 207 has no Q parameter for (CMP105). D256: the Fanuc M29 S500 is the before line of the TAP entry
+    // and part of CYCLE=TAP, so the NCX program holds no function for it and compiles for the iTNC 530 as it stands.
     [Fact]
     public void Compile_Bohren_IsEquivalentToTheHeidenhainSourceExceptTheListedDifferences()
     {
@@ -64,7 +59,7 @@ public sealed partial class HeidenhainCompilerTests : IDisposable
             Path.Combine(Fixture.RepositoryRoot(), "tests", "Ncx.Acceptance", "Expected", "BOHREN.ncx"))
             .ReplaceLineEndings("\n");
 
-        string compiled = Compile("BOHREN.ncx", WithoutRigidTap(frozen), "BOHREN.h");
+        string compiled = Compile("BOHREN.ncx", frozen, "BOHREN.h");
 
         Assert.Equal(["CMP105", "CMP105"], Codes(_error));
         string? difference = new NcComparer(Mill()).Compare(Fixture.ReadText("sources/BOHREN.h"), compiled,
@@ -126,17 +121,6 @@ public sealed partial class HeidenhainCompilerTests : IDisposable
                 Compiled = SingleMoves(frozen),
             },
         ];
-    }
-
-    /// <summary>
-    /// Expected/BOHREN.ncx without the block that the Fanuc tapping M29 S500 reads into, which the iTNC 530 does not
-    /// compile (the TODO(question) of the BOHREN test).
-    /// </summary>
-    /// <param name="frozen">Expected/BOHREN.ncx with LF line endings.</param>
-    internal static string WithoutRigidTap(string frozen)
-    {
-        Assert.Contains(RigidTap + "\n", frozen, StringComparison.Ordinal);
-        return frozen.Replace(RigidTap + "\n", "", StringComparison.Ordinal);
     }
 
     /// <summary>

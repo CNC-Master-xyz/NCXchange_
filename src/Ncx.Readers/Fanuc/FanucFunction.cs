@@ -4,7 +4,7 @@ namespace Ncx.Readers.Fanuc;
 
 /// <summary>
 /// The NCX word an M code of the machine's function tables stands for: SPINDLE=CW for M3, COOLANT=ON for M8,
-/// FUNC:RIGID_TAP=ON for M29 (machine-config 5).
+/// FUNC:TAP_REVERSE=ON for M94 (machine-config 5).
 /// </summary>
 /// <param name="Key">The key, "SPINDLE".</param>
 /// <param name="Addr">The address; null for the default spindle and the default coolant channel.</param>

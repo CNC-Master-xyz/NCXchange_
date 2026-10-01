@@ -71,12 +71,14 @@ public sealed class FanucCyclesTests
         Assert.EndsWith("G81 G99 Z-20. R5. F100.\nG80\nG0 Z50.\n", body, StringComparison.Ordinal);
     }
 
-    // BOHREN.fanuc.nc N3100 and N3110, controller-mapping 5 TAP: M29 S500 before G84 G99 Z-20. R5. P0 F750.
+    // BOHREN.fanuc.nc N3100 and N3110, controller-mapping 5 TAP: M29 S500 before G84 G99 Z-20. R5. P0 F750. D256:
+    // the M29 line is the "before" of the TAP entry of the catalog, which the compiler writes from the cycle, with
+    // the speed of the spindle that turns the tap.
     [Fact]
-    public void Tap_WithDwellAndFeed_IsG84WithPAndF()
+    public void Tap_WithDwellAndFeed_IsG84WithPAndFBehindTheRigidTappingLine()
     {
-        string body = FanucCompile.Body(Approach
-            + "\nRPM=500 FUNC:RIGID_TAP=ON\nCYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE "
+        string body = FanucCompile.Body("TOOL=1\nSPINDLE=CW RPM=500\nRAPID X=10 Y=10\nRAPID Z=5"
+            + "\nCYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE "
             + "CYCLE_F=750 CYCLE_DWELL=0 PITCH=1.5\nCYCLE_CALL");
 
         Assert.EndsWith("M29 S500\nG84 G99 Z-20. R5. P0 F750.\n", body, StringComparison.Ordinal);
@@ -110,7 +112,7 @@ public sealed class FanucCyclesTests
         string body = FanucCompile.Body(
             Approach + "\nVAR:V2=1.5\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 PITCH={$V2}\nCYCLE_CALL");
 
-        Assert.EndsWith("#2 = 1.5\nG84 G99 Z-20. R5. F[#2 * 1000]\n", body, StringComparison.Ordinal);
+        Assert.EndsWith("#2 = 1.5\nM29 S1000\nG84 G99 Z-20. R5. F[#2 * 1000]\n", body, StringComparison.Ordinal);
     }
 
     // Controller-mapping 5 TAP, language 2 rule 8: the feed of G84 is the pitch times the speed, and a speed from an
@@ -310,7 +312,7 @@ public sealed class FanucCyclesTests
             + "IF [#1 LT 3] GOTO 10\n", body, StringComparison.Ordinal);
     }
 
-    // D99, fanuc 6 (a position block under an active G81 drills; the TODO(question) of D247): a subprogram is written
+    // D99, fanuc 6 (a position block under an active G81 drills; D247): a subprogram is written
     // from an unknown target state, so G80 stands before its first motion, and after its return the caller writes the
     // definition of the cycle again with its next call.
     [Fact]

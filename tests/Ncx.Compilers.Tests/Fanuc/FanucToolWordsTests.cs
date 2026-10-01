@@ -234,15 +234,6 @@ public sealed class FanucToolWordsTests
         Assert.Equal("T1 M6\nG0 G17 X0. Y0.\nG1 G41 X1. D1 F100.\n/X2. D2\nX3.\n", body);
     }
 
-    // Fanuc 6, BOHREN.fanuc.nc N3100: the rigid tapping function stands before the S of the running spindle, M29 S500.
-    [Fact]
-    public void Function_WithTheSpeed_StandsBeforeTheS()
-    {
-        string body = FanucCompile.Body("SPINDLE=CW RPM=500\nRPM=500 FUNC:RIGID_TAP=ON");
-
-        Assert.Equal("S500 M3\nM29 S500\n", body);
-    }
-
     // Controller-mapping 4, ORIENT: the orientation of the spindle's table, M19.
     [Fact]
     public void Orient_IsTheOrientCodeOfTheTable()

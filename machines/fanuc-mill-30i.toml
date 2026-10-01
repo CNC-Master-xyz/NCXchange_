@@ -131,8 +131,8 @@ accel_time = 1.5                   # seconds from stop to rpm_max, for the runti
 [coolant]
 STANDARD = { ON = "M8", OFF = "M9" }   # COOLANT=ON and OFF (controller-mapping 4)
 
-[func]                             # strings (D105); the loader normalizes M29, M029, 29 and 029 to "M29", readers compare by number
-RIGID_TAP = { ON = "M29" }         # M29 S before G84 makes the tapping rigid (fanuc 6, BOHREN.fanuc.nc N3100)
+# no [func]: the M29 of BOHREN.fanuc.nc N3100 is the "before" line of the TAP entry of the catalog and part of
+# CYCLE=TAP, not a function of the machine (cycles/fanuc.toml, D256)
 
 [retract]                          # the RETRACT verb (D83)
 MAX = ""                           # empty: a computed G53 move when the kinematics is known, else ERROR (controller-mapping 1)

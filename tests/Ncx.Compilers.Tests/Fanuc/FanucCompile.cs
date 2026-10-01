@@ -129,9 +129,6 @@ internal static partial class FanucCompile
             [coolant]
             STANDARD = { ON = "M8", OFF = "M9" }
 
-            [func]
-            RIGID_TAP = { ON = "M29" }
-
             [tolerance]
             ON = "G5.1 Q1"
             OFF = "G5.1 Q0"

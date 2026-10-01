@@ -1,4 +1,5 @@
 using System.Globalization;
+using Ncx.Config.Templates;
 using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.State;
@@ -73,8 +74,8 @@ internal static class FanucCycles
     /// </summary>
     public static void CancelBeforeMotion(FanucBlock write)
     {
-        // TODO(question): D247: whether G0 to G3 end a canned cycle is open; G80 stands before the motion, which ends
-        // it on every control, until D247 is answered.
+        // D247: a code of group 01 ends the cycle by itself, and G80 before the motion says so in the text as well
+        // (fanuc 6, 9 rule 5; language 4.7; decisions.md).
         Cancel(write);
     }
 
@@ -234,6 +235,11 @@ internal static class FanucCycles
             FanucMotion.Change(write, FanucCodes.Distance, "G90");
         }
 
+        if (entry is not null && !WriteBefore(write, entry))
+        {
+            return;
+        }
+
         write.Main.Code(FanucCodes.RankOf(FanucCodes.Cycle), code);
         if (entry is null)
         {
@@ -249,6 +255,44 @@ internal static class FanucCycles
         write.Target.Set(FanucCodes.Cycle, code);
         write.Target.Set(Definition, definition);
         write.MakeUnknown(FanucCodes.Motion);
+    }
+
+    // The before line of the entry, the native line that belongs to the cycle itself, in a line of its own directly
+    // in front of the cycle block: Fanuc M29 S{rpm} makes the tapping of G84 rigid, and a G84 without it is tapping
+    // with a compensating chuck (machine-config 6; controllers fanuc.md 6, 10 rule 7; D256). An empty before line is
+    // the machine whose parameter makes the cycle so without one. False when the line cannot be written.
+    private static bool WriteBefore(FanucBlock write, CycleEntry entry)
+    {
+        if (string.IsNullOrEmpty(entry.Before))
+        {
+            return true;
+        }
+
+        var values = new TemplateValues();
+        if (write.TemplateOf(entry.Before).Placeholders.Any(placeholder => placeholder.Name == "rpm"))
+        {
+            string? id = TapSpindleOf(write);
+            string? why = id is null ? "the machine has no spindle" : SpeedMissing(write, id);
+            if (id is null || why is not null)
+            {
+                write.Error(DiagnosticCodes.FanucTapFeedNotKnown,
+                    $"CYCLE={entry.Name} is written with the line {entry.Before} in front of it, whose speed is the "
+                    + $"speed of the spindle of the current tool holder, and {why} (machine-config 6; "
+                    + "controllers fanuc.md 6; D256).");
+                return false;
+            }
+
+            values.Set("rpm", write.After.Spindles[id].Rpm);
+        }
+
+        if (write.Render(entry.Before, $"[[cycle]] {entry.Name} before (machine-config 6, D256)", values)
+            is not string text)
+        {
+            return false;
+        }
+
+        write.Write(text);
+        return true;
     }
 
     // The native code of a catalog entry for the machine (machine-config 6): on a mill the drilling entries along the

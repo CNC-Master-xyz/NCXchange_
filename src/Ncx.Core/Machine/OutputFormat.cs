@@ -59,6 +59,15 @@ public sealed record OutputFormat
     /// </summary>
     public string? CommentCharset { get; init; }
 
+    /// <summary>
+    /// external_call: the Fanuc code that calls a program outside the file, which the control takes from parameter
+    /// 6030 and a builder may set to something else; the compiler writes it in place of M98 for a CALL of an external
+    /// program and the reader reads it as CALL (D322). Null when the file leaves it out: the compiler then writes M98
+    /// and the reader reads no external call. A machine whose [sync] mark range covers the code does not name it, and
+    /// the reader keeps the code as a wait mark there.
+    /// </summary>
+    public string? ExternalCall { get; init; }
+
     // TODO(question): implementation 16 (P6-02) names the output files of a job "from [machine] channels and a
     // [format] key", and machine-config 2 names no such key; channel_files and its three values stand for it until
     // that is answered.

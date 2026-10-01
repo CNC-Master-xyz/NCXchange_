@@ -200,8 +200,7 @@ OFF = "COUPOF(S2,S1)"
 PHASE = "COUPON(S2,S1,{angle})"    # angle-synchronous run with an offset
 
 [workpiece]                        # WORKPIECE=MAIN/SUB selects the side the turret works on (D57)
-MAIN = "G54"                       # ORIGIN 1 of the example program
-SUB = "G55"                        # ORIGIN 2 of the example program
+# no MAIN and no SUB: this control has no selection code, so WORKPIECE writes nothing and a reader takes the side from the chuck rule of [func_meta] (D222, D40)
 SUB_frame = "datum"                # the sub spindle datum runs Z the other way and the compiler negates Z; no mirror cycle
 
 [sync]                             # one channel on this machine; the templates are the generic 840D sl ones for a second channel
@@ -218,7 +217,7 @@ SUB_CHUCK = { OPEN = "M68", CLOSE = "M69" }
 MAIN_CHUCK = { OPEN = "M66", CLOSE = "M67" }
 
 [func_meta]
-SUB_CHUCK.CLOSE = "workpiece_transfer_to = SUB"   # fallback only; [workpiece] has the native codes (D40)
+SUB_CHUCK.CLOSE = "workpiece_transfer_to = SUB"   # the rule that carries the side on this machine; [workpiece] names no selection code (D40, D222)
 
 [transform]
 CYLINDER_ON = "TRACYL({d})"        # cylinder surface transformation on the C axis of the current workpiece holder; TRACYL takes the working diameter, {d} = 2 * {r}

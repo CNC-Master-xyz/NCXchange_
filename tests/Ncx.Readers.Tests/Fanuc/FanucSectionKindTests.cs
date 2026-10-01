@@ -73,11 +73,42 @@ public sealed class FanucSectionKindTests
         Assert.False(Check(text, Mill()).HasErrors, Check(text, Mill()).ToText());
     }
 
-    // M198 P calls the program of its digits from external memory, P90001 the O90001; the older form is M98's
-    // (controllers fanuc.md 1; controller-mapping 6).
+    // M198 P calls the program of its digits from external memory on a machine that names M198, P90001 the O90001;
+    // the older form is M98's (controllers fanuc.md 1; controller-mapping 6; D322).
     [Fact]
     public void SectionKind_M198WithFiveDigits_CallsTheExternalProgramOfThoseDigits()
     {
-        Assert.Equal(Lines("CALL=\"O90001\""), Body("M198 P90001"));
+        Assert.Equal(Lines("CALL=\"O90001\""),
+            Body("M198 P90001", MillWith("[format]\nexternal_call = \"M198\"")));
+    }
+
+    // D322: the code of an external call is the machine's [format] external_call, which the control takes from
+    // parameter 6030; on a machine that names M200 the reader reads M200 P as the call.
+    [Fact]
+    public void ExternalCall_CodeOfTheMachine_IsReadAsTheCall()
+    {
+        Assert.Equal(Lines("CALL=\"O9010\""),
+            Body("M200 P9010", MillWith("[format]\nexternal_call = \"M200\"")));
+    }
+
+    // D322: the code sits in parameter 6030 and M198 is only its factory setting, so a machine that names no
+    // [format] external_call has no external call at all: M198 P is no CALL, and the block keeps its words as RAW.
+    [Fact]
+    public void ExternalCall_WithoutTheKeyOfTheMachine_IsNoCall()
+    {
+        string body = Body("M198 P9010");
+
+        Assert.DoesNotContain("CALL", body, StringComparison.Ordinal);
+        Assert.Contains("RAW:FANUC=\"M198 P9010\"", body, StringComparison.Ordinal);
+    }
+
+    // D322: the reader never reads M198 as a call on a machine whose wait range covers 198; on the Nakamura lathe
+    // M198 is the rendezvous of the two turrets, M100 to M199 of [sync] mark_range.
+    [Fact]
+    public void ExternalCall_CodeInsideTheWaitRangeOfTheMachine_IsTheSyncMark()
+    {
+        Assert.Equal(Lines("SYNC=198"), Body("M198", Lathe()));
+        Assert.Equal(Lines("SYNC=198"),
+            Body("M198", LatheWith("[format]\nexternal_call = \"M198\"")));
     }
 }

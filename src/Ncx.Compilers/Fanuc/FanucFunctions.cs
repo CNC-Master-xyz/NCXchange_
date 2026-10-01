@@ -110,11 +110,10 @@ internal static class FanucFunctions
         }
     }
 
-    // WORKPIECE=role from the [workpiece] template of the role (machine-config 5, D57).
-    // TODO(question): D222: a [workpiece] template may carry the datum, "G54 M428", which the reader reads as ORIGIN
-    // where it stands; the template is written as the machine file gives it, and a code of it that the line holds
-    // already, G54 of ORIGIN=1 in the same block, stands once, as D222 writes ORIGIN=1 WORKPIECE=MAIN as G54 M428,
-    // until D222 is answered.
+    // WORKPIECE=role from the [workpiece] template of the role (machine-config 5, D57). The template holds the
+    // selection code alone and never the datum, which is ORIGIN, so ORIGIN=1 WORKPIECE=MAIN of one block stands as
+    // G54 M428 on one line; a control without a selection code names no template and WORKPIECE then writes nothing
+    // (machine-config 5, D222).
     private static void AddWorkpiece(FanucBlock write)
     {
         if (write.Block.Find("WORKPIECE") is not Word workpiece)
@@ -124,24 +123,15 @@ internal static class FanucFunctions
 
         write.Written(workpiece);
         string role = workpiece.Value.ToCanonical();
-        string? template = write.Machine.Workpiece?.Templates.GetValueOrDefault(role);
-        if (write.Render(template, $"[workpiece] {role} (machine-config 5)", new TemplateValues()) is not string text)
+        if (write.Machine.Workpiece?.Templates.GetValueOrDefault(role) is not string template)
         {
             return;
         }
 
-        var words = new List<string>();
-        foreach (string word in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        if (write.Render(template, $"[workpiece] {role} (machine-config 5)", new TemplateValues()) is string text
+            && text.Length > 0)
         {
-            if (!write.Main.HasCode(word))
-            {
-                words.Add(word);
-            }
-        }
-
-        if (words.Count > 0)
-        {
-            Add(write, string.Join(' ', words));
+            Add(write, text);
         }
     }
 

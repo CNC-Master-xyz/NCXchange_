@@ -18,9 +18,9 @@ public sealed class FanucBuilderTests
 
     // An M code of [func] is FUNC:name=state (controller-mapping 4, FUNC).
     [Fact]
-    public void M29_IsTheFunctionOfItsTable()
+    public void M94_IsTheFunctionOfItsTable()
     {
-        Assert.Equal(Lines("FUNC:RIGID_TAP=ON"), Body("M29"));
+        Assert.Equal(Lines("FUNC:TAP_REVERSE=ON"), Body("M94"));
     }
 
     // Any other M is MFUNC with a WARNING (controller-mapping 4, MFUNC; machine-config 5).
@@ -56,7 +56,7 @@ public sealed class FanucBuilderTests
     }
 
     // M428 and M427 of [workpiece] select the spindle the turret works on, the datum stays ORIGIN (controller-mapping
-    // 4, WORKPIECE).
+    // 4, WORKPIECE; D222).
     [Fact]
     public void M428AndG59M427_AreWorkpieceMainAndSub()
     {

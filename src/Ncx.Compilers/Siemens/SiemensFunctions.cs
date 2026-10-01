@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Ncx.Config.Templates;
 using Ncx.Core.Machine;
 using Ncx.Core.Model;
@@ -10,13 +9,10 @@ namespace Ncx.Compilers.Siemens;
 /// language 4.1, 4.6, 4.10): COOLANT and FUNC through their tables, MFUNC as the M function with a WARNING, STOP as M0
 /// and M1, WORKPIECE through [workpiece] with the mirror of its side.
 /// </summary>
-internal static partial class SiemensFunctions
+internal static class SiemensFunctions
 {
     // The channel of a COOLANT word without address (virtual machine 2.5).
     private const string DefaultCoolant = "STANDARD";
-
-    // The target key of the settable frame, which a [workpiece] template may select (controllers siemens.md 4).
-    private const string DatumGroup = "G54";
 
     /// <summary>
     /// Writes the functions of the block into the main line, a procedure of a template in a block of its own.
@@ -82,11 +78,8 @@ internal static partial class SiemensFunctions
     }
 
     // WORKPIECE=role through [workpiece] (language 4.10; machine-config 5; D57); a side programmed mirrored gets its
-    // mirror on, the side left its mirror off. A settable frame the template selects is the datum the control has
-    // active afterwards.
-    // TODO(question): D222: a [workpiece] template may carry the datum, and millturn1.toml writes datums only (MAIN =
-    // "G54", SUB = "G55"); the template is written as the machine file gives it, and an ORIGIN that selects the same
-    // datum afterwards is not written again, until D222 is answered.
+    // mirror on, the side left its mirror off. The template holds the selection code alone and never the datum, which
+    // is ORIGIN; a control without a selection code names no template and WORKPIECE then writes nothing (D222).
     private static void WriteWorkpiece(SiemensBlock write, Word word)
     {
         WorkpieceConfig? workpiece = write.Machine.Workpiece;
@@ -103,10 +96,6 @@ internal static partial class SiemensFunctions
             if (write.Render(template, $"[workpiece] {role} (machine-config 5)", new TemplateValues()) is string text)
             {
                 AddText(write, text);
-                if (Datum().IsMatch(text))
-                {
-                    write.Target.Set(DatumGroup, text);
-                }
             }
         }
 
@@ -161,8 +150,4 @@ internal static partial class SiemensFunctions
 
         SiemensSpindles.AddToMain(write, text);
     }
-
-    // G54 to G57, G505 to G599 and G500, the settable frames (controllers siemens.md 4).
-    [GeneratedRegex("^G(5[4-7]|5[0-9][0-9])$", RegexOptions.CultureInvariant)]
-    private static partial Regex Datum();
 }

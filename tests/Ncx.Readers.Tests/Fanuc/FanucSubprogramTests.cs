@@ -52,6 +52,19 @@ public sealed class FanucSubprogramTests
             StringComparison.Ordinal));
     }
 
+    // D242: a G53 block moves at rapid whatever group 01 holds, so it does not depend on the code the callers left
+    // and stays NCX in a subprogram whose callers leave that code open.
+    [Fact]
+    public void G53InASubprogram_OfCallersInDifferentStates_IsRapidAndStaysNcx()
+    {
+        NcxProgram program = Program(
+            "%\nO0001\nG0 X0 Y0\nM98 P100\nG1 X5. F100\nM98 P100\nM30\nO0100\nG53 Z0\nM99\n%\n", Mill());
+        string text = NcxWriter.Write(program);
+
+        Assert.Contains("\nSUB=BEGIN NAME=100\nRAPID Z=0 FRAME=MACHINE\nSUB=END\n", text,
+            StringComparison.Ordinal);
+    }
+
     // G90 in one call and G91 in the other: whether X10. is absolute or incremental is not known. The F of the RAW
     // block reaches the control, so the next line carries it.
     [Fact]
