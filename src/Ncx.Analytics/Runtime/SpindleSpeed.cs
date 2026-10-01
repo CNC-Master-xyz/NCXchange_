@@ -56,11 +56,17 @@ internal static class SpindleSpeed
     /// The rpm of the spindle a feed per revolution follows during a motion (D288): 0 while it stands, the rpm of RPM
     /// while it turns, under CSS the rpm from VC and the X radius capped by RPM_MAX (virtual machine 8); null when a
     /// value it needs is unknown. Along a motion that changes X the radius is the mean of the start and the end X
-    /// radius (D289), which is the one speed per motion the runtime estimate's profile wants.
+    /// radius for a cutting motion (D289), which is the one speed per motion the runtime estimate's profile wants,
+    /// and the end radius for a RAPID, because nothing is cut on the way.
     /// </summary>
     public static double? RpmOf(MotionEvent motion, MachineConfig machine)
     {
-        return RpmOf(motion, machine, Radius.Mean);
+        // D289: the end radius for a RAPID, the mean for a cutting motion.
+        // TODO(question): the answer names a cutting motion and a RAPID. HOME and RETRACT cut nothing either and the
+        // runtime estimate times all three at the rapid rate (virtual machine 8, D287), but no document extends the
+        // Fanuc rapid rule to them, so they keep the mean of the general clause here; nothing reads it today (the
+        // estimate never asks a rapid-rate motion for its feed, and the tool list counts a LINE or an ARC only).
+        return RpmOf(motion, machine, motion.Verb == Verb.Rapid ? Radius.End : Radius.Mean);
     }
 
     /// <summary>
@@ -81,8 +87,8 @@ internal static class SpindleSpeed
         return (Math.Min(start, end), Math.Max(start, end));
     }
 
-    // The rpm at one radius of the motion, the mean for the runtime estimate and the two ends for the rpm range of
-    // the tool list (D289); the radius matters under CSS only.
+    // The rpm at one radius of the motion, the mean for a cutting motion of the runtime estimate, the end radius for
+    // a RAPID and the two ends for the rpm range of the tool list (D289); the radius matters under CSS only.
     private static double? RpmOf(MotionEvent motion, MachineConfig machine, Radius which)
     {
         ChannelSnapshot state = motion.After;
@@ -108,16 +114,14 @@ internal static class SpindleSpeed
     // Under CSS the rpm follows from VC and the current X radius, capped by RPM_MAX (virtual machine 8): VC in m/min,
     // or ft/min under UNITS=INCH (language 4.11), over the circumference at the radius, which the virtual machine
     // stores (D28, D60).
-    // D289: along a motion that changes X the runtime estimate takes the mean of the start and the end X radius,
-    // because the control regulates the rpm continuously from the current X; for a motion at constant VC that stays
-    // below the cap the mean radius gives the exact time, while the start radius alone nearly doubles a facing cut to
-    // the centre. The rpm range of the tool list takes the two extremes instead, the rpm at the start and at the end
-    // radius, each capped by RPM_MAX: a range reports what the spindle turned at, not an average.
-    // TODO(question): D289 gives one rule for every motion, and the mean is what the code takes for a RAPID too.
-    // Fanuc computes the G96 rpm of a G00 block from the end position, because nothing is cut on the way; whether
-    // a RAPID under CSS should take the end radius instead of the mean is not settled, and nothing of the estimate
-    // depends on it today (virtual machine 8 times a RAPID at the rapid rate, and the tool list counts the rpm of
-    // a LINE or an ARC only).
+    // D289: along a cutting motion that changes X the runtime estimate takes the mean of the start and the end X
+    // radius, because the control regulates the rpm continuously from the current X; for a motion at constant VC that
+    // stays below the cap the mean radius is the exact integral, while the start radius alone nearly doubles a facing
+    // cut to the centre. For a RAPID the radius is the end radius, not the mean: Fanuc computes the G96 rpm of a G00
+    // block from the end position of the block, because nothing is cut on the way, and Nakamura adds that the speed is
+    // therefore not controlled during the positioning. The rpm range of the tool list takes the two extremes instead,
+    // the rpm at the start and at the end radius, each capped by RPM_MAX: a range reports what the spindle turned at,
+    // not an average.
     private static double? CssRpm(MotionEvent motion, string spindle, SpindleSnapshot speed, Radius which)
     {
         ChannelSnapshot state = motion.After;

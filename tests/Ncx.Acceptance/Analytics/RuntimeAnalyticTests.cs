@@ -4,6 +4,8 @@ using Ncx.Analytics;
 using Ncx.Analytics.Runtime;
 using Ncx.Config;
 using Ncx.Core.Machine;
+using Ncx.Core.VirtualMachine.Events;
+using Ncx.Core.VirtualMachine.State;
 
 namespace Ncx.Acceptance.Analytics;
 
@@ -288,6 +290,44 @@ public sealed class RuntimeAnalyticTests
         Assert.Equal((50 / speed) + (speed / 1000), runtime.TotalSeconds, Precision);
     }
 
+    // D289: for a RAPID the radius of CSS is the end radius of the block and not the mean, because Fanuc computes the
+    // G96 rpm of a G00 block from the end position of the block, nothing being cut on the way, and Nakamura adds that
+    // the speed is therefore not controlled during the positioning. RAPID X=10 from X=50 at VC=200 gives the rpm at
+    // radius 10, 200000 / (2 pi 10) = 3183.1, and not the 1061.0 of the mean radius 30.
+    [Fact]
+    public void CssRadius_RapidThatChangesX_TakesTheEndRadiusAndNotTheMean()
+    {
+        MachineConfig machine = AnalyticMachines.Mill(AnalyticMachines.ExactStop);
+        var motions = new MotionCollector();
+        AnalyticRuns.Run(
+            Program(["RPM_MAX=20000", "VC=200", "CSS=ON", "SPINDLE=CW", "FEED_MODE=PER_REV", "RAPID X=50 Y=0 Z=0"],
+                "RAPID X=10",
+                "SPINDLE=OFF"),
+            machine,
+            motions);
+
+        MotionEvent rapid = motions.Motions.Last(motion => motion.Verb == Verb.Rapid);
+        Assert.Equal(200d * 1000 / (2 * Math.PI * 10), SpindleSpeed.RpmOf(rapid, machine)!.Value, Precision);
+    }
+
+    // D289: a cutting motion keeps the mean of the start and the end X radius. LINE X=10 from X=50 at VC=200 gives the
+    // rpm at the mean radius 30, 200000 / (2 pi 30) = 1061.0, and not the 3183.1 of the end radius.
+    [Fact]
+    public void CssRadius_CuttingMotionThatChangesX_KeepsTheMeanOfTheStartAndEndRadius()
+    {
+        MachineConfig machine = AnalyticMachines.Mill(AnalyticMachines.ExactStop);
+        var motions = new MotionCollector();
+        AnalyticRuns.Run(
+            Program(["RPM_MAX=20000", "VC=200", "CSS=ON", "SPINDLE=CW", "FEED_MODE=PER_REV", "RAPID X=50 Y=0 Z=0"],
+                "LINE X=10 F=0.2",
+                "SPINDLE=OFF"),
+            machine,
+            motions);
+
+        MotionEvent line = motions.Motions.Last(motion => motion.Verb == Verb.Line);
+        Assert.Equal(200d * 1000 / (2 * Math.PI * 30), SpindleSpeed.RpmOf(line, machine)!.Value, Precision);
+    }
+
     // VM 8, machine-config 5: a spindle start or stop adds accel_time of that spindle, 2 s each.
     [Fact]
     public void SpindleAccelTime_StartAndStop_AddTheAccelTimeOfTheSpindle()
@@ -477,5 +517,27 @@ public sealed class RuntimeAnalyticTests
         lines.AddRange(setUp);
         lines.AddRange(blocks);
         return CliHarness.OneProgram(lines.ToArray());
+    }
+
+    // Keeps the MOTION events of a run, so that a test can ask SpindleSpeed for the rpm of one motion where the
+    // runtime estimate itself never asks (a motion at the rapid rate is timed from the rapid rate, virtual machine 8).
+    private sealed class MotionCollector : IAnalytic
+    {
+        public List<MotionEvent> Motions { get; } = [];
+
+        public BlockRange Range => BlockRange.Whole;
+
+        public void On(VmEvent vmEvent)
+        {
+            if (vmEvent is MotionEvent motion)
+            {
+                Motions.Add(motion);
+            }
+        }
+
+        public string Report()
+        {
+            return string.Empty;
+        }
     }
 }
