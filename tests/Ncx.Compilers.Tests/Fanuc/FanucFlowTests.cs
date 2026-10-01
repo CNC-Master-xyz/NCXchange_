@@ -137,18 +137,20 @@ public sealed class FanucFlowTests
         Assert.Empty(FanucCompile.CompilerDiagnostics(result));
     }
 
-    // Hard rule 1: a CALL that carries both the pass-through of a caller's local and an argument value says neither
-    // call: M98 carries no arguments at all, and under G65 the pass-through words would sit in a new local-variable
-    // level, which is the difference D148 turns on. No document settles which the block means, so the compiler
-    // reports it instead of writing one of the two (the TODO(question) of FanucFlow).
+    // Controller-mapping 6 (CALL and ARG) maps a CALL with ARG to G65 Pnnnn A1 B2, and D148's ANSWER evidence says
+    // only a macro call can take arguments at all, so a block that carries an argument value is the macro call even
+    // where a pass-through ARG:Vn={$Vn} stands next to it: G65 P0100 A#1 B5., which forwards the caller's #1 into the
+    // callee's A and sets B to 5, is ordinary Fanuc and converts to this NCX line. Nothing about it is ambiguous, so
+    // it carries no diagnostic either; the WARNING CMP311 is for the pure pass-through shape, which is the one both
+    // calls write.
     [Fact]
-    public void MixedArg_OfAPassThroughAndAValue_IsTheErrorCmp310()
+    public void ArgumentValue_NextToAPassThroughWord_IsTheG65MacroCallWithoutADiagnostic()
     {
-        Diagnostic error = FanucCompile.ErrorOf(FanucCompile.Run(
-            CallerAndSub("VAR:V1=5", "CALL=100 ARG:V1={$V1} ARG:V2=5"), FanucCompile.Mill()));
+        CompileResult result = FanucCompile.Run(
+            CallerAndSub("VAR:V1=5", "CALL=100 ARG:V1={$V1} ARG:V2=5"), FanucCompile.Mill());
 
-        Assert.Equal(DiagnosticCodes.FanucCallArgumentsOfNoOneCall, error.Code);
-        Assert.Contains("ARG:V1={$V1}", error.Message, StringComparison.Ordinal);
+        Assert.Contains("\nG65 P0100 A#1 B5.\n", FanucCompile.TextOf(result), StringComparison.Ordinal);
+        Assert.Empty(FanucCompile.CompilerDiagnostics(result));
     }
 
     // Hard rule 1: the TODO(question) of the call form is recorded in the open-questions table, with the decision it
@@ -164,7 +166,8 @@ public sealed class FanucFlowTests
 
         Assert.NotNull(row);
         Assert.Contains("D148", row, StringComparison.Ordinal);
-        Assert.Contains("CMP310", row, StringComparison.Ordinal);
+        Assert.DoesNotContain("CMP310", row, StringComparison.Ordinal);
+        Assert.Contains("an argument value is the `G65`", row, StringComparison.Ordinal);
     }
 
     // D322: a CALL of a program outside the file writes the code of [format] external_call, M98 where the machine

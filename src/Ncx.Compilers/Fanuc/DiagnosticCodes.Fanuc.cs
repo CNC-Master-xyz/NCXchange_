@@ -61,12 +61,10 @@ public static partial class DiagnosticCodes
     /// </summary>
     public const string FanucModalValueNotHeld = "CMP309";
 
-    /// <summary>
-    /// CMP310: a CALL whose ARG words carry both the pass-through of a caller's local, ARG:Vn={$Vn}, which is the M98
-    /// subprogram call of D148, and an argument value, which is the G65 macro call, so the block says neither call
-    /// (controllers fanuc.md 7; controller-mapping 6, CALL and ARG).
-    /// </summary>
-    public const string FanucCallArgumentsOfNoOneCall = "CMP310";
+    // CMP310 was the ERROR of a CALL that carries both a pass-through ARG:Vn={$Vn} and an argument value. The
+    // documents settle that block: D148's evidence has it that only a macro call can take arguments, and
+    // controller-mapping 6 maps a CALL with ARG to G65 Pnnnn A1 B2, so it is the macro call and is written as one.
+    // The code is retired and, by D98, given to no other rule.
 
     /// <summary>
     /// CMP311, a WARNING: a CALL whose ARG words are the pass-through of a caller's locals, ARG:Vn={$Vn}, is written
