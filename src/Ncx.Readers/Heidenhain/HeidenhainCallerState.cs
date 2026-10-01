@@ -1,3 +1,4 @@
+using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.State;
 
 namespace Ncx.Readers.Heidenhain;
@@ -60,6 +61,11 @@ internal sealed record HeidenhainCallerState
     public required bool? Tcpm { get; init; }
 
     /// <summary>
+    /// The feed of the last TOOL CALL, which F AUTO takes (D251); null when the caller knows none.
+    /// </summary>
+    public required Value? ToolCallFeed { get; init; }
+
+    /// <summary>
     /// The facts of the reader where the call stands.
     /// </summary>
     /// <param name="state">The facts of the file.</param>
@@ -77,6 +83,7 @@ internal sealed record HeidenhainCallerState
             ChainText = state.Chain.ToText(),
             DatumShift = new Dictionary<string, decimal>(state.DatumShift, StringComparer.Ordinal),
             Tcpm = state.Tcpm,
+            ToolCallFeed = state.ToolCallFeed,
         };
     }
 }

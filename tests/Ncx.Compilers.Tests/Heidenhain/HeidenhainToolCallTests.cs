@@ -37,6 +37,17 @@ public sealed class HeidenhainToolCallTests
         Assert.Equal("TOOL CALL 1 Z S10000\nTOOL DEF 2\nM3", HeidenhainCompile.Body(result));
     }
 
+    // D251, heidenhain 8 rule 3: the F of a TOOL block is the modal feed of the control and is folded into the TOOL
+    // CALL, so the motion after it writes no F of its own.
+    [Fact]
+    public void ToolCallFeed_OfAToolBlock_IsFoldedIntoTheToolCall()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "TOOL=1 RPM=1592 F=500", "LINE X=10 COMP=OFF", "LINE X=20"));
+
+        Assert.Equal("TOOL CALL 1 Z S1592 F500\nL X+10 R0\nL X+20", HeidenhainCompile.Body(result));
+    }
+
     // Heidenhain 8 rule 3, machine-config 3: without an RPM in the same or the following block the call keeps the
     // speed the spindle has.
     [Fact]

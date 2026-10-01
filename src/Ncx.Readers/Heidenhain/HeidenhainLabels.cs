@@ -34,6 +34,18 @@ internal sealed class HeidenhainLabels
     public Dictionary<string, int> SubLast { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The lines of the LBL blocks of the subprograms that the main flow of their program runs through as well: a
+    /// section before the M2 or M30, or in a program without one (D254). The structure pass moves such a section into
+    /// a SUB behind the program and writes a CALL where it stood.
+    /// </summary>
+    public HashSet<int> Lifted { get; } = [];
+
+    /// <summary>
+    /// The lines of the LBL 0 blocks that close such a section (D254).
+    /// </summary>
+    public HashSet<int> LiftedEnds { get; } = [];
+
+    /// <summary>
     /// The labels a REP or an FN jump uses, each a LABEL.
     /// </summary>
     public HashSet<string> Targets { get; } = new(StringComparer.Ordinal);
@@ -207,13 +219,12 @@ internal sealed class HeidenhainLabels
         }
     }
 
-    // Subprograms are LBL n ... LBL 0 sections after the M30 inside the program (controllers heidenhain.md 1); an LBL n
-    // is one when a CALL LBL n without REP calls it, no REP or FN jump uses it as a label, and an LBL 0 closes it
-    // (heidenhain 7 rule 3). A section inside another subprogram is none.
-    // TODO(question): heidenhain 7 rule 3 does not say what an LBL section is that CALL LBL calls and that stands
-    // before the M30 of its program, or in a program without M30 (the main flow runs through it as well), nor what an
-    // LBL is that is called and also used by REP or an FN jump; such an LBL is no subprogram, and the CALL LBL of it is
-    // kept RAW, until D254 is answered.
+    // Subprograms are LBL n ... LBL 0 sections of the program (controllers heidenhain.md 1); an LBL n is one when a
+    // CALL LBL n without REP calls it, no REP or FN jump uses it as a label, and an LBL 0 closes it (heidenhain 7
+    // rule 3). A section inside another subprogram is none. D254: a section that stands before the M2 or M30, or in a
+    // program without one, is run by the main flow as ordinary blocks as well, over and above its calls, so it is a
+    // SUB with a CALL where it stood, which runs the same blocks in the same order (decisions.md; language 4.13,
+    // D89). An LBL that is called and also used by REP or an FN jump stays a LABEL, as it was.
     private void DecideSubs(IReadOnlyList<SourceBlock> blocks, HashSet<string> called, int mainEnd)
     {
         int insideUntil = -1;
@@ -222,7 +233,7 @@ internal sealed class HeidenhainLabels
             SourceBlock block = blocks[index];
             string? label = IsLabel(block) ? LabelOf(block) : null;
             if (label is null || label == "0" || index <= insideUntil || !called.Contains(label)
-                || Targets.Contains(label) || mainEnd < 0 || index < mainEnd || Subs.Contains(label))
+                || Targets.Contains(label) || Subs.Contains(label))
             {
                 continue;
             }
@@ -236,6 +247,12 @@ internal sealed class HeidenhainLabels
             if (closing >= blocks.Count)
             {
                 continue;
+            }
+
+            if (mainEnd < 0 || index < mainEnd)
+            {
+                Lifted.Add(block.Line);
+                LiftedEnds.Add(blocks[closing].Line);
             }
 
             SubBegins[block.Line] = label;

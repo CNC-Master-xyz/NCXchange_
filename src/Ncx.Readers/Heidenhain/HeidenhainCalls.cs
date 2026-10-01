@@ -51,6 +51,7 @@ internal sealed class HeidenhainCalls
         bool cycleOn = true;
         bool chain = first?.ChainText is not null;
         bool tcpm = true;
+        bool toolCallFeed = true;
         foreach (HeidenhainCallerState caller in callers)
         {
             plane &= caller.Plane == first!.Plane;
@@ -59,6 +60,7 @@ internal sealed class HeidenhainCalls
             cycleOn &= caller.CycleOn == first.CycleOn;
             chain &= caller.ChainText == first.ChainText;
             tcpm &= caller.Tcpm == first.Tcpm;
+            toolCallFeed &= caller.ToolCallFeed?.ToCanonical() == first.ToolCallFeed?.ToCanonical();
         }
 
         state.Plane = plane ? first?.Plane : null;
@@ -69,6 +71,7 @@ internal sealed class HeidenhainCalls
         state.CycleOn = cycleOn ? first?.CycleOn : null;
         state.CycleCalled = true;
         state.Tcpm = tcpm ? first?.Tcpm : null;
+        state.ToolCallFeed = toolCallFeed ? first?.ToolCallFeed : null;
         state.DatumShift.Clear();
         if (chain)
         {

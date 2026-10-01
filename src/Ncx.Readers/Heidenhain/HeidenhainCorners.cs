@@ -101,6 +101,12 @@ internal static class HeidenhainCorners
             block.Draft.Main.WithVerb(verb, drawn.VerbValue).Words.AddRange(drawn.Words);
         }
 
+        // The feed of the CHF or RND block feeds the chamfer line or the rounding arc alone (D255).
+        if (corner.Feed is Value feed)
+        {
+            block.Draft.Main.Add("F", feed);
+        }
+
         block.State.SetPosition(corner.First, end.First);
         block.State.SetPosition(corner.Second, end.Second);
         state.Tangent = corner.Tangent;
@@ -115,10 +121,10 @@ internal static class HeidenhainCorners
     /// <param name="block">The block being read.</param>
     public static HeidenhainPoint? CurrentPosition(HeidenhainBlock block)
     {
-        // TODO(question): D255, heidenhain 2 does not say where a coordinate after a CHF or RND counts from, the corner
-        // point the element before programs or the end of the corner the tool stands at; the reader counts from the
-        // corner point, the incremental words (FromCornerEnd), a CC alone or by IX and IY, and a polar coordinate that
-        // takes the current position, as the Fanuc reader counts the G91 line after ,C and ,R, until D255 is answered.
+        // D255: an incremental coordinate counts from the last programmed position of the tool, which is the corner
+        // point the element before programs, not the end of the corner the tool stands at; so do the incremental
+        // words (FromCornerEnd), a CC alone or by IX and IY, and a polar coordinate that takes the current position
+        // (decisions.md; controllers heidenhain.md 2).
         HeidenhainCorner? corner = block.Heidenhain.Corner;
         return corner is { Problem: null, Point: HeidenhainPoint point } && block.Line <= corner.NextLine
             ? point
@@ -171,6 +177,16 @@ internal static class HeidenhainCorners
     }
 
     /// <summary>
+    /// The feed the element after an expanded corner states again, the one programmed before the corner, which is
+    /// valid again after the CHF or RND block (D255); null where the element states its own or the corner had no feed.
+    /// </summary>
+    /// <param name="block">The block being read.</param>
+    public static Value? FeedAfterCorner(HeidenhainBlock block)
+    {
+        return After(block)?.FeedAfter;
+    }
+
+    /// <summary>
     /// The radius R of the CR after an expanded rounding: the arc loses its start to the rounding and may keep a half
     /// turn or less of more, and its R turns positive (language 4.3, R; D58).
     /// </summary>
@@ -215,7 +231,7 @@ internal static class HeidenhainCorners
             return problem;
         }
 
-        problem = Size(corner, out decimal size, out int sizeDecimals);
+        problem = Size(corner, out decimal size, out int sizeDecimals, out SourceWord? feed);
         if (problem is not null)
         {
             return problem;
@@ -246,9 +262,83 @@ internal static class HeidenhainCorners
         // Computed points keep the decimals of the numbers they come from, at least three (wave-1 question #46).
         int decimals = Math.Max(Math.Max(HeidenhainNumbers.LeastDecimals, sizeDecimals),
             Math.Max(before.Decimals, after.Decimals));
-        return before.IsArc || after.IsArc
+        // The feed of the corner is decided before the elements about it are rewritten, so that a corner the reader
+        // cannot expand leaves them as the source writes them (D255, D58).
+        problem = CornerFeed(state, feed, next, out Value? cornerFeed, out Value? feedAfter);
+        if (problem is not null)
+        {
+            return problem;
+        }
+
+        problem = before.IsArc || after.IsArc
             ? NextToArc(block, before, after, corner, next, size, decimals)
             : BetweenLines(block, before, after, corner, next, isChamfer, size, decimals);
+        if (problem is not null || cornerFeed is null)
+        {
+            return problem;
+        }
+
+        if (state.Corner is not { Block: not null } expanded)
+        {
+            return "a CHF or RND block with a feed of its own that writes no motion has no NCX form";
+        }
+
+        state.Corner = expanded with { Feed = cornerFeed, FeedAfter = feedAfter };
+        return null;
+    }
+
+    // The feed of a CHF or RND block acts in that block alone, so the reader writes it on the chamfer line or the
+    // rounding arc and the feed programmed before the corner again on the element after it, unless that element
+    // states its own; where the earlier feed is not known, or the element after the corner cannot carry it, the
+    // corner stays RAW (D255).
+    private static string? CornerFeed(HeidenhainState state, SourceWord? feed, SourceBlock next, out Value? value,
+        out Value? after)
+    {
+        value = null;
+        after = null;
+        if (feed is null)
+        {
+            return null;
+        }
+
+        if (feed.ToNcxNumber() is not Value given)
+        {
+            return $"F{feed.Text} names no feed";
+        }
+
+        if (!HasWord(next, "F"))
+        {
+            if (state.Feed is not Value earlier)
+            {
+                return "the feed programmed before the chamfer or the rounding is valid again after it, and the "
+                    + "reader does not know it";
+            }
+
+            if (HasWord(next, "FMAX"))
+            {
+                return "the feed programmed before the chamfer or the rounding is valid again after it, and the "
+                    + "element after it moves at FMAX, which carries no feed";
+            }
+
+            after = earlier;
+        }
+
+        value = given;
+        return null;
+    }
+
+    // Tells whether a source block carries a word of this address.
+    private static bool HasWord(SourceBlock block, string address)
+    {
+        foreach (SourceWord word in block.Words)
+        {
+            if (word.Address == address)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // The contour element the block reads into, in the plane: a line L or LP at the feed or at FMAX from where it
@@ -357,9 +447,8 @@ internal static class HeidenhainCorners
             return null;
         }
 
-        // TODO(question): D255, heidenhain 2 names CHF 2 a chamfer without saying what its length measures, the way
-        // along each line from the corner point or the chamfer line itself; the reader takes the way along each line,
-        // as the Fanuc reader takes ,C, until D255 is answered.
+        // D255: the chamfer value is the distance along each line from the corner point, not the length of the
+        // chamfer line itself, as the Fanuc reader takes ,C (decisions.md; controllers heidenhain.md 2).
         double reach = isChamfer ? (double)size : (double)size * Math.Tan(turn / 2);
         if (reach > before.Length || reach > after.Length)
         {
@@ -525,24 +614,25 @@ internal static class HeidenhainCorners
         };
     }
 
-    // The length of a CHF or the radius of an RND: CHF 2, RND R4, and RND 4 as heidenhain 2 writes it; a word beyond it
-    // keeps the corner RAW.
-    private static string? Size(SourceBlock corner, out decimal size, out int decimals)
+    // The length of a CHF or the radius of an RND: CHF 2, RND R4, and RND 4 as heidenhain 2 writes it, with the feed
+    // of the block where it has one; a word beyond them keeps the corner RAW.
+    private static string? Size(SourceBlock corner, out decimal size, out int decimals, out SourceWord? feed)
     {
         size = 0;
         decimals = 0;
+        feed = null;
         SourceWord head = corner.Words[0];
         SourceWord? given = head.Text.Length > 0 ? head : null;
         for (int index = 1; index < corner.Words.Count; index++)
         {
             SourceWord word = corner.Words[index];
 
-            // TODO(question): D255, heidenhain 2 gives the F of an L as the feed that stays and does not say what an F
-            // in a CHF or RND block feeds, the corner alone or the lines after it as well; the reader keeps such a
-            // block RAW, the elements about it as the source writes them, until D255 is answered.
-            if (word.Address == "F")
+            // D255: a feed programmed in a CHF or RND block acts in that block alone, and the feed programmed before
+            // it is valid again afterwards (decisions.md; controllers heidenhain.md 2).
+            if (word.Address == "F" && feed is null && word.Number is not null)
             {
-                return "a CHF or RND block with a feed F of its own is not expanded";
+                feed = word;
+                continue;
             }
 
             bool isSize = word.Address.Length == 0 || (word.Address == "R" && head.Address == "RND");

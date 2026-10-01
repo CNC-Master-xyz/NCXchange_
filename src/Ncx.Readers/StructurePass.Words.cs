@@ -16,6 +16,7 @@ internal sealed partial class StructurePass
     private const string LabelKey = "LABEL";
     private const string JumpKey = "JUMP";
     private const string ReturnKey = "RETURN";
+    private const string CallKey = "CALL";
     private const string BeginValue = "BEGIN";
     private const string EndValue = "END";
 

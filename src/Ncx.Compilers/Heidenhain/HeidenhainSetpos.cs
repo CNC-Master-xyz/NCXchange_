@@ -196,8 +196,22 @@ internal static class HeidenhainSetpos
     /// </summary>
     public static decimal? WorkpieceCoordinate(ChannelSnapshot state, string axis)
     {
-        if (!state.Motion.Position.TryGetValue(axis, out AxisPosition position) || !position.Known
-            || position.Frame != PositionFrame.Workpiece)
+        return state.Motion.Position.TryGetValue(axis, out AxisPosition position)
+            ? WorkpieceCoordinate(state, axis, position)
+            : null;
+    }
+
+    /// <summary>
+    /// The coordinate of a position of one axis in the workpiece frame of the program, read through the setpos shift
+    /// of a SETPOS: the centre a virtual machine computed for an arc by its R (virtual machine 3.2, 3.4); null when it
+    /// is not known there.
+    /// </summary>
+    /// <param name="state">The state the shift is taken from.</param>
+    /// <param name="axis">The NCX name of the axis.</param>
+    /// <param name="position">The position of that axis.</param>
+    public static decimal? WorkpieceCoordinate(ChannelSnapshot state, string axis, AxisPosition position)
+    {
+        if (!position.Known || position.Frame != PositionFrame.Workpiece)
         {
             return null;
         }

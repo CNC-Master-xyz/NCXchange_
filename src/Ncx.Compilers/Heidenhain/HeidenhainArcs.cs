@@ -1,4 +1,5 @@
 using Ncx.Core.Model;
+using Ncx.Core.VirtualMachine.Events;
 using Ncx.Core.VirtualMachine.State;
 
 namespace Ncx.Compilers.Heidenhain;
@@ -27,6 +28,16 @@ internal static class HeidenhainArcs
         bool counterclockwise = verb.Value is IdentValue { Name: "CCW" };
         string direction = counterclockwise ? Counterclockwise : Clockwise;
 
+        // D268: the path movements of a helix can be programmed in polar coordinates only, so every ARC that carries
+        // a tool-axis word is written as CC plus CP IPA, with the sweep and the tool-axis travel as the incremental
+        // IZ, whatever the sweep; C and CR stay for the arcs in the plane (decisions.md; controllers heidenhain.md 2,
+        // 8 rule 4).
+        if (ToolAxisWord(writing) is HeidenhainAxisWord travel)
+        {
+            WriteHelix(writing, travel, counterclockwise, direction);
+            return;
+        }
+
         // CR when the NCX block had R (heidenhain 8 rule 4).
         if (writing.Take("R") is Word radius)
         {
@@ -50,6 +61,156 @@ internal static class HeidenhainArcs
         {
             WriteCenter(writing, direction);
         }
+    }
+
+    // The axis word of the tool axis of the active working plane, which makes the ARC a helix (language 4.3, D84);
+    // null for an arc in the plane.
+    private static HeidenhainAxisWord? ToolAxisWord(HeidenhainBlock writing)
+    {
+        string tool = HeidenhainAxes.ToolAxis(writing.After.Frame.Workplane);
+        return HeidenhainAxes.Of(writing.Block).Find(axis => axis.Axis == tool);
+    }
+
+    // CC X+50 Y+50 and CP IPA-1800 IZ+5 DR-: the helix form of Klartext, the pole, the incremental total angle and
+    // the height of the helix entered incrementally (D268; controllers heidenhain.md 2). The pole is the CENTER of
+    // the block, or the centre the virtual machine computed for an R form (virtual machine 3.2).
+    private static void WriteHelix(HeidenhainBlock writing, HeidenhainAxisWord travel, bool counterclockwise,
+        string direction)
+    {
+        Word? radius = writing.Take("R");
+        if (!(radius is null ? WritePole(writing) : WriteComputedPole(writing)))
+        {
+            return;
+        }
+
+        if (SweepOf(writing) is not decimal sweep)
+        {
+            return;
+        }
+
+        if (HeightOf(writing, travel) is not string height)
+        {
+            return;
+        }
+
+        // CP takes the polar angle and the height: the end point in the plane follows from the sweep, which the
+        // virtual machine computed from those very words (virtual machine 3.2), so they are written with it.
+        MarkPlaneWords(writing);
+
+        string sign = counterclockwise ? "+" : "-";
+        string polarAngle = "IPA" + sign + writing.Numbers.Format("IPA", Math.Abs(sweep), writing.Block);
+        WriteArc(writing, ["CP", polarAngle, height, direction]);
+    }
+
+    // The end point of the arc in the plane is written as the sweep of the CP block (D268): its words are marked as
+    // written, so that nothing of the program is reported as dropped (language 2 rule 8).
+    private static void MarkPlaneWords(HeidenhainBlock writing)
+    {
+        string[] plane = HeidenhainAxes.PlaneAxes(writing.After.Frame.Workplane);
+        foreach (HeidenhainAxisWord axis in HeidenhainAxes.Of(writing.Block))
+        {
+            if (plane.Contains(axis.Axis))
+            {
+                writing.MarkWritten(axis.Word);
+            }
+        }
+    }
+
+    // The pole of an R form, the centre the virtual machine computed for the arc, as CC in the workpiece frame of the
+    // program (virtual machine 3.2, 3.4); false when it is not known there, which is reported.
+    private static bool WriteComputedPole(HeidenhainBlock writing)
+    {
+        IReadOnlyDictionary<string, AxisPosition>? centre = null;
+        foreach (VmEvent step in writing.Step.Events)
+        {
+            centre = step is MotionEvent { Center: not null } motion ? motion.Center : centre;
+        }
+
+        var words = new List<string>();
+        foreach (string axis in HeidenhainAxes.PlaneAxes(writing.After.Frame.Workplane))
+        {
+            if (centre is null || !centre.TryGetValue(axis, out AxisPosition position)
+                || HeidenhainSetpos.WorkpieceCoordinate(writing.Before, axis, position) is not decimal value)
+            {
+                writing.Error(DiagnosticCodes.HeidenhainWordWithoutKlartext,
+                    $"A helix is written as CC plus CP IPA, and the centre of the arc on {axis} is not known in the "
+                    + "workpiece frame, so CC has no coordinate (D268; virtual machine 3.2, 3.4).");
+                return false;
+            }
+
+            string letter = HeidenhainAxes.LetterOf(writing, axis);
+            decimal written = writing.Numbers.DecimalsOf(letter) is int decimals
+                ? Math.Round(value, decimals, MidpointRounding.AwayFromZero)
+                : value;
+            words.Add(letter + HeidenhainNumbers.Signed(writing, letter, written));
+        }
+
+        writing.Line("CC " + string.Join(" ", words));
+        return true;
+    }
+
+    // The sweep of the helix: the ANGLE of the block, or the sweep the virtual machine computed from the end point
+    // (virtual machine 3.2, D84); null when it is not known, which is reported.
+    private static decimal? SweepOf(HeidenhainBlock writing)
+    {
+        if (writing.Take("ANGLE") is Word angle)
+        {
+            if (HeidenhainNumbers.NumberOf(angle.Value) is decimal given)
+            {
+                return given;
+            }
+
+            HeidenhainNumbers.ReportValue(writing, angle);
+            return null;
+        }
+
+        foreach (VmEvent step in writing.Step.Events)
+        {
+            if (step is MotionEvent { Sweep: decimal sweep })
+            {
+                return sweep;
+            }
+        }
+
+        writing.Error(DiagnosticCodes.HeidenhainWordWithoutKlartext,
+            "A helix is written as CC plus CP IPA, and the sweep of the arc is not known, so CP has no IPA (D268; "
+            + "virtual machine 3.2).");
+        return null;
+    }
+
+    // The height of the helix, the travel along the tool axis, entered incrementally: the incremental word as it
+    // stands, an absolute word less the position the arc starts at (D268; controllers heidenhain.md 2); null when it
+    // has no Klartext form, which is reported.
+    private static string? HeightOf(HeidenhainBlock writing, HeidenhainAxisWord travel)
+    {
+        writing.MarkWritten(travel.Word);
+        string letter = HeidenhainAxes.LetterOf(writing, travel.Axis);
+        if (travel.Incremental)
+        {
+            string? written = HeidenhainNumbers.SignedValue(writing, letter, travel.Word.Value);
+            if (written is not null)
+            {
+                return "I" + letter + written;
+            }
+
+            HeidenhainNumbers.ReportValue(writing, travel.Word);
+            return null;
+        }
+
+        if (HeidenhainNumbers.NumberOf(travel.Word.Value) is not decimal target
+            || HeidenhainSetpos.WorkpieceCoordinate(writing.Before, travel.Axis) is not decimal start)
+        {
+            writing.Error(DiagnosticCodes.HeidenhainWordWithoutKlartext,
+                $"A helix is written as CC plus CP IPA with the height entered incrementally, and {letter} of the "
+                + "block or the position the arc starts at is not known, so CP has no height (D268; controllers "
+                + "heidenhain.md 2).");
+            return null;
+        }
+
+        decimal height = writing.Numbers.DecimalsOf(letter) is int decimals
+            ? Math.Round(target - start, decimals, MidpointRounding.AwayFromZero)
+            : target - start;
+        return "I" + letter + HeidenhainNumbers.Signed(writing, letter, height);
     }
 
     // CR X+2 Y+7 R+5 DR-: a positive radius for an arc of at most 180 degrees, a negative one for more (controllers
@@ -100,10 +261,8 @@ internal static class HeidenhainArcs
     }
 
     // C X+70 Y+50 DR+ to the end point about the pole. A block without an end point in the plane is the full circle,
-    // whose end is its start (virtual machine 3.2), written with the coordinates of the start.
-    // TODO(question): heidenhain.md 2 writes a helix as CP IPA with the travel IZ, and heidenhain 8 rule 4 writes the
-    // arc as CC plus C and only a sweep beyond a turn as CP IPA; for an ARC with an end point and a tool-axis word, a
-    // helix of at most one turn, the tool-axis word is written in the C block, as rule 4 reads.
+    // whose end is its start (virtual machine 3.2), written with the coordinates of the start. An ARC with a
+    // tool-axis word never reaches here: a helix is CC plus CP IPA (D268, WriteHelix).
     private static void WriteCenter(HeidenhainBlock writing, string direction)
     {
         List<HeidenhainAxisWord> axes = HeidenhainAxes.Of(writing.Block);

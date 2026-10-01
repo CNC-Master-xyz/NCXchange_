@@ -71,10 +71,10 @@ internal sealed class HeidenhainBlock
     public required Action<string> WriteLine { get; init; }
 
     /// <summary>
-    /// Writes the tool change of the block per [tool_change] with the values the compiler sets itself
-    /// (CompilerBase.WriteToolChange).
+    /// Writes the tool change of the block per [tool_change] with the values the compiler sets itself and the text it
+    /// appends to the command, the feed of a TOOL block (CompilerBase.WriteToolChange, D251).
     /// </summary>
-    public required Action<TemplateValues> WriteToolChange { get; init; }
+    public required Action<TemplateValues, string?> WriteToolChange { get; init; }
 
     /// <summary>
     /// Writes the PRELOAD of the block with the preload template (CompilerBase.WritePreload).

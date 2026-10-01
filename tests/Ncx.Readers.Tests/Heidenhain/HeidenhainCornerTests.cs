@@ -217,15 +217,31 @@ public sealed class HeidenhainCornerTests
             StringComparison.Ordinal);
     }
 
-    // A CHF or RND with its own F stays RAW, and the lines about it are read as the source writes them (the
-    // TODO(question) D255 of HeidenhainCorners).
+    // D255: a feed in a CHF or RND block acts in that block alone, so the reader writes it on the chamfer line or the
+    // rounding arc and the feed programmed before the corner again on the element after it.
     [Theory]
-    [InlineData("3 CHF 2 F50")]
-    [InlineData("3 RND R2 F50")]
-    public void ChfOrRnd_WithItsOwnFeed_IsKeptAsRaw(string corner)
+    [InlineData("3 CHF 2 F50", "LINE X=10 Y=2 F=50")]
+    [InlineData("3 RND R2 F50", "ARC=CCW X=10 Y=2 R=2 F=50")]
+    public void CornerFeed_OfAChfOrRndBlock_FeedsThatBlockAlone(string corner, string expanded)
     {
-        Assert.Equal(Lines("RAPID X=0 Y=0", "LINE X=10 F=100", $"RAW:HEIDENHAIN=\"{corner}\"", "LINE Y=10"),
+        Assert.Equal(Lines("RAPID X=0 Y=0", "LINE X=8 Y=0 F=100", expanded, "LINE Y=10 F=100"),
             Body("1 L X+0 Y+0 FMAX\n2 L X+10 F100\n" + corner + "\n4 L Y+10"));
+    }
+
+    // The element after the corner keeps its own feed where it states one (D255).
+    [Fact]
+    public void CornerFeed_WithAFeedOnTheElementAfterIt_LeavesThatFeed()
+    {
+        Assert.Equal(Lines("RAPID X=0 Y=0", "LINE X=8 Y=0 F=100", "LINE X=10 Y=2 F=50", "LINE Y=10 F=200"),
+            Body("1 L X+0 Y+0 FMAX\n2 L X+10 F100\n3 CHF 2 F50\n4 L Y+10 F200"));
+    }
+
+    // Where the feed programmed before the corner is not known, the corner stays RAW (D255).
+    [Fact]
+    public void CornerFeed_WithoutAKnownFeedBeforeTheCorner_IsKeptAsRaw()
+    {
+        Assert.Equal(Lines("RAPID X=0 Y=0", "RAPID X=10", "RAW:HEIDENHAIN=\"3 CHF 2 F50\"", "LINE Y=10"),
+            Body("1 L X+0 Y+0 FMAX\n2 L X+10 FMAX\n3 CHF 2 F50\n4 L Y+10"));
     }
 
     // A corner the reader does not expand stays RAW with the elements about it as the source writes them: from a point

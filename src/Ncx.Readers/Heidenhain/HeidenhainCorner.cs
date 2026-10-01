@@ -1,3 +1,5 @@
+using Ncx.Core.Model;
+
 namespace Ncx.Readers.Heidenhain;
 
 /// <summary>
@@ -73,4 +75,15 @@ internal sealed record HeidenhainCorner
     /// The degrees the rounding takes off the sweep ANGLE of the CP IPA after it (D84); 0 for another element.
     /// </summary>
     public decimal NextSweepTrim { get; init; }
+
+    /// <summary>
+    /// The feed of the CHF or RND block, which acts in that block alone (D255); null where the block has none.
+    /// </summary>
+    public Value? Feed { get; init; }
+
+    /// <summary>
+    /// The feed that was programmed before the corner and is valid again after it, written on the element after the
+    /// corner (D255); null where that element states its own or the corner has no feed.
+    /// </summary>
+    public Value? FeedAfter { get; init; }
 }

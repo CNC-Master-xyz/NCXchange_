@@ -191,6 +191,23 @@ public sealed partial class HeidenhainReader : ReaderBase
         }
 
         Write(reading);
+        EnterLiftedSub(state, block);
+    }
+
+    // D254: a subprogram section the main flow runs through stands behind the program as a SUB, with a CALL where it
+    // stood (HeidenhainLabels.DecideSubs, StructurePass.FindLiftedSubs). Its blocks are not read in their place, so
+    // the reader records the state of that call here, after the block before the section, and continues with what
+    // the section may change, as it does at a CALL LBL (virtual machine 3.9; HeidenhainFlow.ReadLabelCall).
+    private static void EnterLiftedSub(HeidenhainState state, SourceBlock block)
+    {
+        if (state.NextBlock(block) is not SourceBlock next || !state.Labels.Lifted.Contains(next.Line)
+            || !state.Labels.SubBegins.TryGetValue(next.Line, out string? name))
+        {
+            return;
+        }
+
+        state.Calls.Record(name, HeidenhainCallerState.Of(state));
+        state.Calls.ChangesOf(name, state).ApplyTo(state);
     }
 
     // The words of the file structure are the structure pass's: BEGIN PGM, M30 and M2 (language 4.13).
@@ -379,11 +396,10 @@ public sealed partial class HeidenhainReader : ReaderBase
     }
 
     // The definition stays active until the next CYCL DEF and there is no cancel word, so the reader writes CYCLE=OFF
-    // before the next non-cycle motion (controllers heidenhain.md 5; controller-mapping 5, CYCLE=OFF).
-    // TODO(question): heidenhain 5 has CYCLE=OFF written "before the next non-cycle motion", which for a definition
-    // followed by its positioning blocks and then M99 would switch the cycle off before its first call; the reader
-    // writes it before the first non-cycle motion after a call of the cycle, and the definition again where the cycle
-    // is called while NCX has it off, until D227 is answered.
+    // before the first non-cycle motion after a call of the cycle, and before a TOOL CALL while NCX has the cycle on
+    // (HeidenhainToolCall.ReadCall); a call made while NCX has the cycle off writes the definition again
+    // (HeidenhainCycles.Call). D227: a positioning block between a CYCL DEF and its first call does not end the
+    // definition on the control (decisions.md; controllers heidenhain.md 5; controller-mapping 5, CYCLE=OFF).
     private void Write(HeidenhainBlock reading)
     {
         HeidenhainState state = reading.Heidenhain;
@@ -470,12 +486,18 @@ public sealed partial class HeidenhainReader : ReaderBase
     {
         if (labels.SubBegins.TryGetValue(block.Line, out string? name))
         {
-            return new SourceStructure { Role = StructureRole.SubBegin, Name = name };
+            // D254: a section the main flow runs through as well stays inside its program and is moved into a SUB
+            // behind it, with a CALL where it stood (decisions.md; language 4.13, D89).
+            return labels.Lifted.Contains(block.Line)
+                ? new SourceStructure { LiftsSub = name }
+                : new SourceStructure { Role = StructureRole.SubBegin, Name = name };
         }
 
         if (labels.SubEnds.Contains(block.Line))
         {
-            return new SourceStructure { Role = StructureRole.Return };
+            return labels.LiftedEnds.Contains(block.Line)
+                ? new SourceStructure { LiftsSubEnd = true }
+                : new SourceStructure { Role = StructureRole.Return };
         }
 
         return new SourceStructure

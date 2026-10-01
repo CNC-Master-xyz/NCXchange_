@@ -68,6 +68,7 @@ internal sealed partial class StructurePass
         pass.PlanFileBegin();
         List<SourceSection> sections = pass.FindSections();
         pass.DecideKinds(sections);
+        pass.FindLiftedSubs(sections);
         pass.FindContours(sections);
         pass.FindRepeats(sections);
         for (int index = 0; index < sections.Count; index++)
@@ -76,6 +77,7 @@ internal sealed partial class StructurePass
             pass.PlanSection(sections[index], nextBegin);
             pass.PlanContours(sections[index], nextBegin);
             pass.PlanRepeats(sections[index], nextBegin);
+            pass.PlanLiftedSubs(sections[index], nextBegin);
         }
 
         pass.PlanFileEnd();

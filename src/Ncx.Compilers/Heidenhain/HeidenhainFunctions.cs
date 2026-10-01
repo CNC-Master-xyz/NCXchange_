@@ -9,7 +9,8 @@ namespace Ncx.Compilers.Heidenhain;
 /// The M functions of Klartext (controllers heidenhain.md 1, 2, 4; controller-mapping 1, 2, 4; machine-config 5): the
 /// feed mode as M136 and M137, the spindle, its orientation and the coolant through the tables of the machine, a named
 /// function through [func], MFUNC as its M function with a WARNING, and STOP as M0 and M1. A function stands in a block
-/// of its own, before the motion of its NCX block, and STOP after it.
+/// of its own, before the motion of its NCX block, so that a word whose M function acts at the end of a Klartext block
+/// still acts before the motion (D252, heidenhain 8 rule 8); STOP stands after it, where its NCX block stops.
 /// </summary>
 internal static class HeidenhainFunctions
 {
@@ -24,9 +25,16 @@ internal static class HeidenhainFunctions
     // The channel a bare COOLANT addresses (language 4.6, virtual machine 2.5).
     private const string DefaultCoolant = "STANDARD";
 
-    // TODO(question): D252: when the M functions of a Klartext block act, at its start or at its end, is open; every
-    // function of an NCX block is written in a Klartext block of its own before the motion, which acts before the
-    // motion whichever the answer (language 5 rule 3), and which honours the recommendation of D252 for M5, M9 and M0.
+    // D252: some M functions become effective at the start of a positioning block and others at its end, whatever
+    // their place in it (decisions.md; controllers heidenhain.md 2, the table). Every function of an NCX block is
+    // written in a Klartext block of its own before the motion, so a word whose function acts at the block end,
+    // SPINDLE=OFF and COOLANT=OFF, acts before the motion as language 5 rule 3 requires.
+    // TODO(question): D252's compiler sentence names STOP with those two, and the compiler does not follow it there:
+    // STOP is a block word and not a state word, and its NCX block stops when the motion of the block is done
+    // (language 4.1; virtual machine 3 steps 5 and 7, which raise the STOP event after the MOTION, BlockEvents), so an
+    // M0 in a block before the L would stop earlier than the NCX block says. WriteStop therefore writes M0 and M1
+    // after the motion until the maintainer says whether that half of the sentence or the order of the virtual machine
+    // gives way (decisions.md D252; heidenhain 8 rule 8; P3-04 question 33).
 
     /// <summary>
     /// Writes the functions of the block that act before its motion: FEED_MODE, SPINDLE, ORIENT, COOLANT, FUNC and
@@ -64,8 +72,8 @@ internal static class HeidenhainFunctions
     }
 
     /// <summary>
-    /// Writes STOP after the motion of its block: STOP=PROGRAM as M0, STOP=OPTIONAL as M1 (controller-mapping 1, STOP;
-    /// controllers heidenhain.md 1).
+    /// Writes STOP after the motion of its block, where its NCX block stops: STOP=PROGRAM as M0, STOP=OPTIONAL as M1
+    /// (controller-mapping 1, STOP; controllers heidenhain.md 1, 8 rule 8; the TODO(question) of D252 above).
     /// </summary>
     public static void WriteStop(HeidenhainBlock writing)
     {

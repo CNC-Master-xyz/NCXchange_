@@ -69,6 +69,7 @@ internal sealed class HeidenhainChanges
         if (Tool)
         {
             state.Plane = null;
+            state.ToolCallFeed = null;
         }
 
         if (Pole)

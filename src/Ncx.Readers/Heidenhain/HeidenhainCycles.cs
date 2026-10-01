@@ -190,10 +190,11 @@ internal static partial class HeidenhainCycles
         }
 
         string body = PatternHead().Replace(block.Content, "");
-        var points = new List<HeidenhainPoint>();
+        var points = new List<HeidenhainPatternPoint>();
         foreach (Match point in PatternPoint().Matches(body))
         {
-            if (PointOf(point.Groups[1].Value, first, second, tool, out string? problem) is not HeidenhainPoint read)
+            if (PointOf(point.Groups[1].Value, first, second, tool, out string? problem)
+                is not HeidenhainPatternPoint read)
             {
                 block.Draft.KeepAsRaw(problem!);
                 return;
@@ -318,7 +319,7 @@ internal static partial class HeidenhainCycles
             return;
         }
 
-        if (state.Pattern is not List<HeidenhainPoint> points
+        if (state.Pattern is not List<HeidenhainPatternPoint> points
             || !state.PlaneAxes(out string first, out string second, out _))
         {
             block.Draft.KeepAsRaw("CYCL CALL PAT needs the points of a PATTERN DEF that the reader expands "
@@ -326,9 +327,26 @@ internal static partial class HeidenhainCycles
             return;
         }
 
+        decimal active = 0m;
         for (int index = 0; index < points.Count; index++)
         {
             HeidenhainDraftBlock target = index == 0 ? block.Draft.Main : new HeidenhainDraftBlock();
+
+            // D254: the surface of a position acts in addition to the Q203 of the cycle, so the CYCLE block is
+            // written again before that point's call with SURFACE, CLEARANCE, DEPTH and SAFE shifted by it, and back
+            // where the next point differs (language 4.7: a new CYCLE replaces all parameters).
+            if (points[index].Surface != active)
+            {
+                if (Shifted(block, points[index].Surface) is not HeidenhainDraftBlock again)
+                {
+                    return;
+                }
+
+                AddCallBlock(block, index, again);
+                active = points[index].Surface;
+                state.CycleOn = true;
+            }
+
             if (index > 0)
             {
                 block.Draft.After.Add(target);
@@ -339,11 +357,67 @@ internal static partial class HeidenhainCycles
                 return;
             }
 
-            target.Add(first, HeidenhainNumbers.Of(points[index].First))
-                .Add(second, HeidenhainNumbers.Of(points[index].Second));
-            block.State.SetPosition(first, points[index].First);
-            block.State.SetPosition(second, points[index].Second);
+            HeidenhainPoint point = points[index].Point;
+            target.Add(first, HeidenhainNumbers.Of(point.First)).Add(second, HeidenhainNumbers.Of(point.Second));
+            block.State.SetPosition(first, point.First);
+            block.State.SetPosition(second, point.Second);
         }
+
+        // The shifted CYCLE block is NCX's, not the control's: the definition of the control is unchanged, so the
+        // shifted cycle is switched off and the next call writes the definition again (D254).
+        if (active != 0m)
+        {
+            block.Draft.After.Add(new HeidenhainDraftBlock().Add("CYCLE", null, new IdentValue("OFF")));
+            state.CycleOn = false;
+            state.CycleCalled = false;
+        }
+    }
+
+    // The block of an expanded pattern call stands in the main block for the first point and after it for the others.
+    private static void AddCallBlock(HeidenhainBlock block, int index, HeidenhainDraftBlock written)
+    {
+        if (index == 0)
+        {
+            block.Draft.Before.Add(written);
+        }
+        else
+        {
+            block.Draft.After.Add(written);
+        }
+    }
+
+    // The CYCLE block of the active definition with SURFACE, CLEARANCE, DEPTH and SAFE shifted by the surface of a
+    // PATTERN DEF position (D254; controllers heidenhain.md 5); null where a shifted word is no number, which keeps
+    // the pattern call RAW.
+    private static HeidenhainDraftBlock? Shifted(HeidenhainBlock block, decimal surface)
+    {
+        if (block.Heidenhain.Definition is not HeidenhainDefinition definition)
+        {
+            return null;
+        }
+
+        var written = new HeidenhainDraftBlock();
+        foreach (Word word in definition.Words)
+        {
+            bool shifted = surface != 0m && word.Addr is null
+                && word.Key is "SURFACE" or "CLEARANCE" or "DEPTH" or "SAFE";
+            if (!shifted)
+            {
+                written.Add(word.Key, word.Addr, word.Value);
+                continue;
+            }
+
+            if (HeidenhainNumbers.NumberOf(word.Value) is not decimal value)
+            {
+                block.Draft.KeepAsRaw($"the surface of a PATTERN DEF position shifts {word.Key} of the cycle, which "
+                    + "is no number here (D254)");
+                return null;
+            }
+
+            written.Add(word.Key, word.Addr, HeidenhainNumbers.Of(value + surface));
+        }
+
+        return written;
     }
 
     // D163: cycle 200 with Q211 = 0 is DRILL and with any other Q211 DRILL_DWELL with CYCLE_DWELL = Q211; cycle 203
@@ -591,23 +665,24 @@ internal static partial class HeidenhainCycles
         return null;
     }
 
-    // A point of a PATTERN DEF: the two axes of the plane, and on the tool axis 0 or nothing.
-    // TODO(question): heidenhain 5 does not say what the tool-axis coordinate of a PATTERN DEF point does to the cycle
-    // (a surface for the point, or added to Q203); a point with one other than 0 keeps the pattern RAW until D254 is
-    // answered.
-    private static HeidenhainPoint? PointOf(string coordinates, string first, string second, string tool,
+    // A point of a PATTERN DEF: the two axes of the plane, and on the tool axis the workpiece surface the position
+    // starts at. D254: a surface in Z other than 0 acts in addition to the Q203 of the machining cycle, so the reader
+    // keeps it with the point and shifts the cycle by it (decisions.md; controllers heidenhain.md 5).
+    private static HeidenhainPatternPoint? PointOf(string coordinates, string first, string second, string tool,
         out string? problem)
     {
         problem = null;
         decimal? x = null;
         decimal? y = null;
+        decimal surface = 0m;
         foreach (string coordinate in coordinates.Split(' ', StringSplitOptions.RemoveEmptyEntries))
         {
             string axis = coordinate.Substring(0, 1).ToUpperInvariant();
             decimal? value = HeidenhainNumbers.Parse(coordinate.Substring(1));
             x = axis == first ? value : x;
             y = axis == second ? value : y;
-            if (value is null || (axis == tool && value != 0m) || (axis != first && axis != second && axis != tool))
+            surface = axis == tool && value is decimal height ? height : surface;
+            if (value is null || (axis != first && axis != second && axis != tool))
             {
                 problem = $"{coordinate} of a PATTERN DEF point has no NCX form; the pattern stays RAW";
                 return null;
@@ -615,7 +690,9 @@ internal static partial class HeidenhainCycles
         }
 
         problem = x is null || y is null ? "a PATTERN DEF point needs both axes of the plane" : null;
-        return x is decimal pointX && y is decimal pointY ? new HeidenhainPoint(pointX, pointY) : null;
+        return x is decimal pointX && y is decimal pointY
+            ? new HeidenhainPatternPoint(new HeidenhainPoint(pointX, pointY), surface)
+            : null;
     }
 
     // A CYCL CALL PAT stands after the PATTERN DEF before the next one.

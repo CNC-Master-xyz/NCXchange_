@@ -37,7 +37,8 @@ internal static class HeidenhainToolCall
 
     // TOOL CALL n axis S: the tool, the tool axis of the working plane and the speed in one call (heidenhain 8 rule 3,
     // virtual machine 3.5). The template of [tool_change] fills {tool} with the number of the tool in the spindle,
-    // which is how a bare TOOL gets its number (D91); the compiler gives {axis} and {rpm}.
+    // which is how a bare TOOL gets its number (D91); the compiler gives {axis} and {rpm}. An F of a TOOL block is the
+    // modal feed of the control and is folded into the call behind the template (D251, heidenhain 8 rule 3).
     private static void WriteChange(HeidenhainBlock writing)
     {
         if (writing.Take("TOOL") is null)
@@ -73,7 +74,7 @@ internal static class HeidenhainToolCall
         var values = new TemplateValues();
         values.Set("rpm", speed);
         values.Set("axis", axis);
-        writing.WriteToolChange(values);
+        writing.WriteToolChange(values, FoldedFeed(writing));
         TakeSpeeds(writing, spindle);
         writing.Take("WORKPLANE");
 
@@ -85,6 +86,13 @@ internal static class HeidenhainToolCall
             writing.Target.Set(PlaneKey, axis);
             writing.Target.Set(SpeedKey + spindle, ActiveSpeed(writing, speedStep, spindle, speed));
         }
+    }
+
+    // The feed of a TOOL block, written behind the TOOL CALL where it changes, as the control takes it there (D251,
+    // heidenhain 8 rule 3; controllers heidenhain.md 4). A block that also moves writes its feed with its motion.
+    private static string? FoldedFeed(HeidenhainBlock writing)
+    {
+        return writing.Block.Verb is null && writing.Block.Has("F") ? HeidenhainMotion.Feed(writing) : null;
     }
 
     // TOOL DEF n prepares the next tool, PRELOAD=n (controllers heidenhain.md 4; heidenhain 8 rule 3).

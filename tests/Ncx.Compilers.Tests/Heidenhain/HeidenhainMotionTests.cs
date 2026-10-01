@@ -416,6 +416,30 @@ public sealed class HeidenhainMotionTests
             HeidenhainCompile.Body(result));
     }
 
+    // D268, heidenhain 8 rule 4: a helix of at most one turn is CC plus CP IPA too, with the sweep the virtual
+    // machine computed and the tool-axis travel as the incremental IZ.
+    [Fact]
+    public void Helix_OfAtMostOneTurnWithACentre_IsCcPlusCpIpa()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "RAPID X=60 Y=50 Z=0", "LINE Z=0 F=100", "ARC=CCW X=40 Y=50 Z=-5 CENTER:X=50 CENTER:Y=50"));
+
+        Assert.Equal("L X+60 Y+50 Z+0 R0 FMAX\nL Z+0 F100\nCC X+50 Y+50\nCP IPA+180 IZ-5 DR+",
+            HeidenhainCompile.Body(result));
+    }
+
+    // D268: an R form with a tool-axis word is written the same way, with the centre the virtual machine computed
+    // (virtual machine 3.2).
+    [Fact]
+    public void Helix_WrittenByItsRadius_TakesTheCentreTheVirtualMachineComputed()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "RAPID X=7 Y=2 Z=0", "LINE Z=0 F=100", "ARC=CW X=2 Y=7 Z=-3 R=5"));
+
+        Assert.Equal("L X+7 Y+2 Z+0 R0 FMAX\nL Z+0 F100\nCC X+7 Y+7\nCP IPA-90 IZ-3 DR-",
+            HeidenhainCompile.Body(result));
+    }
+
     // Heidenhain 8 rule 2: the feed where it changed, also on an arc, which moves at the feed like a line (language
     // 4.3).
     [Fact]

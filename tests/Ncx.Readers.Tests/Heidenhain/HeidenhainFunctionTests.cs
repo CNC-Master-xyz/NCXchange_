@@ -17,11 +17,27 @@ public sealed class HeidenhainFunctionTests
             Body("1 M3\n2 M4\n3 M5\n4 M8\n5 M9"));
     }
 
-    // M functions at the end of a positioning block stand in its NCX block (heidenhain 2; language 5 rule 3).
+    // M3, M4, M8, M13 and M14 become effective at the start of a positioning block, so their words stand in the NCX
+    // block of the motion, which acts before it (D252; heidenhain 2; language 5 rule 3).
     [Fact]
-    public void MFunctions_InAPositioningBlock_StandInItsBlock()
+    public void BlockStartFunctions_InAPositioningBlock_StandInItsBlock()
     {
         Assert.Equal(Lines("RAPID X=10 COMP=OFF SPINDLE=CW COOLANT=ON"), Body("1 L X+10 R0 FMAX M3 M8"));
+    }
+
+    // M0, M1, M5, M6 and M9 become effective at the end of a positioning block, whatever their place in it, so their
+    // words stand in a block of their own directly after the motion (D252; heidenhain 2).
+    [Fact]
+    public void BlockEndFunctions_InAPositioningBlock_StandAfterTheMotion()
+    {
+        Assert.Equal(Lines("RAPID Z=100 COMP=OFF", "SPINDLE=OFF COOLANT=OFF"), Body("1 L Z+100 R0 FMAX M5 M9"));
+    }
+
+    // Outside a positioning block the order of the words does not change: a block of M functions alone keeps them.
+    [Fact]
+    public void BlockEndFunctions_WithoutAMotion_StandInTheirOwnBlockAsBefore()
+    {
+        Assert.Equal(Lines("SPINDLE=OFF", "COOLANT=OFF"), Body("1 M5\n2 M9"));
     }
 
     // M126 and M127 are ROTARY_PATH, M116 and M117 ROTARY_FEED (controller-mapping 1; D86).

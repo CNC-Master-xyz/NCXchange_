@@ -38,8 +38,9 @@ public sealed class HeidenhainFunctionTests
         Assert.Equal("M136\nM137", HeidenhainCompile.Body(result));
     }
 
-    // Language 5 rule 3 and the TODO(question) D252 of HeidenhainFunctions: the functions of a motion block act before
-    // its motion, each in a Klartext block of its own before the line, in the canonical order of the words.
+    // Language 5 rule 3 and D252: the functions of a motion block act before its motion, each in a Klartext block of
+    // its own before the line, in the canonical order of the words, so that a word whose M function would act at the
+    // end of the Klartext block still acts before the motion (decisions.md; heidenhain 8 rule 8).
     [Fact]
     public void FunctionsOfAMotionBlock_StandInBlocksOfTheirOwnBeforeTheMotion()
     {
@@ -49,14 +50,18 @@ public sealed class HeidenhainFunctionTests
         Assert.Equal("L X+0 Y+0 R0 FMAX\nM3\nM8\nL Z+2 FMAX", HeidenhainCompile.Body(result));
     }
 
-    // Controller-mapping 1, STOP: M1 and M0, after the motion of their block.
+    // Controller-mapping 1, STOP: M1 and M0, after the motion of their block. Unlike SPINDLE=OFF and COOLANT=OFF,
+    // STOP is not written in a block before the L: it is a block word and not a state word, and its NCX block stops
+    // when the motion of the block is done (language 4.1; virtual machine 3 steps 5 and 7), so an M0 before the L
+    // would stop earlier than the NCX block says. The STOP of D252's compiler sentence waits on that (the
+    // TODO(question) in HeidenhainFunctions; heidenhain 8 rule 8).
     [Fact]
-    public void Stop_IsM0OrM1AfterTheMotion()
+    public void Stop_InAMotionBlock_IsWrittenAfterTheMotion()
     {
         CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
-            "RAPID X=0 Y=0 STOP=OPTIONAL", "STOP=PROGRAM"));
+            "LINE X=10 F=100 STOP=PROGRAM", "RAPID X=0 Y=0 STOP=OPTIONAL", "STOP=PROGRAM"));
 
-        Assert.Equal("L X+0 Y+0 R0 FMAX\nM1\nM0", HeidenhainCompile.Body(result));
+        Assert.Equal("L X+10 R0 F100\nM0\nL X+0 Y+0 FMAX\nM1\nM0", HeidenhainCompile.Body(result));
     }
 
     // Language 4.6: MFUNC is the M function the machine configuration does not name, written with the WARNING CMP109.

@@ -139,7 +139,7 @@ internal static partial class HeidenhainFlow
         if (label is null || name is null || !state.Labels.Subs.Contains(label))
         {
             block.Draft.KeepAsRaw($"LBL {label} is no subprogram of the file: none is called without REP and closed by "
-                + "LBL 0 after the M30 of the program (controllers heidenhain.md 1, 7 rule 3)");
+                + "LBL 0 (controllers heidenhain.md 1, 7 rule 3)");
             return;
         }
 

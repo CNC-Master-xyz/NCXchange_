@@ -148,6 +148,15 @@ public sealed class HeidenhainCycleTests
             Body(Drill + "\n3 L X+10 Y+10 FMAX\n4 CYCL CALL\n5 L Z+50 FMAX\n6 L X+30 FMAX M99"));
     }
 
+    // A TOOL CALL ends the cycle of NCX while the control keeps the definition, so CYCLE=OFF stands before the TOOL
+    // block and no WARNING falls on the source (D227).
+    [Fact]
+    public void CycleOff_BeforeAToolCallWhileTheCycleIsOn_StandsInFrontOfTheToolBlock()
+    {
+        Assert.Equal(Lines(DrillWords, "CYCLE_CALL", "CYCLE=OFF", "TOOL=2 OFFSET:LEN=2 OFFSET:RAD=2 RPM=500"),
+            Body(Drill + "\n3 CYCL CALL\n4 TOOL CALL 2 Z S500"));
+    }
+
     // CYCL CALL PAT calls at every point of the PATTERN DEF, one CYCLE_CALL per point (heidenhain 7 rule 7).
     [Fact]
     public void CyclCallPat_ExpandsToOneCallPerPoint()
@@ -157,6 +166,23 @@ public sealed class HeidenhainCycleTests
 
         Assert.Equal(Lines(DrillWords, "CYCLE_CALL X=25 Y=33.5", "CYCLE_CALL X=50 Y=75"), BodyOf(text));
         AssertFormatsToItself(text);
+    }
+
+    // D254: a workpiece surface in Z other than 0 acts in addition to the Q203 of the cycle, so the CYCLE block is
+    // written again before that point's call with SURFACE, CLEARANCE, DEPTH and SAFE shifted by it, and the shifted
+    // cycle is switched off after the pattern. The Q204 of this definition equals its Q200, so the retract is
+    // CLEARANCE and the block carries no SAFE to shift (D226).
+    [Fact]
+    public void PatternSurface_OtherThanZero_ShiftsTheCycleOfThatPoint()
+    {
+        Assert.Equal(Lines(
+            DrillWords,
+            "CYCLE_CALL X=25 Y=33.5",
+            "CYCLE=DRILL SURFACE=-3 CLEARANCE=-1 DEPTH=-13 CYCLE_RETRACT=CLEARANCE CYCLE_F=100",
+            "CYCLE_CALL X=50 Y=75",
+            "CYCLE=OFF"),
+            Body("1 PATTERN DEF ~\n    POS1 (X+25 Y+33,5 Z+0) ~\n    POS2 (X+50 Y+75 Z-3)\n" + Drill
+                + "\n3 CYCL CALL PAT FMAX"));
     }
 
     // A PATTERN DEF no CYCL CALL PAT calls stays RAW (heidenhain 7 rule 9).

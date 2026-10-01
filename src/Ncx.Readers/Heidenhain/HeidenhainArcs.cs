@@ -61,9 +61,11 @@ internal static class HeidenhainArcs
             y = isFirst ? y : value;
         }
 
-        // TODO(question): D254, heidenhain 2 does not say what a CC with one axis of the plane leaves for the other,
-        // the coordinate of the earlier pole or of the current position; the pole is then not known, and the arcs about
-        // it stay RAW until D254 is answered.
+        // TODO(question): what a CC with one axis of the plane leaves for the other, the coordinate of the earlier
+        // pole or of the current position, is still open: D254 settled the other two halves of its question and
+        // recorded that the manuals describe CC with both coordinates, CC with none and an incremental CC
+        // coordinate, but never CC with exactly one axis word (decisions.md). The pole is then not known, and the
+        // arcs about it stay RAW.
         return x is decimal poleX && y is decimal poleY ? new HeidenhainPoint(poleX, poleY) : null;
     }
 

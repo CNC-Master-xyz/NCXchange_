@@ -55,14 +55,38 @@ public sealed class HeidenhainToolTests
         Assert.Equal(Lines("PRELOAD=5", "PRELOAD=0"), Body("5 TOOL DEF 5\n6 TOOL DEF 0"));
     }
 
-    // The delta offsets DL and DR have no NCX word, and the meaning of the F of a TOOL CALL is not documented: the
-    // block stays RAW (language 4.4; D5).
-    [Theory]
-    [InlineData("5 TOOL CALL 4 Z S1592 DL+0.1 DR-0.05")]
-    [InlineData("5 TOOL CALL 4 Z S1592 F500")]
-    public void ToolCall_WithDeltaOffsetsOrF_IsKeptAsRaw(string line)
+    // The delta offsets DL and DR have no NCX word: the block stays RAW (language 4.4; D5).
+    [Fact]
+    public void ToolCall_WithDeltaOffsets_IsKeptAsRaw()
     {
-        NcxProgram program = FramedProgram(line);
+        NcxProgram program = FramedProgram("5 TOOL CALL 4 Z S1592 DL+0.1 DR-0.05");
+
+        Assert.Single(program.Blocks, block => block.Find("RAW") is not null);
+        Assert.Equal([DiagnosticCodes.KeptAsRaw], Codes(program));
+    }
+
+    // The F of a TOOL CALL is the ordinary modal feed: the reader writes it as F in the TOOL block (D251).
+    [Fact]
+    public void ToolCallFeed_InTheToolBlock_IsTheModalFeed()
+    {
+        Assert.Equal(Lines("F=500 TOOL=4 OFFSET:LEN=4 OFFSET:RAD=4 RPM=1592", "LINE X=10 COMP=OFF"),
+            Body("5 TOOL CALL 4 Z S1592 F500\n6 L X+10 R0"));
+    }
+
+    // F AUTO takes the feed of the TOOL CALL block, which the reader writes as that number (D251).
+    [Fact]
+    public void FeedAuto_AfterAToolCallWithAFeed_IsThatFeed()
+    {
+        Assert.Equal(Lines("F=500 TOOL=4 OFFSET:LEN=4 OFFSET:RAD=4 RPM=1592", "LINE X=10 COMP=OFF",
+            "LINE X=20 F=300 COMP=OFF", "LINE X=20 F=500 COMP=OFF"),
+            Body("5 TOOL CALL 4 Z S1592 F500\n6 L X+10 R0\n7 L X+20 R0 F300\n8 L X+20 R0 F AUTO"));
+    }
+
+    // Where no TOOL CALL feed is known, F AUTO keeps its block RAW (D251).
+    [Fact]
+    public void FeedAuto_WithoutAKnownToolCallFeed_IsKeptAsRaw()
+    {
+        NcxProgram program = FramedProgram("5 TOOL CALL 4 Z S1592\n6 L X+10 R0 F AUTO");
 
         Assert.Single(program.Blocks, block => block.Find("RAW") is not null);
         Assert.Equal([DiagnosticCodes.KeptAsRaw], Codes(program));

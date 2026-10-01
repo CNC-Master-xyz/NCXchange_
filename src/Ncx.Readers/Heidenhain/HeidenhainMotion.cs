@@ -173,6 +173,13 @@ internal static class HeidenhainMotion
         SourceWord? tcpm = block.FindCode("M128");
         if (feed is null || (tcpm is not null && block.IndexOf(tcpm) < block.IndexOf(feed)))
         {
+            // The feed programmed before a CHF or RND block is valid again after it, so the element after an
+            // expanded corner states it where it has none of its own (D255).
+            if (feed is null && HeidenhainCorners.FeedAfterCorner(block) is Value again)
+            {
+                block.Draft.Main.Add("F", again);
+            }
+
             return rapid;
         }
 
@@ -180,13 +187,26 @@ internal static class HeidenhainMotion
         int next = block.IndexOf(feed) + 1;
         bool auto = next < block.Source.Words.Count && block.Source.Words[next].Address == "AUTO";
 
-        // TODO(question): heidenhain 2 gives F AUTO the feed of the tool table, which neither an NCX word nor a key of
-        // the machine file holds; the block is kept RAW until D251 is answered.
-        if (auto || feed.Text.Length == 0)
+        // D251: F AUTO is the feed of the TOOL CALL block, not of the tool table, and that feed is the modal feed:
+        // the reader writes it as the number the TOOL CALL gave, and keeps the block RAW only where no TOOL CALL feed
+        // is known (decisions.md; controllers heidenhain.md 2, 4).
+        if (auto)
         {
-            block.Draft.KeepAsRaw(auto
-                ? "F AUTO takes the feed of the tool table, which NCX does not know (controllers heidenhain.md 2)"
-                : "F names no feed");
+            block.MarkRead(block.Source.Words[next]);
+            if (block.Heidenhain.ToolCallFeed is Value fromCall)
+            {
+                block.Draft.Main.Add("F", fromCall);
+                block.Heidenhain.Feed = fromCall;
+            }
+            else
+            {
+                block.Draft.KeepAsRaw("F AUTO takes the feed of the TOOL CALL block, which the reader does not know "
+                    + "here (D251)");
+            }
+        }
+        else if (feed.Text.Length == 0)
+        {
+            block.Draft.KeepAsRaw("F names no feed");
         }
         else if (rapid)
         {
@@ -195,6 +215,7 @@ internal static class HeidenhainMotion
         else if (ValueOf(block, feed) is Value value)
         {
             block.Draft.Main.Add("F", value);
+            block.Heidenhain.Feed = value;
         }
 
         return rapid;

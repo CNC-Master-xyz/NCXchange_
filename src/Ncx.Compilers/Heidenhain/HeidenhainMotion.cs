@@ -89,8 +89,8 @@ internal static class HeidenhainMotion
         writing.Line(string.Join(" ", words));
     }
 
-    // TODO(question): heidenhain 8 rule 2 writes F "on every block by option", and machine-config 2 has no key for
-    // that option; the feed is written where it changes.
+    // D273: heidenhain 8 rule 2 no longer writes F "on every block by option"; F is modal on the control, so the
+    // compiler writes it where it changes and no machine file needs the key (decisions.md).
 
     /// <summary>
     /// The feed of the block where it differs from the one the control has, F2387, F1,5, FQ1; null where it does not

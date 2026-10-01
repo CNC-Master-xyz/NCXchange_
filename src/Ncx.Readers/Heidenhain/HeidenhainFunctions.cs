@@ -25,6 +25,14 @@ internal static class HeidenhainFunctions
     // The states of [spindle.ROLE] that SPINDLE takes as its value (machine-config 5, language 4.5).
     private static readonly string[] s_spindleStates = ["CW", "CCW", "OFF"];
 
+    // The M functions of the control that act at the end of a positioning block, whatever their place in it: the
+    // overview table of the manual (D252). The others of the table act at the block start, and a function of a table
+    // of the machine stays in the motion block.
+    private static readonly string[] s_blockEndCodes = ["M0", "M1", "M2", "M5", "M6", "M9", "M30"];
+
+    // The verbs of a block that moves, before whose motion the state words of its NCX block act (language 5 rule 3).
+    private static readonly string[] s_motionVerbs = ["RAPID", "LINE", "ARC", "RETRACT", "HOME"];
+
     /// <summary>
     /// Tells whether the controller or a table of the machine names an M function, so that no reader rule is asked for
     /// it: the tables are tried first (D40, D66, machine-config 5).
@@ -80,10 +88,10 @@ internal static class HeidenhainFunctions
     /// Reads the M functions of a block that the other concerns left.
     /// </summary>
     /// <param name="block">The block being read.</param>
-    // TODO(question): heidenhain.md 2 allows up to two M functions at the end of an L block and does not say whether
-    // each acts at the start or at the end of the motion, while the state words of an NCX motion block act before its
-    // motion (language 5 rule 3); an M function read with the motion (ReadsWithMotion) is written into the NCX block of
-    // the motion, which reads L Z+100 R0 FMAX M5 as SPINDLE=OFF before the retract, until D252 is answered.
+    // D252: some M functions become effective at the start of a positioning block and others at its end, whatever
+    // their order in the block (controllers heidenhain.md 2, the table): the word of a function that acts at the block
+    // end stands in a block of its own directly after the motion, the others stand in the motion block, whose state
+    // words act before its motion (decisions.md; language 5 rule 3; heidenhain 7 rule 10).
     public static void Read(HeidenhainBlock block)
     {
         if (!block.Draft.IsRaw)
@@ -136,7 +144,7 @@ internal static class HeidenhainFunctions
         block.Draft.Warnings.Add(new HeidenhainWarning(DiagnosticCodes.HeidenhainMCodeNotNamed,
             $"M{text} is no M function of the controller or of a table of the machine; it is written as MFUNC={text} "
             + "(machine-config 5)."));
-        block.Draft.AddState("MFUNC", null, new IntegerValue(mfunc, text));
+        AddFunction(block, code, "MFUNC", null, new IntegerValue(mfunc, text));
     }
 
     // The M functions of the controller that NCX has words for (controllers heidenhain.md 1, 2; controller-mapping 1
@@ -184,8 +192,21 @@ internal static class HeidenhainFunctions
             block.Heidenhain.Tcpm = code == "M128";
         }
 
-        block.Draft.AddState(key, null, new IdentValue(value));
+        AddFunction(block, code, key, null, new IdentValue(value));
         return true;
+    }
+
+    // The word of an M function stands in the motion block, or in a block of its own directly after the motion when
+    // the function acts at the end of its Klartext block (D252).
+    private static void AddFunction(HeidenhainBlock block, string code, string key, string? addr, Value value)
+    {
+        if (s_blockEndCodes.Contains(code) && block.Draft.Main.Verb is string verb && s_motionVerbs.Contains(verb))
+        {
+            block.Draft.AddAfterMotion(key, addr, value);
+            return;
+        }
+
+        block.Draft.AddState(key, addr, value);
     }
 
     // M91 is read with the motion of its block, M99 with the cycle call; left here they stand in a block without a
@@ -222,16 +243,16 @@ internal static class HeidenhainFunctions
         switch (key)
         {
             case "SPINDLE":
-                block.Draft.AddState(key, SpindleAddress(block.Machine, addr), new IdentValue(value));
+                AddFunction(block, code, key, SpindleAddress(block.Machine, addr), new IdentValue(value));
                 block.State.LastSpindle = addr;
                 return;
             case "COOLANT":
                 // The channel STANDARD is the default channel that a bare COOLANT addresses (language 4.6).
-                block.Draft.AddState(key, addr == "STANDARD" ? null : addr, new IdentValue(value));
+                AddFunction(block, code, key, addr == "STANDARD" ? null : addr, new IdentValue(value));
                 return;
             default:
                 // SPINDLE_MODE and FUNC.
-                block.Draft.AddState(key, addr, new IdentValue(value));
+                AddFunction(block, code, key, addr, new IdentValue(value));
                 return;
         }
     }

@@ -25,7 +25,9 @@ public abstract partial class CompilerBase
     /// tool table (D10), {b}, {c}.
     /// </summary>
     /// <param name="values">Values the controller sets itself, which the change keeps; null for none.</param>
-    protected void WriteToolChange(TemplateValues? values = null)
+    /// <param name="suffix">Text appended to the rendered change command: the feed of the block that the Heidenhain
+    /// compiler folds into the TOOL CALL (D251); null for none.</param>
+    protected void WriteToolChange(TemplateValues? values = null, string? suffix = null)
     {
         BlockStep step = Step;
         if (!step.Block.Has("TOOL")
@@ -41,7 +43,7 @@ public abstract partial class CompilerBase
         // TOOL=0 empties the spindle with the unload template (machine-config 3).
         if (after.SpindleTool == s_emptySpindle)
         {
-            WriteTemplate(config?.Unload, "[tool_change] unload (machine-config 3)", filled);
+            WriteTemplate(config?.Unload, "[tool_change] unload (machine-config 3)", filled, suffix);
             return;
         }
 
@@ -57,7 +59,7 @@ public abstract partial class CompilerBase
         }
 
         string what = asPreloaded ? "[tool_change] change_preloaded" : "[tool_change] change";
-        WriteTemplate(text, what + " (machine-config 3)", filled);
+        WriteTemplate(text, what + " (machine-config 3)", filled, suffix);
     }
 
     /// <summary>

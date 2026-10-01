@@ -34,6 +34,30 @@ public sealed class HeidenhainFlowTests
         AssertFormatsToItself(text);
     }
 
+    // D254: a section that stands before the M30 is run by the main flow as ordinary blocks as well, so the reader
+    // writes it as a SUB and a CALL where it stood, which runs the same blocks in the same order (language 4.13,
+    // D89).
+    [Fact]
+    public void LiftedSub_TheMainFlowRunsThrough_IsASubWithACallWhereItStood()
+    {
+        string text = Text("0 BEGIN PGM S MM\n1 L X+0 R0 FMAX\n2 LBL 1\n3 L IX+10 F100\n4 LBL 0\n5 CALL LBL 1\n"
+            + "6 M30\n7 END PGM S MM\n");
+
+        Assert.Equal(Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"S\"",
+            "FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF",
+            "RAPID X=0 COMP=OFF",
+            "CALL=1",
+            "CALL=1",
+            "PROGRAM=END",
+            "SUB=BEGIN NAME=1",
+            "LINE IX=10 F=100",
+            "SUB=END",
+            "FILE=END"), text);
+        AssertFormatsToItself(text);
+    }
+
     // The subprogram runs with the state of its callers at the CALL, and check walks it at every call without an
     // ERROR (virtual machine 3.9).
     [Fact]

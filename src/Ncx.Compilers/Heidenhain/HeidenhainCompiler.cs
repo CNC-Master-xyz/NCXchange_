@@ -175,7 +175,7 @@ public sealed class HeidenhainCompiler : CompilerBase
             Templates = Templates,
             Labels = _labels,
             WriteLine = Line,
-            WriteToolChange = values => WriteToolChange(values),
+            WriteToolChange = (values, suffix) => WriteToolChange(values, suffix),
             WritePreload = () => WritePreload(),
             CommentText = CommentText,
         };

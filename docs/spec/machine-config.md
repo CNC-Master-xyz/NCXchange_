@@ -256,6 +256,7 @@ TILT_AXIS_ON = ""                  # empty = the target cannot write TILT_AXIS w
                                    # Heidenhain: "PLANE AXIAL A{a} B{b} C{c} {move}"; Siemens: CYCLE800 with the rotary-axes mode (bits 7 and 6 set) and {dir}
 TILT_TURN = "G53.1"                # written after TILT_ON for MOVE=TURN where the control positions the axes in a second block (Fanuc); Heidenhain and Siemens use {move} and {dir}
 move = { TURN = "TURN FMAX", MOVE = "MOVE ABST50 FMAX", STAY = "STAY" }   # values of {move} per MOVE option (Heidenhain); Siemens {dir}: TURN = -1, STAY = 0
+                                   # no retract here: a RETRACT before the tilt is its own block, the Heidenhain MB and the Siemens _FR (D228, D83)
 ROTARY_PATH_SHORTEST = "M126"      # D86; Siemens: rotary axes with DC() by the compiler, Fanuc: roll-over axis setting (empty = WARNING, kept as written)
 ROTARY_PATH_FULL = "M127"
 ROTARY_FEED_MM_MIN = "M116"        # Siemens: "FGREF[{axis}]={radius}" per rotary axis

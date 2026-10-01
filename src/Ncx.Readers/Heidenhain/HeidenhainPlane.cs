@@ -96,10 +96,10 @@ internal static class HeidenhainPlane
     // written as RETRACT in front of the tilt, as the reader of Siemens writes the _FR retract of CYCLE800
     // (controller-mapping 1, TILT; D83). SEQ, ABST, F, SYM and the other options have no NCX word and keep the block
     // RAW (controller-mapping 1, MOVE and ROT; D5).
-    // TODO(question): MOVE=TURN positions the rotary axes "tool retracted first" (language 4.2), and MB says by how
-    // much; whether the MB of a PLANE is the RETRACT in front of the TILT, or a part of MOVE=TURN that the compiler's
-    // move template writes, is not said; the reader writes the RETRACT, and a PLANE RESET that positions the axes back
-    // (TURN, MOVE) stays RAW, until D228 is answered.
+    // D228: MB is a retract path, incremental from the current tool position in the active tool-axis direction, that
+    // the control travels before the swivel, so it is the RETRACT in front of the TILT and no part of MOVE=TURN; a
+    // PLANE RESET that positions the axes back (TURN, MOVE) stays RAW in 1.0 (decisions.md; controllers heidenhain.md
+    // 3, 7 rule 6; language 4.2, MOVE).
     private static bool Options(HeidenhainBlock block, HeidenhainDraftBlock? entry, out HeidenhainDraftBlock? retract)
     {
         retract = null;

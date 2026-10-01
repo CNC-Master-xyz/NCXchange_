@@ -14,8 +14,10 @@ public abstract partial class CompilerBase
     /// <param name="text">The template text as the record of the machine keeps it; null when the file has none.</param>
     /// <param name="what">The template as a message names it: "[tool_change] change (machine-config 3)".</param>
     /// <param name="values">The values of its placeholders.</param>
+    /// <param name="suffix">Text the compiler appends to the rendered template, separated by a space: the feed the
+    /// Heidenhain compiler folds into the TOOL CALL (D251); null for none.</param>
     /// <returns>True when it was written.</returns>
-    protected bool WriteTemplate(string? text, string what, TemplateValues values)
+    protected bool WriteTemplate(string? text, string what, TemplateValues values, string? suffix = null)
     {
         // A word whose template the machine does not give cannot be written, as a template without a value for a
         // placeholder cannot (machine-config introduction).
@@ -36,7 +38,7 @@ public abstract partial class CompilerBase
 
         if (rendered.Length > 0)
         {
-            Line(rendered);
+            Line(suffix is null ? rendered : rendered + " " + suffix);
         }
 
         return true;

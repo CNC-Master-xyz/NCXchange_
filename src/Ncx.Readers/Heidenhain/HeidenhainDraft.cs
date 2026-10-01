@@ -78,6 +78,27 @@ internal sealed class HeidenhainDraft
     }
 
     /// <summary>
+    /// Adds a state word to a block after the main block: the word of an M function that acts at the end of its
+    /// Klartext block, which must not act before the motion of the main block (D252, language 5 rule 3).
+    /// </summary>
+    /// <param name="key">The key.</param>
+    /// <param name="addr">The address; null for none.</param>
+    /// <param name="value">The value.</param>
+    public void AddAfterMotion(string key, string? addr, Value value)
+    {
+        foreach (HeidenhainDraftBlock block in After)
+        {
+            if (block.Verb is null && !block.Has(key, addr))
+            {
+                block.Add(key, addr, value);
+                return;
+            }
+        }
+
+        After.Add(new HeidenhainDraftBlock().Add(key, addr, value));
+    }
+
+    /// <summary>
     /// The blocks in the order they are written.
     /// </summary>
     public List<HeidenhainDraftBlock> InOrder()

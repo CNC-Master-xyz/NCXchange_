@@ -64,6 +64,21 @@ public sealed record SourceStructure
     public SourceContour? Contour { get; init; }
 
     /// <summary>
+    /// The name of the subprogram section the block begins that the main flow also runs through: a Klartext LBL n
+    /// section called by CALL LBL that stands before the M2 or M30 of its program (D254; controllers heidenhain.md 1,
+    /// 7 rule 3). Null for every other block. The structure pass moves the range from this block to the block that
+    /// carries <see cref="LiftsSubEnd"/> into a SUB section behind the program and writes a CALL where it stood, so
+    /// that the same blocks run in the same order (language 4.13, D89).
+    /// </summary>
+    public string? LiftsSub { get; init; }
+
+    /// <summary>
+    /// True for the block that closes a section <see cref="LiftsSub"/> begins, the LBL 0 of a Klartext subprogram the
+    /// main flow runs through (D254).
+    /// </summary>
+    public bool LiftsSubEnd { get; init; }
+
+    /// <summary>
     /// The block range a repeat of the block names by the labels of its first and its last block, which stand before it
     /// in its section, START END of a SINUMERIK REPEAT START END P=3 (controller-mapping 6, REPEAT + TIMES); null for a
     /// block that names none. The structure pass copies the range into a SUB section of the file, whose name the

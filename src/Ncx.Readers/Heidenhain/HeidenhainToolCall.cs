@@ -32,20 +32,23 @@ internal static class HeidenhainToolCall
     // TOOL CALL 4 Z S1592: tool 4 in the spindle, Z as the tool axis, which also sets the working plane, speed 1592
     // (controllers heidenhain.md 4). The offsets come from the tool table with the call, so the reader emits both
     // offset words with the number of the tool (heidenhain 7 rule 2; language 2 rule 4).
-    // TODO(question): heidenhain 4 names the F of TOOL CALL without saying what it does (the modal feed, or the feed
-    // that F AUTO takes), and OFFSET:LEN and OFFSET:RAD take a register number (language 4.4) that a tool called by
-    // name has not; a TOOL CALL with F (D251), or by name (D239), is kept RAW until those are answered. The delta
-    // offsets DL, DR and DR2 have no NCX word (language 4.4) and keep the block RAW with a WARNING (D5).
+    // D251: the F of a TOOL CALL is the ordinary modal feed, which holds until a positioning block or another TOOL
+    // CALL programs a new one, and which F AUTO takes; the reader writes it as F in the TOOL block and keeps the value
+    // (decisions.md; controllers heidenhain.md 4). The delta offsets DL, DR and DR2 have no NCX word (language 4.4)
+    // and keep the block RAW with a WARNING (D5).
+    // TODO(question): OFFSET:LEN and OFFSET:RAD take a register number (language 4.4) that a tool called by name has
+    // not, so no NCX form available today states the offsets such a call loads; a TOOL CALL by name is kept RAW until
+    // D239 is answered.
     private static void ReadCall(HeidenhainBlock block)
     {
         SourceWord? number = NumberWord(block);
         SourceWord? axis = AxisWord(block);
         SourceWord? speed = block.Take("S");
+        SourceWord? feed = block.Take("F");
         foreach (SourceWord word in block.Unread())
         {
             string reason = word.Address switch
             {
-                "F" => "heidenhain 4 does not say what the F of TOOL CALL does",
                 "DL" or "DR" or "DR2" => $"the delta offset {word.Address} has no NCX word (language 4.4)",
                 "" when word.Text.StartsWith('"') => "a tool called by name has no offset register for OFFSET:LEN and "
                     + "OFFSET:RAD (language 4.4)",
@@ -73,6 +76,14 @@ internal static class HeidenhainToolCall
             block.Draft.AddState("RPM", null, rpm);
         }
 
+        // The feed of the call is the modal feed from here on, and the one F AUTO takes (D251).
+        if (feed is not null && ValueOf(block, feed) is Value modal)
+        {
+            block.Draft.AddState("F", null, modal);
+            block.Heidenhain.Feed = modal;
+            block.Heidenhain.ToolCallFeed = modal;
+        }
+
         if (number?.Number is not decimal tool)
         {
             return;
@@ -88,8 +99,14 @@ internal static class HeidenhainToolCall
             block.State.Preloaded = null;
         }
 
-        // TOOL ends the cycle of NCX (virtual machine 4), while the control keeps the definition: the reader writes it
-        // again before its next call.
+        // TOOL ends the cycle of NCX (virtual machine 4), while the control keeps the definition: CYCLE=OFF stands
+        // before the TOOL block while NCX has the cycle on, so that no WARNING falls on a source the control runs as
+        // written, and the reader writes the definition again before the next call (D227).
+        if (block.Heidenhain.CycleOn == true)
+        {
+            block.Draft.Before.Add(new HeidenhainDraftBlock().Add("CYCLE", null, new IdentValue("OFF")));
+        }
+
         block.Heidenhain.CycleOn = false;
         block.Heidenhain.CycleCalled = false;
     }

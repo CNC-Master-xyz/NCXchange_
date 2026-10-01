@@ -1,3 +1,4 @@
+using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.State;
 
 namespace Ncx.Readers.Heidenhain;
@@ -79,6 +80,19 @@ internal sealed class HeidenhainState
     public HeidenhainCorner? Corner { get; set; }
 
     /// <summary>
+    /// The modal feed of the control, which a numeric F of a positioning block or of a TOOL CALL block sets and holds
+    /// until the next one (D273; controllers heidenhain.md 2); null while the reader does not know it. FMAX and the F
+    /// of a CHF or RND block hold for their block alone and leave it (D255).
+    /// </summary>
+    public Value? Feed { get; set; }
+
+    /// <summary>
+    /// The feed of the last TOOL CALL block, which F AUTO takes (D251; controllers heidenhain.md 4); null while the
+    /// reader knows none.
+    /// </summary>
+    public Value? ToolCallFeed { get; set; }
+
+    /// <summary>
     /// The active machining cycle definition (controllers heidenhain.md 5); null while none is.
     /// </summary>
     public HeidenhainDefinition? Definition { get; set; }
@@ -118,10 +132,10 @@ internal sealed class HeidenhainState
     public bool? Tcpm { get; set; } = false;
 
     /// <summary>
-    /// The points of the last PATTERN DEF in the working plane, which CYCL CALL PAT calls at; null while no pattern is
-    /// known (controllers heidenhain.md 5).
+    /// The machining positions of the last PATTERN DEF, which CYCL CALL PAT calls at, each with the workpiece surface
+    /// it starts at (D254); null while no pattern is known (controllers heidenhain.md 5).
     /// </summary>
-    public List<HeidenhainPoint>? Pattern { get; set; }
+    public List<HeidenhainPatternPoint>? Pattern { get; set; }
 
     /// <summary>
     /// The blocks CYCL DEF n.1, n.2 ... of a cycle that CYCL DEF n.0 reads as a whole, by line: the reason the group is
@@ -191,6 +205,7 @@ internal sealed class HeidenhainState
         }
 
         Tangent = null;
+        Feed = null;
     }
 
     /// <summary>
