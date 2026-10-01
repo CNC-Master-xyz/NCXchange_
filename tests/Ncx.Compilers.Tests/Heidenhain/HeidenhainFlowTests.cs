@@ -527,7 +527,7 @@ public sealed class HeidenhainFlowTests
             HeidenhainCompile.Body(result));
     }
 
-    // The TODO(question) D221 of HeidenhainFlow.ReturnLabel: the IF of a RETURN JUMP block makes the return of the
+    // The TODO(question) D272 of HeidenhainFlow.ReturnLabel: the IF of a RETURN JUMP block makes the return of the
     // subprogram conditional (language 4.9; virtual machine 3.6), and the sub_end LBL 0 takes no condition, CMP101.
     [Fact]
     public void Return_UnderIfInASubprogram_IsTheErrorCmp101()

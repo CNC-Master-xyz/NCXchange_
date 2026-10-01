@@ -163,7 +163,9 @@ unload = "T0\nG361"
 auto_preload = true
 preload_position = "before_first_motion"
 kind_map = { ROTARY = "0.", TURNING = "1." }
-# turret 2 (channel 2): change = "T{tool:02}{offset:02}", offsets +30 for spindle 2 (T0131 .. T1242)
+# turret 2 (channel 2) needs no table of its own: a T word of a holder other than default_holder is the turret
+# form T{tool:02}{offset:02}, read and written with the role TURRET2 (D219); the offsets of turret 2 are +30 for
+# spindle 2 (T0101 .. T1212 at spindle 1, T0131 .. T1242 at spindle 2)
 
 [home]
 template = "G28 {axes}"            # G28 U0 W0 on the turret, G28 V0 for Y

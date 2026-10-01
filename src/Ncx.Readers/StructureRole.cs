@@ -32,9 +32,9 @@ public enum StructureRole
     /// <summary>
     /// The begin of a section the source does not name as a program or a subprogram, the Fanuc O line. It is a
     /// subprogram when a block of the file calls it (SourceStructure.Calls), since a CALL of a program is an ERROR
-    /// (language 4.13). The documents do not yet say what a section is that no block of the file calls (D210); until
-    /// they do, it is a program when it holds M30 or M2 and a subprogram otherwise, and the first of them is the
-    /// program of a file that has none.
+    /// (language 4.13). A section that no block of the file calls is a program when it holds an M30 or M2, a skipped
+    /// one included, and a subprogram otherwise; where no section of the file is a program, the first uncalled one
+    /// is, with the INFO RDR012 naming that reading (D210; controller-mapping 1, 6).
     /// </summary>
     SectionBegin,
 

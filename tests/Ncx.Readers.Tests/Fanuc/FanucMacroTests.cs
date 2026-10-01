@@ -247,6 +247,36 @@ public sealed class FanucMacroTests
         Assert.Equal(Lines("RAW:FANUC=\"G480 I20.\"", "RAPID X=1"), Body("G480 I20.\nN20 G0 X1."));
     }
 
+    // D221: M99 Pn in a section that no block of the file calls returns to the block Nn of that same section, which
+    // reads as JUMP=n with the LABEL=n the structure pass writes there (controller-mapping 6, the paragraph after the
+    // table; decisions.md).
+    [Fact]
+    public void ReturnToABlock_InASectionNoBlockOfTheFileCalls_IsAJumpToThatBlock()
+    {
+        Assert.Equal(Lines("LABEL=30", "RAPID X=1", "JUMP=30"), Body("N30 G0 X1.\nM99 P30"));
+    }
+
+    // D221: in a subprogram a block of the file calls, the P of M99 names a block of the caller, which no JUMP of NCX
+    // reaches, so the block stays RAW even where the subprogram carries that block number itself (D5).
+    [Fact]
+    public void ReturnToABlock_InASubprogramTheFileCalls_StaysRaw()
+    {
+        string text = Text("%\nO0001\nM98 P100\nM30\nO0100\nN30 G0 X1.\nM99 P30\n%\n");
+        Assert.Contains("RAW:FANUC=\"M99 P30\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("JUMP=30", text, StringComparison.Ordinal);
+    }
+
+    // D221: whether a block of the file calls a section is a fact of the whole file, not of the blocks read so far,
+    // so the subprogram reads the same way where its caller stands after it (controller-mapping 6; decisions.md).
+    [Fact]
+    public void ReturnToABlock_InASubprogramTheFileCallsFurtherDown_StaysRaw()
+    {
+        string text = Text("%\nO0100\nN30 G0 X1.\nM99 P30\nO0001\nM98 P100\nM30\n%\n");
+        Assert.Contains("RAW:FANUC=\"M99 P30\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("JUMP=30", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("LABEL=30", text, StringComparison.Ordinal);
+    }
+
     // An unmapped system variable, an indirect variable, M99 P and G66 keep their blocks as RAW (language 4.12;
     // controller-mapping 6, 9).
     [Fact]

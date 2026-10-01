@@ -50,7 +50,8 @@ internal static class FanucToolWords
     private static bool ReadBuilderChange(FanucBlock block)
     {
         ToolChangeConfig? config = block.Machine.ToolChange;
-        if (IsBuilderMacro(config?.Change) && FanucTemplates.TryMatch(block, config!.Change, out TemplateValues change))
+        if (IsBuilderMacro(block, config?.Change)
+            && FanucTemplates.TryMatch(block, config!.Change, out TemplateValues change))
         {
             if (change.TryGetNumber("tool", out decimal tool))
             {
@@ -74,7 +75,7 @@ internal static class FanucToolWords
             return true;
         }
 
-        if (IsBuilderMacro(config?.Preload)
+        if (IsBuilderMacro(block, config?.Preload)
             && FanucTemplates.TryMatch(block, config!.Preload, out TemplateValues preload)
             && (preload.TryGetNumber("next", out decimal preloaded) || preload.TryGetNumber("tool", out preloaded)))
         {
@@ -85,10 +86,45 @@ internal static class FanucToolWords
         return false;
     }
 
-    // A template that begins with a G code is a builder's macro; the plain T and M6 forms are the Fanuc words below.
-    private static bool IsBuilderMacro(string? template)
+    // A template that begins with a G code is a builder's macro. D219: [tool_change] describes the change of
+    // default_holder, so on a lathe a plain T template is tried too where the T word belongs to that holder — the
+    // Mori Seiki tool spindle's T9001 matches the preload "T{tool:04}" and is PRELOAD=9001 — while a T word of
+    // another holder is the turret form of fanuc 5. On a mill the plain T and M6 forms stay the Fanuc words below.
+    private static bool IsBuilderMacro(FanucBlock block, string? template)
     {
-        return template is not null && template.Length > 1 && template[0] == 'G' && char.IsAsciiDigit(template[1]);
+        if (template is null || template.Length < 2)
+        {
+            return false;
+        }
+
+        return (template[0] == 'G' && char.IsAsciiDigit(template[1]))
+            || (block.IsLathe && HolderRoleOfTheChannel(block) is null);
+    }
+
+    /// <summary>
+    /// The role of the tool holder a T word of the file belongs to, where that holder is not default_holder: the
+    /// holder whose channel is the channel of the file (D219; virtual machine 3.8 rules 1 and 2). Null where the
+    /// file's channel is unknown or no other holder carries it, and the T word then belongs to default_holder, whose
+    /// TOOL needs no role (language 4.4).
+    /// </summary>
+    private static string? HolderRoleOfTheChannel(FanucBlock block)
+    {
+        if (block.Fanuc.Channel is not long channel)
+        {
+            return null;
+        }
+
+        string? standard = block.Machine.ResolveDefaultHolder()?.Id;
+        foreach (KeyValuePair<string, string> role in block.Machine.Roles)
+        {
+            ResourceDef? holder = block.Machine.FindResource(role.Value);
+            if (holder is { Type: ResourceType.ToolHolder } && holder.Channel == channel && holder.Id != standard)
+            {
+                return role.Key;
+            }
+        }
+
+        return null;
     }
 
     // T and M6 per machine kind (controllers fanuc.md 5, controller-mapping 3).
@@ -134,7 +170,7 @@ internal static class FanucToolWords
         block.MarkRead(tool!);
         if (block.IsLathe)
         {
-            Turret(block, digits!);
+            Turret(block, digits!, HolderRoleOfTheChannel(block));
         }
         else if (change is not null)
         {
@@ -149,11 +185,11 @@ internal static class FanucToolWords
     // On a lathe with a turret T0404 indexes station 4 and activates offset 4 in one word, T0656 is station 6 with
     // offset 56, T0100 cancels the offset of station 1; six digits T001001 on 120-tool ATCs. The reader emits the
     // offset change and no motion (controllers fanuc.md 5; controller-mapping 3; language 4.4).
-    // TODO(question): on a lathe the T word is the turret form (fanuc 5), while the Mori Seiki tool spindle takes T9001
-    // as PRELOAD=9001 (controller-mapping 3, D91); the documents do not say how the reader tells the two apart, so
-    // every T word of a lathe is the turret form until D219 is answered. A T word shorter than four digits is padded,
-    // T101 as T0101 (D153).
-    private static void Turret(FanucBlock block, string digits)
+    // D219: the tool holder decides. A T word none of the templates of default_holder matches, and every T word of
+    // another holder of the lathe, is the turret form; on another holder the TOOL carries that holder's role,
+    // because a TOOL without one reaches default_holder (language 4.4; virtual machine 3.8 rules 1 and 2), and
+    // OFFSET follows the holder of the last TOOL. A T word shorter than four digits is padded, T101 as T0101 (D153).
+    private static void Turret(FanucBlock block, string digits, string? role)
     {
         int width = digits.Length <= 4 ? 4 : 6;
         if (digits.Length > width)
@@ -166,7 +202,7 @@ internal static class FanucToolWords
         int split = width == 4 ? 100 : 1000;
         int station = whole / split;
         int offset = whole % split;
-        block.Draft.AddState("TOOL", null, Integer(station));
+        block.Draft.AddState("TOOL", role, Integer(station));
         block.Draft.AddState("OFFSET", null, Integer(offset));
     }
 

@@ -97,7 +97,7 @@ public sealed class ArcValidationTests
     public void Compensation_RepeatedInAnArcBlock_IsNoChange()
     {
         VmHarness vm = new VmHarness(VmMachines.Default())
-            .Execute("UNITS=MM", "RAPID X=0 Y=0", "COMP=LEFT", "ARC=CW X=10 Y=0 R=5 COMP=LEFT");
+            .Execute("UNITS=MM SPINDLE=CW RPM=1000", "RAPID X=0 Y=0", "COMP=LEFT", "ARC=CW X=10 Y=0 R=5 COMP=LEFT");
 
         vm.AssertNoDiagnostics();
     }
@@ -105,6 +105,6 @@ public sealed class ArcValidationTests
     // An arc from X=0 Y=0, known in the workpiece frame of the XY plane.
     private static VmHarness FromOrigin(string arc)
     {
-        return new VmHarness(VmMachines.Default()).Execute("UNITS=MM", "RAPID X=0 Y=0", arc);
+        return new VmHarness(VmMachines.Default()).Execute("UNITS=MM SPINDLE=CW RPM=1000", "RAPID X=0 Y=0", arc);
     }
 }

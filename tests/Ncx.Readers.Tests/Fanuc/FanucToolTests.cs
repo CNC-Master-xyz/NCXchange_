@@ -73,6 +73,30 @@ public sealed class FanucToolTests
         Assert.Equal(Lines("TOOL=6 OFFSET=56", "TOOL=1 OFFSET=0"), Body("T0656\nG0 T0100", Lathe()));
     }
 
+    // D219: the tool holder decides what a T word of a lathe means. [tool_change] describes the change of
+    // default_holder, so a T word of that holder is read through its templates first: on the Mori Seiki NTX1000 the
+    // tool spindle's T9001 matches the preload "T{tool:04}" and is PRELOAD=9001, a bare magazine tool number, not
+    // the turret form TOOL=90 OFFSET=1 (decisions.md; controller-mapping 3; machine-config 3).
+    [Fact]
+    public void ToolWord_MatchingThePreloadTemplateOfTheDefaultHolder_IsThePreload()
+    {
+        Assert.Equal(Lines("PRELOAD=9001"),
+            Body("T9001", LoadMachineFile("docs/spec/examples/machines/mori-ntx1000-mapps.toml")));
+    }
+
+    // D219: a T word of a holder that is not default_holder is the turret form of fanuc 5 and carries that holder's
+    // role, because a TOOL without one reaches default_holder; the holder is the one whose channel is the channel of
+    // the file, turret 2 of the Nakamura NTJX in the path-2 file O1000.P-2 (decisions.md; controller-mapping 3;
+    // virtual machine 3.8 rules 1 and 2; language 4.4).
+    [Fact]
+    public void ToolWord_InAFileOfTheChannelOfAnotherHolder_IsTheTurretFormWithThatHoldersRole()
+    {
+        string text = TextOfFile("O1000.P-2", "%\nO1000\nG0 T0656\nM30\n%\n",
+            LoadMachineFile("docs/spec/examples/machines/nakamura-ntjx.toml"));
+
+        Assert.Contains("TOOL:TURRET2=6 OFFSET=56", text, StringComparison.Ordinal);
+    }
+
     // The builder's change macro of [tool_change], G340 T0101. A02., is the change with its offset and the preload of
     // the next tool; G341 T02. the preload alone (controller-mapping 3, Nakamura).
     [Fact]

@@ -15,4 +15,12 @@ public static partial class DiagnosticCodes
     /// after its last block, because every subprogram ends with it (language 4.13).
     /// </summary>
     public const string SubReturnMissing = "RDR011";
+
+    /// <summary>
+    /// RDR012, an INFO: a section of the source that no block of the file calls was read as a program or as a
+    /// subprogram by the rule of D210, and the note names the reading, because the control cannot tell the two apart
+    /// either: the same stored section is a subprogram or a main program depending only on how it is started
+    /// (controller-mapping 1, 6).
+    /// </summary>
+    public const string UncalledSectionKind = "RDR012";
 }

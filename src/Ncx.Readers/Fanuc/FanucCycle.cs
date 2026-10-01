@@ -63,6 +63,23 @@ internal sealed class FanucCycle
     public Value? Feed { get; set; }
 
     /// <summary>
+    /// The thread lead F of G92 and G76, the word PITCH (D175); null while the source has given none.
+    /// </summary>
+    public Value? Pitch { get; set; }
+
+    /// <summary>
+    /// The end point of the last pass of a simple turning cycle, by NCX axis name: X(U) and Z(W) are modal data G90,
+    /// G92 and G94 share, so an omitted word repeats the previous value, and the reader writes both end-point words
+    /// on every CYCLE_CALL (D187).
+    /// </summary>
+    public Dictionary<string, Value> TurningEnd { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The axes of TurningEnd in the order the source first gave them.
+    /// </summary>
+    public List<string> TurningAxes { get; } = [];
+
+    /// <summary>
     /// The initial level: where the drilling axis stood when the cycle mode began, SAFE under G98; null when the reader
     /// does not know it.
     /// </summary>
@@ -83,7 +100,7 @@ internal sealed class FanucCycle
     /// </summary>
     public FanucCycle Copy()
     {
-        return new FanucCycle
+        var copy = new FanucCycle
         {
             Code = Code,
             Entry = Entry,
@@ -95,10 +112,18 @@ internal sealed class FanucCycle
             Peck = Peck,
             Dwell = Dwell,
             Feed = Feed,
+            Pitch = Pitch,
             InitialLevel = InitialLevel,
             ReturnsToInitialLevel = ReturnsToInitialLevel,
             Written = Written,
         };
+        foreach (string axis in TurningAxes)
+        {
+            copy.TurningAxes.Add(axis);
+            copy.TurningEnd[axis] = TurningEnd[axis];
+        }
+
+        return copy;
     }
 
     /// <summary>
@@ -117,8 +142,22 @@ internal sealed class FanucCycle
             Peck?.ToCanonical() ?? "",
             Dwell?.ToCanonical() ?? "",
             Feed?.ToCanonical() ?? "",
+            Pitch?.ToCanonical() ?? "",
+            TurningEndKey(),
             InitialLevel?.ToString(CultureInfo.InvariantCulture) ?? "",
             ReturnsToInitialLevel ? "G98" : "G99",
             Written ?? "");
+    }
+
+    // The end point of the last pass per axis, in the order the source gave the axes (D187).
+    private string TurningEndKey()
+    {
+        var parts = new List<string>();
+        foreach (string axis in TurningAxes)
+        {
+            parts.Add(axis + "=" + TurningEnd[axis].ToCanonical());
+        }
+
+        return string.Join(",", parts);
     }
 }

@@ -211,12 +211,23 @@ internal static class FanucMacro
         SourceWord? m200 = IsBuilderNakamura(block.Machine) ? block.FindCode("M200") : null;
         if (m98 is null && m198 is null && g65 is null && m200 is null)
         {
-            // M99 P returns to a block of the caller: RETURN plus JUMP, kept as the two words (controller-mapping 6).
-            // TODO(question): a JUMP names a LABEL of its own section (language 4.9, virtual machine 3.6), and the
-            // block of the caller is none; the reader keeps M99 P as RAW until D221 is answered.
-            if (block.HasCode("M99") && block.Find("P") is not null)
+            // D221: M99 Pn in a section that no block of the file calls returns to the block Nn of that section, a
+            // JUMP=n to the LABEL=n the structure pass writes there; in a subprogram a block of the file calls, P
+            // names a block of the caller, which no JUMP of NCX reaches, and the block stays RAW (decisions.md;
+            // controller-mapping 6, the paragraph after the table; D5).
+            if (block.HasCode("M99") && block.Find("P") is SourceWord returnTo)
             {
-                block.Draft.KeepAsRaw("M99 P returns to a block of the caller, which no JUMP of NCX reaches");
+                if (block.Fanuc.ReturnsToTheBlock.TryGetValue(block.Source.Line, out string? target))
+                {
+                    block.MarkRead(block.FindCode("M99")!);
+                    block.MarkRead(returnTo);
+                    block.Draft.Main.Add("JUMP", JumpTo(block,
+                        long.Parse(target, NumberStyles.None, CultureInfo.InvariantCulture)));
+                }
+                else
+                {
+                    block.Draft.KeepAsRaw("M99 P returns to a block of the caller, which no JUMP of NCX reaches");
+                }
             }
 
             return;

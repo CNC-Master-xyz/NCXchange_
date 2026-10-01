@@ -31,7 +31,13 @@ internal static class FanucCycles
     // The multiple repetitive cycles of a lathe, one-shot with the contour range P Q (controllers fanuc.md 6).
     private static readonly string[] s_repetitive = ["G70", "G71", "G72", "G73", "G74", "G75", "G76"];
 
+    // The one-shot cycles the manual states a return to the cycle start point for (D187).
+    private static readonly string[] s_returnToTheStartPoint = ["G70", "G73", "G76"];
+
     private static readonly string[] s_motion = ["G0", "G1", "G2", "G3"];
+
+    // The word of the thread lead F of a simple turning cycle (D175).
+    private const string PitchWord = "PITCH";
     private static readonly IntegerValue s_zero = new(0, "0");
 
     /// <summary>
@@ -268,7 +274,13 @@ internal static class FanucCycles
             active.Written = null;
         }
 
-        block.Fanuc.ForgetPositions();
+        // D187: G70 returns in rapid to the cycle start point, note 3 of G73 says the same and the tool path of G76
+        // is a closed loop back to it, so the tool stands where it stood; where G71, G72, G74 and G75 leave it no
+        // page of the manual says, and the reader forgets the positions there (decisions.md; fanuc 6).
+        if (Array.IndexOf(s_returnToTheStartPoint, entry.Native) < 0)
+        {
+            block.Fanuc.ForgetPositions();
+        }
     }
 
     // G98 returns to the initial level and G99 to the R level (mills, systems B and C; controllers fanuc.md 3, group
@@ -810,22 +822,35 @@ internal static class FanucCycles
 
     // The simple turning cycles of system A, G90 (OD), G92 (thread) and G94 (face), are modal like the drilling cycles:
     // CYCLE= and one CYCLE_CALL per block with X and Z or U and W (language 4.7.1; controller-mapping 5, turning
-    // cycles; cycles/fanuc.toml).
-    // TODO(question): the taper R of G90 and G94 and the F of the thread G92 have no NCX word (wave-1 question #18); a
-    // block with R, and a G92 with F, stay RAW.
+    // cycles; cycles/fanuc.toml). D175: F is the cutting feed CYCLE_F on G90 and G94 and the thread lead PITCH on
+    // G92, and R is the taper of the pass, the catalog word TAPER, a radius value (D60). X(U), Z(W) and R are modal
+    // data the cycles share, so a repeat block with a new value is a new CYCLE block, because a new CYCLE replaces
+    // all parameters (language 4.7). A word the entry does not map keeps the block RAW (D5).
     private static void ReadTurning(FanucBlock block, FanucCycle cycle, bool defines)
     {
         CycleEntry entry = cycle.Entry!;
+        List<FanucAxisWord> positions = Positions(block, cycle);
+        if (block.Draft.IsRaw || (!defines && positions.Count == 0))
+        {
+            return;
+        }
+
+        // D175 gives the taper R of G90, G92 and G94 the catalog word TAPER, which cycles/fanuc.toml maps.
+        // TODO(question): the parser takes no parameter name of a catalog entry yet
+        // (WordCatalog.IsNativeParameterAllowed), so a block with R would read into text that check rejects with
+        // PAR010; the reader keeps such a block RAW until D114 is answered, which loses nothing (D5).
         if (block.Find("R") is not null)
         {
-            block.Draft.KeepAsRaw($"R, the taper of {cycle.Code}, has no NCX word");
+            block.Draft.KeepAsRaw($"R, the taper of {cycle.Code}, is the catalog word TAPER of D175, which the "
+                + "parser does not take yet (D114)");
             return;
         }
 
         SourceWord? feed = block.Take("F");
         if (feed is not null)
         {
-            if (entry.CycleF is null)
+            bool lead = entry.Params.GetValueOrDefault(PitchWord) == "F";
+            if (!lead && entry.CycleF is null)
             {
                 block.Draft.KeepAsRaw($"F of {cycle.Code} has no NCX word");
                 return;
@@ -833,15 +858,16 @@ internal static class FanucCycles
 
             if (FanucMacro.ValueOf(block, feed) is Value value)
             {
-                cycle.Feed = value;
-                block.Fanuc.ControlFeed = value;
+                if (lead)
+                {
+                    cycle.Pitch = value;
+                }
+                else
+                {
+                    cycle.Feed = value;
+                    block.Fanuc.ControlFeed = value;
+                }
             }
-        }
-
-        List<FanucAxisWord> positions = Positions(block, cycle);
-        if (block.Draft.IsRaw || (!defines && positions.Count == 0))
-        {
-            return;
         }
 
         foreach (FanucAxisWord position in positions)
@@ -855,7 +881,67 @@ internal static class FanucCycles
             definition.Add("CYCLE_F", cycleFeed);
         }
 
+        if (entry.Params.ContainsKey(PitchWord) && cycle.Pitch is Value cyclePitch)
+        {
+            definition.Add(PitchWord, cyclePitch);
+        }
+
         Write(block, cycle, definition);
-        Call(block, cycle, positions, 1);
+        CallTurning(block, cycle, positions);
+    }
+
+    // D187: the control brings the tool back to the start point A after a simple turning cycle, so no axis has moved
+    // after the call and none becomes unknown; the words of a call are the end point of one pass, not where the tool
+    // stands. X(U) and Z(W) are modal data the three cycles share, so an omitted word repeats the previous value and
+    // an incremental U or W counts from the start point. The reader therefore writes both end-point words on every
+    // CYCLE_CALL, absolutely, and leaves the source-side position where it is (decisions.md; fanuc 6; language 4.7,
+    // CYCLE_CALL).
+    private static void CallTurning(FanucBlock block, FanucCycle cycle, List<FanucAxisWord> positions)
+    {
+        foreach (FanucAxisWord position in positions)
+        {
+            if (FanucMacro.ValueOf(block, position.Word) is not Value value)
+            {
+                return;
+            }
+
+            if (FanucNumbers.NumberOf(value) is not decimal number)
+            {
+                block.Draft.KeepAsRaw($"the end point of the pass of {cycle.Code} is no number the reader knows");
+                return;
+            }
+
+            if (position.Incremental)
+            {
+                if (!block.State.Positions.TryGetValue(position.Axis, out decimal start))
+                {
+                    block.Draft.KeepAsRaw(
+                        $"{position.Word.Address} of {cycle.Code} counts from a start point the reader does not know");
+                    return;
+                }
+
+                number += start;
+            }
+
+            if (!cycle.TurningEnd.ContainsKey(position.Axis))
+            {
+                cycle.TurningAxes.Add(position.Axis);
+            }
+
+            cycle.TurningEnd[position.Axis] = FanucNumbers.Of(number);
+        }
+
+        DraftBlock call = block.Draft.Main;
+        if (call.Verb is not null || call.Has("CYCLE", null))
+        {
+            call = new DraftBlock();
+            block.Draft.After.Add(call);
+        }
+
+        call.WithVerb("CYCLE_CALL");
+        foreach (string axis in cycle.TurningAxes)
+        {
+            call.Add(axis, cycle.TurningEnd[axis]);
+        }
     }
 }

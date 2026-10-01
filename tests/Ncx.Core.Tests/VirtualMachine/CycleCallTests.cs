@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine;
 using Ncx.Core.VirtualMachine.State;
@@ -51,7 +52,7 @@ public sealed class CycleCallTests
     public void CycleCall_WithoutExpandCycles_GivesNoMotionsAndTheSamePosition()
     {
         VmHarness vm = new VmHarness(VmMachines.Default()).Execute(
-            "UNITS=MM",
+            "UNITS=MM SPINDLE=CW RPM=1000",
             "RAPID X=0 Y=0 Z=50",
             "CYCLE=DRILL SURFACE=0 CLEARANCE=5 DEPTH=-21.732 CYCLE_F=565",
             "CYCLE_CALL X=10 Y=10");
@@ -93,7 +94,7 @@ public sealed class CycleCallTests
     [Fact]
     public void CycleCall_WithoutACycle_IsAnError()
     {
-        VmHarness vm = new VmHarness(VmMachines.Default()).Execute("UNITS=MM", "CYCLE_CALL X=10");
+        VmHarness vm = new VmHarness(VmMachines.Default()).Execute("UNITS=MM SPINDLE=CW RPM=1000", "CYCLE_CALL X=10");
 
         Assert.Equal([DiagnosticCodes.CycleCallWithoutCycle], vm.Codes());
     }
@@ -104,7 +105,8 @@ public sealed class CycleCallTests
     [InlineData("CYCLE=DRILL DEPTH=-10 CYCLE_F=100")]
     public void CycleCall_BuiltInCycleWithoutDepthOrClearance_IsAnError(string cycle)
     {
-        VmHarness vm = new VmHarness(VmMachines.Default()).Execute("UNITS=MM", cycle, "CYCLE_CALL X=10");
+        VmHarness vm = new VmHarness(VmMachines.Default())
+            .Execute("UNITS=MM SPINDLE=CW RPM=1000", cycle, "CYCLE_CALL X=10");
 
         Assert.Equal([DiagnosticCodes.CycleCallWithoutDepthOrClearance], vm.Codes());
     }
@@ -123,6 +125,36 @@ public sealed class CycleCallTests
         Assert.Equal(Workpiece(10m), vm.Position("X"));
         Assert.Equal(Workpiece(10m), vm.Position("Y"));
         Assert.Equal(AxisPosition.Unknown, vm.Position("Z"));
+    }
+
+    // D187: a Fanuc turning cycle brings the tool back to its start point and has no drilling axis, so after its
+    // call no axis has moved and none becomes unknown; the words of the call are the end point of one pass
+    // (decisions.md; virtual machine 3.3; fanuc 6).
+    [Fact]
+    public void CycleCall_FanucTurningCycle_LeavesEveryAxisWhereItStood()
+    {
+        VmHarness vm = Turning().Execute(
+            "WORKPLANE=ZX", "RAPID X=70 Y=0 Z=2", "CYCLE=TURN_OD CYCLE_F=0.3", "CYCLE_CALL X=60 Z=-70");
+
+        vm.AssertNoDiagnostics();
+        Assert.Empty(vm.Vm.LastCycleMotions);
+        Assert.Equal(Workpiece(70m), vm.Position("X"));
+        Assert.Equal(Workpiece(0m), vm.Position("Y"));
+        Assert.Equal(Workpiece(2m), vm.Position("Z"));
+    }
+
+    // D187 takes only the cycles the manual states a return for; no page says where G71 type I, G72 type I, G74 and
+    // G75 leave the tool, so a GROOVE on G75 keeps the D94 rule: the plane axes stand at the call point and the
+    // drilling axis of the plane, Y under WORKPLANE=ZX, is unknown.
+    [Fact]
+    public void CycleCall_FanucCycleWithoutAStatedReturn_KeepsTheRuleOfD94()
+    {
+        VmHarness vm = Turning().Execute(
+            "WORKPLANE=ZX", "RAPID X=70 Y=0 Z=2", "CYCLE=GROOVE", "CYCLE_CALL X=60 Z=-70");
+
+        Assert.Equal(Workpiece(60m), vm.Position("X"));
+        Assert.Equal(AxisPosition.Unknown, vm.Position("Y"));
+        Assert.Equal(Workpiece(-70m), vm.Position("Z"));
     }
 
     // VM 3.3, D59, D60: a side drilling cycle on a lathe with AXIS=X under DIAMETER=ON, as the cross holes of
@@ -151,7 +183,7 @@ public sealed class CycleCallTests
     public void CycleCall_AxisNamingARotaryAxis_IsAnError()
     {
         VmHarness vm = new VmHarness(VmMachines.Default())
-            .Execute("UNITS=MM", "CYCLE=DRILL AXIS=C CLEARANCE=5 DEPTH=-10", "CYCLE_CALL X=10");
+            .Execute("UNITS=MM SPINDLE=CW RPM=1000", "CYCLE=DRILL AXIS=C CLEARANCE=5 DEPTH=-10", "CYCLE_CALL X=10");
 
         Assert.Equal([DiagnosticCodes.CycleAxisNotLinear], vm.Codes());
     }
@@ -224,9 +256,29 @@ public sealed class CycleCallTests
     }
 
     // The default machine of D103 with ExpandCycles and the units set.
+    // A machine whose cycle catalog is the Fanuc one with the simple turning cycle TURN_OD on G90, which returns to
+    // its start point, and the one-shot GROOVE on G75, which no page of the manual states a return for (D187).
+    private static VmHarness Turning()
+    {
+        MachineConfig machine = VmMachines.Default() with
+        {
+            CycleCatalog = new CycleCatalog
+            {
+                Controller = Controller.Fanuc,
+                Entries =
+                [
+                    new CycleEntry { Name = "TURN_OD", Native = "G90", Modal = true },
+                    new CycleEntry { Name = "GROOVE", Native = "G75" },
+                ],
+            },
+        };
+        return new VmHarness(machine, new VmOptions { ExpandCycles = true }).Execute("UNITS=MM SPINDLE=CW RPM=1000");
+    }
+
     private static VmHarness Expanding()
     {
-        return new VmHarness(VmMachines.Default(), new VmOptions { ExpandCycles = true }).Execute("UNITS=MM");
+        return new VmHarness(VmMachines.Default(), new VmOptions { ExpandCycles = true })
+            .Execute("UNITS=MM SPINDLE=CW RPM=1000");
     }
 
     private static AxisPosition Workpiece(decimal value)

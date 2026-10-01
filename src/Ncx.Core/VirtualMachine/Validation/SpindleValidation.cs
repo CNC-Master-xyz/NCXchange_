@@ -32,8 +32,9 @@ internal static class SpindleValidation
             ValidationRule.Error(DiagnosticCodes.SyncNeedsTwoSpindles,
                 "SPINDLE_SYNC with more or fewer than two spindle roles.", "language 4.5; VM 3.8 rule 5"),
             ValidationRule.Warning(DiagnosticCodes.SpindleOffBeforeLine,
-                "Spindle OFF before a LINE: the spindle of the current tool holder, the default spindle when the "
-                + "holder has none.", "VM 2.3, 5") with { SuppressedInUncalledSub = true },
+                "Spindle OFF before a LINE, an ARC or a CYCLE_CALL of the built-in drilling family other than TAP: "
+                + "the spindle of the current tool holder, the default spindle when the holder has none.",
+                "VM 2.3, 5; D194") with { SuppressedInUncalledSub = true },
             ValidationRule.Warning(DiagnosticCodes.RpmAboveMax, "RPM above the spindle's rpm_max.",
                 "VM 5; machine-config 5; D64"),
             ValidationRule.Warning(DiagnosticCodes.RpmBelowMin, "RPM below the spindle's rpm_min.",
@@ -42,17 +43,21 @@ internal static class SpindleValidation
     };
 
     /// <summary>
-    /// Spindle OFF before a LINE is a WARNING: the spindle of the current tool holder ([[resource]] spindle), the
-    /// default spindle when the holder has none (virtual machine 5). The current tool holder is the holder of the last
-    /// TOOL (virtual machine 2.3), and the state words of the block take effect before its motion (language 5 rule 3).
-    /// The rule depends on the caller's state and is suppressed inside a subprogram that no program of the file calls
-    /// (3.9, D99). Which spindle is the default one on the built-in default machine is D129.
+    /// Spindle OFF before a LINE, an ARC or a CYCLE_CALL of the built-in drilling family other than TAP is a
+    /// WARNING: the spindle of the current tool holder ([[resource]] spindle), the default spindle when the holder
+    /// has none (virtual machine 5, D194). An ARC cuts as a LINE does, and a drilling cycle feeds to DEPTH, and each
+    /// Fanuc canned-cycle section says the spindle must be set turning before the cycle; TAP is rigid tapping
+    /// (controller-mapping 5), where the cycle drives the spindle itself, so the state before the call does not
+    /// decide the cut. A catalog cycle and a CYCLE:&lt;controller&gt;=n cycle are not checked, because the VM does
+    /// not know their sequence (D94) and a measuring cycle runs with the spindle stopped. The current tool holder is
+    /// the holder of the last TOOL (virtual machine 2.3), and the state words of the block take effect before its
+    /// motion (language 5 rule 3). The rule depends on the caller's state and is suppressed inside a subprogram that
+    /// no program of the file calls (3.9, D99). Which spindle is the default one on the built-in default machine is
+    /// D129.
     /// </summary>
-    // TODO(question): virtual machine 5 names the spindle OFF "before a LINE", while ARC and CYCLE_CALL cut with the
-    // spindle as well (language 4.3, 4.7); only LINE is checked until D194 is answered, as for "LINE without feed".
     public static void CheckSpindleBeforeLine(BlockContext context)
     {
-        if (context.Block.Verb?.Key != "LINE")
+        if (!Cuts(context))
         {
             return;
         }
@@ -70,12 +75,33 @@ internal static class SpindleValidation
         }
 
         string holderName = holder is null || HolderName(machine, holder) is not string name ? "" : " " + name;
+        string verb = context.Block.Verb!.Key;
         string message = holderSpindle is not null
-            ? $"LINE cuts while spindle {ResourceName(machine, spindleId)}, the spindle of the current tool "
+            ? $"{verb} cuts while spindle {ResourceName(machine, spindleId)}, the spindle of the current tool "
                 + $"holder{holderName}, is OFF (virtual machine 5)."
-            : $"LINE cuts while the default spindle {ResourceName(machine, spindleId)} is OFF; the current tool "
+            : $"{verb} cuts while the default spindle {ResourceName(machine, spindleId)} is OFF; the current tool "
                 + $"holder{holderName} has no spindle of its own (virtual machine 5).";
         context.CallerRuleDiagnostics.Warning(context.Block, DiagnosticCodes.SpindleOffBeforeLine, message);
+    }
+
+    // The verbs the rule covers (D194): LINE and ARC cut with the spindle, and a CYCLE_CALL of the built-in drilling
+    // family feeds to DEPTH at CYCLE_F (virtual machine 3.3). TAP is the exception, because controller-mapping 5
+    // maps it to rigid tapping, where the cycle positions and drives the spindle itself; a catalog cycle and a
+    // CYCLE:<controller>=n cycle are not checked, since the VM does not know their sequence (D94).
+    private static bool Cuts(BlockContext context)
+    {
+        string? verb = context.Block.Verb?.Key;
+        if (verb is "LINE" or "ARC")
+        {
+            return true;
+        }
+
+        CycleState cycle = context.State.Cycle;
+        return verb == "CYCLE_CALL"
+            && cycle.Controller is null
+            && cycle.Name is string name
+            && name != "TAP"
+            && DrillingFamily.Names.Contains(name);
     }
 
     /// <summary>

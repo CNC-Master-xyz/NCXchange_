@@ -173,16 +173,17 @@ internal sealed partial class StructurePass
     // machine 3.6 and 3.9); the subprogram is Onnnn ... M99 after the caller's M30 (controller-mapping 1, 6). An M30
     // does not make a called section a program: in a subprogram it ends the program from the call, as a Fanuc M30 in a
     // subprogram does (virtual machine 3.6).
-    // TODO(question): D210. The documents do not say what an O section is that no block of the file calls: an O program
-    // of its own (several O programs in one file are several programs, controller-mapping 1) whose M99 loops as in a
-    // main program (controller-mapping 6), or a subprogram that another file calls (Onnnn ... M99 in its own file,
-    // controller-mapping 1, 6). Until D210 is answered it is a program when it holds an M30 or M2 and a subprogram
-    // otherwise, and when no section of the file is a program the first such section is, since a file holds at least
-    // one program (language 4.13). A subprogram in its own file therefore reads as a program: one that holds an M30
-    // (virtual machine 3.6) with its M99 as the loop, one that holds only Onnnn ... M99 as a program that loops.
+    // D210: an O section that no block of the file calls is a program when it holds an M30 or M2, a skipped one
+    // included, and a subprogram otherwise; when no section of the file is a program the first uncalled one is,
+    // since a file holds at least one program (language 4.13). On the control every O number is a program until
+    // something calls it, an M30 marks a main program, and the M99 of a bar-work program loops back to its start
+    // (decisions.md; controller-mapping 1, 6). The control cannot tell the two readings apart either, because the
+    // same stored section is a subprogram or a main program depending only on how it is started, so the reader names
+    // the reading it took in an INFO (D98).
     private void DecideKinds(List<SourceSection> sections)
     {
         HashSet<string> called = CalledNames();
+        List<SourceSection> uncalled = [];
         bool hasProgram = false;
         foreach (SourceSection section in sections)
         {
@@ -191,23 +192,31 @@ internal sealed partial class StructurePass
                 bool isProgram = !IsCalled(section, called)
                     && FindRole(section, StructureRole.ProgramEnd, unskippedOnly: false) is not null;
                 section.Kind = isProgram ? SectionKind.Program : SectionKind.Sub;
+                if (!IsCalled(section, called))
+                {
+                    uncalled.Add(section);
+                }
             }
 
             hasProgram |= section.Kind == SectionKind.Program;
         }
 
-        if (hasProgram)
+        if (hasProgram || uncalled.Count == 0)
         {
             return;
         }
 
-        foreach (SourceSection section in sections)
+        // No section of the file ends a program, so the first uncalled one is the program and its M99 is the loop
+        // back to its start. A subprogram in its own file reads exactly the same way, which is why the reader names
+        // this reading in an INFO (D98, D210).
+        SourceSection program = uncalled[0];
+        program.Kind = SectionKind.Program;
+        if (program.Begin is int begin)
         {
-            if (section.Undecided && !IsCalled(section, called))
-            {
-                section.Kind = SectionKind.Program;
-                return;
-            }
+            _diagnostics.Info(_blocks[begin].Line, DiagnosticCodes.UncalledSectionKind,
+                "No section of the file ends a program and no block of the file calls this one: it is read as the "
+                + "program of the file, its M99 as the loop back to its start; a subprogram in a file of its own "
+                + "reads the same way (D210).");
         }
     }
 

@@ -84,6 +84,7 @@ public abstract class ReaderBase : IReader
         // structure, and the structure pass lays out the order in which the blocks are read and the blocks of the
         // structure are written (architecture 7, language 4.13).
         List<SourceBlock> blocks = [.. Tokenizer.Tokenize(source.Text)];
+        BeginStructure(blocks);
         var structures = new List<SourceStructure>(blocks.Count);
         foreach (SourceBlock block in blocks)
         {
@@ -113,6 +114,16 @@ public abstract class ReaderBase : IReader
     /// subprogram, the program end, the return, its label and the labels it jumps to (language 4.13). The structure
     /// pass writes the words of the structure from it; ReadBlock writes the other words of the block.
     /// </summary>
+    /// <summary>
+    /// Called with the blocks of the file, in file order, before the first StructureOf: a family that needs a fact of
+    /// the whole file to lay out a single block works it out here, so that the reading of a block does not depend on
+    /// how far the structure pass has walked (D221). Does nothing by default.
+    /// </summary>
+    /// <param name="blocks">Every block of the file, trivia among them, in file order.</param>
+    protected virtual void BeginStructure(IReadOnlyList<SourceBlock> blocks)
+    {
+    }
+
     /// <param name="block">A source block with words.</param>
     protected abstract SourceStructure StructureOf(SourceBlock block);
 

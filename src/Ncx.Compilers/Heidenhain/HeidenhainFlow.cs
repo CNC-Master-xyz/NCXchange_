@@ -286,7 +286,7 @@ internal static class HeidenhainFlow
     // TODO(question): heidenhain 7 rule 3 reads "LBL n closed by LBL 0" as a subprogram, and no document says how a
     // reader takes an LBL 0 before the one that closes the section, which sub_end for RETURN writes; the compiler
     // writes it as machine-config 2 says.
-    // TODO(question): D221: IF needs the JUMP or CALL of its block (language 5 rule 5) and makes the whole block
+    // TODO(question): D272: IF needs the JUMP or CALL of its block (language 5 rule 5) and makes the whole block
     // conditional (language 4.9: the block executes when the expression is not 0), so a RETURN under IF in a
     // subprogram returns only when the condition holds, and LBL 0 takes no condition; it is reported, as a CALL under
     // IF is.

@@ -87,6 +87,25 @@ internal sealed class FanucState
     public HashSet<int> JumpsToTheEnd { get; } = [];
 
     /// <summary>
+    /// The label an M99 Pn block jumps to, by the line of the block: the block Nn of the same section, where no block
+    /// of the file calls that section (D221; controller-mapping 6). An M99 Pn of a subprogram the file calls names a
+    /// block of the caller and stands in no entry here, because no JUMP of NCX reaches it.
+    /// </summary>
+    public Dictionary<int, string> ReturnsToTheBlock { get; } = [];
+
+    /// <summary>
+    /// The name of the program or subprogram the structure pass is laying out, "100" of O0100; null before the first
+    /// O line of the file.
+    /// </summary>
+    public string? SectionName { get; set; }
+
+    /// <summary>
+    /// The channel of the file, from its name (controller-mapping 7); null where the reader does not know it, and
+    /// the words of the file then belong to the default resources (virtual machine 3.8 rule 2, D219).
+    /// </summary>
+    public long? Channel { get; set; }
+
+    /// <summary>
     /// The line of the block after an expanded corner, whose incremental plane words count from the programmed corner
     /// (D58); null while there is none.
     /// </summary>
@@ -230,6 +249,16 @@ internal sealed class FanucState
 
             jumps.Add((line, labels));
         }
+    }
+
+    /// <summary>
+    /// Tells whether the section being laid out already carries the label, which an M99 Pn of a section no block of
+    /// the file calls jumps back to (D221).
+    /// </summary>
+    /// <param name="label">The label.</param>
+    public bool HasSectionLabel(string label)
+    {
+        return _sectionLabels.Contains(label);
     }
 
     /// <summary>

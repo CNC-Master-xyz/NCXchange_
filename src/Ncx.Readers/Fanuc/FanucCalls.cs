@@ -10,6 +10,7 @@ namespace Ncx.Readers.Fanuc;
 /// </summary>
 internal sealed class FanucCalls
 {
+    private readonly HashSet<string> _called = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> _expected = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<FanucCallerState>> _callers = new(StringComparer.Ordinal);
     private readonly Dictionary<string, FanucChanges> _changes = new(StringComparer.Ordinal);
@@ -31,6 +32,27 @@ internal sealed class FanucCalls
     public void Expect(string name)
     {
         _expected[name] = _expected.GetValueOrDefault(name) + 1;
+    }
+
+    /// <summary>
+    /// A block of the file calls the section, as the pre-scan of the whole file saw it before the structure pass laid
+    /// the file out (FanucReader.BeginStructure, D221).
+    /// </summary>
+    /// <param name="name">The name of the section, "100" of O0100.</param>
+    public void Call(string name)
+    {
+        _called.Add(name);
+    }
+
+    /// <summary>
+    /// Tells whether a block of the file enters the section, by the name a call names it with, "100" of O0100
+    /// (D210, D221). The answer is the one of the whole file, from the pre-scan, and not of the blocks the structure
+    /// pass has walked so far: a caller may stand after the section it calls.
+    /// </summary>
+    /// <param name="name">The name of the section.</param>
+    public bool IsCalled(string name)
+    {
+        return _called.Contains(name);
     }
 
     /// <summary>

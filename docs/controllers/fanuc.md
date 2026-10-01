@@ -23,7 +23,7 @@ N410 M2
 - `( ... )` is a comment, anywhere in the block. Nothing else is. Some controls restrict the character set to ASCII capitals.
 - `/` or `/n` at the block start is the optional block skip: the block runs unless switch n is on.
 - `M30` ends and rewinds, `M2` ends; `M99` in a main program jumps back to its first block (this is how bar-work programs loop). `M0` stops, `M1` stops when the optional stop switch is on.
-- Subprograms are `O` programs of their own (after the main program's `M30` in the same file, or in their own file) that end with `M99`; `M98 P0100` calls, `M98 P0100 L3` calls three times (older form `M98 P30100`: three times program 0100), `M99 P30` returns to block 30 of the caller. `M198` calls a program from external memory; `G65 P9010 A1 B2` calls a macro with letter arguments (section 7).
+- Subprograms are `O` programs of their own (after the main program's `M30` in the same file, or in their own file) that end with `M99`; `M98 P0100` calls, `M98 P0100 L3` calls three times (older form `M98 P30100`: three times program 0100), `M99 P30` returns to block 30 of the caller, and in a section no block of the file calls to block 30 of that section (D221). `M198` calls a program from external memory; `G65 P9010 A1 B2` calls a macro with letter arguments (section 7).
 - One `G` per group and up to three `M` codes per block on 30i (one on older controls). The words in a block execute together; `S` and `M3` in a motion block start the spindle before the motion.
 
 ## 2. Numbers
@@ -84,6 +84,7 @@ The `T` word means different things per machine kind, and the two-word model of 
 
 - Mill with a magazine: `T5` alone brings tool 5 to the change position (preload); `M6` performs the change to the preloaded tool; `T4 M6` in one block changes to 4 directly (the control preloads and changes). `T5` after the `M6` in the same block is illegal on most controls. `M6` without any preload is an error in the source.
 - Lathe with a turret: `T0404` indexes station 4 and activates offset 4 in one word; `T0656` is station 6 with offset 56; `T0100` cancels the offset of station 1; six-digit forms `T001001` exist on 120-tool ATCs. A `T` word alone in its own block moves the axes by the difference of the offsets, at rapid under `G0`, which is why the builders recommend writing it inside a `G0` block; the reader emits the offset change and no motion.
+- Which form a lathe `T` word is, the tool holder decides (D219): the word belongs to the holder whose `channel` is the channel of the program, else to `default_holder`; on `default_holder` the `[tool_change]` templates are tried first (Mori Seiki `T9001` is the preload of a magazine tool), and every other `T` word of a lathe is the turret form above, with the role of its holder on the `TOOL`.
 - Mill-turn ATCs wrap the change in a builder macro: Nakamura `G340 T0101. A02.` (change to 1 with offset 1, prepare 2), Mori Seiki `T9001` then `G361 B0 D1.`, DMG on Siemens `T="NAME"` then `TC(...)` (`machine-builders.md`).
 - `G43 H` and `D` carry the offsets on mills; on lathes the offset is inside the `T` word. `H` and `D` of the same tool usually have the same number (a CAM habit, not a rule).
 
@@ -93,7 +94,26 @@ Spindles: `M3`/`M4`/`M5` with `S`. Fanuc has one `S` address; on a machine with 
 
 Mill canned cycles are one block that defines and calls: `G81 G99 Z-21.732 R5. F565` drills at the current X Y to Z-21.732 (absolute under `G90`), starting the feed at `R5.` and returning to R (`G99`) or to the initial level (`G98`); every following block with a position calls the cycle again at that position; `G80` (or a `G0`/`G1` on some controls) cancels. `G82` adds a dwell `P` (milliseconds), `G83` pecks with `Q`, `G73` chip-breaks, `G84` taps (`M29 S` before it makes it rigid; the pitch is `F`, or `F`/`S` in per-minute mode), `G85` reams, `G86` bores, `G76` fine bores with a shift, `G74` left-hand taps, `G87`..`G89` back boring and variants. `K3` on the cycle block repeats it three times at incremental steps under `G91`. The reader converts `R` and `Z` to the absolute `CLEARANCE` and `DEPTH` of NCX and keeps the modal call behaviour by emitting a `CYCLE_CALL` per position.
 
-Lathe drilling cycles: `G83`/`G84`/`G85` drill along Z at a `C` position on the face, `G87`/`G88`/`G89` along X on the circumference (NCX `AXIS=X`); Mori Seiki adds deep-hole variants `G83.5`/`G87.5`. Turning cycles: `G90` (OD/ID), `G92` (thread), `G94` (face) in system A (`G77`/`G78`/`G79` in B) are modal like the drilling cycles, a following block with only `X`, `Z`, `R` (or `U`, `W`) repeats them; `G70`..`G76` (finish, rough OD, rough face, pattern repeat, face cut-off, OD groove, compound thread) are one-shot blocks whose `P` and `Q` name the block range of the contour that follows, which NCX carries as a subprogram section referenced by `CONTOUR=`.
+Lathe drilling cycles: `G83`/`G84`/`G85` drill along Z at a `C` position on the face, `G87`/`G88`/`G89` along X on the circumference (NCX `AXIS=X`); Mori Seiki adds deep-hole variants `G83.5`/`G87.5`. Turning cycles: `G90` (OD/ID), `G92` (thread), `G94` (face) in system A (`G77`/`G78`/`G79` in B) are modal like the drilling cycles, a following block with only `X`, `Z`, `R` (or `U`, `W`) repeats them — `X(U)`, `Z(W)` and `R` are modal data the three share, so a word left out keeps its last value; `G70`..`G76` (finish, rough OD, rough face, pattern repeat, face cut-off, OD groove, compound thread) are one-shot blocks. `G70`..`G73` name the block range of the finishing contour with `P` and `Q`, which NCX carries as a subprogram section referenced by `CONTOUR=`; `G74` and `G75` take `P` as the step along the second plane axis and `Q` as the step along the first, and `G76` takes `P` and `Q` as thread data, so those three carry no contour (D176). The NCX names of the two the documents had none for are `PATTERN_REPEAT` for `G73`, with a contour, and `FACE_GROOVE` for `G74`, without one; both belong to the lathe catalog, since `G73` and `G74` are `CHIP_BREAK` and left-hand tapping on a mill (D176).
+
+Addresses of the turning cycles (lathe manual of the 30i/31i/32i-B; D175, D176). The simple cycles are one block:
+
+| Cycle | Block | Addresses |
+|---|---|---|
+| `G90`, `G92`, `G94` | one | `X(U)` `Z(W)` end point of the pass, `R` the taper (a radius value, signed), `F` the cutting feed on `G90` and `G94` and the thread lead on `G92`; `Q` on `G92` shifts the thread start angle in 0.001 degree steps for a multi-start thread |
+
+The multiple repetitive cycles are written as two blocks, and the same letter means different things in the two:
+
+| Cycle | First block | Second block |
+|---|---|---|
+| `G71`, `G72` | `U(Δd)` or `W(Δd)` depth of cut, `R(e)` retract | `P(ns)` `Q(nf)` contour block range, `U(Δu)` `W(Δw)` finishing allowances, `F` `S` `T` |
+| `G73` | `U(Δi)` `W(Δk)` relief, `R(d)` number of divisions | `P(ns)` `Q(nf)` contour block range, `U(Δu)` `W(Δw)` allowances, `F` `S` `T` |
+| `G74`, `G75` | `R(e)` return amount | `X(U)` `Z(W)` end point, `P(Δi)` `Q(Δk)` the two infeed steps, `R(Δd)` relief at the cut bottom, `F` |
+| `G76` | `P(m)(r)(a)` finishing repeats, chamfer and tool angle, `Q(Δdmin)` smallest cut, `R(d)` allowance | `X(U)` `Z(W)` end point, `R(i)` taper, `P(k)` thread height, `Q(Δd)` first cut, `F(L)` thread lead |
+
+`G70`, the finishing cycle, is one block: `P(ns)` `Q(nf)`, the contour block range.
+
+The manual warns for `G71`, `G73`, `G74` and `G76` that the same address means different things depending on which other words stand in the block, which is why the reader keeps a cycle block with a word its catalog entry does not map as `RAW` (D5). NCX maps the taper `R` of the simple cycles as the catalog word `TAPER` and the thread lead `F` of `G92` and `G76` as `PITCH` (D175); the other words of `G71`..`G76` and the two-block form wait for a later catalog decision.
 
 ## 7. Custom macro B
 
@@ -112,7 +132,7 @@ A two-path lathe runs one program per path (turret, or head and turret). The pat
 1. Resolve every block against the source-side state: verb from group 01, absolute or incremental from group 03 or the `U W` addresses, plane from group 02, feed mode from group 05 or `G98`/`G99` on system A.
 2. `T`, `M6` and the offsets per section 5; `S` binds to the spindle of the M code in the same block, else to the last selected spindle.
 3. `G91 G28 Z0` and `G28 U0 W0` are `HOME`; `G30 P2` is `HOME POINT=2`; `G53` is `FRAME=MACHINE` on the block.
-4. `M99` in the main program is a jump to a label after the header; `/M30` is `SKIP JUMP=END`; `GOTO` to a block below `M30` and back becomes a section in front of `PROGRAM=END` behind `JUMP=END`.
+4. An `O` section a block of the file calls is a subprogram; one that no block calls is a program when it holds an `M30` or `M2`, a skipped one included, and a subprogram otherwise, except that where no section of the file is a program the first uncalled one is, with an INFO naming that reading (D210). `M99` in the main program is a jump to a label after the header; `/M30` is `SKIP JUMP=END`; `GOTO` to a block below `M30` and back becomes a section in front of `PROGRAM=END` behind `JUMP=END`. A program that has no end at all, one that runs into the closing `%`, is ended after its last block with a WARNING, as a Klartext program without `M30` is (D211).
 5. `G81`..`G89` define and call; following position blocks call; `G80` cancels; `R` and `Z` become absolute `CLEARANCE` and `DEPTH`; `K` repeats expand.
 6. `G52` replaces the previous `G52`, so the reader writes `SHIFT=RESET` before the new `SHIFT`.
 7. `G10`, `G65`/`G66` calls of unknown macros, probing (`G31`, `G38`), builder G macros not in the configuration: `RAW` with a WARNING, never dropped.
@@ -122,7 +142,7 @@ A two-path lathe runs one program per path (turret, or head and turret). The pat
 
 1. Write `G0`/`G1` only when the verb changes (a `[format]` option may ask for the G on every block); write `G90` once in the header and use absolute values, or write `G91` blocks where the NCX block had incremental words (a machine setting).
 2. Write `M3 S1000` in one block, never `S1000` alone after another spindle's M code (section 5).
-3. Program end from `program_end` (`M30` or `M2`); subprograms after it as `O` programs ending with `M99`, or as separate files when the machine wants that.
+3. Program end from `program_end` (`M30` or `M2`); subprograms after it as `O` programs ending with `M99`, or as separate files when the machine wants that; a `JUMP` to the label after the header is written back as `M99`, the loop of a bar-work program, where every jump to that label is unconditional; `M99` takes no condition, so a conditional one keeps the label's `N` and `IF [ ] GOTO` (D210).
 4. Wait marks from the `[sync]` table with the path form the machine uses (list or bitmask).
 5. Decimal point on every real number per `[format]` (`decimals`, `trailing_zeros`); comments in parentheses, transliterated to ASCII (`comment_charset`).
 6. Numbers, names and file names per `[format]`; block numbers per `format.block_numbers`.

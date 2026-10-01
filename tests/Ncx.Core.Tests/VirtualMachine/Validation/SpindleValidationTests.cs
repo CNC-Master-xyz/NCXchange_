@@ -55,6 +55,46 @@ public sealed class SpindleValidationTests
             warning.Message);
     }
 
+    // D194: an ARC cuts as a LINE does, so the rule covers it too (decisions.md; virtual machine 5).
+    [Fact]
+    public void SpindleOff_BeforeAnArc_Warns()
+    {
+        VmHarness vm = new VmHarness(VmMachines.Default())
+            .Execute("UNITS=MM F=100", "RAPID X=0 Y=0", "ARC=CW X=10 Y=0 R=5");
+
+        Diagnostic warning = RuleAssert.Only(vm, DiagnosticCodes.SpindleOffBeforeLine);
+
+        Assert.Equal(
+            "ARC cuts while spindle TOOL, the spindle of the current tool holder, is OFF (virtual machine 5).",
+            warning.Message);
+    }
+
+    // D194: a CYCLE_CALL of the built-in drilling family feeds to DEPTH at CYCLE_F, and each Fanuc canned-cycle
+    // section says the spindle must be set turning before the cycle, so the rule covers it (decisions.md; fanuc 6).
+    [Fact]
+    public void SpindleOff_BeforeADrillingCycleCall_Warns()
+    {
+        VmHarness vm = new VmHarness(VmMachines.Default())
+            .Execute("UNITS=MM", "RAPID X=0 Y=0 Z=50", "CYCLE=DRILL CLEARANCE=5 DEPTH=-10 CYCLE_F=100",
+                "CYCLE_CALL X=10");
+
+        Diagnostic warning = RuleAssert.Only(vm, DiagnosticCodes.SpindleOffBeforeLine);
+
+        Assert.Equal(
+            "CYCLE_CALL cuts while spindle TOOL, the spindle of the current tool holder, is OFF (virtual machine 5).",
+            warning.Message);
+    }
+
+    // D194: TAP is rigid tapping (controller-mapping 5), where the cycle positions and drives the spindle itself, so
+    // the spindle state before the call does not decide the cut and the rule passes.
+    [Fact]
+    public void SpindleOff_BeforeATapCycleCall_IsNoWarning()
+    {
+        new VmHarness(VmMachines.Default())
+            .Execute("UNITS=MM", "RAPID X=0 Y=0 Z=50", "CYCLE=TAP CLEARANCE=5 DEPTH=-10 PITCH=1.5", "CYCLE_CALL X=10")
+            .AssertNoDiagnostics();
+    }
+
     // Language 5 rule 3: the state words of a motion block take effect before its motion, so the spindle started in the
     // LINE block runs when it cuts.
     [Fact]

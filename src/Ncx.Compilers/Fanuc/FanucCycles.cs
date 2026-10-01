@@ -112,7 +112,9 @@ internal static class FanucCycles
     // is CMP380 at its call.
     // TODO(question): D157: which words a rule carries is the recommendation of D157, which the built-in drilling
     // family follows (CycleEntry.RuleWords); a word of an entry of another name is written only through its params
-    // until D157 is answered. D175: the lead of G92 and G76 and the taper R of G90, G92 and G94 have no NCX word.
+    // until D157 is answered. D175: the lead of G92 and G76 is the word PITCH, written through the address the entry
+    // maps; the taper R of G90, G92 and G94 is the catalog word TAPER, which no program can carry until D114 lets the
+    // parser take a parameter name of a catalog entry.
     private static void CheckCarried(FanucBlock write, CycleEntry? entry)
     {
         write.Written("CYCLE");
@@ -125,7 +127,8 @@ internal static class FanucCycles
 
             write.Written(word);
             bool carried = entry is null
-                || (entry.Words.Contains(key) && (key != "PITCH" || entry.CycleF is not null));
+                || (entry.Words.Contains(key)
+                    && (key != "PITCH" || entry.CycleF is not null || entry.NativeOf(key) is not null));
             if (!carried)
             {
                 write.Error(DiagnosticCodes.FanucCycleWordNotMapped,
@@ -465,6 +468,14 @@ internal static class FanucCycles
     // recommends, until D218 is answered.
     private static void AddFeed(FanucBlock write, CycleEntry entry, CycleSnapshot cycle)
     {
+        // D175: the F of a thread turning cycle is the lead itself, which the entry maps as PITCH; it is written as
+        // read, while the pitch of TAP becomes a feed per revolution below.
+        if (entry.NativeOf("PITCH") == "F" && Parameter(cycle, "PITCH") is Value thread)
+        {
+            AddFeedWord(write, FanucExpressions.WordValue(write, "F", thread, 1m), thread is not ExprValue);
+            return;
+        }
+
         if (entry.CycleF is null)
         {
             return;
@@ -483,6 +494,12 @@ internal static class FanucCycles
             known = pitch is not ExprValue;
         }
 
+        AddFeedWord(write, feed, known);
+    }
+
+    // The F of the cycle block, written where the control's feed differs from it (D218).
+    private static void AddFeedWord(FanucBlock write, string? feed, bool known)
+    {
         if (feed is null)
         {
             return;

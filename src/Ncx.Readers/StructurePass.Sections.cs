@@ -83,9 +83,9 @@ internal sealed partial class StructurePass
 
         // A program without an end in the source ends after its last block; that is the M99 loop, or a WARNING when
         // the source has no end at all (language 4.13; controller-mapping 1, the missing M30 of Klartext).
-        // TODO(question): controller-mapping 1 makes the missing M30 of Klartext a WARNING and says nothing of a Fanuc
-        // or Siemens program without M30, M2 or M17; every reader reports it with the same WARNING until D211 is
-        // answered.
+        // D211: the same WARNING for every family, Fanuc and Siemens as well as Klartext, because the reader writes
+        // a block the source does not have; an M99 loop and a /M30 are ends the source writes and get none
+        // (decisions.md; controller-mapping 1, the PROGRAM=END row).
         bool loops = _structures[last].Role == StructureRole.Return && !_blocks[last].BlockSkip;
         if (!loops && FindRole(section, StructureRole.ProgramEnd, unskippedOnly: false) is null)
         {

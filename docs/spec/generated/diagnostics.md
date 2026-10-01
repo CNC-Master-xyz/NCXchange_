@@ -160,7 +160,7 @@ The spindles, their mode and synchronization, and their speed limits (language 4
 | `VM012` | ERROR | SPINDLE_SYNC with a spindle that is not in SPINDLE mode. | VM 3.8 rule 5 |
 | `VM013` | WARNING | RPM or SPINDLE of the following spindle while it runs synchronized. | VM 3.8 rule 5 |
 | `VM014` | ERROR | SPINDLE_SYNC with more or fewer than two spindle roles. | language 4.5; VM 3.8 rule 5 |
-| `VM500` | WARNING | Spindle OFF before a LINE: the spindle of the current tool holder, the default spindle when the holder has none. Suppressed inside a subprogram that no program of the file calls (D99). | VM 2.3, 5 |
+| `VM500` | WARNING | Spindle OFF before a LINE, an ARC or a CYCLE_CALL of the built-in drilling family other than TAP: the spindle of the current tool holder, the default spindle when the holder has none. Suppressed inside a subprogram that no program of the file calls (D99). | VM 2.3, 5; D194 |
 | `VM501` | WARNING | RPM above the spindle's rpm_max. | VM 5; machine-config 5; D64 |
 | `VM502` | WARNING | RPM below the spindle's rpm_min. | VM 5; machine-config 5; D64 |
 

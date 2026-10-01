@@ -171,8 +171,31 @@ public sealed class FanucCyclesTests
         Assert.Equal(DiagnosticCodes.FanucTapFeedNotKnown, error.Code);
     }
 
-    // Machine-config 6, language 2 rule 8, D175: the catalog maps no address of G92 to PITCH, so the thread cycle
-    // would cut with the feed the control has: CMP385, never a thread without its lead.
+    // D175: the catalog entry of G92 maps PITCH to F, the thread lead, so the compiler writes the lead through that
+    // address instead of turning it into a feed per revolution as it does for TAP (decisions.md; fanuc 6;
+    // machine-config 6).
+    [Fact]
+    public void ThreadCycle_WithPitch_WritesTheLeadAsTheFOfTheCycleBlock()
+    {
+        const string Thread =
+            "[[cycle]]\nname = \"THREAD\"\nnative = \"G92\"\nmodal = true\nparams = { PITCH = \"F\" }";
+        string text = FanucCompile.TextOf(FanucCompile.Run(FanucCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+            "FEED_MODE=PER_REV COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
+            "SPINDLE:MAIN=CW RPM:MAIN=500",
+            "RAPID X=70 Z=2",
+            "CYCLE=THREAD PITCH=1.5",
+            "CYCLE_CALL X=60 Z=-30",
+            "CYCLE=OFF",
+            "PROGRAM=END",
+            "FILE=END"), FanucCompile.Lathe(FanucCompile.DefaultSync, Thread)));
+
+        Assert.Contains("\nG92 X60. Z-30. F1.5\n", text, StringComparison.Ordinal);
+    }
+
+    // Machine-config 6, language 2 rule 8, D175: an entry of G92 that maps no address to PITCH leaves the thread
+    // cycle cutting with the feed the control has: CMP385, never a thread without its lead.
     [Fact]
     public void Thread_WithPitch_IsTheErrorCmp385()
     {

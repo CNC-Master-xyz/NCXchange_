@@ -265,4 +265,26 @@ public sealed class FanucToolWordsTests
         Assert.Contains(FanucCompile.CompilerDiagnostics(result),
             diagnostic => diagnostic.Code == DiagnosticCodes.FanucMFuncWritten);
     }
+    // D219: [tool_change] describes the change of default_holder, so a TOOL on another tool holder of a lathe is
+    // written as the turret form T{tool:02}{offset:02} of fanuc 5, not with the builder's change macro of the
+    // default holder (decisions.md; machine-config 3, the turret row; controller-mapping 3).
+    [Fact]
+    public void ToolChange_OnAHolderOtherThanTheDefault_IsWrittenAsTheTurretForm()
+    {
+        string machine = FanucCompile.Lathe(FanucCompile.DefaultSync,
+                "\n[[resource]]\nid = \"T2\"\ntype = \"tool_holder\"\nchannel = 2\n")
+            .Replace("TURRET1 = \"T1\"", "TURRET1 = \"T1\"\nTURRET2 = \"T2\"", StringComparison.Ordinal)
+            .Replace("change = \"T{tool:02}{offset:02}\"", "change = \"G340 T{tool:02}{offset:02}.\"",
+                StringComparison.Ordinal);
+        string text = FanucCompile.TextOf(FanucCompile.Run(FanucCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+            "FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
+            "TOOL:TURRET2=6 OFFSET=56",
+            "PROGRAM=END",
+            "FILE=END"), machine));
+
+        Assert.Contains("\nT0656\n", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("G340", text, StringComparison.Ordinal);
+    }
 }

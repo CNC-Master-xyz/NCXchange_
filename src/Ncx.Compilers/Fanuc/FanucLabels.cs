@@ -139,8 +139,8 @@ internal sealed class FanucLabels
 
     // The loop of a main program: M99 jumps back to its first block, which the reader writes as a LABEL after the
     // header and a JUMP to it (controller-mapping 6, M99 paragraph).
-    // TODO(question): D210: the compiler writes a JUMP to the label after the header back as M99 where every jump to it
-    // is unconditional, as D210 recommends, until D210 is answered.
+    // D210: the compiler writes such a JUMP back as M99 where every jump to the label is unconditional; M99 takes no
+    // condition, so a conditional one keeps the label's N and IF [ ] GOTO (decisions.md; fanuc 10 rule 3).
     private void FindLoop(Section section, List<Block> blocks)
     {
         if (section.Kind != SectionKind.Program || blocks.Count < 2)

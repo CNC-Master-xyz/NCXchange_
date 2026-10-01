@@ -11,7 +11,7 @@ public sealed class CycleValidationTests
     [Fact]
     public void CycleCall_WithoutACycle_IsAnError()
     {
-        VmHarness vm = new VmHarness(VmMachines.Default()).Execute("UNITS=MM", "CYCLE_CALL");
+        VmHarness vm = new VmHarness(VmMachines.Default()).Execute("UNITS=MM SPINDLE=CW RPM=1000", "CYCLE_CALL");
 
         RuleAssert.Only(vm, DiagnosticCodes.CycleCallWithoutCycle);
     }
@@ -20,7 +20,8 @@ public sealed class CycleValidationTests
     [Fact]
     public void CycleCall_BuiltInDrillingCycleWithoutDepth_IsAnError()
     {
-        VmHarness vm = new VmHarness(VmMachines.Default()).Execute("UNITS=MM", "CYCLE=DRILL CLEARANCE=2", "CYCLE_CALL");
+        VmHarness vm = new VmHarness(VmMachines.Default())
+            .Execute("UNITS=MM SPINDLE=CW RPM=1000", "CYCLE=DRILL CLEARANCE=2", "CYCLE_CALL");
 
         RuleAssert.Only(vm, DiagnosticCodes.CycleCallWithoutDepthOrClearance);
     }
@@ -30,7 +31,7 @@ public sealed class CycleValidationTests
     public void Axis_NotALinearAxis_IsAnError()
     {
         VmHarness vm = new VmHarness(VmMachines.Default())
-            .Execute("UNITS=MM", "CYCLE=DRILL AXIS=C CLEARANCE=2 DEPTH=-5", "CYCLE_CALL");
+            .Execute("UNITS=MM SPINDLE=CW RPM=1000", "CYCLE=DRILL AXIS=C CLEARANCE=2 DEPTH=-5", "CYCLE_CALL");
 
         RuleAssert.Only(vm, DiagnosticCodes.CycleAxisNotLinear);
     }
@@ -41,7 +42,7 @@ public sealed class CycleValidationTests
     public void CycleCall_WithAWordOnTheDrillingAxis_IsAnError()
     {
         VmHarness vm = new VmHarness(VmMachines.Default()).Execute(
-            "UNITS=MM",
+            "UNITS=MM SPINDLE=CW RPM=1000",
             "RAPID X=0 Y=0 Z=50",
             "CYCLE=DRILL SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_F=100",
             "CYCLE_CALL X=10 Y=10 Z=20");
@@ -55,7 +56,7 @@ public sealed class CycleValidationTests
     public void CycleCall_WithPlaneWordsOnly_IsNoError()
     {
         VmHarness vm = new VmHarness(VmMachines.Default()).Execute(
-            "UNITS=MM",
+            "UNITS=MM SPINDLE=CW RPM=1000",
             "RAPID X=0 Y=0 Z=50",
             "CYCLE=DRILL SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_F=100",
             "CYCLE_CALL X=10 Y=10");

@@ -72,6 +72,8 @@ Templates found in the manuals:
 | Mori Seiki NT/NTX tool spindle (MAPPS) | `"G361 B{b} D{kind}"` with `kind` mapped 0 (rotary), 1 (turning) | `"T{tool:04}"` (the `T` word brings the tool to the change position, the change is `G361`); `unload = "T0\nG361"` |
 | DMG structure programming (840D) | `"T=\"{name}\"\nTC({offset},,,{kind},{b},{c})"` with `kind` mapped 1 (rotary), 2 (turning), 3 and 4 for turret tools at spindle 3 or 4 | `"T=\"{name}\""` on machines that prepare on the `T` word |
 
+`[tool_change]` describes the change of `default_holder`. A machine with a second tool holder needs no table of its own: a `T` word of the source belongs to the tool holder whose `channel` is the channel of the program, else to `default_holder` (virtual machine 3.8 rule 2). A `T` word of `default_holder` is read through these templates first, so the Mori Seiki `T9001` is `PRELOAD=9001` through its `preload`; a `T` word none of them matches, and every `T` word of another holder, is the turret form `T{tool:02}{offset:02}` of `fanuc.md` 5, whose `TOOL` carries that holder's role, and the compiler writes a change on such a holder in that form (D219).
+
 When `change` contains `{next}`, a `PRELOAD` word that follows the `TOOL` block (before the next motion) is folded into the change command; with `auto_preload` the compiler fills `{next}` from the STATIC look-ahead. `{b}` and `{c}` are filled the same way from the next positioning block and the next `ORIENT:TOOL`; `{kind}` comes from the tool table (D52). A template may span lines with `\n`.
 
 ```toml

@@ -358,10 +358,10 @@ internal static class FanucMotion
     // (controllers fanuc.md 4). The reader computes the absolute centre from I J K and the start point where it knows
     // the start point, and keeps I J K as CENTER:IX where it does not (controller-mapping 2, the rows CENTER:X and
     // CENTER:IX; language 6 and examples/2.5D_FRAESEN.ncx: G3 X70. Y50. I-.534 J-19.993 is CENTER:X=50 CENTER:Y=50).
-    // TODO(question): controller-mapping 2 gives I J K two readings (CENTER:X computed from I J K and the start point,
-    // CENTER:IX as I J K) and the phase plan names CENTER:IX; the reader computes the absolute centre under G90 from a
-    // known start point, and keeps CENTER:IX under G91, from an unknown start point and on a diameter X axis (D60),
-    // until D208 is answered.
+    // D208: the reader computes the absolute centre under G90 from a known start point, and keeps CENTER:IX under
+    // G91, from an unknown start point and on a diameter X axis (D60) (decisions.md; controller-mapping 2). The
+    // number after I, J and K is always incremental on the control, whatever G90 or G91 says, so the absolute centre
+    // is the reader's own exact sum and CENTER:IX is the lossless fallback.
     private static void ReadArc(FanucBlock block, DraftBlock main, Dictionary<string, decimal> start,
         bool incremental)
     {

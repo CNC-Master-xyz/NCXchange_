@@ -50,6 +50,32 @@ public sealed partial class FanucReader : ReaderBase
         FanucModalGroups.For(Machine.Machine.GcodeSystem);
 
     /// <summary>
+    /// The calls of the whole file, before the structure pass lays it out: which sections a block of the file enters
+    /// is a fact of the file, not of the blocks walked so far, because a caller may stand after the section it calls
+    /// (D221; controller-mapping 6). The counting of the calls stays with the pass (FanucCalls.Expect).
+    /// </summary>
+    /// <param name="blocks">Every block of the file, in file order.</param>
+    protected override void BeginStructure(IReadOnlyList<SourceBlock> blocks)
+    {
+        FanucState fanuc = Facts();
+        foreach (SourceBlock block in blocks)
+        {
+            if (block.IsTrivia)
+            {
+                continue;
+            }
+
+            foreach (FanucCall call in FanucMacro.CallsOf(block, Machine))
+            {
+                if (!call.External)
+                {
+                    fanuc.Calls.Call(call.Name);
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// The structure of a Fanuc block: % frames the file, O begins a program or a subprogram, N is a label, GOTO jumps,
     /// M30 and M2 end the program, M99 returns, M98 P, G65 P and the M200 P of the builder nakamura call, G70 to G76
     /// name a contour (controllers fanuc.md 1, 6, 7; controller-mapping 1, 5, 6, 8; language 4.7.1, 4.13); on a machine
@@ -68,6 +94,7 @@ public sealed partial class FanucReader : ReaderBase
         var labelsUsed = new List<string>();
         var calls = new List<string>();
         SourceWord? program = block.Find("P");
+        SourceWord? returnsToTheBlock = null;
         foreach (SourceWord word in block.Words)
         {
             string? code = word.Address is "G" or "M" ? NativeCode.Of(word) : null;
@@ -81,8 +108,10 @@ public sealed partial class FanucReader : ReaderBase
                 role = StructureRole.SectionBegin;
                 number = decimal.ToInt64(decimal.Truncate(programNumber));
                 channel = ChannelOfFile();
+                fanuc.Channel = channel;
                 fanuc.ProgramNumbers.Add(number.Value);
-                fanuc.Calls.Begins[number.Value.ToString(CultureInfo.InvariantCulture)] = block;
+                fanuc.SectionName = number.Value.ToString(CultureInfo.InvariantCulture);
+                fanuc.Calls.Begins[fanuc.SectionName] = block;
                 fanuc.BeginSectionLabels();
             }
             else if (word.Address == "N")
@@ -97,10 +126,29 @@ public sealed partial class FanucReader : ReaderBase
             {
                 role = StructureRole.ProgramEnd;
             }
-            else if (code == "M99" && program is null)
+            else if (code == "M99")
             {
-                role = StructureRole.Return;
+                if (program is null)
+                {
+                    role = StructureRole.Return;
+                }
+                else
+                {
+                    returnsToTheBlock = program;
+                }
             }
+        }
+
+        // D221: M99 Pn in a section that no block of the file calls returns to the block Nn of that same section, a
+        // jump backwards, and reads as JUMP=n with LABEL=n on that block (decisions.md; controller-mapping 6). In a
+        // subprogram a block of the file calls, P names a block of the caller, which no JUMP of NCX reaches, so the
+        // reader keeps the block as RAW (FanucMacro.ReadCalls, D5). Which sections the file calls comes from the
+        // pre-scan of BeginStructure, so that a caller standing after its section reads the same way as one before it.
+        if (returnsToTheBlock is not null && FanucState.LabelOf(returnsToTheBlock) is string target
+            && !fanuc.Calls.IsCalled(fanuc.SectionName ?? string.Empty) && fanuc.HasSectionLabel(target))
+        {
+            fanuc.ReturnsToTheBlock[block.Line] = target;
+            Jump(fanuc, block, target, labelsUsed);
         }
 
         // M98 P, G65 P and the M200 P of the builder nakamura enter a subprogram of the file; M198 P calls a program

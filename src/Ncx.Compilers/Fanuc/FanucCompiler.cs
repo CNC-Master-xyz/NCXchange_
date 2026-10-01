@@ -1,4 +1,5 @@
 using System.Globalization;
+using Ncx.Config.Templates;
 using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.State;
@@ -248,7 +249,19 @@ public sealed class FanucCompiler : CompilerBase
         if (change)
         {
             FanucCycles.CancelBeforeToolChange(write);
-            WriteToolChange();
+
+            // D219: [tool_change] describes the change of default_holder; a TOOL on another tool holder of a lathe
+            // is the turret form of fanuc 5 (machine-config 3, the turret row).
+            if (FanucToolWords.TurretChange(write) is TemplateValues turret)
+            {
+                WriteTemplate(FanucToolWords.TurretForm, "the turret form of a holder other than default_holder "
+                    + "(machine-config 3, the turret row; D219)", turret);
+            }
+            else
+            {
+                WriteToolChange();
+            }
+
             FanucToolWords.AfterChange(write);
         }
 

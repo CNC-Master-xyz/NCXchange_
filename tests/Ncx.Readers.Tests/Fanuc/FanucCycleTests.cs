@@ -170,8 +170,9 @@ public sealed class FanucCycleTests
             Body("G0 X60. Z-20. C0\nG87 X30. R54. F0.05\nC120.\nG80", Lathe()));
     }
 
-    // G90 of system A is the modal turning cycle TURN_OD of the catalog: CYCLE= and a CYCLE_CALL per block with X and Z
-    // (language 4.7.1; controller-mapping 5).
+    // G90 of system A is the modal turning cycle TURN_OD of the catalog: CYCLE= and a CYCLE_CALL per block with X and
+    // Z (language 4.7.1; controller-mapping 5). D187: X(U) and Z(W) are modal data the cycle keeps, and a call leaves
+    // the tool at its start point, so the reader writes both end-point words on every call.
     [Fact]
     public void G90_OfSystemA_IsTurnOdWithACallPerBlock()
     {
@@ -180,9 +181,57 @@ public sealed class FanucCycleTests
                 "RAPID X=70 Z=2",
                 "CYCLE=TURN_OD CYCLE_F=0.3",
                 "CYCLE_CALL X=60 Z=-70",
-                "CYCLE_CALL X=50",
+                "CYCLE_CALL X=50 Z=-70",
                 "RAPID X=100 CYCLE=OFF"),
             Body("G0 X70. Z2.\nG90 X60. Z-70. F0.3\nX50.\nG0 X100.", Lathe()));
+    }
+
+    // D187: the control brings the tool back to the start point A after a simple turning cycle, which is why the
+    // manual's own repeat example cuts four progressively deeper passes with incremental U words counted from that
+    // same start point, not from the previous end point (decisions.md; fanuc 6).
+    [Fact]
+    public void RepeatOfASimpleTurningCycle_WithIncrementalWords_CountsFromTheStartPoint()
+    {
+        Assert.Equal(
+            Lines(
+                "RAPID X=70 Z=2",
+                "CYCLE=TURN_OD CYCLE_F=0.4",
+                "CYCLE_CALL X=62 Z=-64",
+                "CYCLE_CALL X=54 Z=-64",
+                "CYCLE_CALL X=46 Z=-64",
+                "RAPID X=100 CYCLE=OFF"),
+            Body("G0 X70. Z2.\nG90 U-8. W-66. F0.4\nU-16.\nU-24.\nG0 X100.", Lathe()));
+    }
+
+    // D175: the F of the thread cycle G92 is the thread lead, the word PITCH, while the F of G90 and G94 is the
+    // cutting feed CYCLE_F (decisions.md; language 4.7, the PITCH row; fanuc 6).
+    [Fact]
+    public void Feed_OnTheThreadCycleG92_IsThePitchAndNotTheCycleFeed()
+    {
+        string text = Text("%\nO0001\nG0 X70. Z2.\nG92 X60. Z-70. F2.0\nX50.\nG0 X100.\nM30\n%\n", Lathe());
+
+        Assert.Equal(
+            Lines(
+                "RAPID X=70 Z=2",
+                "CYCLE=THREAD PITCH=2.0",
+                "CYCLE_CALL X=60 Z=-70",
+                "CYCLE_CALL X=50 Z=-70",
+                "RAPID X=100 CYCLE=OFF"),
+            BodyOf(text));
+        AssertFormatsToItself(text);
+        Assert.False(Check(text, Lathe()).HasErrors, Check(text, Lathe()).ToText());
+    }
+
+    // D175 gives the taper R of G90, G92 and G94 the catalog word TAPER, which cycles/fanuc.toml maps, but the parser
+    // takes no parameter name of a catalog entry yet (D114): the reader keeps such a block RAW, so nothing is lost
+    // (D5) and the text it writes is one that check can run (code-guidelines 4).
+    [Fact]
+    public void Taper_OnASimpleTurningCycle_KeepsItsBlockRawUntilTheParserTakesTheCatalogWord()
+    {
+        string text = Text("%\nO0001\nG0 X70. Z2.\nG90 X60. Z-70. R-2. F0.3\nM30\n%\n", Lathe());
+
+        Assert.Contains("RAW:FANUC=\"G90 X60. Z-70. R-2. F0.3\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("TAPER", text, StringComparison.Ordinal);
     }
 
     // G70 to G76 of system A name the contour that follows them with P and Q: the reader turns the range into a SUB
@@ -193,8 +242,6 @@ public sealed class FanucCycleTests
     [InlineData("G70", "FINISH")]
     [InlineData("G71", "ROUGH_TURN")]
     [InlineData("G72", "ROUGH_FACE")]
-    [InlineData("G75", "GROOVE")]
-    [InlineData("G76", "COMPOUND_THREAD")]
     public void G70ToG76_WithTheContourThatFollows_AreTheCatalogCycleWithTheContourAsASubSection(string code,
         string cycle)
     {
@@ -219,6 +266,21 @@ public sealed class FanucCycleTests
             text);
         AssertFormatsToItself(text);
         Assert.False(Check(text, Lathe()).HasErrors, Check(text, Lathe()).ToText());
+    }
+
+    // D176: P and Q of G74, G75 and G76 are infeed steps and thread data, not a block range, so those entries carry
+    // no contour and the block keeps the words its entry does not map: the reader keeps it RAW with its range, and no
+    // SUB section is made (decisions.md; fanuc 6; D5).
+    [Theory]
+    [InlineData("G75")]
+    [InlineData("G76")]
+    public void ContourRange_OnTheCyclesThatTakeNone_IsNoContourAndTheBlockStaysRaw(string code)
+    {
+        string text = Text(
+            "%\nO0001\nG0 X40. Z2.\n" + code + " P10 Q20\nN10 G0 X20.\nN20 G1 Z-10. F0.2\nM30\n%\n", Lathe());
+
+        Assert.Contains("RAW:FANUC=\"" + code + " P10 Q20\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("CONTOUR", text, StringComparison.Ordinal);
     }
 
     // G71 roughs along the contour that follows it and G70 finishes along the same one: both name its one SUB section

@@ -24,6 +24,13 @@ internal static class CycleRules
     private const string ChipBreakCycle = "CHIP_BREAK";
     private const string TapCycle = "TAP";
 
+    // D187: the Fanuc turning cycles that bring the tool back to their start point, so that after their call no axis
+    // has moved and none becomes unknown. Operation 4 of G90, G92 and G94 (G77, G78, G79 in the G-code systems B and
+    // C) is the return to the start point A, G70 returns in rapid to the cycle start point, note 3 of G73 says the
+    // same, and the tool path of G76 is a closed loop back to A (fanuc 6).
+    private static readonly string[] s_cyclesReturningToTheStartPoint =
+        ["G90", "G92", "G94", "G77", "G78", "G79", "G70", "G73", "G76"];
+
     /// <summary>
     /// Executes a CYCLE_CALL block.
     /// </summary>
@@ -46,16 +53,21 @@ internal static class CycleRules
             return [];
         }
 
-        // For a CYCLE:<controller>=n cycle the VM does not know the sequence: the call positions the plane axes at the
-        // axis words of the call block, the drilling axis is unknown afterwards, and ExpandCycles raises no MOTION
-        // events for it (virtual machine 3.3, D94).
-        // TODO(question): a cycle of the cycle catalog (CYCLE=RECT_POCKET, language 4.7.1) carries its own parameters
-        // (virtual machine 5), and virtual machine 3.3 gives the sequence of the built-in family and of the native form
-        // only; the VM does not know the sequence of a catalog cycle either and calls it like the native form until
-        // D187 is answered.
+        // D187: a cycle of the cycle catalog (CYCLE=RECT_POCKET, language 4.7.1) is called like the native form of
+        // D94, because the VM knows the sequence of the built-in family alone: the call positions the plane axes at
+        // the axis words of the call block, the drilling axis is unknown afterwards, and ExpandCycles raises no
+        // MOTION events for it (virtual machine 3.3; decisions.md).
         if (cycle.Controller is not null || !DrillingFamily.Names.Contains(name))
         {
-            PositionTheHoleOnly(context, cycle);
+            // The one exception: a Fanuc turning cycle brings the tool back to its start point and has no drilling
+            // axis, so no axis moves and none becomes unknown; the words of its call are the end point of one pass.
+            // TODO(question): no manual page says where G71 type I, G72 type I, G74 and G75 leave the tool, so those
+            // four keep the D94 rule and the drilling axis becomes unknown after them.
+            if (!ReturnsToTheStartPoint(context, cycle, name))
+            {
+                PositionTheHoleOnly(context, cycle);
+            }
+
             return [];
         }
 
@@ -210,6 +222,18 @@ internal static class CycleRules
         }
 
         return hole;
+    }
+
+    // D187: the cycles of the Fanuc catalog that bring the tool back to their start point (fanuc 6); a cycle written
+    // in the native form of D94 keeps the D94 rule, and so do the turning cycles of the other families until their
+    // end positions are confirmed.
+    private static bool ReturnsToTheStartPoint(BlockContext context, CycleState cycle, string name)
+    {
+        CycleCatalog catalog = context.Machine.CycleCatalog;
+        return cycle.Controller is null
+            && catalog.Controller == Controller.Fanuc
+            && catalog.Find(name) is CycleEntry entry
+            && Array.IndexOf(s_cyclesReturningToTheStartPoint, entry.Native) >= 0;
     }
 
     // The plane axes go to the axis words of the call block, and the drilling axis is unknown afterwards: the VM does

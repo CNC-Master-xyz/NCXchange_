@@ -253,7 +253,8 @@ public sealed class ArcTests
     public void Arc_UnderInchUnits_TakesTheToleranceOf00005Inch()
     {
         VmHarness vm = new VmHarness(VmMachines.Default())
-            .Execute("UNITS=INCH F=10", "RAPID X=0 Y=10.005", "ARC=CW X=10 Y=0 CENTER:X=0 CENTER:Y=0");
+            .Execute("UNITS=INCH F=10 SPINDLE=CW RPM=1000", "RAPID X=0 Y=10.005",
+                "ARC=CW X=10 Y=0 CENTER:X=0 CENTER:Y=0");
 
         Assert.Equal([DiagnosticCodes.ArcInconsistentCenter], vm.Codes());
     }
@@ -272,7 +273,8 @@ public sealed class ArcTests
     public void Arc_ToleranceOfTheOptions_ReplacesTheDefault()
     {
         VmHarness vm = new VmHarness(VmMachines.Default(), new VmOptions { ArcTolerance = 0.001m })
-            .Execute("UNITS=MM F=10", "RAPID X=0 Y=10.005", "ARC=CW X=10 Y=0 CENTER:X=0 CENTER:Y=0");
+            .Execute("UNITS=MM F=10 SPINDLE=CW RPM=1000", "RAPID X=0 Y=10.005",
+                "ARC=CW X=10 Y=0 CENTER:X=0 CENTER:Y=0");
 
         Assert.Equal([DiagnosticCodes.ArcInconsistentCenter], vm.Codes());
     }
@@ -293,7 +295,7 @@ public sealed class ArcTests
     // The default machine of D103 with the units and a feed set.
     private static VmHarness Mill()
     {
-        return new VmHarness(VmMachines.Default()).Execute("UNITS=MM F=1000");
+        return new VmHarness(VmMachines.Default()).Execute("UNITS=MM F=1000 SPINDLE=CW RPM=1000");
     }
 
     private static AxisPosition Workpiece(decimal value)

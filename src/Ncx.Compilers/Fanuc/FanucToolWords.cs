@@ -38,6 +38,43 @@ internal static class FanucToolWords
     private static readonly ToolRef s_emptySpindle = new(0);
 
     /// <summary>
+    /// D219: [tool_change] describes the change of default_holder, so a TOOL on another tool holder of a lathe is
+    /// written as the turret form T{tool:02}{offset:02} of fanuc 5 instead, the station and the offset number in one
+    /// word (machine-config 3, the turret row; controller-mapping 3). The values of that form, with the combined
+    /// OFFSET of the block marked written because the form carries it; null when the change is the one of
+    /// [tool_change].
+    /// </summary>
+    /// <param name="write">The block being written.</param>
+    public static TemplateValues? TurretChange(FanucBlock write)
+    {
+        if (!write.IsLathe || write.Block.Find("TOOL") is not Word tool || tool.Addr is not string role
+            || write.Machine.ResolveRole(role) is not ResourceDef holder
+            || holder.Type != ResourceType.ToolHolder
+            || holder.Id == write.Machine.ResolveDefaultHolder()?.Id
+            || !write.After.Holders.TryGetValue(holder.Id, out HolderSnapshot? after)
+            || after.SpindleTool.Number is not int station)
+        {
+            return null;
+        }
+
+        var values = new TemplateValues();
+        values.Set("tool", station);
+        values.Set("offset", after.OffsetCombined);
+        if (write.Block.Find("OFFSET", null) is Word combined)
+        {
+            write.Written(combined);
+        }
+
+        return values;
+    }
+
+    /// <summary>
+    /// The turret form of D219, the template the compiler writes a change on a holder other than default_holder with
+    /// (fanuc 5; machine-config 3, the turret row).
+    /// </summary>
+    public const string TurretForm = "T{tool:02}{offset:02}";
+
+    /// <summary>
     /// After the change of [tool_change]: a combined OFFSET stands in the change command where its template has
     /// {offset} (machine-config 3), and under motion_code_after_tool_change the next motion writes its code (the
     /// TODO(question) of OutputFormat).

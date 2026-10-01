@@ -139,6 +139,35 @@ public sealed class ShippedCatalogsTests
         Assert.Equal(feed, entry.CycleF);
     }
 
+    // D175: the simple turning cycles carry their taper R as the catalog word TAPER, and the thread cycle G92 its
+    // lead F as PITCH, while G90 and G94 take F as the cutting feed CYCLE_F (decisions.md; fanuc 6).
+    [Theory]
+    [InlineData("TURN_OD", "CYCLE_F")]
+    [InlineData("FACE", "CYCLE_F")]
+    [InlineData("THREAD", "PITCH")]
+    public void FanucSimpleTurningCycle_TaperAndFeed_AreTheWordsTaperAndCycleFOrPitch(string name, string ofTheFeed)
+    {
+        CycleEntry? entry = Load("fanuc.toml", Controller.Fanuc).Find(name);
+
+        Assert.NotNull(entry);
+        Assert.Equal("R", entry.Params["TAPER"]);
+        Assert.Equal("F", entry.Params[ofTheFeed]);
+    }
+
+    // D176: G74, G75 and G76 take P and Q as infeed steps and thread data, not as a block range, so their entries
+    // carry no contour (decisions.md; the D65 row of decisions.md).
+    [Theory]
+    [InlineData("GROOVE")]
+    [InlineData("COMPOUND_THREAD")]
+    public void FanucOneShotTurningCycle_WithoutAContourRange_CarriesNoContour(string name)
+    {
+        CycleEntry? entry = Load("fanuc.toml", Controller.Fanuc).Find(name);
+
+        Assert.NotNull(entry);
+        Assert.Empty(entry.Contour);
+        Assert.DoesNotContain("CONTOUR", entry.Words);
+    }
+
     // P2-03: a G71 entry carries Contour, the P and Q that name the first and the last block of the contour of
     // CONTOUR=name (machine-config 6, D65).
     [Fact]

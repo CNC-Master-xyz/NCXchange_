@@ -105,7 +105,12 @@ public sealed class StructurePassTests
                 "PROGRAM=END",
                 "FILE=END"),
             Core.Writing.NcxWriter.Write(program));
-        Assert.Empty(program.Diagnostics.Items);
+
+        // No section of the file ends a program, so the INFO of D210 names the reading: this section is the program
+        // and its M99 the loop, which is how a subprogram in a file of its own reads too.
+        Diagnostic reading = Assert.Single(program.Diagnostics.Items);
+        Assert.Equal((DiagnosticCodes.UncalledSectionKind, Severity.Info, 2),
+            (reading.Code, reading.Severity, reading.Line));
     }
 
     // A block-skipped /M30 is not the program end: SKIP JUMP=END there and the real PROGRAM=END at the end of the
@@ -197,9 +202,23 @@ public sealed class StructurePassTests
         Assert.False(check.HasErrors, check.ToText());
     }
 
-    // The reading the structure pass keeps until the open question of StructurePass.DecideKinds is answered: an O
-    // section that no block of the file calls is a program when it holds an M30, so a subprogram in its own file that
-    // holds one reads as a program, its M99 as the loop of controller-mapping 6.
+    // D210: where no section of the file ends a program, the first uncalled one is the program and its M99 the loop
+    // back to its start; a subprogram in a file of its own reads exactly the same way, which the control cannot tell
+    // apart either, so the reader names the reading in an INFO (decisions.md; controller-mapping 1, 6; D98).
+    [Fact]
+    public void UncalledSection_WhereNoSectionOfTheFileEndsAProgram_IsTheProgramWithAnInfoNamingTheReading()
+    {
+        NcxProgram program = Program(Lines("%", "O9010", "G0 X5", "M99", "%"));
+
+        Diagnostic reading = Assert.Single(program.Diagnostics.Items,
+            item => item.Code == DiagnosticCodes.UncalledSectionKind);
+        Assert.Equal(Severity.Info, reading.Severity);
+        Assert.Contains("a subprogram in a file of its own reads the same way", reading.Message,
+            StringComparison.Ordinal);
+    }
+
+    // D210: an O section that no block of the file calls is a program when it holds an M30, so a subprogram in its
+    // own file that holds one reads as a program, its M99 as the loop of controller-mapping 6.
     [Fact]
     public void Sections_UncalledOSectionHoldingM30_IsAProgramWhoseM99Loops()
     {
@@ -270,9 +289,9 @@ public sealed class StructurePassTests
 
         Assert.EndsWith(Lines("RAPID X=0", "PROGRAM=END", "FILE=END"), Core.Writing.NcxWriter.Write(program),
             StringComparison.Ordinal);
-        Diagnostic warning = Assert.Single(program.Diagnostics.Items);
-        Assert.Equal((DiagnosticCodes.ProgramEndMissing, Severity.Warning, 2),
-            (warning.Code, warning.Severity, warning.Line));
+        Diagnostic warning = Assert.Single(program.Diagnostics.Items,
+            item => item.Code == DiagnosticCodes.ProgramEndMissing);
+        Assert.Equal((Severity.Warning, 2), (warning.Severity, warning.Line));
     }
 
     // Every subprogram ends with SUB=END (language 4.13): a source subprogram without a return gets it after its

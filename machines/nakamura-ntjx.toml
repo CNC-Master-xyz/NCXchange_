@@ -148,7 +148,7 @@ path_mode = "continuous"           # G64 cutting mode (fanuc 3, group 13)
 corner_speed = 1000                # mm/min carried through a corner
 
 [tool_change]
-change = "G340 T{tool:02}{offset:02}. A{next:02}."   # tool spindle with ATC (turret 1), decimal point literal (NT NURSE macro rule); six digits "G340 T{tool:03}{offset:03} A{next:03}" on a 120-tool ATC; turret 2 uses "T{tool:02}{offset:02}"
+change = "G340 T{tool:02}{offset:02}. A{next:02}."   # tool spindle with ATC (turret 1), decimal point literal (NT NURSE macro rule); six digits "G340 T{tool:03}{offset:03} A{next:03}" on a 120-tool ATC; turret 2 (channel 2) needs no table of its own, its T word is the turret form "T{tool:02}{offset:02}" with the role TURRET2, D219
 preload = "G341 T{next:02}."
 unload = "G0 T{tool:02}00"
 auto_preload = true
