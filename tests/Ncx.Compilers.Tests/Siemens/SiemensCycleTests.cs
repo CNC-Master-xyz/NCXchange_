@@ -80,6 +80,18 @@ public sealed class SiemensCycleTests
             MillBody("RAW:SIEMENS=\"MCALL L706\"", "RAPID X=10", "RAPID X=20"));
     }
 
+    // D343 and D259: a modal call that is merely unknown, here because the label before the RAW line made the target
+    // state unknown, may be armed on the control, and no RAW line before this one armed it, so MCALL alone still
+    // stands before the RAW line; only a modal call a RAW line of the same range armed is left alone (siemens 7, 12
+    // rule 5).
+    [Fact]
+    public void ModalCall_UnknownAtALabelBeforeARawLine_IsEndedBeforeTheRawLine()
+    {
+        Assert.Equal(Lines("MCALL CYCLE81(2,0,2,-10)", "G0 X10", "NEXT:", "MCALL", "STOPRE"),
+            MillBody("CYCLE=DRILL SURFACE=0 CLEARANCE=2 DEPTH=-10", "CYCLE_CALL X=10", "LABEL=NEXT",
+                "RAW:SIEMENS=\"STOPRE\""));
+    }
+
     // D259: the RAW range of a pattern and its modal cycle is written back line by line, with no MCALL alone between
     // its lines, which would take the drilling cycle away from the pattern.
     [Fact]
