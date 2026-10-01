@@ -141,9 +141,10 @@ internal static class HeidenhainToolCall
     // Klartext gives the working plane with the tool axis of TOOL CALL (controller-mapping 1, WORKPLANE; heidenhain 8
     // rule 3), so a WORKPLANE writes nothing of its own; it is folded into the TOOL CALL of its block or of the block
     // before it.
-    // TODO(question): the documents give no Klartext form for a WORKPLANE that changes the tool axis of the last TOOL
-    // CALL without a TOOL in its block; it is reported (CMP110), and where no TOOL CALL has been written the control's
-    // plane is not known and nothing is written.
+    // D321: Klartext fixes the working plane at the tool call with the spindle axis, and no other block sets it, so a
+    // WORKPLANE that changes the tool axis of the last TOOL CALL without a TOOL in its block, and not in the following
+    // block of a TOOL block (D275), is an ERROR (CMP110, decisions.md); where no TOOL CALL has been written the
+    // control's plane is not known and nothing is written.
     private static void CheckWorkplane(HeidenhainBlock writing)
     {
         if (writing.Take("WORKPLANE") is not Word plane || writing.Block.Has("TOOL"))
@@ -215,10 +216,10 @@ internal static class HeidenhainToolCall
         }
     }
 
-    // TODO(question): heidenhain 8 rule 3 takes the RPM of the same or the following block, and in Expected/BOHREN.ncx,
-    // read from the Fanuc source, the RPM of TOOL=1 stands two blocks later, after the PRELOAD=2 that TOOL DEF writes
-    // right after the call (preload_position = "after_change"); the following block is the first one after the TOOL
-    // block that is not a block of PRELOAD words alone, in the same section.
+    // D275: the following block of heidenhain 8 rule 3 is the first block after the TOOL block, in the same section,
+    // that is not a block of PRELOAD words alone (decisions.md). A TOOL DEF has no speed field, so the PRELOAD=2 that
+    // Expected/BOHREN.ncx carries between TOOL=1 and its RPM, which TOOL DEF writes right after the call
+    // (preload_position = "after_change"), is never the block the speed comes from.
     private static BlockStep? FollowingBlock(HeidenhainBlock writing)
     {
         IReadOnlyList<BlockStep> steps = writing.LookAhead.Steps;

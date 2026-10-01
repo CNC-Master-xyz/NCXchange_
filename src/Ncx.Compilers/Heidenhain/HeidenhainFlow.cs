@@ -220,8 +220,8 @@ internal static class HeidenhainFlow
 
     // FN 9: IF +Q1 EQU +Q3, FN 10 unequal, FN 11 greater, FN 12 less (controllers heidenhain.md 6), with two values,
     // each a number or a Q parameter with its sign; <=, >=, AND, OR and NOT have no FN function.
-    // TODO(question): heidenhain.md 6 writes the comparison of FN 9 as EQU and examples/PATTERN_LOOP.ncx that of FN 12
-    // as LT; no document gives the words of FN 10 and FN 11, which are written NE and GT.
+    // D336: the comparison words are EQU, NE, GT and LT, each with the sign on both values (decisions.md; controllers
+    // heidenhain.md 6).
     private static string? Condition(HeidenhainBlock writing, Word condition)
     {
         string separator = writing.Numbers.DecimalSeparator;

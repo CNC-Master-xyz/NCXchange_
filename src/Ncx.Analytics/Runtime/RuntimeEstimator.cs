@@ -174,10 +174,9 @@ internal sealed class RuntimeEstimator
     // The speed of a motion in mm/s: RAPID and HOME use the rapid rate, the smallest of the moving axes (virtual
     // machine 8; HOME is a MOTION, wave-2 question #25); every other motion the commanded feed, which the profile
     // limits by the max_feed of every axis that moves. The fallback is distance over the feed as commanded.
-    // TODO(question): virtual machine 8 names only RAPID and HOME for the rapid rate, and a RETRACT takes no feed of
-    // its own (virtual machine 3.1a: "A RETRACT with a feed ... ERROR"), so the F of its MOTION is the active feed of
-    // the program. The estimate times RETRACT at the rapid rate of its moving axes with the same profile, as the tool
-    // list counts its distance as rapid, until that is answered.
+    // D287: a RETRACT takes no feed of its own (virtual machine 3.1a: "A RETRACT with a feed ... ERROR"), and M140 MB
+    // without a feed traverses at rapid, so RETRACT is timed at the rapid rate of its moving axes with the same
+    // profile, as the tool list counts its distance as rapid (virtual machine 8; language 4.3; decisions.md).
     private double? SpeedOf(MotionEvent motion, MovingAxes axes)
     {
         if (motion.Verb is Verb.Rapid or Verb.Home or Verb.Retract)

@@ -16,6 +16,18 @@ public sealed class HeidenhainFunctionTests
         Assert.Equal("M3\nM8\nM9\nM4\nM5", HeidenhainCompile.Body(result));
     }
 
+    // D337: every Klartext program starts with feed per minute, so the FEED_MODE=PER_MIN of the complete header of
+    // D34 writes nothing, as the Klartext sources do not write it; a program that switches away and back writes both.
+    [Fact]
+    public void FeedModeAtProgramStart_PerMin_WritesNothing()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Lines(
+            "FILE=BEGIN NCX=1", "PROGRAM=BEGIN NAME=\"T\"", "UNITS=MM WORKPLANE=XY FEED_MODE=PER_MIN",
+            "RAPID X=0", "PROGRAM=END", "FILE=END"));
+
+        Assert.Equal("L X+0 R0 FMAX", HeidenhainCompile.Body(result));
+    }
+
     // Controller-mapping 2, FEED_MODE: M136 per revolution, M137 per minute, on change.
     [Fact]
     public void FeedMode_IsM136OrM137OnChange()

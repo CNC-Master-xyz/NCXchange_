@@ -91,9 +91,10 @@ internal static class HeidenhainCompensation
     /// </summary>
     /// <param name="writing">The block being written.</param>
     /// <param name="motion">The motion as the message names it: "The ARC".</param>
-    // TODO(question): heidenhain.md 2 and differences.md write R0, RL and RR at the end of the L block only, and no
-    // document says whether a C, CR or CP block, a CYCL CALL or M140 may carry them; such a motion after a COMP that
-    // no L block has written is reported (CMP115) and nothing is guessed.
+    // D345: Klartext offers R0, RL and RR on any path function, but a compensation takes effect and is cancelled only
+    // in a straight-line block, and the C, CR and CT dialogs have no entry for it, so the compiler writes the word on
+    // the L block alone (heidenhain.md 2 and 8 rule 2; differences.md; decisions.md): an arc, a CYCL CALL at the
+    // current position or M140 after a COMP that no L block has written is reported (CMP115) and nothing is guessed.
     public static void Check(HeidenhainBlock writing, string motion)
     {
         writing.Take(WrittenKey);

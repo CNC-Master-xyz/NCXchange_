@@ -26,18 +26,6 @@ public sealed partial class HeidenhainCompilerTests : IDisposable
     // The block of Expected/BOHREN.ncx that the Fanuc tapping M29 S500 reads into.
     private const string RigidTap = "RPM=500 FUNC:RIGID_TAP=ON";
 
-    /// <summary>
-    /// The target state of a program starts unknown (P3-03), so the FEED_MODE=PER_MIN of the header is M137, which the
-    /// Klartext sources, whose control has it after the end of the program before, do not write (the TODO(question) of
-    /// HeidenhainFunctions, the header of a program).
-    /// </summary>
-    internal static readonly NcException s_programStart = new()
-    {
-        Grounds = "the question of the target state at the start of a program: M137 for the FEED_MODE=PER_MIN of the "
-            + "header",
-        Compiled = ["M137"],
-    };
-
     private readonly ProjectHarness _project = new(Fixture.RepositoryRoot());
 
     // What the last compile wrote to the standard error: the diagnostics (D98).
@@ -50,8 +38,8 @@ public sealed partial class HeidenhainCompilerTests : IDisposable
 
     // M5: ncx compile examples/2.5D_FRAESEN.ncx --machine heidenhain-itnc530 is equivalent to 2.5D_FRAESEN.h under the
     // comparison rules (block numbers, formatting and comment placement ignored; the M30 the source leaves out is no
-    // difference by them, wave-1 question #12 and D49), except the header's M137 and the stock definition the example
-    // keeps as a comment (D217).
+    // difference by them, wave-1 question #12 and D49), except the stock definition the example keeps as a comment
+    // (D217).
     [Fact]
     public void Compile_25DFraesen_IsEquivalentToTheHeidenhainSourceExceptTheListedDifferences()
     {
@@ -98,12 +86,12 @@ public sealed partial class HeidenhainCompilerTests : IDisposable
     }
 
     /// <summary>
-    /// The differences of 2.5D_FRAESEN.ncx compiled for the iTNC 530 against 2.5D_FRAESEN.h, in their order: the M137
-    /// of the header and the stock definition the example keeps as a comment (D217).
+    /// The differences of 2.5D_FRAESEN.ncx compiled for the iTNC 530 against 2.5D_FRAESEN.h: the stock definition the
+    /// example keeps as a comment (D217).
     /// </summary>
     internal static List<NcException> Differences25DFraesen()
     {
-        return [s_programStart, StockDefinition("BLK FORM 0.1 Z X0 Y0 Z-20", "BLK FORM 0.2 X100 Y100 Z0")];
+        return [StockDefinition("BLK FORM 0.1 Z X0 Y0 Z-20", "BLK FORM 0.2 X100 Y100 Z0")];
     }
 
     /// <summary>
@@ -116,7 +104,6 @@ public sealed partial class HeidenhainCompilerTests : IDisposable
     {
         return
         [
-            s_programStart,
             StockDefinition("BLK FORM 0.1 Z X0 Y0 Z-25", "BLK FORM 0.2 X100 Y20 Z0"),
             PlungeFeed(Cycle200("565,487"), Cycle200("565")),
             new NcException

@@ -70,11 +70,11 @@ public sealed class HeidenhainProgramFrameTests
         Assert.Equal("0 BEGIN PGM OP2 MM\r\n1 L Z+10 R0 FMAX\r\n2 M30\r\n3 END PGM OP2 MM\r\n", result.Files[1].Text);
     }
 
-    // The TODO(question) of the program start: the target state of a program starts unknown (P3-03), so the header's
-    // FEED_MODE=PER_MIN is M137 (controller-mapping 2, FEED_MODE); UNITS stands in BEGIN PGM, WORKPLANE waits for the
-    // TOOL CALL, COMP for the first straight line, and CYCLE=OFF writes nothing (heidenhain 5).
+    // D337: every Klartext program starts with feed per minute, so the header's FEED_MODE=PER_MIN writes nothing
+    // (controller-mapping 2, FEED_MODE); UNITS stands in BEGIN PGM, WORKPLANE waits for the TOOL CALL, COMP for the
+    // first straight line, and CYCLE=OFF writes nothing (heidenhain 5).
     [Fact]
-    public void Header_OfTheExamples_IsM137AndItsCompensationIsR0OnTheFirstLine()
+    public void Header_OfTheExamples_WritesNothingAndItsCompensationIsR0OnTheFirstLine()
     {
         CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Lines(
             "FILE=BEGIN NCX=1",
@@ -84,7 +84,7 @@ public sealed class HeidenhainProgramFrameTests
             "PROGRAM=END",
             "FILE=END"));
 
-        Assert.Equal(["BEGIN PGM T MM", "M137", "L X+10 Y-5 R0 FMAX", "M30", "END PGM T MM"],
+        Assert.Equal(["BEGIN PGM T MM", "L X+10 Y-5 R0 FMAX", "M30", "END PGM T MM"],
             HeidenhainCompile.LinesOf(HeidenhainCompile.TextOf(result)));
     }
 

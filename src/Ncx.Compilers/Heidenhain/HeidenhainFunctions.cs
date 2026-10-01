@@ -18,6 +18,9 @@ internal static class HeidenhainFunctions
     private const string SpindleKey = "SPINDLE:";
     private const string CoolantKey = "COOLANT:";
 
+    // Feed per minute, the mode every Klartext program starts in (D337).
+    private const string PerMinute = "M137";
+
     // The channel a bare COOLANT addresses (language 4.6, virtual machine 2.5).
     private const string DefaultCoolant = "STANDARD";
 
@@ -89,12 +92,21 @@ internal static class HeidenhainFunctions
         return null;
     }
 
+    /// <summary>
+    /// The feed mode the control has at the start of a program, M137: a modal M function that is not cancelled in a
+    /// later block is cancelled at program end, and the control resets the modal program information when a new
+    /// program is selected, so M136 never carries into the next program (D337; controllers heidenhain.md 2). The
+    /// target state of a program therefore begins with M137 known, and the FEED_MODE=PER_MIN of the complete header
+    /// of D34 writes nothing, as the Klartext sources 2.5D_FRAESEN.h and BOHREN.h do not.
+    /// </summary>
+    /// <param name="writing">The block being written, the PROGRAM=BEGIN of the program.</param>
+    public static void EnterProgram(HeidenhainBlock writing)
+    {
+        writing.Target.Set(FeedModeKey, PerMinute);
+    }
+
     // FEED_MODE=PER_REV as M136, PER_MIN as M137, on change (controller-mapping 2, F and FEED_MODE; controllers
-    // heidenhain.md 2).
-    // TODO(question): the target state of a program starts unknown (P3-03), so the FEED_MODE=PER_MIN of the complete
-    // header of D34 is written as M137, which the Klartext sources 2.5D_FRAESEN.h and BOHREN.h do not write; no
-    // document says whether the control has M137 active at the start of a program (virtual machine 4 resets the feed
-    // mode at PROGRAM=END), so that the header's feed mode would write nothing.
+    // heidenhain.md 2); a program starts with M137 active (D337, EnterProgram).
     private static void WriteFeedMode(HeidenhainBlock writing)
     {
         if (writing.Take("FEED_MODE") is not Word mode)
@@ -102,7 +114,7 @@ internal static class HeidenhainFunctions
             return;
         }
 
-        string code = mode.Value is IdentValue { Name: "PER_REV" } ? "M136" : "M137";
+        string code = mode.Value is IdentValue { Name: "PER_REV" } ? "M136" : PerMinute;
         if (writing.Target.Changes(FeedModeKey, code))
         {
             writing.Line(code);

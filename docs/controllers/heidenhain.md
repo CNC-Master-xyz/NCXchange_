@@ -30,14 +30,14 @@ Heidenhain controls are programmed in Klartext (conversational format): every bl
 
 ## 2. Motion
 
-- `L X+10 Y-5 Z+2 R0 FMAX M3`: line to the target; `FMAX` is rapid, `F500` feed, `F AUTO` the feed of the tool table, `F` modal otherwise; `R0`/`RL`/`RR` radius compensation off, left, right; up to two `M` functions at the end.
+- `L X+10 Y-5 Z+2 R0 FMAX M3`: line to the target; `FMAX` is rapid, `F500` feed, `F AUTO` the feed of the tool table, `F` modal otherwise; `R0`/`RL`/`RR` radius compensation off, left, right, on the `L` block only: Klartext offers the word on any path function, but a compensation takes effect and is cancelled only in a straight-line block, and the `C`, `CR` and `CT` dialogs have no entry for it (D345); up to two `M` functions at the end.
 - Coordinates carry a sign (`X+10`); `IX+30` is incremental (`IX IY IZ IA IB IC`), never modal.
 - `CC X+50 Y+50` sets the arc center (absolute; `CC IX IY` incremental; `CC` alone takes the current position); `C X+70 Y+50 DR+` draws the arc about it, `DR+` counterclockwise, `DR-` clockwise; `CR X+2 Y+7 R+5 DR-` draws by radius (positive radius: arc of at most 180 degrees, negative: more); `CT X Y` a tangentially connecting arc.
 - Polar: `LP PR+50 PA+30`, `CP IPA+737.956 IZ-5.4 DR+` (an incremental polar angle of more than a turn with an axial increment is how helices are written; `CP PA` absolute), `CC` is the pole.
 - `LN X Y Z NX NY NZ TX TY TZ F` is the 5-axis line with the surface normal and the tool vector, used with `M128` or `FUNCTION TCPM`.
 - `CHF 2` chamfer and `RND 4` rounding between two motion blocks; `APPR`/`DEP` approach and departure blocks (`APPR LT`, `DEP CT`...) are kept `RAW` in 1.0.
 - `M91` in the block: coordinates from the machine datum; `M92` from a second datum.
-- `M126`/`M127`: shortest path of rotary axes; `M128 F1000`/`M129`: tool center point control (with the feed of the compensating motion), `FUNCTION TCPM F TCP AXIS POS PATHCTRL AXIS` and `FUNCTION RESET TCPM` on the TNC 640; `M116`/`M117` rotary feed in mm/min; `M138` selects the tilting axes for `M128`; `M140 MB MAX` (or `MB50`) retracts along the tool axis to the limit or by a distance, `M140 MB MAX F..`; `M118` handwheel superimposition, `M120 LA` look-ahead for radius compensation, `M136`/`M137` feed per revolution.
+- `M126`/`M127`: shortest path of rotary axes; `M128 F1000`/`M129`: tool center point control (with the feed of the compensating motion), `FUNCTION TCPM F TCP AXIS POS PATHCTRL AXIS` and `FUNCTION RESET TCPM` on the TNC 640; `M116`/`M117` rotary feed in mm/min; `M138` selects the tilting axes for `M128`; `M140 MB MAX` (or `MB50`) retracts along the tool axis to the limit or by a distance, `M140 MB MAX F..`; `M118` handwheel superimposition, `M120 LA` look-ahead for radius compensation, `M136` feed per revolution, `M137` back to feed per minute. Every program starts with feed per minute: a modal M function that is not cancelled in a later block is cancelled at program end, and the control resets the modal program information when a new program is selected, so `M136` never carries into the next program (D337).
 - `CYCL DEF 32.0 TOLERANZ`, `32.1 T0.02`, `32.2 HSC-MODE:0 TA0.05`: contouring tolerance, mode (0 finish, 1 rough) and rotary tolerance.
 
 ## 3. Frames
@@ -81,7 +81,7 @@ CYCL CALL
 ## 6. Q parameters and FN functions
 
 - `Q0`..`Q99` free, `Q100`..`Q199` reserved for the control's cycles (read by programs), `Q200`..`Q1199` cycle parameters, `Q1200`..`Q1399` reserved, `Q1400`..`Q1999` free again; `QL0`..`QL499` local to the program level, `QR` remanent (kept after power-off), `QS` strings.
-- `FN 0: Q5 = +10` assign, `FN 1` add, `FN 2` subtract, `FN 3` multiply, `FN 4` divide, `FN 5` square root; the formula syntax `Q1 = Q2 + 3 * SIN Q3` with the functions `SIN COS TAN ASIN ACOS ATAN SQRT ABS INT FRAC SGN NEG LN LOG EXP` and `^` (power), `%` (modulo); `FN 9: IF +Q1 EQU +Q3 GOTO LBL 5`, `FN 10` (unequal), `FN 11` (greater), `FN 12` (less); `FN 14` error message, `FN 16: F-PRINT` output to a file, `FN 18: SYSREAD` system data (positions, tool data, cycle results), `FN 19` PLC values, `FN 20: WAIT FOR` synchronization with the PLC, `FN 26`..`FN 28` table access, `FN 29` PLC output, `FN 37` export.
+- `FN 0: Q5 = +10` assign, `FN 1` add, `FN 2` subtract, `FN 3` multiply, `FN 4` divide, `FN 5` square root; the formula syntax `Q1 = Q2 + 3 * SIN Q3` with the functions `SIN COS TAN ASIN ACOS ATAN SQRT ABS INT FRAC SGN NEG LN LOG EXP` and `^` (power), `%` (modulo); `FN 9: IF +Q1 EQU +Q3 GOTO LBL 5` (equal), `FN 10: IF +10 NE -Q5 GOTO LBL 10` (unequal), `FN 11: IF +Q1 GT +10 GOTO LBL 5` (greater), `FN 12: IF +Q5 LT +0 GOTO LBL "ANYNAME"` (less), each with the sign on both values (D336); `FN 14` error message, `FN 16: F-PRINT` output to a file, `FN 18: SYSREAD` system data (positions, tool data, cycle results), `FN 19` PLC values, `FN 20: WAIT FOR` synchronization with the PLC, `FN 26`..`FN 28` table access, `FN 29` PLC output, `FN 37` export.
 - Expressions may stand wherever a number stands (`L X+Q1 Y-Q2`); the reader keeps `Q` names as NCX variable names (`Q5`, `QL5`, `QR5`, `QS5`).
 
 ## 7. Reading Klartext
@@ -99,8 +99,8 @@ CYCL CALL
 ## 8. Writing Klartext
 
 1. Consecutive block numbers from 0, `BEGIN PGM name MM` from the program name and the units, `END PGM name MM` after `M30`.
-2. Comma as the decimal separator, sign on every coordinate, `FMAX` for `RAPID`, `F` on `LINE` blocks when the feed changed (or on every block by option).
-3. `TOOL CALL n axis S` assembled from `TOOL`, `WORKPLANE` and the `RPM` of the same or the following block; `TOOL DEF n` for `PRELOAD`.
+2. Comma as the decimal separator, sign on every coordinate, `FMAX` for `RAPID`, `F` on `LINE` blocks when the feed changed (or on every block by option); `R0`, `RL` or `RR` on the `L` block only, where the compensation changed, so a motion Klartext writes without an `L` block that would run with another one is an ERROR (D345).
+3. `TOOL CALL n axis S` assembled from `TOOL`, `WORKPLANE` and the `RPM` of the same or the following block, which is the first block after the `TOOL` block, in its section, that holds more than `PRELOAD` words (a `TOOL DEF` has no speed field, so a preload is never the block the speed comes from); what the call folds in is not written again (D275). A `WORKPLANE` that changes the tool axis of the last `TOOL CALL` needs a `TOOL` in its own block, or must stand in that following block: Klartext fixes the working plane at the tool call with the spindle axis, and no other block sets it, so every other form is an ERROR (D321). `TOOL DEF n` for `PRELOAD`.
 4. Arcs as `CC` plus `C` (the canonical form) or `CR` when the NCX block had `R`; sweeps beyond a turn as `CP IPA`.
 5. `HOME` as `L ... FMAX M91` to the reference coordinates (`home`, or `home2` for `POINT=2`) of the `[[axis]]` table (there is no reference return command); an axis without them is an ERROR of this compiler, not of `ncx check` (D100).
 6. Subprograms as `LBL n` ... `LBL 0` after the `M30` of every program that calls them, or as separate `.h` files with `CALL PGM` when the machine setting says so.

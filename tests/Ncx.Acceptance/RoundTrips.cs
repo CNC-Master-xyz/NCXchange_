@@ -265,10 +265,8 @@ public sealed class RoundTrips : IDisposable
     {
         return source switch
         {
-            "2.5D_FRAESEN.h" or "3D_FRAESEN.h" => [HeidenhainCompilerTests.s_programStart],
             "BOHREN.h" =>
             [
-                HeidenhainCompilerTests.s_programStart,
                 ChipBreaks("24"),
                 ChipBreaks("3"),
             ],
@@ -277,8 +275,8 @@ public sealed class RoundTrips : IDisposable
     }
 
     // The differences of each program compiled to the other controller, in their order: those HeidenhainCompilerTests
-    // and FanucCompilerTests keep for the example and for BOHREN, and for 3D_FRAESEN those of the 2.5D example, the
-    // M137 of the header and the stock definition the Fanuc reading has no block for (D217).
+    // and FanucCompilerTests keep for the example and for BOHREN, and for 3D_FRAESEN the stock definition the Fanuc
+    // reading has no block for (D217).
     private static List<NcException> CompileDifferences(string program, string machine, string text)
     {
         if (program == "2.5D_FRAESEN.ncx")
@@ -290,11 +288,7 @@ public sealed class RoundTrips : IDisposable
 
         return program == "BOHREN.ncx"
             ? HeidenhainCompilerTests.BohrenDifferences(text.ReplaceLineEndings("\n"))
-            :
-            [
-                HeidenhainCompilerTests.s_programStart,
-                HeidenhainCompilerTests.StockDefinition("BLK FORM 0.1 Z X0 Y0 Z-55", "BLK FORM 0.2 X100 Y100 Z0"),
-            ];
+            : [HeidenhainCompilerTests.StockDefinition("BLK FORM 0.1 Z X0 Y0 Z-55", "BLK FORM 0.2 X100 Y100 Z0")];
     }
 
     // D163 with wave-1 question #20: the Klartext reader reads every cycle 203 as PECK, the first entry of the catalog

@@ -62,6 +62,7 @@ public sealed class HeidenhainCompiler : CompilerBase
         _labels.Clear();
         HeidenhainBlock writing = NewBlock();
         HeidenhainProgramFrame.WriteBegin(writing, program, state);
+        HeidenhainFunctions.EnterProgram(writing);
         HeidenhainLabels.Check(writing);
     }
 
