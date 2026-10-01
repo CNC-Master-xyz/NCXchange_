@@ -23,6 +23,21 @@ internal sealed class FanucCycle
     public CycleEntry? Entry { get; init; }
 
     /// <summary>
+    /// Why the blocks of the cycle stay RAW although the catalog maps its code: the rigid-tapping "before" line of
+    /// the entry does not stand in front of the cycle block, so the source programmed another machining than the
+    /// entry names (D256). Null for a cycle the reader reads.
+    /// </summary>
+    public string? Problem { get; init; }
+
+    /// <summary>
+    /// True where the mode the "before" line of the entry switches on is in force for this cycle, the Fanuc rigid
+    /// tapping of M29 S: the line stood in the block in front of the cycle block or in the cycle block itself, or the
+    /// block re-issued the code of a cycle that was entered with it. The mode holds for the whole run of the cycle,
+    /// which ends with G80 or with a code of group 01 (controllers fanuc.md 6; D247; D256).
+    /// </summary>
+    public bool EnteredWithBefore { get; init; }
+
+    /// <summary>
     /// True for a simple turning cycle, G90, G92, G94 of system A (language 4.7.1).
     /// </summary>
     public bool IsTurning { get; init; }
@@ -104,6 +119,8 @@ internal sealed class FanucCycle
         {
             Code = Code,
             Entry = Entry,
+            Problem = Problem,
+            EnteredWithBefore = EnteredWithBefore,
             IsTurning = IsTurning,
             Axis = Axis,
             WritesAxis = WritesAxis,
@@ -134,6 +151,8 @@ internal sealed class FanucCycle
         return string.Join("|",
             Code,
             Entry?.Name ?? "",
+            Problem ?? "",
+            EnteredWithBefore ? "before" : "",
             IsTurning ? "turning" : "drilling",
             Axis,
             WritesAxis ? "axis" : "",

@@ -79,6 +79,13 @@ public sealed record SourceStructure
     public bool LiftsSubEnd { get; init; }
 
     /// <summary>
+    /// True for a block that returns to a block of its own section, a Fanuc <c>M99 Pn</c> in a section no block of
+    /// the file calls (D221): the family reads it as a <c>JUMP</c> of its own, and the structure pass counts it among
+    /// the ends a source writes, so a program whose last block it is gets no WARNING about a missing end (D211).
+    /// </summary>
+    public bool ReturnsToABlock { get; init; }
+
+    /// <summary>
     /// The block range a repeat of the block names by the labels of its first and its last block, which stand before it
     /// in its section, START END of a SINUMERIK REPEAT START END P=3 (controller-mapping 6, REPEAT + TIMES); null for a
     /// block that names none. The structure pass copies the range into a SUB section of the file, whose name the

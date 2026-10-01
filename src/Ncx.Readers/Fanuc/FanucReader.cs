@@ -144,11 +144,17 @@ public sealed partial class FanucReader : ReaderBase
         // subprogram a block of the file calls, P names a block of the caller, which no JUMP of NCX reaches, so the
         // reader keeps the block as RAW (FanucMacro.ReadCalls, D5). Which sections the file calls comes from the
         // pre-scan of BeginStructure, so that a caller standing after its section reads the same way as one before it.
+        bool returnsToABlock = false;
         if (returnsToTheBlock is not null && FanucState.LabelOf(returnsToTheBlock) is string target
             && !fanuc.Calls.IsCalled(fanuc.SectionName ?? string.Empty) && fanuc.HasSectionLabel(target))
         {
             fanuc.ReturnsToTheBlock[block.Line] = target;
             Jump(fanuc, block, target, labelsUsed);
+
+            // D211 and D221: the loop that such a block closes is an end the source writes, as a plain M99 loop is,
+            // so the structure pass writes PROGRAM=END after it without the WARNING RDR010 (decisions.md;
+            // controller-mapping 1, the PROGRAM=END row).
+            returnsToABlock = true;
         }
 
         // M98 P, G65 P and the M200 P of the builder nakamura enter a subprogram of the file; the external call code
@@ -177,6 +183,7 @@ public sealed partial class FanucReader : ReaderBase
             LabelsUsed = labelsUsed,
             Calls = calls,
             Contour = FanucCycles.ContourOf(block, Machine, out _),
+            ReturnsToABlock = returnsToABlock,
         };
     }
 
@@ -743,6 +750,7 @@ public sealed partial class FanucReader : ReaderBase
             if (index + 1 < blocks.Count && BeforeOf(blocks[index + 1]) is string entry)
             {
                 fanuc.CycleBefore[block.Line] = entry;
+                fanuc.BeforeLineOf[blocks[index + 1].Line] = block.Line;
             }
 
             // The contour of a G70 to G76 is the SUB section the structure pass made of it (language 4.7.1, D65).

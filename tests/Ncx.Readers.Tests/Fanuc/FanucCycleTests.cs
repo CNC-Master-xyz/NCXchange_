@@ -1,3 +1,5 @@
+using Ncx.Core.Model;
+using Ncx.Core.Writing;
 using static Ncx.Readers.Tests.Fanuc.FanucRead;
 
 namespace Ncx.Readers.Tests.Fanuc;
@@ -67,18 +69,20 @@ public sealed class FanucCycleTests
             Body("G0 X0 Y0 Z10.\nG82 G99 Z-5. R2. P500 F100\nG80"));
     }
 
-    // G84 taps with the pitch F / S in the per-minute mode (controller-mapping 5, TAP; BOHREN.fanuc.nc N3110).
+    // D256: a G84 without the rigid-tapping line of the TAP entry in front of it is tapping with a compensating
+    // chuck, which is another machining than CYCLE=TAP and has no entry in the Fanuc catalog, so the blocks of the
+    // cycle stay RAW and no compiler writes the M29 of rigid tapping in front of them (decisions.md; fanuc 6; D5).
     [Fact]
-    public void G84_InThePerMinuteMode_HasThePitchFOverS()
+    public void TapWithoutItsRigidTapLine_IsAnotherMachining_KeepsItsBlocksAsRaw()
     {
         Assert.Equal(
             Lines(
                 "SPINDLE=CW RPM=500",
                 "RAPID X=0 Y=0 Z=10",
-                "CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE CYCLE_F=750 PITCH=1.5",
-                "CYCLE_CALL",
+                "RAW:FANUC=\"G84 G99 Z-20. R5. F750\"",
+                "RAW:FANUC=\"X30.\"",
                 "CYCLE=OFF"),
-            Body("S500 M3\nG0 X0 Y0 Z10.\nG84 G99 Z-20. R5. F750\nG80"));
+            Body("S500 M3\nG0 X0 Y0 Z10.\nG84 G99 Z-20. R5. F750\nX30.\nG80"));
     }
 
     // D256, BOHREN.fanuc.nc N3100 and N3110: the M29 S of rigid tapping directly before the G84 is the before line
@@ -95,6 +99,53 @@ public sealed class FanucCycleTests
                 "CYCLE_CALL",
                 "CYCLE=OFF"),
             Body("S500 M3\nG0 X0 Y0 Z10.\nM29 S500\nG84 G99 Z-20. R5. F750\nG80"));
+    }
+
+    // D256: the rigid-tapping line enters the mode for the whole run of the cycle - its own evidence has an M29
+    // inside a running tapping cycle alarm PS0204, so a legal source cannot repeat the line in front of a second
+    // cycle block - so a second G84 until G80 is the same cycle TAP and not another machining.
+    [Fact]
+    public void RigidTapLine_WithASecondCycleBlockOfTheRun_KeepsReadingTheTapCycle()
+    {
+        Assert.Equal(
+            Lines(
+                "SPINDLE=CW RPM=500",
+                "RAPID X=0 Y=0 Z=10",
+                "CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE CYCLE_F=750 PITCH=1.5",
+                "CYCLE_CALL",
+                "CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-25 CYCLE_RETRACT=CLEARANCE CYCLE_F=750 PITCH=1.5",
+                "CYCLE_CALL",
+                "CYCLE=OFF"),
+            Body("S500 M3\nG0 X0 Y0 Z10.\nM29 S500\nG84 G99 Z-20. R5. F750\nG84 G99 Z-25. R5. F750\nG80"));
+    }
+
+    // D256 names three ways into the rigid-tapping mode, the second of them "M29 S in the same block as the tapping
+    // command", so the before line standing in the cycle block itself is the cycle TAP as well.
+    [Fact]
+    public void RigidTapLine_InTheCycleBlockItself_IsReadIntoTheTapCycle()
+    {
+        Assert.Equal(
+            Lines(
+                "SPINDLE=CW RPM=500",
+                "RAPID X=0 Y=0 Z=10",
+                "CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE CYCLE_F=750 PITCH=1.5",
+                "CYCLE_CALL",
+                "CYCLE=OFF"),
+            Body("S500 M3\nG0 X0 Y0 Z10.\nM29 S500 G84 G99 Z-20. R5. F750\nG80"));
+    }
+
+    // D256 requires the rigid-tapping line immediately before the cycle block, and a call may stand between the two:
+    // where the cycle block begins a section a block of the file calls, the reader does not see which block runs
+    // before it, so it can say neither that the line stands there nor that the source programmed the other
+    // machining, and the blocks of the cycle stay RAW with that reason (D5; wave-3 question #195).
+    [Fact]
+    public void TapAtTheHeadOfACalledSubprogram_WhoseLineTheReaderCannotSee_KeepsItsBlocksAsRaw()
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\nM98 P100\nG80\nM30\n"
+            + "O0100\nG84 G99 Z-20. R5. F750\nM99\n%\n");
+        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("the reader does not see which block runs before this one",
+            program.Diagnostics.ToText(), StringComparison.Ordinal);
     }
 
     // D256: the S of the before line is the speed the tapping runs at, so a speed other than the running one is RPM.

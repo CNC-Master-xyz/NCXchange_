@@ -210,7 +210,7 @@ internal static class FanucMacro
             if ((older || code == "G65" || (external is not null && code == external))
                 && CalledProgram(program, older && times is null) is long called)
             {
-                calls.Add(new FanucCall(called, Repeats(program, times, older), code == external));
+                calls.Add(new FanucCall(called, Repeats(program, times, older), code == external, code == "G65"));
             }
         }
 
@@ -307,7 +307,199 @@ internal static class FanucMacro
         if (g65 is not null)
         {
             ReadArguments(block);
+            return;
         }
+
+        if (external is null)
+        {
+            ReadSharedLocals(block, called);
+        }
+    }
+
+    // D148: a subprogram call opens no local-variable level, so an M98 subprogram (and the M200 of the builder
+    // nakamura) shares the caller's #1..#33 for reading and for writing, while a G65 macro call raises the level and
+    // starts the callee's vacant apart from its letter arguments (fanuc 7; controllers fanuc.md 7). A CALL of NCX is
+    // the macro call: the callee's V1..V33 start unassigned apart from the ARG values and the caller's are restored
+    // at the return (virtual machine 3.6, 4). So the locals the subprogram reads from the caller stand on the CALL as
+    // ARG:Vn={$Vn}, and a local it writes back for the caller does not reach the caller through a CALL at all, which
+    // the reader reports (decisions.md, D148; RDR106). D148 settles those two alone: a local the subprogram assigns
+    // itself before it reads it is no local it reads from the caller, and one it leaves behind that no block of the
+    // caller reads is none it writes back for the caller, so neither puts a word or a diagnostic on the CALL.
+    // TODO(question): an external program, the call code of [format] external_call and a P the file holds no O line
+    // for, has blocks the reader does not see, so it cannot tell which of #1..#33 that program reads or writes; D148
+    // settles the subprogram of the file and says nothing of one outside it, and the reader passes no ARG and reports
+    // nothing there, as main does (wave-3 question #194).
+    private static void ReadSharedLocals(FanucBlock block, long called)
+    {
+        var read = new SortedSet<int>();
+        var written = new SortedSet<int>();
+        SharedLocalsOf(block, called, read, written);
+        foreach (int local in read)
+        {
+            string name = "V" + local.ToString(CultureInfo.InvariantCulture);
+            if (FanucExpression.Parse("$" + name, block, out _) is ExprValue value)
+            {
+                block.Draft.Main.Add("ARG", name, value);
+            }
+        }
+
+        SortedSet<int> back = WrittenBackLocals(block, written);
+        if (back.Count == 0)
+        {
+            return;
+        }
+
+        var locals = new List<string>();
+        foreach (int local in back)
+        {
+            locals.Add("#" + local.ToString(CultureInfo.InvariantCulture));
+        }
+
+        block.Draft.Warnings.Add((DiagnosticCodes.FanucSharedLocalWritten,
+            $"The subprogram {called.ToString(CultureInfo.InvariantCulture)} writes "
+            + $"{string.Join(", ", locals)}, which it shares with its caller because a subprogram call opens no "
+            + "local-variable level; the CALL of NCX restores the caller's V1..V33 at the return, so the write does "
+            + "not reach the caller (D148, virtual machine 3.6)."));
+    }
+
+    // The locals #1..#33 that a called program of the file, and every program it calls at the same level, reads from
+    // the caller, and the ones they write (D148). A G65 of the subprogram opens a level of its own and is not
+    // followed, an external program has blocks the reader does not see, and a program that calls itself is walked
+    // once. The walk follows the blocks in the order of the file and the calls where they stand, so that a local the
+    // subprogram assigns before it reads it is not counted as read from the caller.
+    private static void SharedLocalsOf(FanucBlock block, long called, SortedSet<int> read, SortedSet<int> written)
+    {
+        WalkLevel(block, called, read, written, [], []);
+    }
+
+    // The blocks of one program of the file and of the programs it calls at the same local-variable level, in the
+    // order they run in, adding what they read from the caller to read and what they write to written; assigned
+    // carries the locals the walk has written already and walked the programs it has walked (D148).
+    private static void WalkLevel(FanucBlock block, long program, SortedSet<int> read, SortedSet<int> written,
+        HashSet<int> assigned, HashSet<long> walked)
+    {
+        if (!walked.Add(program)
+            || !block.Fanuc.Calls.Begins.TryGetValue(
+                program.ToString(CultureInfo.InvariantCulture), out SourceBlock? begin))
+        {
+            return;
+        }
+
+        foreach (SourceBlock body in block.Fanuc.SectionOf(begin))
+        {
+            LocalsOf(body, read, written, assigned);
+            foreach (FanucCall call in CallsOf(body, block.Machine))
+            {
+                if (!call.External && !call.Macro)
+                {
+                    WalkLevel(block, call.Program, read, written, assigned, walked);
+                }
+            }
+        }
+    }
+
+    // Which of the locals an M98 subprogram writes it writes back for the caller (D148): the blocks of the caller
+    // after the CALL, and the subprograms they call at the same level, read it without assigning it themselves
+    // first, so the value they expect is the one the subprogram left. The CALL of NCX restores the caller's V1..V33
+    // at the return instead (virtual machine 3.6), which is the loss the reader reports; a local the subprogram only
+    // used as its own scratch reaches no block that reads it and is none.
+    private static SortedSet<int> WrittenBackLocals(FanucBlock block, SortedSet<int> written)
+    {
+        if (written.Count == 0)
+        {
+            return written;
+        }
+
+        var read = new SortedSet<int>();
+        var ignored = new SortedSet<int>();
+        var assigned = new HashSet<int>();
+        var walked = new HashSet<long>();
+        bool after = false;
+        foreach (SourceBlock body in block.Fanuc.SectionOf(block.Source))
+        {
+            if (!after)
+            {
+                after = body.Line == block.Line;
+                continue;
+            }
+
+            LocalsOf(body, read, ignored, assigned);
+            foreach (FanucCall call in CallsOf(body, block.Machine))
+            {
+                if (!call.External && !call.Macro)
+                {
+                    WalkLevel(block, call.Program, read, ignored, assigned, walked);
+                }
+            }
+        }
+
+        read.IntersectWith(written);
+        return read;
+    }
+
+    // The locals #1..#33 one block reads from the state it began with and the ones it writes, word by word in the
+    // order of the block: #n = e writes #n, and every other #n of the block, in the value of a word, in an
+    // expression and in the index of an indirect variable, is a read (D148). A read counts as one from the caller
+    // only where no write of the walk assigned it before, so that #1=0 before WHILE[#1 LT 3] is the subprogram's own
+    // counter and not the caller's local; a block reads before it writes, as #1=#1+1 does. An indirect assignment,
+    // #[#1+1]=5, names no local the reader can tell, so it assigns none here and a read after it still counts as the
+    // caller's, which is what D148 says of a local the subprogram reads.
+    private static void LocalsOf(SourceBlock block, SortedSet<int> read, SortedSet<int> written,
+        HashSet<int> assigned)
+    {
+        foreach (SourceWord word in block.Words)
+        {
+            int? target = word.Address == "#" && word.Expression is not null
+                && long.TryParse(word.Text, NumberStyles.None, CultureInfo.InvariantCulture, out long number)
+                && IsLocal(number)
+                    ? (int)number
+                    : null;
+            if (target is null)
+            {
+                AddLocals(word.Text, read, assigned);
+            }
+
+            AddLocals(word.Expression, read, assigned);
+            if (target is int local)
+            {
+                written.Add(local);
+                assigned.Add(local);
+            }
+        }
+    }
+
+    // Every #n with n in 1..33 of a text, the value of a word or an expression as the control writes it, that no
+    // write of the walk assigned before (D148).
+    private static void AddLocals(string? text, SortedSet<int> locals, HashSet<int> assigned)
+    {
+        if (text is null)
+        {
+            return;
+        }
+
+        for (int index = text.IndexOf('#', StringComparison.Ordinal); index >= 0;
+            index = text.IndexOf('#', index + 1))
+        {
+            int end = index + 1;
+            while (end < text.Length && char.IsAsciiDigit(text[end]))
+            {
+                end++;
+            }
+
+            if (end > index + 1
+                && long.TryParse(text.AsSpan(index + 1, end - index - 1), NumberStyles.None,
+                    CultureInfo.InvariantCulture, out long local) && IsLocal(local)
+                && !assigned.Contains((int)local))
+            {
+                locals.Add((int)local);
+            }
+        }
+    }
+
+    // #1..#33 are the local variables of one call level, which NCX names V1..V33 (fanuc 7; language 4.9, D33).
+    private static bool IsLocal(long variable)
+    {
+        return variable is >= 1 and <= 33;
     }
 
     // The letters of G65 are the arguments; the callee reads A as #1, which NCX names V1 (language 4.9, controllers

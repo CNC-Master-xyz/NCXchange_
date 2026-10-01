@@ -137,7 +137,7 @@ A two-path lathe runs one program per path (turret, or head and turret). The pat
 6. `G52` replaces the previous `G52`, so the reader writes `SHIFT=RESET` before the new `SHIFT`. In a `G52` block `U` and `W` are the lathe spelling of that absolute local origin, not increments, so rule 1 does not apply to them and the reader writes absolute `SHIFT` words (D117).
 7. `G10`, `G65`/`G66` calls of unknown macros, probing (`G31`, `G38`), builder G macros not in the configuration: `RAW` with a WARNING, never dropped.
 8. Numbers are taken as written; a trailing or leading dot is accepted.
-9. The `before` line of a catalog entry standing directly in front of its cycle block belongs to the cycle: `M29 S500` before a `G84` is read into `CYCLE=TAP`, and the `S` becomes `RPM` only where it differs from the running speed (machine-config 6, D256).
+9. The `before` line of a catalog entry belongs to the cycle (machine-config 6, D256). Fanuc gives three ways into the mode it switches on: the line in the block directly in front of the cycle block, the line in the same block as the cycle command, and the control parameter that needs none, which is the entry whose `before` is `""`. `M29 S500` in front of a `G84`, or in its block, is read into `CYCLE=TAP`, and the `S` becomes `RPM` only where it differs from the running speed; an `S` word or an axis motion between the line and the cycle block alarms PS0203. The mode then holds for the run of the cycle, which `G80` or a code of group 01 ends (rule 5), and an `M29` inside a running tapping cycle alarms PS0204, so every cycle block of one run is the same `CYCLE=TAP`. A `G84` that the line reaches in none of the three ways is tapping with a compensating chuck, another machining than the entry names.
 
 ## 10. Rules for the writer
 
@@ -147,4 +147,4 @@ A two-path lathe runs one program per path (turret, or head and turret). The pat
 4. Wait marks from the `[sync]` table with the path form the machine uses (list or bitmask).
 5. Decimal point on every real number per `[format]` (`decimals`, `trailing_zeros`); comments in parentheses, transliterated to ASCII (`comment_charset`).
 6. Numbers, names and file names per `[format]`; block numbers per `format.block_numbers`.
-7. The `before` line of a catalog entry stands in its own line directly before the cycle block, `M29 S500` before `G84 G99 Z-20. R5. F750` (machine-config 6, D256).
+7. The `before` line of a catalog entry stands in its own line directly before the cycle block, `M29 S500` before `G84 G99 Z-20. R5. F750`, and once per run of the cycle, since an `M29` inside a running tapping cycle alarms PS0204 (machine-config 6, D256).

@@ -85,8 +85,11 @@ internal sealed partial class StructurePass
         // the source has no end at all (language 4.13; controller-mapping 1, the missing M30 of Klartext).
         // D211: the same WARNING for every family, Fanuc and Siemens as well as Klartext, because the reader writes
         // a block the source does not have; an M99 loop and a /M30 are ends the source writes and get none
-        // (decisions.md; controller-mapping 1, the PROGRAM=END row).
-        bool loops = _structures[last].Role == StructureRole.Return && !_blocks[last].BlockSkip;
+        // (decisions.md; controller-mapping 1, the PROGRAM=END row). A loop is the return the family reads as a
+        // JUMP=START and the one it reads as a JUMP of its own, the Fanuc M99 Pn of a section no block of the file
+        // calls, which returns to the block Nn of that same section (SourceStructure.ReturnsToABlock, D221).
+        bool loops = (_structures[last].Role == StructureRole.Return || _structures[last].ReturnsToABlock)
+            && !_blocks[last].BlockSkip;
         if (!loops && FindRole(section, StructureRole.ProgramEnd, unskippedOnly: false) is null)
         {
             _diagnostics.Warning(_blocks[header].Line, DiagnosticCodes.ProgramEndMissing, string.Create(

@@ -12,7 +12,10 @@ namespace Ncx.Readers.Fanuc;
 /// know.</param>
 /// <param name="External">True for the external call code of the machine, the call of a program from external
 /// memory.</param>
-internal sealed record FanucCall(long Program, bool Repeats, bool External)
+/// <param name="Macro">True for a G65 macro call, which opens a local-variable level of its own, so that the callee's
+/// #1..#33 are vacant apart from the letter arguments; a subprogram call opens none and shares the caller's (fanuc 7,
+/// D148).</param>
+internal sealed record FanucCall(long Program, bool Repeats, bool External, bool Macro)
 {
     /// <summary>
     /// The name of the section the call enters, the number without leading zeros (controller-mapping 6).

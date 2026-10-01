@@ -84,6 +84,21 @@ public sealed class FanucCyclesTests
         Assert.EndsWith("M29 S500\nG84 G99 Z-20. R5. P0 F750.\n", body, StringComparison.Ordinal);
     }
 
+    // D256: the rigid-tapping line enters a mode that holds for the whole run of the cycle, and its evidence has an
+    // M29 inside a running tapping cycle alarm PS0204, so a second definition of the same CYCLE=TAP - another DEPTH
+    // until CYCLE=OFF - is written without the line.
+    [Fact]
+    public void Tap_WithASecondDefinitionOfTheRun_WritesTheRigidTappingLineOnlyOnce()
+    {
+        string body = FanucCompile.Body("TOOL=1\nSPINDLE=CW RPM=500\nRAPID X=10 Y=10\nRAPID Z=5"
+            + "\nCYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE CYCLE_F=750 PITCH=1.5\nCYCLE_CALL"
+            + "\nCYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-25 CYCLE_RETRACT=CLEARANCE CYCLE_F=750 PITCH=1.5\nCYCLE_CALL"
+            + "\nCYCLE=OFF");
+
+        Assert.EndsWith("M29 S500\nG84 G99 Z-20. R5. F750.\nG84 G99 Z-25. R5.\nG80\n", body,
+            StringComparison.Ordinal);
+    }
+
     // Language 4.7 CYCLE_DWELL (seconds), controllers fanuc.md 6 (P in milliseconds) and 7: an expression dwell is P
     // with the expression times 1000.
     [Fact]

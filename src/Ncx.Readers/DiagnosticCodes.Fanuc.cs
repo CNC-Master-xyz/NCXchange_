@@ -39,4 +39,11 @@ public static partial class DiagnosticCodes
     /// the drilling axis stood; CYCLE_RETRACT=SAFE is written without SAFE (controller-mapping 5, language 4.7).
     /// </summary>
     public const string FanucInitialLevelUnknown = "RDR105";
+
+    /// <summary>
+    /// RDR106, a WARNING: an M98 subprogram writes one of the caller's local variables #1..#33 back for the caller,
+    /// which it shares with it because a subprogram call opens no local-variable level; a CALL of NCX restores the
+    /// caller's V1..V33 at the return, so the write does not reach the caller (D148; virtual machine 3.6).
+    /// </summary>
+    public const string FanucSharedLocalWritten = "RDR106";
 }

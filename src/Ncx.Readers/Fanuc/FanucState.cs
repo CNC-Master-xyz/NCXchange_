@@ -76,6 +76,19 @@ internal sealed class FanucState
     public Dictionary<int, string> CycleBefore { get; } = [];
 
     /// <summary>
+    /// The line of the block that stands directly in front of a cycle block whose catalog entry carries a "before"
+    /// line, by the line of that cycle block (machine-config 6, D256).
+    /// </summary>
+    public Dictionary<int, int> BeforeLineOf { get; } = [];
+
+    /// <summary>
+    /// The lines of the blocks that were read as the "before" line of the cycle block after them: the line matched
+    /// the template of the entry, so the cycle is the machining the entry names (D256). A cycle block whose entry
+    /// carries a "before" line that stands in no entry here is another machining, which the reader keeps as RAW.
+    /// </summary>
+    public HashSet<int> CycleBeforeRead { get; } = [];
+
+    /// <summary>
     /// The lines of the blocks in the contour range of a G70 to G76 cycle of a lathe that stay RAW with their cycle.
     /// </summary>
     public HashSet<int> ContourLines { get; } = [];

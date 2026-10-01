@@ -156,6 +156,54 @@ public sealed class FanucMacroTests
         Assert.DoesNotContain(DiagnosticCodes.FanucMCodeNotNamed, Codes(program));
     }
 
+    // D148: a subprogram call opens no local-variable level, so an M98 subprogram shares the caller's #1..#33; the
+    // locals it reads stand on the CALL as ARG:Vn={$Vn}, which is how a CALL of NCX gives a callee its V1..V33
+    // (decisions.md; fanuc 7; virtual machine 3.6).
+    [Fact]
+    public void SharedLocals_AnM98SubprogramThatReadsThem_StandOnTheCallAsArg()
+    {
+        string text = Text("%\nO0001\n#1=5\n#2=7\nM98 P100\nM30\nO0100\nG90 G1 X#1 F100\nM99\n%\n");
+        Assert.Contains("CALL=100 ARG:V1={$V1}\n", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("ARG:V2", text, StringComparison.Ordinal);
+    }
+
+    // D148: a local the M98 subprogram writes back for the caller is one the caller sees on the control, while the
+    // CALL of NCX restores the caller's V1..V33 at the return, so the write does not reach the block of the caller
+    // that reads it and the reader reports the call (decisions.md; virtual machine 3.6; RDR106).
+    [Fact]
+    public void SharedLocals_AnM98SubprogramThatWritesThemBackForTheCaller_IsReported()
+    {
+        NcxProgram program = Program("%\nO0001\nM98 P100\nG90 G1 X#1 F100\nM30\nO0100\n#1=5\nM99\n%\n");
+        Assert.Contains("RDR106", Codes(program));
+        Assert.DoesNotContain("ARG:V1", NcxWriter.Write(program), StringComparison.Ordinal);
+    }
+
+    // D148 conditions the ARG on the subprogram reading the caller's locals and the report on its writing them
+    // "back for the caller": a subprogram that uses #1 as its own loop counter, assigning it before every read and
+    // leaving it behind for no block of the caller, does neither, so its CALL carries no ARG of a local nothing
+    // assigned (which the virtual machine would report as the ERROR VM901, D38) and no warning (decisions.md).
+    [Fact]
+    public void SharedLocals_AnM98SubprogramWhoseCounterIsItsOwn_StandOnNoArgAndAreNoWarning()
+    {
+        NcxProgram program = Program(
+            "%\nO0001\nG90 G0 X0\nM98 P100\nM30\nO0100\n#1=0\nWHILE[#1 LT 3]DO1\nG1 X[#1] F100\n#1=#1+1\n"
+            + "END1\nM99\n%\n");
+        string text = NcxWriter.Write(program);
+        Assert.Contains("CALL=100\n", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("ARG:V1", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("RDR106", Codes(program));
+    }
+
+    // D148: a G65 macro call raises the local-variable level, so its callee's #1..#33 are vacant apart from the
+    // letter arguments and no ARG of the caller's locals stands on the CALL (fanuc 7; decisions.md).
+    [Fact]
+    public void SharedLocals_AG65MacroCallWhoseCalleeReadsThem_StandOnNoArg()
+    {
+        string text = Text("%\nO0001\n#1=5\nG65 P9010 A1.\nM30\nO9010\nG90 G1 X#2 F100\nM99\n%\n");
+        Assert.Contains("CALL=9010 ARG:V1=1\n", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("ARG:V2", text, StringComparison.Ordinal);
+    }
+
     // A program the file does not hold is an external program, called by its file name (language 4.9, CALL).
     [Fact]
     public void M98_OfAProgramNotInTheFile_IsAnExternalCall()
@@ -271,6 +319,18 @@ public sealed class FanucMacroTests
     public void ReturnToABlock_InASectionNoBlockOfTheFileCalls_IsAJumpToThatBlock()
     {
         Assert.Equal(Lines("LABEL=30", "RAPID X=1", "JUMP=30"), Body("N30 G0 X1.\nM99 P30"));
+    }
+
+    // D211 with D221: the loop an M99 Pn closes in a section no block of the file calls is an end the source writes,
+    // as a plain M99 loop is, so a program whose last block it is gets PROGRAM=END without the WARNING RDR010
+    // (decisions.md; controller-mapping 1, the PROGRAM=END row).
+    [Fact]
+    public void MissingProgramEnd_WithAnM99PnLoopAsTheLastBlock_IsNoWarning()
+    {
+        NcxProgram program = Program("%\nO0001\nN30 G0 X1.\nM99 P30\n%\n");
+        string text = NcxWriter.Write(program);
+        Assert.Contains("LABEL=30\nRAPID X=1\nJUMP=30\nPROGRAM=END\n", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("RDR010", Codes(program));
     }
 
     // D221: in a subprogram a block of the file calls, the P of M99 names a block of the caller, which no JUMP of NCX

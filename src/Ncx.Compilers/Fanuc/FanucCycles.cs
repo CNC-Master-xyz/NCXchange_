@@ -258,7 +258,7 @@ internal static class FanucCycles
             FanucMotion.Change(write, FanucCodes.Distance, "G90");
         }
 
-        if (entry is not null && !WriteBefore(write, entry))
+        if (entry is not null && !WriteBefore(write, entry, code))
         {
             return;
         }
@@ -284,9 +284,21 @@ internal static class FanucCycles
     // in front of the cycle block: Fanuc M29 S{rpm} makes the tapping of G84 rigid, and a G84 without it is tapping
     // with a compensating chuck (machine-config 6; controllers fanuc.md 6, 10 rule 7; D256). An empty before line is
     // the machine whose parameter makes the cycle so without one. False when the line cannot be written.
-    private static bool WriteBefore(FanucBlock write, CycleEntry entry)
+    private static bool WriteBefore(FanucBlock write, CycleEntry entry, string code)
     {
         if (string.IsNullOrEmpty(entry.Before))
+        {
+            return true;
+        }
+
+        // The line stands once, in front of the block that enters the mode: the mode holds for the whole run of the
+        // cycle, and D256's evidence has an M29 inside a running tapping cycle alarm PS0204, so a second definition
+        // of the same cycle - another DEPTH of the same CYCLE=TAP - carries no line. The run ends with G80 or with a
+        // code of group 01 (fanuc 6; D247), which Cancel and Ended write and which clears the native code of the
+        // target state.
+        if (write.Target.ActiveOf(FanucCodes.Cycle) == code
+            && write.Target.ActiveOf(Definition) is string active
+            && active.StartsWith(entry.Name + " ", StringComparison.Ordinal))
         {
             return true;
         }

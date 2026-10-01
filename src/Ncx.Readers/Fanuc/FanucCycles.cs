@@ -46,22 +46,31 @@ internal static class FanucCycles
     private static readonly IntegerValue s_zero = new(0, "0");
 
     /// <summary>
-    /// Reads the "before" line of a catalog entry, the native line that belongs to the cycle itself and stands
-    /// directly in front of its cycle block: the Fanuc M29 S of rigid tapping is part of CYCLE=TAP, and its S becomes
-    /// RPM only where it differs from the speed the spindle runs at (machine-config 6; controllers fanuc.md 6, 9 rule
-    /// 9; D256).
+    /// Reads the "before" line of a catalog entry, the native line that belongs to the cycle itself: the Fanuc M29 S
+    /// of rigid tapping is part of CYCLE=TAP, and its S becomes RPM only where it differs from the speed the spindle
+    /// runs at (machine-config 6; controllers fanuc.md 6, 9 rule 9; D256). D256 names two ways the line reaches the
+    /// cycle, "M29 S before the tapping block" and "M29 S in the same block as the tapping command", so the line is
+    /// read in the block in front of the cycle block and in the cycle block itself.
     /// </summary>
     /// <param name="block">The block being read.</param>
     public static void ReadBeforeLine(FanucBlock block)
     {
-        if (block.Draft.IsRaw
-            || !block.Fanuc.CycleBefore.TryGetValue(block.Line, out string? name)
-            || block.Machine.CycleCatalog.Find(name) is not CycleEntry entry
-            || !FanucTemplates.TryMatch(block, entry.Before, out TemplateValues values))
+        if (block.Draft.IsRaw)
         {
             return;
         }
 
+        if (!BeforeLineMatches(block, block.Fanuc.CycleBefore.GetValueOrDefault(block.Line),
+                out TemplateValues values)
+            && !BeforeLineMatches(block, EntryOfTheCycleOf(block), out values))
+        {
+            return;
+        }
+
+        // The line matched, so the cycle of this block, or of the block after it, is the machining the entry names; a
+        // cycle block whose entry carries a "before" line that reaches it in neither way, and that re-issues the code
+        // of no running cycle of the entry, is another machining and stays RAW (Start, D256).
+        block.Fanuc.CycleBeforeRead.Add(block.Line);
         if (!values.TryGetNumber("rpm", out decimal rpm))
         {
             return;
@@ -75,6 +84,31 @@ internal static class FanucCycles
 
         block.Draft.AddState("RPM", FanucFunctions.SpindleAddress(block, role), FanucNumbers.Of(rpm));
         block.Fanuc.Rpm[role ?? ""] = rpm;
+    }
+
+    // Whether the words of the block are the "before" line of the named catalog entry; false for no name and for an
+    // entry without one (machine-config 6).
+    private static bool BeforeLineMatches(FanucBlock block, string? name, out TemplateValues values)
+    {
+        values = new TemplateValues();
+        return name is not null && block.Machine.CycleCatalog.Find(name) is CycleEntry entry
+            && FanucTemplates.TryMatch(block, entry.Before, out values);
+    }
+
+    // The entry whose cycle code this very block carries and whose "before" line may therefore stand in the block
+    // itself: the second of the three ways into the mode that D256 names, "M29 S in the same block as the tapping
+    // command" (machine-config 6).
+    private static string? EntryOfTheCycleOf(FanucBlock block)
+    {
+        foreach (CycleEntry entry in block.Machine.CycleCatalog.Entries)
+        {
+            if (!string.IsNullOrEmpty(entry.Before) && block.HasCode(entry.Native))
+            {
+                return entry.Name;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -139,8 +173,8 @@ internal static class FanucCycles
         {
             if (code is not null || Positions(block, cycle).Count > 0)
             {
-                block.Draft.KeepAsRaw(
-                    $"{cycle.Code} has no cycle in the catalog of the machine (machine-config 6); its blocks stay RAW");
+                block.Draft.KeepAsRaw(cycle.Problem ?? $"{cycle.Code} has no cycle in the catalog of the machine "
+                    + "(machine-config 6); its blocks stay RAW");
             }
 
             return;
@@ -531,6 +565,16 @@ internal static class FanucCycles
         CycleEntry? matched = block.IsLathe
             ? LatheEntry(block, catalog, code, axis, previous)
             : ModalEntry(catalog, code);
+        bool before = matched is not null && !string.IsNullOrEmpty(matched.Before)
+            && WithItsBeforeLine(block, matched, code, previous);
+        string? problem = matched is null || string.IsNullOrEmpty(matched.Before) || before
+            ? null
+            : WithoutItsBeforeLine(block, matched);
+        if (problem is not null)
+        {
+            matched = null;
+        }
+
         decimal? initial = previous?.InitialLevel;
         if (initial is null && block.State.Positions.TryGetValue(axis, out decimal level))
         {
@@ -543,6 +587,8 @@ internal static class FanucCycles
         {
             Code = code,
             Entry = matched,
+            Problem = problem,
+            EnteredWithBefore = before,
             Axis = axis,
             WritesAxis = block.IsLathe,
             InitialLevel = initial,
@@ -558,6 +604,81 @@ internal static class FanucCycles
         }
 
         block.Fanuc.Cycle = cycle;
+    }
+
+    // Whether the mode the entry's "before" line switches on is in force for this cycle, so that the cycle is the
+    // machining the entry names (machine-config 6; controllers fanuc.md 6, 9 rule 9; D256). D256 names three ways
+    // into it: the line in the block in front of the cycle block, the line in the cycle block itself, and the
+    // parameter that needs none, which is the documented before = "" entry and reaches this test as an entry with no
+    // line. The mode then holds for the whole run of the cycle - D256's own evidence has an M29 inside a running
+    // tapping cycle alarm PS0204, so a legal source cannot repeat the line in front of a second cycle block - and a
+    // run ends with G80 or with a code of group 01 that cancels the cycle (fanuc 6; D247), which leaves no cycle
+    // active here. A block that only re-issues the native code of a cycle entered with the line is therefore the
+    // same machining as its entry.
+    private static bool WithItsBeforeLine(FanucBlock block, CycleEntry entry, string code, FanucCycle? previous)
+    {
+        if (block.Fanuc.CycleBeforeRead.Contains(block.Line)
+            || (block.Fanuc.BeforeLineOf.TryGetValue(block.Line, out int before)
+                && block.Fanuc.CycleBeforeRead.Contains(before)))
+        {
+            return true;
+        }
+
+        return previous is not null && previous.EnteredWithBefore && previous.Code == code
+            && previous.Entry?.Name == entry.Name;
+    }
+
+    // Why a cycle block whose code the catalog maps is not read as the entry's cycle, although the entry carries a
+    // "before" line, the native line of the machining itself (machine-config 6; controllers fanuc.md 6; D256).
+    // Where the reader sees the block that runs before the cycle block and the line stands in neither of the places
+    // D256 names, the source programmed the other machining, which Fanuc states apart as a fact of the control: a
+    // G84 with M29 S in front of it taps rigidly, and "G84(G88) cycle that don't use the M29 code will be activated
+    // with normal tapping", tapping with a compensating chuck (D256, the ANSWER and its evidence). The catalog of the
+    // family has no entry for that other machining, so the blocks of the cycle stay RAW with the reason (D5,
+    // controller-mapping 9): the Fanuc text round-trips as the source wrote it, and no compiler writes the entry's
+    // "before" line in front of it.
+    // TODO(question): which NCX cycle the other machining is has no answer yet; D256 names TAP_COMPENSATING "once the
+    // Fanuc catalog has that entry (D162)", and D162 is open, so until it is answered the reader names no cycle and
+    // keeps the blocks as RAW rather than reading a machining the source did not program (wave-3 question #193).
+    // TODO(question): where the block that runs before the cycle block is none the reader sees - a cycle block that
+    // begins a section a block of the file calls, or one a jump enters - the reader can say neither that the line
+    // stands in front of it nor that the source programmed the other machining, since D256 requires the line
+    // immediately before the cycle block and a call may stand between the two. It keeps the blocks of the cycle as
+    // RAW with that reason, the least it can defend, until the answer says what such a cycle reads as (wave-3
+    // question #195).
+    private static string? WithoutItsBeforeLine(FanucBlock block, CycleEntry entry)
+    {
+        if (!SeesWhatRunsBefore(block))
+        {
+            return $"the reader does not see which block runs before this one, so it cannot tell whether the line "
+                + $"\"{entry.Before}\" of the cycle {entry.Name} stands in front of {entry.Native} here "
+                + "(machine-config 6, D256); its blocks stay RAW";
+        }
+
+        return $"{entry.Native} without the line \"{entry.Before}\" in front of it is not the cycle {entry.Name} of "
+            + "the catalog but another machining, which NCX cannot name (machine-config 6, D256); its blocks stay RAW";
+    }
+
+    // Whether the reader sees the block that runs before a block: the block in front of it in the file runs before
+    // it, unless a jump enters it or it begins a section a block of the file calls, where the block before it in the
+    // file is the end of another section (virtual machine 3.9; controller-mapping 6). Nothing runs before the first
+    // block of the file, which the reader sees as well.
+    private static bool SeesWhatRunsBefore(FanucBlock block)
+    {
+        FanucState fanuc = block.Fanuc;
+        if (block.Source.Find("N") is SourceWord label && fanuc.JumpTargets.Contains(FanucState.LabelOf(label)))
+        {
+            return false;
+        }
+
+        int index = fanuc.IndexOf(block.Source);
+        if (index <= 0)
+        {
+            return true;
+        }
+
+        return fanuc.Blocks[index - 1].Find("O") is not SourceWord program || program.Number is not decimal number
+            || !fanuc.Calls.IsCalled(decimal.ToInt64(decimal.Truncate(number)).ToString(CultureInfo.InvariantCulture));
     }
 
     // The entry of a native cycle that stays active after its block, as the drilling cycles and the simple turning
