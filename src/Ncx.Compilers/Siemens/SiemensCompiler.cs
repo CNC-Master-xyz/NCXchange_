@@ -182,6 +182,15 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
             return false;
         }
 
+        // The RAW PROC line of a subprogram stands at the head of its unit or is reported there (SiemensFlow.ProcLine).
+        if (write.File.IsProcRaw(write.Block))
+        {
+            write.Written("RAW");
+            write.Written("SKIP");
+            SiemensProgramFrame.WriteComment(write);
+            return true;
+        }
+
         write.Written("RAW");
         write.Written("SKIP");
         SiemensCycles.EndModalCallBeforeRaw(write, raw);

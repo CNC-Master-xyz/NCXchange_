@@ -175,6 +175,24 @@ public sealed class SiemensCompilerTests : IDisposable
         Assert.Equal(AfterHeader(LinesWithoutNumbers(compiled)), AfterHeader(LinesWithoutNumbers(again)));
     }
 
+    // D344, 840D sl NC-Programmierung SW4.92 p.511, p.522-523: a source subprogram PROC CHECK SAVE converts and
+    // compiles back to one PROC CHECK SAVE line and an M17 end, since RET cannot stand in a SAVE subprogram.
+    [Fact]
+    public void RoundTrip_SubprogramDeclaredSave_KeepsOneProcLineAndEndsWithM17()
+    {
+        MachineConfig machine = Mill();
+        NcxProgram read = new SiemensReader().Read(new SourceFile("MAIN.mpf",
+            "%_N_MAIN_MPF\nCHECK\nG0 X10\nM30\n%_N_CHECK_SPF\nPROC CHECK SAVE\nG0 X5\nM17\n"), machine,
+            new ReadOptions());
+
+        List<string> lines = LinesWithoutNumbers(Compile(NcxWriter.Write(read), machine));
+
+        Assert.Equal("PROC CHECK SAVE",
+            Assert.Single(lines, line => line.StartsWith("PROC ", StringComparison.Ordinal)));
+        Assert.Equal("M17", lines[^1]);
+        Assert.DoesNotContain("RET", lines);
+    }
+
     // Phase 5 exit, M8: under NCX_CORPUS the Hermle C22 U program and the Burkhardt+Weber programs read and compile
     // back to themselves under the comparison rules of phase 3 (block numbers, comments and blank lines left out,
     // numbers compared by value, the modal lines before the first motion compared per G group).

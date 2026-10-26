@@ -245,6 +245,178 @@ public sealed class SiemensProgramFrameTests
         Assert.Equal(["CMP533"], CompilerCodes(result));
     }
 
+    // D344, 840D sl NC-Programmierung SW4.92 p.522-523: RET cannot stand in a subprogram defined with SAVE, and M17
+    // returns from any subprogram, so a SAVE subprogram ends with M17; its RAW PROC line, as the reader keeps PROC NAME
+    // SAVE, stands in place of the compiler's own PROC line, the one PROC line of the unit.
+    [Fact]
+    public void SubEnd_OfASubprogramDeclaredSave_IsM17UnderItsOwnProcLine()
+    {
+        Assert.Equal(Lines(
+            "%_N_MAIN_MPF",
+            "G17 G40 G90 G94 G71",
+            "CHECK",
+            "M30",
+            "%_N_CHECK_SPF",
+            "PROC CHECK SAVE",
+            "G0 G90 X5",
+            "M17"), TextOf(Run(SubWithRaw("PROC CHECK SAVE", "RAPID X=5"), Mill())));
+    }
+
+    // D344: SAVE right after the parenthesis of the parameters, and after a default that holds parentheses, declares
+    // the subprogram SAVE as well, so it ends with M17 under its own PROC line (SW4.92 p.511-512, p.522-523).
+    [Theory]
+    [InlineData("PROC CHECK(REAL W)SAVE")]
+    [InlineData("PROC CHECK(REAL W=SIN(30)) SAVE")]
+    public void SubEnd_OfASubprogramDeclaredSaveAfterParameters_IsM17UnderItsOwnProcLine(string proc)
+    {
+        string program = $$"""
+            FILE=BEGIN NCX=1
+            PROGRAM=BEGIN NAME="MAIN"
+            FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF
+            CALL=CHECK ARG:W=5
+            PROGRAM=END
+            SUB=BEGIN NAME=CHECK
+            RAW:SIEMENS="{{proc}}"
+            VAR:R1={$W * 2}
+            SUB=END
+            FILE=END
+            """;
+
+        Assert.Equal(Lines("%_N_MAIN_MPF", "EXTERN CHECK(REAL)", "G17 G40 G90 G94 G71", "CHECK(5)", "M30",
+            "%_N_CHECK_SPF", proc, "R1=W*2", "M17"), TextOf(Run(program, Mill())));
+    }
+
+    // The reader keeps a PROC that stands inside a unit as RAW too ("PROC stands inside a unit", SiemensCalls
+    // ReadProc); only a PROC line that is the first block of the SUB section is the subprogram's own, so one later in
+    // the section is written where it stands, under the compiler's own PROC line, and the end stays RET.
+    [Fact]
+    public void ProcLine_RawLaterInTheSection_IsNotTheSubprogramsOwn()
+    {
+        Assert.Equal(Lines(
+            "%_N_MAIN_MPF",
+            "G17 G40 G90 G94 G71",
+            "CHECK",
+            "M30",
+            "%_N_CHECK_SPF",
+            "PROC CHECK",
+            "G0 G90 X5",
+            "PROC CHECK SAVE",
+            "RET"), TextOf(Run(SubWithBlocks("RAPID X=5", "RAW:SIEMENS=\"PROC CHECK SAVE\""), Mill())));
+    }
+
+    // D344: a RETURN inside a SAVE subprogram is the same return as its end, M17 and not RET (SW4.92 p.522-523).
+    [Fact]
+    public void Return_InASubprogramDeclaredSave_IsM17()
+    {
+        string text = TextOf(Run(SubWithRaw("PROC CHECK SAVE", "RETURN"), Mill()));
+
+        Assert.DoesNotContain("RET", text, StringComparison.Ordinal);
+        Assert.Equal(2, LinesOf(text).Count(line => line == "M17"));
+    }
+
+    // The RAW PROC line with SBLOF and DISPLOF and no SAVE stands in place of the compiler's own and keeps RET, sub_end
+    // (controller-mapping 6, SUB=BEGIN; SW4.92 p.512-513).
+    [Fact]
+    public void ProcLine_RawWithoutSave_StandsInPlaceOfTheCompilersLineAndTheEndStaysRet()
+    {
+        Assert.Equal(Lines(
+            "%_N_MAIN_MPF",
+            "G17 G40 G90 G94 G71",
+            "CHECK",
+            "M30",
+            "%_N_CHECK_SPF",
+            "PROC CHECK SBLOF DISPLOF",
+            "G0 G90 X5",
+            "RET"), TextOf(Run(SubWithRaw("PROC CHECK SBLOF DISPLOF", "RAPID X=5"), Mill())));
+    }
+
+    // A subprogram without a RAW PROC line keeps the compiler's own PROC line and RET (siemens 12 rule 1).
+    [Fact]
+    public void ProcLine_WithoutARawProcLine_IsTheCompilersLineAndTheEndRet()
+    {
+        string program = """
+            FILE=BEGIN NCX=1
+            PROGRAM=BEGIN NAME="MAIN"
+            FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF
+            CALL=CHECK
+            PROGRAM=END
+            SUB=BEGIN NAME=CHECK
+            RAPID X=5
+            SUB=END
+            FILE=END
+            """;
+
+        Assert.Equal(Lines("%_N_MAIN_MPF", "G17 G40 G90 G94 G71", "CHECK", "M30", "%_N_CHECK_SPF", "PROC CHECK",
+            "G0 G90 X5", "RET"), TextOf(Run(program, Mill())));
+    }
+
+    // A RAW PROC line whose REAL parameters are the ones the calls give, in their order, stands in place of the
+    // compiler's line with its defaults and attributes (siemens 8; SW4.92 p.511-512).
+    [Fact]
+    public void ProcLine_RawWithTheParametersOfTheCalls_StandsInPlaceOfTheCompilersLine()
+    {
+        string program = """
+            FILE=BEGIN NCX=1
+            PROGRAM=BEGIN NAME="MAIN"
+            FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF
+            CALL=POCK ARG:DEPTH=5
+            PROGRAM=END
+            SUB=BEGIN NAME=POCK
+            RAW:SIEMENS="PROC POCK(REAL DEPTH=2) SAVE"
+            VAR:R1={$DEPTH * 2}
+            SUB=END
+            FILE=END
+            """;
+
+        Assert.Equal(Lines("%_N_MAIN_MPF", "EXTERN POCK(REAL)", "G17 G40 G90 G94 G71", "POCK(5)", "M30",
+            "%_N_POCK_SPF", "PROC POCK(REAL DEPTH=2) SAVE", "R1=DEPTH*2", "M17"), TextOf(Run(program, Mill())));
+    }
+
+    // A RAW PROC line that names another subprogram, or declares other parameters than the calls give, is the ERROR
+    // CMP598: the compiler does not guess which PROC line the unit carries, and writes no second one.
+    [Theory]
+    [InlineData("PROC OTHER SAVE")]
+    [InlineData("PROC CHECK(REAL DEPTH) SAVE")]
+    [InlineData("PROC CHECK(INT COUNT)")]
+    public void ProcLine_RawOfAnotherSubprogramOrOtherParameters_IsTheErrorCmp598(string proc)
+    {
+        Assert.Equal(["CMP598"], CompilerCodes(Run(SubWithRaw(proc, "RAPID X=5"), Mill())));
+    }
+
+    // The CMP598 of a subprogram whose calls give no parameters says so, and prints no empty list.
+    [Fact]
+    public void ProcLine_RawWithParametersTheCallsDoNotGive_SaysNoParameters()
+    {
+        CompileResult result = Run(SubWithRaw("PROC CHECK(REAL DEPTH) SAVE", "RAPID X=5"), Mill());
+
+        string text = result.Diagnostics.ToText();
+        Assert.Contains("no parameters", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("()", text, StringComparison.Ordinal);
+    }
+
+    // A program that calls the subprogram CHECK, whose first block is the RAW line, then the block given.
+    private static string SubWithRaw(string raw, string block)
+    {
+        return SubWithBlocks("RAW:SIEMENS=\"" + raw + "\"", block);
+    }
+
+    // A program that calls the subprogram CHECK with the two blocks given.
+    private static string SubWithBlocks(string first, string second)
+    {
+        return $$"""
+            FILE=BEGIN NCX=1
+            PROGRAM=BEGIN NAME="MAIN"
+            FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF
+            CALL=CHECK
+            PROGRAM=END
+            SUB=BEGIN NAME=CHECK
+            {{first}}
+            {{second}}
+            SUB=END
+            FILE=END
+            """;
+    }
+
     // The N numbers of the lines of a text, the skipped ones too, in their order (siemens 1).
     private static List<string> BlockNumbersOf(string text)
     {

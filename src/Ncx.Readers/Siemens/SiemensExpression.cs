@@ -174,7 +174,8 @@ internal static partial class SiemensExpression
     // TODO(question): the manuals show DIV only for operands that are not negative (840D sl NC-Programmierung SW4.92
     // p.449: 7 DIV 4.1 = 1; HLL training 2010 p.242: 3 DIV 4 = 0), and none says whether -7 DIV 2 is -3 or -4 (manual
     // audit 2026-10-26, D346). Until one does, DIV converts only where both operands are number literals of 0 or more,
-    // and any other DIV keeps the block RAW with the WARNING RDR506 (D5).
+    // and any other DIV keeps the block RAW with the WARNING RDR506 (D5). Row 2 of "Manual audit 2026-10-26" in
+    // docs/implementation/03-open-questions.md.
     private static string DivisionRounding(SiemensBlock block, string text)
     {
         var warning = new SiemensWarning(DiagnosticCodes.SiemensDivisionRoundingUnknown,
