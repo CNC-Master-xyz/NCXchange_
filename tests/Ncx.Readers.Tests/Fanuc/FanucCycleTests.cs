@@ -119,6 +119,21 @@ public sealed class FanucCycleTests
             Body("S500 M3\nG0 X0 Y0 Z10.\nM29 S500\nG84 G99 Z-20. R5. F750\nG84 G99 Z-25. R5. F750\nG80"));
     }
 
+    // D256: with the line in the first cycle block the mode holds for the run as well, so a G84 re-issued in the same
+    // run, with or without a block between, is the same cycle TAP.
+    [Theory]
+    [InlineData("M29 S500 G84 G99 Z-20. R5. F750\nG84 G99 Z-25. R5. F750\nG80")]
+    [InlineData("M29 S500 G84 G99 Z-20. R5. F750\nM8\nG84 G99 Z-25. R5. F750\nG80")]
+    [InlineData("M29 S500 G84 G99 Z-20. R5. F750\nG84 G99 Z-25.\nG80")]
+    public void RigidTapLine_InTheFirstCycleBlockOfTheRun_KeepsReadingTheTapCycle(string snippet)
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\n" + snippet + "\nM30\n%\n");
+        string text = NcxWriter.Write(program);
+        Assert.Contains("CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20", text, StringComparison.Ordinal);
+        Assert.Contains("CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-25", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("RAW:", text, StringComparison.Ordinal);
+    }
+
     // D256 names three ways into the rigid-tapping mode, the second of them "M29 S in the same block as the tapping
     // command", so the before line standing in the cycle block itself is the cycle TAP as well.
     [Fact]
@@ -132,6 +147,195 @@ public sealed class FanucCycleTests
                 "CYCLE_CALL",
                 "CYCLE=OFF"),
             Body("S500 M3\nG0 X0 Y0 Z10.\nM29 S500 G84 G99 Z-20. R5. F750\nG80"));
+    }
+
+    // D256, manual audit 2026-10-26: the control forbids only an S command or an axis movement between M29 and G84
+    // (B-64484EN-2 p.103-104, alarm PS0203), so a block with neither between them leaves the line in force - the
+    // Doosan shape M29S500P12 / M177 / G84 (MX-Series CNC-Programmierbuch p.131).
+    [Fact]
+    public void RigidTapLine_WithABlockOfNeitherSNorMotionBetween_IsReadIntoTheTapCycle()
+    {
+        Assert.Equal(
+            Lines(
+                "SPINDLE=CW RPM=500",
+                "RAPID X=0 Y=0 Z=10",
+                "COOLANT=ON",
+                "CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE CYCLE_F=750 PITCH=1.5",
+                "CYCLE_CALL",
+                "CYCLE=OFF"),
+            Body("S500 M3\nG0 X0 Y0 Z10.\nM29 S500\nM8\nG84 G99 Z-20. R5. F750\nG80"));
+    }
+
+    // D256, manual audit 2026-10-26: the line may share its block with the positioning move in front of the cycle -
+    // the Mori shape "Z30.0 M329 S400;" then G84 (NTX1000SZM p.281-282); PS0203 concerns only what stands between
+    // the M29 block and G84 (B-64484EN-2 p.104).
+    [Fact]
+    public void RigidTapLine_WithAMoveInItsOwnBlock_IsReadIntoTheTapCycle()
+    {
+        Assert.Equal(
+            Lines(
+                "SPINDLE=CW RPM=500",
+                "RAPID X=0 Y=0",
+                "RAPID Z=10",
+                "CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE CYCLE_F=750 PITCH=1.5",
+                "CYCLE_CALL",
+                "CYCLE=OFF"),
+            Body("S500 M3\nG0 X0 Y0\nZ10. M29 S500\nG84 G99 Z-20. R5. F750\nG80"));
+    }
+
+    // D256: an S command between M29 and G84 is alarm PS0203 (B-64484EN-2 p.104), so the line does not reach the
+    // G84, which keeps the reading of a G84 without its line.
+    [Fact]
+    public void RigidTapLine_WithAnSWordBetween_DoesNotReachTheCycle()
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\nS600\nG84 G99 Z-20. R5. F750\nG80\n"
+            + "M30\n%\n");
+        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("G84 without the line", program.Diagnostics.ToText(), StringComparison.Ordinal);
+    }
+
+    // D256: an axis movement between M29 and G84 is alarm PS0203 (B-64484EN-2 p.104), so the line does not reach the
+    // G84, which keeps the reading of a G84 without its line.
+    [Fact]
+    public void RigidTapLine_WithAnAxisMovementBetween_DoesNotReachTheCycle()
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\nX5.\nG84 G99 Z-20. R5. F750\nG80\n"
+            + "M30\n%\n");
+        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("G84 without the line", program.Diagnostics.ToText(), StringComparison.Ordinal);
+    }
+
+    // D256: a call between M29 and G84 runs blocks the reader does not see at that place, so it can tell neither that
+    // the line reaches the G84 nor that it does not, and the blocks of the cycle stay RAW with that reason (D5;
+    // wave-3 question #195).
+    [Fact]
+    public void RigidTapLine_WithACallBetween_KeepsItsBlocksAsRawUnseen()
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\nM98 P100\nG84 G99 Z-20. R5. F750\n"
+            + "G80\nM30\nO0100\nM8\nM99\n%\n");
+        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("the reader does not see which block runs before this one",
+            program.Diagnostics.ToText(), StringComparison.Ordinal);
+    }
+
+    // D256: G80, a canned-cycle code or a group-01 code cancels the rigid tapping mode (0i-D Connection Manual
+    // B-64303EN-1 p.927, 10.13.16.8; B-64484EN-2 p.104, the cancel clears S to 0), so the M29 S of an earlier cycle
+    // does not reach a G84 after the G80 that ended it.
+    [Theory]
+    [InlineData("M29 S500 G84 G99 Z-20. R5. F750\nG80\nG84 G99 Z-25. R5. F750\nG80")]
+    [InlineData("M29 S500 G84 G99 Z-20. R5. F750\nG80\nM8\nG84 G99 Z-25. R5. F750\nG80")]
+    [InlineData("M29 S500 G84 G99 Z-20. R5. F750\nM8\nG80\nG84 G99 Z-25. R5. F750\nG80")]
+    public void RigidTapLine_OfAnEarlierCycleEndedByG80_DoesNotReachTheNextCycle(string snippet)
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\n" + snippet + "\nM30\n%\n");
+        string text = NcxWriter.Write(program);
+        Assert.Contains("CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20", text, StringComparison.Ordinal);
+        Assert.Contains("RAW:FANUC=\"G84 G99 Z-25. R5. F750\"", text, StringComparison.Ordinal);
+        Assert.Contains("G84 without the line", program.Diagnostics.ToText(), StringComparison.Ordinal);
+    }
+
+    // D256: G80 or a group-01 code between M29 and G84 cancels the mode the line set (0i-D Connection Manual
+    // B-64303EN-1 p.927, 10.13.16.8), so the G84 keeps the reading of a G84 without its line.
+    [Theory]
+    [InlineData("G80")]
+    [InlineData("G0")]
+    public void RigidTapLine_WithACancelBetween_DoesNotReachTheCycle(string cancel)
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\n" + cancel
+            + "\nG84 G99 Z-20. R5. F750\nG80\nM30\n%\n");
+        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("G84 without the line", program.Diagnostics.ToText(), StringComparison.Ordinal);
+    }
+
+    // D256: the line in a block with a group-01 code, "G0 Z10. M29 S500;", the manuals do not settle (0i-D Connection
+    // Manual B-64303EN-1 p.927 states the cancel after the tapping), so the cycle stays RAW with that reason.
+    [Fact]
+    public void RigidTapLine_WithACancelInItsOwnBlock_KeepsTheCycleRawWithItsReason()
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0\nG0 Z10. M29 S500\nG84 G99 Z-20. R5. F750\nG80\n"
+            + "M30\n%\n");
+        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("the manual does not say whether the line holds there",
+            program.Diagnostics.ToText(), StringComparison.Ordinal);
+    }
+
+    // D256: M2 and M30 end the program in the reset state (B-64484EN p.297 and p.1135), and a reset cancels the
+    // rigid tapping mode (B-64484EN-2 p.103, Reset; B-64303EN-1 p.927), so the line before them does not reach a
+    // G84 after them, which keeps the reading of a G84 without its line.
+    [Theory]
+    [InlineData("M30")]
+    [InlineData("M2")]
+    public void RigidTapLine_WithAProgramEndBetween_DoesNotReachTheCycle(string end)
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\n" + end
+            + "\nG84 G99 Z-20. R5. F750\nG80\nM30\n%\n");
+        string text = NcxWriter.Write(program);
+        Assert.DoesNotContain("CYCLE=TAP", text, StringComparison.Ordinal);
+        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", text, StringComparison.Ordinal);
+        Assert.Contains("G84 without the line", program.Diagnostics.ToText(), StringComparison.Ordinal);
+    }
+
+    // D256: a line block the reader keeps as RAW is not read into the cycle - the RAW text carries the M29 S to the
+    // control, and a compiler writes the line in front of every TAP run, so a TAP after it would give the line twice;
+    // the G84 stays RAW with a reason that names the RAW line block.
+    [Theory]
+    [InlineData("M29 S500 P12\n", "M29 S500 P12")]
+    [InlineData("M29S500P12\nM177\n", "M29S500P12")]
+    [InlineData("M29 S500 Q1\nM8\n", "M29 S500 Q1")]
+    public void RigidTapLine_InABlockKeptAsRaw_KeepsTheCycleRawWithItsReason(string lines, string line)
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\n" + lines
+            + "G84 G99 Z-20. R5. F750\nG80\nM30\n%\n");
+        string text = NcxWriter.Write(program);
+        Assert.DoesNotContain("CYCLE=TAP", text, StringComparison.Ordinal);
+        Assert.Contains("RAW:FANUC=\"" + line + "\"", text, StringComparison.Ordinal);
+        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", text, StringComparison.Ordinal);
+        Assert.Contains("stands in a block the reader keeps as RAW", program.Diagnostics.ToText(),
+            StringComparison.Ordinal);
+    }
+
+    // D256: a skipped line block runs or not by the operator's switch, so the reader cannot tell whether the line
+    // reaches the G84; the cycle stays RAW with that reason and the skipped block is read as any skipped block is.
+    [Theory]
+    [InlineData("/M29 S500\nM8\n")]
+    [InlineData("/M29 S500\n")]
+    public void RigidTapLine_InASkippedBlock_KeepsTheCycleRawUnseen(string lines)
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\n" + lines
+            + "G84 G99 Z-20. R5. F750\nG80\nM30\n%\n");
+        string text = NcxWriter.Write(program);
+        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", text, StringComparison.Ordinal);
+        Assert.Contains("the reader does not see which block runs before this one",
+            program.Diagnostics.ToText(), StringComparison.Ordinal);
+        Assert.Contains(Body("/M29 S500"), text, StringComparison.Ordinal);
+    }
+
+    // D256: a jump into the cycle block, or into a block between the line and the cycle block, reaches the G84
+    // without passing the line, so the reader cannot tell whether the line is in force (wave-3 question #195).
+    [Theory]
+    [InlineData("M29 S500\nN10 G84 G99 Z-20. R5. F750\n")]
+    [InlineData("M29 S500\nN10 M8\nG84 G99 Z-20. R5. F750\n")]
+    public void RigidTapLine_WithAJumpTargetUpToTheCycle_KeepsTheCycleRawUnseen(string lines)
+    {
+        NcxProgram program = Program("%\nO0001\n#1=2\nS500 M3\nG0 X0 Y0 Z10.\n" + lines
+            + "#1=#1-1\nIF[#1 GT 0] GOTO 10\nG80\nM30\n%\n");
+        string text = NcxWriter.Write(program);
+        Assert.DoesNotContain("CYCLE=TAP", text, StringComparison.Ordinal);
+        Assert.Contains("G84 G99 Z-20. R5. F750\"", text, StringComparison.Ordinal);
+        Assert.Contains("the reader does not see which block runs before this one",
+            program.Diagnostics.ToText(), StringComparison.Ordinal);
+    }
+
+    // D256: a call in the line block itself runs blocks the reader does not see after the M29, so it cannot tell
+    // whether the line reaches the G84 (wave-3 question #195).
+    [Fact]
+    public void RigidTapLine_WithACallInItsOwnBlock_KeepsTheCycleRawUnseen()
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500 M98 P100\nG84 G99 Z-20. R5. F750\n"
+            + "G80\nM30\nO0100\nM8\nM99\n%\n");
+        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("the reader does not see which block runs before this one",
+            program.Diagnostics.ToText(), StringComparison.Ordinal);
     }
 
     // D256 requires the rigid-tapping line immediately before the cycle block, and a call may stand between the two:

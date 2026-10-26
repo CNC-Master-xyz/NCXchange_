@@ -70,16 +70,36 @@ internal sealed class FanucState
     public HashSet<int> TurnsOfTilts { get; } = [];
 
     /// <summary>
-    /// The NCX name of the catalog entry whose "before" line a block is, by the line of that block: the block stands
-    /// directly in front of the entry's cycle block and belongs to the cycle (machine-config 6, D256).
+    /// The NCX name of the catalog entry whose "before" line a block may be, by the line of that block: the block
+    /// stands in front of the entry's cycle block with neither an S word nor an axis word between them (machine-config
+    /// 6, D256; B-64484EN-2 p.104, PS0203).
     /// </summary>
     public Dictionary<int, string> CycleBefore { get; } = [];
 
     /// <summary>
-    /// The line of the block that stands directly in front of a cycle block whose catalog entry carries a "before"
-    /// line, by the line of that cycle block (machine-config 6, D256).
+    /// The lines of the blocks that may hold the "before" line of a cycle block whose catalog entry carries one, by
+    /// the line of that cycle block (machine-config 6, D256; FanucReader.MarkBeforeLines).
     /// </summary>
-    public Dictionary<int, int> BeforeLineOf { get; } = [];
+    public Dictionary<int, List<int>> BeforeLinesOf { get; } = [];
+
+    /// <summary>
+    /// The lines of the cycle blocks whose walk back to the "before" line ended at a block the reader does not see
+    /// past, so that it cannot tell whether the line reaches the cycle (D256; FanucReader.MarkBeforeLines).
+    /// </summary>
+    public HashSet<int> BeforeLineUnseen { get; } = [];
+
+    /// <summary>
+    /// The lines of the cycle blocks whose walk back ended at a block that carries the codes of the "before" line
+    /// together with a code that cancels the rigid tapping mode, "G0 Z10. M29 S500;", which the manuals do not settle
+    /// (D256; FanucReader.MarkBeforeLines). Each is in BeforeLineUnseen as well.
+    /// </summary>
+    public HashSet<int> BeforeLineWithACancel { get; } = [];
+
+    /// <summary>
+    /// The lines of the blocks that matched the "before" line of a cycle but ended RAW, so that the line reaches the
+    /// control as RAW text and does not count for the cycle (D256, D5; FanucReader.ReadBlock).
+    /// </summary>
+    public HashSet<int> BeforeLineRaw { get; } = [];
 
     /// <summary>
     /// The lines of the blocks that were read as the "before" line of the cycle block after them: the line matched
