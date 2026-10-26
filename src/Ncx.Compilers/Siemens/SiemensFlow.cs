@@ -354,7 +354,7 @@ internal static partial class SiemensFlow
 
         if (write.File.ProcRawOf(sub) is Block rawBlock && rawBlock.Find("RAW")?.Value is StringValue raw)
         {
-            if (SiemensFile.ProcParts(raw.Content) is ProcLineParts parts
+            if (SiemensProcLine.Parse(raw.Content) is ProcLineParts { Readable: true } parts
                 && string.Equals(parts.Name, name, StringComparison.OrdinalIgnoreCase)
                 && RealParameterNames(parts.Parameters) is List<string> rawNames
                 && rawNames.SequenceEqual(names, StringComparer.OrdinalIgnoreCase))
@@ -390,7 +390,7 @@ internal static partial class SiemensFlow
             return names;
         }
 
-        foreach (string parameter in parameters.Split(','))
+        foreach (string parameter in SiemensProcLine.SplitParameters(parameters))
         {
             Match match = RealParameter().Match(parameter);
             if (!match.Success)

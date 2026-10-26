@@ -114,11 +114,15 @@ public sealed class SiemensFlowTests
     }
 
     // D344: the CMP597 of a SAVE subprogram stands after a parameter list too, PROC CHECK(REAL WERT1) SAVE with the
-    // parameter its call gives (NC-Programmierung SW4.92, p.511-512, p.523).
-    [Fact]
-    public void JumpToEndInASubprogram_DeclaredSaveAfterParameters_IsTheErrorCmp597()
+    // parameter its call gives, with no blank after the parenthesis and with a default that holds parentheses, the
+    // spellings the reader keeps as RAW (NC-Programmierung SW4.92, p.511-512, p.523).
+    [Theory]
+    [InlineData("PROC CHECK(REAL WERT1) SAVE")]
+    [InlineData("PROC CHECK(REAL WERT1)SAVE")]
+    [InlineData("PROC CHECK(REAL WERT1=SIN(30)) SAVE")]
+    public void JumpToEndInASubprogram_DeclaredSaveAfterParameters_IsTheErrorCmp597(string proc)
     {
-        string program = """
+        string program = $$"""
             FILE=BEGIN NCX=1
             PROGRAM=BEGIN NAME="MAIN"
             FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF
@@ -126,7 +130,7 @@ public sealed class SiemensFlowTests
             RAPID X=10
             PROGRAM=END
             SUB=BEGIN NAME=CHECK
-            RAW:SIEMENS="PROC CHECK(REAL WERT1) SAVE"
+            RAW:SIEMENS="{{proc}}"
             JUMP=END IF={$WERT1 == 1}
             SUB=END
             FILE=END
@@ -135,20 +139,22 @@ public sealed class SiemensFlowTests
         Assert.Equal(["CMP597"], CompilerCodes(Run(program, Mill())));
     }
 
-    // D344: SAVE inside the name of a subprogram, SAVE_CHECK, is no attribute, so the parameterized return stands
-    // (NC-Programmierung SW4.92, p.511, p.523).
-    [Fact]
-    public void JumpToEndInASubprogram_SaveInsideTheName_IsTheParameterizedReturn()
+    // D344: SAVE inside the name of a subprogram, SAVE_CHECK or CHECKSAVE, is no attribute, so the parameterized
+    // return stands (NC-Programmierung SW4.92, p.511, p.523).
+    [Theory]
+    [InlineData("SAVE_CHECK")]
+    [InlineData("CHECKSAVE")]
+    public void JumpToEndInASubprogram_SaveInsideTheName_IsTheParameterizedReturn(string name)
     {
-        string program = """
+        string program = $$"""
             FILE=BEGIN NCX=1
             PROGRAM=BEGIN NAME="MAIN"
             FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF
-            CALL=SAVE_CHECK
+            CALL={{name}}
             RAPID X=10
             PROGRAM=END
-            SUB=BEGIN NAME=SAVE_CHECK
-            RAW:SIEMENS="PROC SAVE_CHECK"
+            SUB=BEGIN NAME={{name}}
+            RAW:SIEMENS="PROC {{name}}"
             JUMP=END
             SUB=END
             FILE=END
@@ -157,14 +163,15 @@ public sealed class SiemensFlowTests
 
         Assert.Empty(CompilerCodes(result));
         Assert.Contains("RET(\"PROGRAM_END\",,$P_STACK)", TextOf(result), StringComparison.Ordinal);
-        Assert.Contains("PROC SAVE_CHECK", LinesOf(TextOf(result)));
+        Assert.Contains("PROC " + name, LinesOf(TextOf(result)));
     }
 
-    // D344: a RAW PROC line with SBLOF or DISPLOF and without SAVE leaves the parameterized return as it is
-    // (NC-Programmierung SW4.92, p.512, p.523).
+    // D344: a RAW PROC line with SBLOF or DISPLOF and without SAVE, or with SAVE only in its comment, leaves the
+    // parameterized return as it is (NC-Programmierung SW4.92, p.512, p.523).
     [Theory]
     [InlineData("PROC CHECK SBLOF")]
     [InlineData("PROC CHECK DISPLOF")]
+    [InlineData("PROC CHECK ; SAVE")]
     public void JumpToEndInASubprogram_ProcWithoutSave_IsTheParameterizedReturn(string proc)
     {
         string program = $$"""

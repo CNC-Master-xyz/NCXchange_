@@ -50,9 +50,14 @@ internal sealed partial class SiemensFile
     // The names a RAW:SIEMENS block of a unit declares itself, DEF REAL LEN the reader kept (D261).
     private readonly Dictionary<Section, HashSet<string>> _rawDeclared = [];
 
-    // The RAW PROC line of a subprogram, PROC NAME SAVE as the reader keeps it (controller-mapping 6, SUB=BEGIN): the
-    // first RAW line of the SUB section that is a PROC line.
+    // The RAW PROC line of a subprogram, PROC NAME SAVE as the reader keeps it (controller-mapping 6, SUB=BEGIN): a
+    // RAW PROC line that is the first block of the SUB section, as the reader declares the subprogram by a PROC at the
+    // top of its unit only (SiemensUnits.Read); a PROC inside a unit stays a RAW line of its own
+    // (SiemensCalls.ReadProc).
     private readonly Dictionary<Section, Block> _procRaws = [];
+
+    // The SUB sections whose first block the walk has met.
+    private readonly HashSet<Section> _subsBegun = [];
 
     private SiemensFile(IReadOnlyList<BlockStep> steps)
     {
@@ -64,13 +69,16 @@ internal sealed partial class SiemensFile
                 _subs.TryAdd(name, section);
             }
 
-            if (step.Block.Find("RAW")?.Value is StringValue raw)
+            string? raw = (step.Block.Find("RAW")?.Value as StringValue)?.Content;
+            if (raw is not null)
             {
-                RawFrameKeys.UnionWith(SiemensFrames.KeysNamedBy(raw.Content));
-                if (step.Section is Section { Kind: SectionKind.Sub } sub && ProcRawLine().IsMatch(raw.Content))
-                {
-                    _procRaws.TryAdd(sub, step.Block);
-                }
+                RawFrameKeys.UnionWith(SiemensFrames.KeysNamedBy(raw));
+            }
+
+            if (step.Section is Section { Kind: SectionKind.Sub } sub && !step.Block.Has("SUB")
+                && _subsBegun.Add(sub) && raw is not null && SiemensProcLine.Parse(raw) is not null)
+            {
+                _procRaws.Add(sub, step.Block);
             }
         }
 
@@ -270,7 +278,8 @@ internal sealed partial class SiemensFile
     public bool DeclaresSave(Section sub)
     {
         return ProcRawOf(sub) is Block block && block.Find("RAW")?.Value is StringValue raw
-            && ProcWithSave().IsMatch(raw.Content);
+            && SiemensProcLine.Parse(raw.Content) is ProcLineParts parts
+            && parts.Attributes.Contains("SAVE", StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -288,22 +297,6 @@ internal sealed partial class SiemensFile
     public bool IsProcRaw(Block block)
     {
         return _procRaws.ContainsValue(block);
-    }
-
-    /// <summary>
-    /// The name and the parameter list of a RAW PROC line, the text between the parentheses, null without them; null
-    /// for a line that is no PROC line.
-    /// </summary>
-    public static ProcLineParts? ProcParts(string raw)
-    {
-        Match match = ProcRawLine().Match(raw);
-        if (!match.Success)
-        {
-            return null;
-        }
-
-        Group parameters = match.Groups["parameters"];
-        return new ProcLineParts(match.Groups["name"].Value, parameters.Success ? parameters.Value : null);
     }
 
     /// <summary>
@@ -635,16 +628,4 @@ internal sealed partial class SiemensFile
     [GeneratedRegex(@"\bDEF\s+(?:INT|REAL|BOOL|CHAR|AXIS|FRAME|STRING\s*\[[^\]]*\])\s+([^\r\n;]*)",
         RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex DefLine();
-
-    // A PROC line with SAVE among the attributes after the name and its parameters, SBLOF and DISPLOF beside it, a
-    // comment after them (840D sl NC-Programmierung SW4.92, p.511-512).
-    [GeneratedRegex(@"^\s*(?:N\d+\s+)?PROC\s+[A-Z_][A-Z0-9_]*\s*(?:\([^)]*\))?(?:\s+[A-Z]+)*?\s+SAVE\b",
-        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
-    private static partial Regex ProcWithSave();
-
-    // A PROC line: the name, the parameters between parentheses, then the attributes (840D sl NC-Programmierung
-    // SW4.92, p.510-512).
-    [GeneratedRegex(@"^\s*(?:N\d+\s+)?PROC\s+(?<name>[A-Z_][A-Z0-9_]*)\s*(?:\((?<parameters>[^)]*)\))?",
-        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
-    private static partial Regex ProcRawLine();
 }

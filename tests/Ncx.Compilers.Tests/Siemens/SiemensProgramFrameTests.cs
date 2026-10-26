@@ -262,6 +262,48 @@ public sealed class SiemensProgramFrameTests
             "M17"), TextOf(Run(SubWithRaw("PROC CHECK SAVE", "RAPID X=5"), Mill())));
     }
 
+    // D344: SAVE right after the parenthesis of the parameters, and after a default that holds parentheses, declares
+    // the subprogram SAVE as well, so it ends with M17 under its own PROC line (SW4.92 p.511-512, p.522-523).
+    [Theory]
+    [InlineData("PROC CHECK(REAL W)SAVE")]
+    [InlineData("PROC CHECK(REAL W=SIN(30)) SAVE")]
+    public void SubEnd_OfASubprogramDeclaredSaveAfterParameters_IsM17UnderItsOwnProcLine(string proc)
+    {
+        string program = $$"""
+            FILE=BEGIN NCX=1
+            PROGRAM=BEGIN NAME="MAIN"
+            FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF
+            CALL=CHECK ARG:W=5
+            PROGRAM=END
+            SUB=BEGIN NAME=CHECK
+            RAW:SIEMENS="{{proc}}"
+            VAR:R1={$W * 2}
+            SUB=END
+            FILE=END
+            """;
+
+        Assert.Equal(Lines("%_N_MAIN_MPF", "EXTERN CHECK(REAL)", "G17 G40 G90 G94 G71", "CHECK(5)", "M30",
+            "%_N_CHECK_SPF", proc, "R1=W*2", "M17"), TextOf(Run(program, Mill())));
+    }
+
+    // The reader keeps a PROC that stands inside a unit as RAW too ("PROC stands inside a unit", SiemensCalls
+    // ReadProc); only a PROC line that is the first block of the SUB section is the subprogram's own, so one later in
+    // the section is written where it stands, under the compiler's own PROC line, and the end stays RET.
+    [Fact]
+    public void ProcLine_RawLaterInTheSection_IsNotTheSubprogramsOwn()
+    {
+        Assert.Equal(Lines(
+            "%_N_MAIN_MPF",
+            "G17 G40 G90 G94 G71",
+            "CHECK",
+            "M30",
+            "%_N_CHECK_SPF",
+            "PROC CHECK",
+            "G0 G90 X5",
+            "PROC CHECK SAVE",
+            "RET"), TextOf(Run(SubWithBlocks("RAPID X=5", "RAW:SIEMENS=\"PROC CHECK SAVE\""), Mill())));
+    }
+
     // D344: a RETURN inside a SAVE subprogram is the same return as its end, M17 and not RET (SW4.92 p.522-523).
     [Fact]
     public void Return_InASubprogramDeclaredSave_IsM17()
@@ -355,6 +397,12 @@ public sealed class SiemensProgramFrameTests
     // A program that calls the subprogram CHECK, whose first block is the RAW line, then the block given.
     private static string SubWithRaw(string raw, string block)
     {
+        return SubWithBlocks("RAW:SIEMENS=\"" + raw + "\"", block);
+    }
+
+    // A program that calls the subprogram CHECK with the two blocks given.
+    private static string SubWithBlocks(string first, string second)
+    {
         return $$"""
             FILE=BEGIN NCX=1
             PROGRAM=BEGIN NAME="MAIN"
@@ -362,8 +410,8 @@ public sealed class SiemensProgramFrameTests
             CALL=CHECK
             PROGRAM=END
             SUB=BEGIN NAME=CHECK
-            RAW:SIEMENS="{{raw}}"
-            {{block}}
+            {{first}}
+            {{second}}
             SUB=END
             FILE=END
             """;
