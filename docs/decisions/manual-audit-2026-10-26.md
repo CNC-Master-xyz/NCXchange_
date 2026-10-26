@@ -146,3 +146,11 @@ These are proposals, not answers. They are corrected before the maintainer confi
 2. The open proposals of section 4 are corrected in their proposed answers. They are proposals, not answers.
 3. Citation pass: every entry is re-cited from the reports, with no change of substance. For settled entries the recorded ANSWER is not rewritten. The corrected citations are added to the entry only if the maintainer wants that, or are kept here.
 4. The code follow-ups of section 3 (D256, D344, D346) go into one small implementation wave.
+
+Progress, 2026-10-26:
+- **Steps 1 and 2 are done.**
+  - D377 corrects D361 and D378 sets out the choice on D190, both under "Twelfth round" in `rationale.md`, with rows 227 and 228 in `../implementation/03-open-questions.md`.
+  - The 23 open proposals of section 4 were rewritten after their facts were checked again in the connector. Each now reads "corrected 2026-10-26 after the manual audit" and carries a "Corrected:" line. Three of them now depart from their draft's Recommendation: D223, D244 and D278.
+  - D373 and D375, which are unanswered, were corrected in place.
+- **One further finding:** Heidenhain's REAM retract also differs by generation. The iTNC 530 and the older TNC 620 feed out to `Q200` and then go to `Q204` at rapid. The TNC 640 and TNC 128 feed all the way to `Q204`. D378 takes this into account.
+- **Steps 3 and 4 are open.**
