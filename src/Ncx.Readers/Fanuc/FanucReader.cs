@@ -745,12 +745,11 @@ public sealed partial class FanucReader : ReaderBase
                 fanuc.TurnsOfTilts.Add(blocks[index + 1].Line);
             }
 
-            // The "before" line of a catalog entry stands directly in front of the entry's cycle block and belongs
-            // to the cycle, Fanuc M29 S before a G84 (machine-config 6, D256).
-            if (index + 1 < blocks.Count && BeforeOf(blocks[index + 1]) is string entry)
+            // The "before" line of a catalog entry stands in front of the entry's cycle block and belongs to the
+            // cycle, Fanuc M29 S before a G84 (machine-config 6, D256).
+            if (BeforeOf(block) is string entry)
             {
-                fanuc.CycleBefore[block.Line] = entry;
-                fanuc.BeforeLineOf[blocks[index + 1].Line] = block.Line;
+                MarkBeforeLines(fanuc, index, entry);
             }
 
             // The contour of a G70 to G76 is the SUB section the structure pass made of it (language 4.7.1, D65).
@@ -832,6 +831,127 @@ public sealed partial class FanucReader : ReaderBase
                 return;
             }
         }
+    }
+
+    // The blocks in front of a cycle block that may hold the "before" line of its entry (machine-config 6, D256).
+    // The Fanuc control forbids only an S command or an axis movement between M29 and G84, alarm PS0203, and names
+    // M29 S "before a tapping command", not directly before it (B-64484EN-2 p.103, the three ways into rigid mode;
+    // p.104, M29): Doosan programs M29S500P12 / M177 / G84 (MX-Series CNC-Programmierbuch p.131), and Mori programs
+    // the line in the block of the positioning move in front of the cycle, "Z30.0 M329 S400;" then G84 (NTX1000SZM
+    // p.281-282). So the walk goes back from the cycle block over the blocks with neither an S word nor an axis word
+    // and ends at the first block with one, which is a place of the line as well, since PS0203 concerns only what
+    // stands between the M29 block and G84. It ends without the line at the head of a program, and where the reader
+    // does not see what runs in front of a block or what a block does: a block a jump enters, the head of a section a
+    // block of the file calls, a call, a return, a macro branch.
+    // TODO(question): a block that may move an axis without an axis word - the tool change M6 or a T word, the tool
+    // length compensation G43, G44, G49 - the manual neither allows nor forbids between M29 and G84; the walk ends
+    // there as at a block it does not see, so the cycle stays RAW with that reason rather than reading TAP or the
+    // other machining (manual audit 2026-10-26, D256).
+    private void MarkBeforeLines(FanucState fanuc, int cycleIndex, string entry)
+    {
+        IReadOnlyList<SourceBlock> blocks = fanuc.Blocks;
+        int cycleLine = blocks[cycleIndex].Line;
+        var lines = new List<int>();
+        fanuc.BeforeLinesOf[cycleLine] = lines;
+        for (int index = cycleIndex - 1; index >= 0; index--)
+        {
+            SourceBlock block = blocks[index];
+            if (block.Find("O") is SourceWord program)
+            {
+                if (program.Number is not decimal number || fanuc.Calls.IsCalled(
+                    decimal.ToInt64(decimal.Truncate(number)).ToString(CultureInfo.InvariantCulture)))
+                {
+                    fanuc.BeforeLineUnseen.Add(cycleLine);
+                }
+
+                return;
+            }
+
+            fanuc.CycleBefore[block.Line] = entry;
+            lines.Add(block.Line);
+            if (MovesOrSetsTheSpeed(block))
+            {
+                return;
+            }
+
+            if (HidesWhatRunsBefore(fanuc, block))
+            {
+                fanuc.BeforeLineUnseen.Add(cycleLine);
+                return;
+            }
+        }
+    }
+
+    // Whether a block carries an S word or an axis word, what PS0203 forbids between M29 and G84 (B-64484EN-2 p.104).
+    private bool MovesOrSetsTheSpeed(SourceBlock block)
+    {
+        foreach (SourceWord word in block.Words)
+        {
+            if (word.Address == "S" || IsAxisAddress(word.Address))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // The letters of an axis word, as FanucAxes reads them: the [[axis]] table with its incremental letters, the
+    // standard axes X Y Z A B C, the machine axes U V W, and H of system A, each with an extended number (D30, D93).
+    private bool IsAxisAddress(string address)
+    {
+        if (address.Length == 0 || !char.IsAsciiLetterUpper(address[0]))
+        {
+            return false;
+        }
+
+        foreach (AxisDef axis in Machine.Axes)
+        {
+            if ((axis.Letter ?? axis.NcxName) == address || axis.IncrementalLetter == address)
+            {
+                return true;
+            }
+        }
+
+        string letter = address.Substring(0, 1);
+        if (address.Length > 1 && !address.Substring(1).All(char.IsAsciiDigit))
+        {
+            return false;
+        }
+
+        return "XYZABCUVW".Contains(letter, StringComparison.Ordinal)
+            || (letter == "H" && Machine.Machine.GcodeSystem == GcodeSystem.A);
+    }
+
+    // Whether the reader cannot see past a block on the walk back from a cycle block: a jump enters it, it calls or
+    // returns or branches, or it may move an axis without an axis word (see MarkBeforeLines).
+    private bool HidesWhatRunsBefore(FanucState fanuc, SourceBlock block)
+    {
+        if (block.Find("N") is SourceWord label && fanuc.JumpTargets.Contains(FanucState.LabelOf(label)))
+        {
+            return true;
+        }
+
+        if (FanucMacro.CallsOf(block, Machine).Count > 0)
+        {
+            return true;
+        }
+
+        foreach (SourceWord word in block.Words)
+        {
+            if (word.Address is "GOTO" or "IF" or "WHILE" or "DO" or "END" or "T")
+            {
+                return true;
+            }
+
+            if (word.Address is "G" or "M" && NativeCode.Of(word) is "M98" or "M99" or "M198" or "M6" or "G65" or "G66"
+                or "G66.1" or "G43" or "G44" or "G49")
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // The NCX name of the catalog entry whose cycle this block starts and that carries a "before" line; null for

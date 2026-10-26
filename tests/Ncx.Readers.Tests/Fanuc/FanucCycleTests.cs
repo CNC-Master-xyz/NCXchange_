@@ -134,6 +134,75 @@ public sealed class FanucCycleTests
             Body("S500 M3\nG0 X0 Y0 Z10.\nM29 S500 G84 G99 Z-20. R5. F750\nG80"));
     }
 
+    // D256, manual audit 2026-10-26: the control forbids only an S command or an axis movement between M29 and G84
+    // (B-64484EN-2 p.103-104, alarm PS0203), so a block with neither between them leaves the line in force - the
+    // Doosan shape M29S500P12 / M177 / G84 (MX-Series CNC-Programmierbuch p.131).
+    [Fact]
+    public void RigidTapLine_WithABlockOfNeitherSNorMotionBetween_IsReadIntoTheTapCycle()
+    {
+        Assert.Equal(
+            Lines(
+                "SPINDLE=CW RPM=500",
+                "RAPID X=0 Y=0 Z=10",
+                "COOLANT=ON",
+                "CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE CYCLE_F=750 PITCH=1.5",
+                "CYCLE_CALL",
+                "CYCLE=OFF"),
+            Body("S500 M3\nG0 X0 Y0 Z10.\nM29 S500\nM8\nG84 G99 Z-20. R5. F750\nG80"));
+    }
+
+    // D256, manual audit 2026-10-26: the line may share its block with the positioning move in front of the cycle -
+    // the Mori shape "Z30.0 M329 S400;" then G84 (NTX1000SZM p.281-282); PS0203 concerns only what stands between
+    // the M29 block and G84 (B-64484EN-2 p.104).
+    [Fact]
+    public void RigidTapLine_WithAMoveInItsOwnBlock_IsReadIntoTheTapCycle()
+    {
+        Assert.Equal(
+            Lines(
+                "SPINDLE=CW RPM=500",
+                "RAPID X=0 Y=0",
+                "RAPID Z=10",
+                "CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE CYCLE_F=750 PITCH=1.5",
+                "CYCLE_CALL",
+                "CYCLE=OFF"),
+            Body("S500 M3\nG0 X0 Y0\nZ10. M29 S500\nG84 G99 Z-20. R5. F750\nG80"));
+    }
+
+    // D256: an S command between M29 and G84 is alarm PS0203 (B-64484EN-2 p.104), so the line does not reach the
+    // G84, which keeps the reading of a G84 without its line.
+    [Fact]
+    public void RigidTapLine_WithAnSWordBetween_DoesNotReachTheCycle()
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\nS600\nG84 G99 Z-20. R5. F750\nG80\n"
+            + "M30\n%\n");
+        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("G84 without the line", program.Diagnostics.ToText(), StringComparison.Ordinal);
+    }
+
+    // D256: an axis movement between M29 and G84 is alarm PS0203 (B-64484EN-2 p.104), so the line does not reach the
+    // G84, which keeps the reading of a G84 without its line.
+    [Fact]
+    public void RigidTapLine_WithAnAxisMovementBetween_DoesNotReachTheCycle()
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\nX5.\nG84 G99 Z-20. R5. F750\nG80\n"
+            + "M30\n%\n");
+        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("G84 without the line", program.Diagnostics.ToText(), StringComparison.Ordinal);
+    }
+
+    // D256: a call between M29 and G84 runs blocks the reader does not see at that place, so it can tell neither that
+    // the line reaches the G84 nor that it does not, and the blocks of the cycle stay RAW with that reason (D5;
+    // wave-3 question #195).
+    [Fact]
+    public void RigidTapLine_WithACallBetween_KeepsItsBlocksAsRawUnseen()
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\nM98 P100\nG84 G99 Z-20. R5. F750\n"
+            + "G80\nM30\nO0100\nM8\nM99\n%\n");
+        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("the reader does not see which block runs before this one",
+            program.Diagnostics.ToText(), StringComparison.Ordinal);
+    }
+
     // D256 requires the rigid-tapping line immediately before the cycle block, and a call may stand between the two:
     // where the cycle block begins a section a block of the file calls, the reader does not see which block runs
     // before it, so it can say neither that the line stands there nor that the source programmed the other
