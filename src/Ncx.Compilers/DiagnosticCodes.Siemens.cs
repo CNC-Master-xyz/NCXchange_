@@ -157,6 +157,13 @@ public static partial class DiagnosticCodes
     public const string SiemensWordUnderARawModalCall = "CMP596";
 
     /// <summary>
+    /// CMP597: JUMP=END in a subprogram whose PROC line, a RAW line of the file, declares SAVE: the return
+    /// RET("label",,$P_STACK) that ends the program from the call (D344) cannot stand there, since RET "can only be
+    /// used in subprograms that were not defined with the attribute SAVE" (840D sl NC-Programmierung SW4.92, p.523).
+    /// </summary>
+    public const string SiemensReturnInSaveSubprogram = "CMP597";
+
+    /// <summary>
     /// CMP610: SYNC without a wait template in [sync], or with a mark outside its mark_range (machine-config 5;
     /// controllers siemens.md 9).
     /// </summary>

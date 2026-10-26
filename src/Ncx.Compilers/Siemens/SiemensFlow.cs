@@ -225,6 +225,19 @@ internal static class SiemensFlow
             return;
         }
 
+        // RET "can only be used in subprograms that were not defined with the attribute SAVE", and the manual names
+        // no exception for the parameterized form and no other way to leave a SAVE subprogram to the program end
+        // (840D sl NC-Programmierung SW4.92, p.511, p.523-526; D344): an ERROR where a RAW PROC line declares SAVE.
+        if (write.File.DeclaresSave(sub))
+        {
+            write.Error(DiagnosticCodes.SiemensReturnInSaveSubprogram,
+                $"JUMP=END in block {write.Block.Line.ToString(CultureInfo.InvariantCulture)} of the subprogram "
+                + $"{sub.Name ?? sub.Number?.ToString(CultureInfo.InvariantCulture)}, which its PROC line declares "
+                + "SAVE: the return RET(\"label\",,$P_STACK) that ends the program from the call cannot stand in a "
+                + "subprogram with the attribute SAVE (840D sl NC-Programmierung SW4.92, p.523; D344).");
+            return;
+        }
+
         SiemensCycles.EndModalCall(write);
         WriteConditional(write, condition, "RET(\"" + label + "\",,$P_STACK)");
     }

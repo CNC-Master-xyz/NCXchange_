@@ -254,6 +254,26 @@ internal sealed partial class SiemensFile
     }
 
     /// <summary>
+    /// True when a RAW line of the subprogram is its PROC line with the attribute SAVE, PROC NAME(...) SAVE as the
+    /// reader keeps it (controller-mapping 6, SUB=BEGIN), in which no RET may stand: RET "can only be used in
+    /// subprograms that were not defined with the attribute SAVE" (840D sl NC-Programmierung SW4.92, p.511, p.523).
+    /// The compiler's own PROC line never declares SAVE (SiemensFlow.ProcLine).
+    /// </summary>
+    public bool DeclaresSave(Section sub)
+    {
+        foreach (BlockStep step in _steps)
+        {
+            if (step.Section == sub && step.Block.Find("RAW")?.Value is StringValue raw
+                && ProcWithSave().IsMatch(raw.Content))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// True when a JUMP=END, or a RETURN outside a subprogram, stands in the program or in a subprogram the program
     /// calls, so that its end carries the label: a JUMP=END in a subprogram is written RET("label",,$P_STACK), which
     /// needs the label in the program it returns to (controller-mapping 1, JUMP=END; language 4.9, RETURN; D344).
@@ -582,4 +602,10 @@ internal sealed partial class SiemensFile
     [GeneratedRegex(@"\bDEF\s+(?:INT|REAL|BOOL|CHAR|AXIS|FRAME|STRING\s*\[[^\]]*\])\s+([^\r\n;]*)",
         RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex DefLine();
+
+    // A PROC line with SAVE among the attributes after the name and its parameters, SBLOF and DISPLOF beside it, a
+    // comment after them (840D sl NC-Programmierung SW4.92, p.511-512).
+    [GeneratedRegex(@"^\s*(?:N\d+\s+)?PROC\s+[A-Z_][A-Z0-9_]*\s*(?:\([^)]*\))?(?:\s+[A-Z]+)*?\s+SAVE\b",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex ProcWithSave();
 }
