@@ -619,9 +619,20 @@ internal static class FanucCycles
     // same machining as its entry.
     private static bool WithItsBeforeLine(FanucBlock block, CycleEntry entry, string code, FanucCycle? previous)
     {
-        if (block.Fanuc.CycleBeforeRead.Contains(block.Line)
-            || (block.Fanuc.BeforeLinesOf.TryGetValue(block.Line, out List<int>? before)
-                && before.Exists(block.Fanuc.CycleBeforeRead.Contains)))
+        if (block.Fanuc.CycleBeforeRead.Contains(block.Line))
+        {
+            return true;
+        }
+
+        // Where the reader does not see what runs in front of the cycle block back to the place of the line, a jump
+        // into it among them, it cannot tell whether the mode is in force (FanucReader.MarkBeforeLines).
+        if (block.Fanuc.BeforeLineUnseen.Contains(block.Line))
+        {
+            return false;
+        }
+
+        if (block.Fanuc.BeforeLinesOf.TryGetValue(block.Line, out List<int>? before)
+            && before.Exists(block.Fanuc.CycleBeforeRead.Contains))
         {
             return true;
         }

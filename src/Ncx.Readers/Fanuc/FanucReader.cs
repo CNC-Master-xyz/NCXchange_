@@ -840,19 +840,35 @@ public sealed partial class FanucReader : ReaderBase
     // the line in the block of the positioning move in front of the cycle, "Z30.0 M329 S400;" then G84 (NTX1000SZM
     // p.281-282). So the walk goes back from the cycle block over the blocks with neither an S word nor an axis word
     // and ends at the first block with one, which is a place of the line as well, since PS0203 concerns only what
-    // stands between the M29 block and G84. It ends without the line at the head of a program, and where the reader
-    // does not see what runs in front of a block or what a block does: a block a jump enters, the head of a section a
-    // block of the file calls, a call, a return, a macro branch.
+    // stands between the M29 block and G84.
+    // It ends without the line at the head of a program and at a block with G80, a canned-cycle code or a group-01
+    // code, which cancel the rigid tapping mode (0i-D Connection Manual B-64303EN-1 p.927, 10.13.16.8; B-64484EN-2
+    // p.104, the cancel clears S to 0) - the block of an earlier cycle among them, whose own M29 S therefore does not
+    // reach a G84 after its G80. It ends unseen, with no place of the line, where the reader does not see what runs
+    // in front of a block or what a block does: a jump enters the cycle block or a block of the walk, a block is
+    // skipped by the operator's switch, a block calls, returns or branches, or the walk reaches the head of a section
+    // a block of the file calls. These are tested on every block of the walk before its S and axis words, so that
+    // they cover the line block itself.
     // TODO(question): a block that may move an axis without an axis word - the tool change M6 or a T word, the tool
     // length compensation G43, G44, G49 - the manual neither allows nor forbids between M29 and G84; the walk ends
-    // there as at a block it does not see, so the cycle stays RAW with that reason rather than reading TAP or the
-    // other machining (manual audit 2026-10-26, D256).
+    // there unseen, so the cycle stays RAW with that reason rather than reading TAP or the other machining (manual
+    // audit 2026-10-26, D256).
+    // TODO(question): whether the line holds where its own block carries a group-01 code, "G0 Z10. M29 S500;" in
+    // front of G84, the manuals do not say; the cancel of 10.13.16.8 is stated for after the tapping. The walk ends
+    // unseen at such a block, so the cycle stays RAW rather than reading TAP or the other machining.
     private void MarkBeforeLines(FanucState fanuc, int cycleIndex, string entry)
     {
         IReadOnlyList<SourceBlock> blocks = fanuc.Blocks;
-        int cycleLine = blocks[cycleIndex].Line;
+        SourceBlock cycle = blocks[cycleIndex];
         var lines = new List<int>();
-        fanuc.BeforeLinesOf[cycleLine] = lines;
+        fanuc.BeforeLinesOf[cycle.Line] = lines;
+        if (IsJumpTarget(fanuc, cycle))
+        {
+            fanuc.BeforeLineUnseen.Add(cycle.Line);
+            return;
+        }
+
+        string before = Machine.CycleCatalog.Find(entry)?.Before ?? "";
         for (int index = cycleIndex - 1; index >= 0; index--)
         {
             SourceBlock block = blocks[index];
@@ -861,25 +877,93 @@ public sealed partial class FanucReader : ReaderBase
                 if (program.Number is not decimal number || fanuc.Calls.IsCalled(
                     decimal.ToInt64(decimal.Truncate(number)).ToString(CultureInfo.InvariantCulture)))
                 {
-                    fanuc.BeforeLineUnseen.Add(cycleLine);
+                    fanuc.BeforeLineUnseen.Add(cycle.Line);
+                    lines.Clear();
                 }
 
-                return;
+                break;
             }
 
-            fanuc.CycleBefore[block.Line] = entry;
+            if (HidesWhatRunsBefore(fanuc, block)
+                || (CancelsTheMode(block) && CarriesTheCodesOf(block, before)))
+            {
+                fanuc.BeforeLineUnseen.Add(cycle.Line);
+                lines.Clear();
+                break;
+            }
+
+            if (CancelsTheMode(block))
+            {
+                break;
+            }
+
             lines.Add(block.Line);
             if (MovesOrSetsTheSpeed(block))
             {
-                return;
-            }
-
-            if (HidesWhatRunsBefore(fanuc, block))
-            {
-                fanuc.BeforeLineUnseen.Add(cycleLine);
-                return;
+                break;
             }
         }
+
+        foreach (int line in lines)
+        {
+            fanuc.CycleBefore[line] = entry;
+        }
+    }
+
+    // Whether a block carries G80, a code of the canned cycles, group 09, or a code of group 01, which cancel the
+    // rigid tapping mode (0i-D Connection Manual B-64303EN-1 p.927, 10.13.16.8; controllers fanuc.md 3).
+    private bool CancelsTheMode(SourceBlock block)
+    {
+        foreach (SourceWord word in block.Words)
+        {
+            if (word.Address == "G" && NativeCode.Of(word) is string code
+                && (code == "G80" || (ModalGroupOfCode.TryGetValue(code, out int group)
+                    && group is FanucModalGroups.Motion or FanucModalGroups.Cycle)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Whether a block carries every code of a "before" line, the M29 of "M29 S{rpm}", so that it may be that line.
+    private static bool CarriesTheCodesOf(SourceBlock block, string before)
+    {
+        bool any = false;
+        foreach (string token in before.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (token.Contains('{', StringComparison.Ordinal) || token[0] is not ('G' or 'M'))
+            {
+                continue;
+            }
+
+            any = true;
+            if (!HasNativeCode(block, token))
+            {
+                return false;
+            }
+        }
+
+        return any;
+    }
+
+    private static bool HasNativeCode(SourceBlock block, string code)
+    {
+        foreach (SourceWord word in block.Words)
+        {
+            if (word.Address is "G" or "M" && NativeCode.Of(word) == code)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsJumpTarget(FanucState fanuc, SourceBlock block)
+    {
+        return block.Find("N") is SourceWord label && fanuc.JumpTargets.Contains(FanucState.LabelOf(label));
     }
 
     // Whether a block carries an S word or an axis word, what PS0203 forbids between M29 and G84 (B-64484EN-2 p.104).
@@ -923,11 +1007,12 @@ public sealed partial class FanucReader : ReaderBase
             || (letter == "H" && Machine.Machine.GcodeSystem == GcodeSystem.A);
     }
 
-    // Whether the reader cannot see past a block on the walk back from a cycle block: a jump enters it, it calls or
-    // returns or branches, or it may move an axis without an axis word (see MarkBeforeLines).
+    // Whether the reader cannot see past a block on the walk back from a cycle block: it is skipped by the
+    // operator's switch, a jump enters it, it calls or returns or branches, or it may move an axis without an axis
+    // word (see MarkBeforeLines).
     private bool HidesWhatRunsBefore(FanucState fanuc, SourceBlock block)
     {
-        if (block.Find("N") is SourceWord label && fanuc.JumpTargets.Contains(FanucState.LabelOf(label)))
+        if (block.BlockSkip || IsJumpTarget(fanuc, block))
         {
             return true;
         }
