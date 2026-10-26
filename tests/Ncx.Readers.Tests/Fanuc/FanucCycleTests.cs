@@ -119,6 +119,21 @@ public sealed class FanucCycleTests
             Body("S500 M3\nG0 X0 Y0 Z10.\nM29 S500\nG84 G99 Z-20. R5. F750\nG84 G99 Z-25. R5. F750\nG80"));
     }
 
+    // D256: with the line in the first cycle block the mode holds for the run as well, so a G84 re-issued in the same
+    // run, with or without a block between, is the same cycle TAP.
+    [Theory]
+    [InlineData("M29 S500 G84 G99 Z-20. R5. F750\nG84 G99 Z-25. R5. F750\nG80")]
+    [InlineData("M29 S500 G84 G99 Z-20. R5. F750\nM8\nG84 G99 Z-25. R5. F750\nG80")]
+    [InlineData("M29 S500 G84 G99 Z-20. R5. F750\nG84 G99 Z-25.\nG80")]
+    public void RigidTapLine_InTheFirstCycleBlockOfTheRun_KeepsReadingTheTapCycle(string snippet)
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\n" + snippet + "\nM30\n%\n");
+        string text = NcxWriter.Write(program);
+        Assert.Contains("CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20", text, StringComparison.Ordinal);
+        Assert.Contains("CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-25", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("RAW:", text, StringComparison.Ordinal);
+    }
+
     // D256 names three ways into the rigid-tapping mode, the second of them "M29 S in the same block as the tapping
     // command", so the before line standing in the cycle block itself is the cycle TAP as well.
     [Fact]
@@ -230,6 +245,18 @@ public sealed class FanucCycleTests
             + "\nG84 G99 Z-20. R5. F750\nG80\nM30\n%\n");
         Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", NcxWriter.Write(program), StringComparison.Ordinal);
         Assert.Contains("G84 without the line", program.Diagnostics.ToText(), StringComparison.Ordinal);
+    }
+
+    // D256: the line in a block with a group-01 code, "G0 Z10. M29 S500;", the manuals do not settle (0i-D Connection
+    // Manual B-64303EN-1 p.927 states the cancel after the tapping), so the cycle stays RAW with that reason.
+    [Fact]
+    public void RigidTapLine_WithACancelInItsOwnBlock_KeepsTheCycleRawWithItsReason()
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0\nG0 Z10. M29 S500\nG84 G99 Z-20. R5. F750\nG80\n"
+            + "M30\n%\n");
+        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("the manual does not say whether the line holds there",
+            program.Diagnostics.ToText(), StringComparison.Ordinal);
     }
 
     // D256: a skipped line block runs or not by the operator's switch, so the reader cannot tell whether the line

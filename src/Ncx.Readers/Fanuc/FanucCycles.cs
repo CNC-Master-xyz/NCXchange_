@@ -661,6 +661,13 @@ internal static class FanucCycles
     // (wave-3 question #195).
     private static string? WithoutItsBeforeLine(FanucBlock block, CycleEntry entry)
     {
+        if (block.Fanuc.BeforeLineWithACancel.Contains(block.Line))
+        {
+            return $"the line \"{entry.Before}\" of the cycle {entry.Name} stands in front of {entry.Native} in a "
+                + "block with a code that cancels the rigid tapping mode, G80, a cycle code or a group-01 code, and "
+                + "the manual does not say whether the line holds there (machine-config 6, D256); its blocks stay RAW";
+        }
+
         if (!SeesWhatRunsBefore(block))
         {
             return $"the reader does not see which block runs before this one, or what a block between it and the "

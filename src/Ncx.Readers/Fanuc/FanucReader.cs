@@ -853,9 +853,14 @@ public sealed partial class FanucReader : ReaderBase
     // length compensation G43, G44, G49 - the manual neither allows nor forbids between M29 and G84; the walk ends
     // there unseen, so the cycle stays RAW with that reason rather than reading TAP or the other machining (manual
     // audit 2026-10-26, D256).
+    // A block with the entry's own native code, the G84 of an earlier cycle block of the same run, ends the walk with
+    // no place of the line and no mark: whether the run was entered with the line is the reading of that cycle block
+    // (FanucCycles.WithItsBeforeLine, the previous cycle of the run). It is tested before the cancel codes, of which
+    // G84 is one.
     // TODO(question): whether the line holds where its own block carries a group-01 code, "G0 Z10. M29 S500;" in
     // front of G84, the manuals do not say; the cancel of 10.13.16.8 is stated for after the tapping. The walk ends
-    // unseen at such a block, so the cycle stays RAW rather than reading TAP or the other machining.
+    // at such a block with a reason of its own (BeforeLineWithACancel), so the cycle stays RAW rather than reading
+    // TAP or the other machining.
     private void MarkBeforeLines(FanucState fanuc, int cycleIndex, string entry)
     {
         IReadOnlyList<SourceBlock> blocks = fanuc.Blocks;
@@ -868,7 +873,8 @@ public sealed partial class FanucReader : ReaderBase
             return;
         }
 
-        string before = Machine.CycleCatalog.Find(entry)?.Before ?? "";
+        CycleEntry? catalogEntry = Machine.CycleCatalog.Find(entry);
+        string before = catalogEntry?.Before ?? "";
         for (int index = cycleIndex - 1; index >= 0; index--)
         {
             SourceBlock block = blocks[index];
@@ -884,10 +890,24 @@ public sealed partial class FanucReader : ReaderBase
                 break;
             }
 
-            if (HidesWhatRunsBefore(fanuc, block)
-                || (CancelsTheMode(block) && CarriesTheCodesOf(block, before)))
+            if (HidesWhatRunsBefore(fanuc, block))
             {
                 fanuc.BeforeLineUnseen.Add(cycle.Line);
+                lines.Clear();
+                break;
+            }
+
+            // The entry's own native code re-issued in the run: the cycle block before it holds the mode or not by
+            // its own reading, and FanucCycles.WithItsBeforeLine continues the run of a cycle entered with the line.
+            if (catalogEntry is not null && HasNativeCode(block, catalogEntry.Native))
+            {
+                break;
+            }
+
+            if (CancelsTheMode(block) && CarriesTheCodesOf(block, before))
+            {
+                fanuc.BeforeLineUnseen.Add(cycle.Line);
+                fanuc.BeforeLineWithACancel.Add(cycle.Line);
                 lines.Clear();
                 break;
             }

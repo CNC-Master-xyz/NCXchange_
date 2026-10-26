@@ -89,6 +89,13 @@ internal sealed class FanucState
     public HashSet<int> BeforeLineUnseen { get; } = [];
 
     /// <summary>
+    /// The lines of the cycle blocks whose walk back ended at a block that carries the codes of the "before" line
+    /// together with a code that cancels the rigid tapping mode, "G0 Z10. M29 S500;", which the manuals do not settle
+    /// (D256; FanucReader.MarkBeforeLines). Each is in BeforeLineUnseen as well.
+    /// </summary>
+    public HashSet<int> BeforeLineWithACancel { get; } = [];
+
+    /// <summary>
     /// The lines of the blocks that were read as the "before" line of the cycle block after them: the line matched
     /// the template of the entry, so the cycle is the machining the entry names (D256). A cycle block whose entry
     /// carries a "before" line that stands in no entry here is another machining, which the reader keeps as RAW.
