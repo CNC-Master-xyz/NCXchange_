@@ -50,6 +50,15 @@ internal sealed partial class SiemensFile
     // The names a RAW:SIEMENS block of a unit declares itself, DEF REAL LEN the reader kept (D261).
     private readonly Dictionary<Section, HashSet<string>> _rawDeclared = [];
 
+    // The RAW PROC line of a subprogram, PROC NAME SAVE as the reader keeps it (controller-mapping 6, SUB=BEGIN): a
+    // RAW PROC line that is the first block of the SUB section, as the reader declares the subprogram by a PROC at the
+    // top of its unit only (SiemensUnits.Read); a PROC inside a unit stays a RAW line of its own
+    // (SiemensCalls.ReadProc).
+    private readonly Dictionary<Section, Block> _procRaws = [];
+
+    // The SUB sections whose first block the walk has met.
+    private readonly HashSet<Section> _subsBegun = [];
+
     private SiemensFile(IReadOnlyList<BlockStep> steps)
     {
         _steps = steps;
@@ -60,9 +69,16 @@ internal sealed partial class SiemensFile
                 _subs.TryAdd(name, section);
             }
 
-            if (step.Block.Find("RAW")?.Value is StringValue raw)
+            string? raw = (step.Block.Find("RAW")?.Value as StringValue)?.Content;
+            if (raw is not null)
             {
-                RawFrameKeys.UnionWith(SiemensFrames.KeysNamedBy(raw.Content));
+                RawFrameKeys.UnionWith(SiemensFrames.KeysNamedBy(raw));
+            }
+
+            if (step.Section is Section { Kind: SectionKind.Sub } sub && !step.Block.Has("SUB")
+                && _subsBegun.Add(sub) && raw is not null && SiemensProcLine.Parse(raw) is not null)
+            {
+                _procRaws.Add(sub, step.Block);
             }
         }
 
@@ -251,6 +267,36 @@ internal sealed partial class SiemensFile
 
         _endLabels.Add(program, name);
         return name;
+    }
+
+    /// <summary>
+    /// True when the RAW PROC line of the subprogram declares the attribute SAVE, PROC NAME(...) SAVE as the reader
+    /// keeps it (controller-mapping 6, SUB=BEGIN), in which no RET may stand: RET "can only be used in subprograms that
+    /// were not defined with the attribute SAVE" (840D sl NC-Programmierung SW4.92, p.511, p.523). The compiler's own
+    /// PROC line never declares SAVE (SiemensFlow.ProcLine).
+    /// </summary>
+    public bool DeclaresSave(Section sub)
+    {
+        return ProcRawOf(sub) is Block block && block.Find("RAW")?.Value is StringValue raw
+            && SiemensProcLine.Parse(raw.Content) is ProcLineParts parts
+            && parts.Attributes.Contains("SAVE", StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The block of the RAW PROC line of the subprogram, null for none (controller-mapping 6, SUB=BEGIN).
+    /// </summary>
+    public Block? ProcRawOf(Section sub)
+    {
+        return _procRaws.GetValueOrDefault(sub);
+    }
+
+    /// <summary>
+    /// True for the block of the RAW PROC line of a subprogram, which the head of its unit writes or reports
+    /// (SiemensFlow.ProcLine), and which is not written again where it stands.
+    /// </summary>
+    public bool IsProcRaw(Block block)
+    {
+        return _procRaws.ContainsValue(block);
     }
 
     /// <summary>

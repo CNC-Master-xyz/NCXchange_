@@ -84,6 +84,142 @@ public sealed class SiemensFlowTests
         Assert.Contains("PROGRAM_END:", TextOf(result));
     }
 
+    // D344 and the 840D sl manual (NC-Programmierung SW4.92, p.523): RET "can only be used in subprograms that were
+    // not defined with the attribute SAVE", and the parameterized form is no exception the manual names (p.524-526),
+    // so JUMP=END in a subprogram whose RAW PROC line declares SAVE, as the reader keeps PROC NAME SAVE, is the ERROR
+    // CMP597 naming the block.
+    [Theory]
+    [InlineData("PROC CHECK SAVE")]
+    [InlineData("N5 PROC CHECK SAVE")]
+    [InlineData("PROC CHECK SBLOF SAVE DISPLOF")]
+    public void JumpToEndInASubprogram_DeclaredSave_IsTheErrorCmp597(string proc)
+    {
+        string program = $$"""
+            FILE=BEGIN NCX=1
+            PROGRAM=BEGIN NAME="MAIN"
+            FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF
+            VAR:R1=1
+            CALL=CHECK
+            RAPID X=10
+            PROGRAM=END
+            SUB=BEGIN NAME=CHECK
+            RAW:SIEMENS="{{proc}}"
+            JUMP=END IF={$R1 == 1}
+            SUB=END
+            FILE=END
+            """;
+        CompileResult result = Run(program, Mill());
+
+        Assert.Equal(["CMP597"], CompilerCodes(result));
+    }
+
+    // D344: the CMP597 of a SAVE subprogram stands after a parameter list too, PROC CHECK(REAL WERT1) SAVE with the
+    // parameter its call gives, with no blank after the parenthesis and with a default that holds parentheses, the
+    // spellings the reader keeps as RAW (NC-Programmierung SW4.92, p.511-512, p.523).
+    [Theory]
+    [InlineData("PROC CHECK(REAL WERT1) SAVE")]
+    [InlineData("PROC CHECK(REAL WERT1)SAVE")]
+    [InlineData("PROC CHECK(REAL WERT1=SIN(30)) SAVE")]
+    public void JumpToEndInASubprogram_DeclaredSaveAfterParameters_IsTheErrorCmp597(string proc)
+    {
+        string program = $$"""
+            FILE=BEGIN NCX=1
+            PROGRAM=BEGIN NAME="MAIN"
+            FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF
+            CALL=CHECK ARG:WERT1=1
+            RAPID X=10
+            PROGRAM=END
+            SUB=BEGIN NAME=CHECK
+            RAW:SIEMENS="{{proc}}"
+            JUMP=END IF={$WERT1 == 1}
+            SUB=END
+            FILE=END
+            """;
+
+        Assert.Equal(["CMP597"], CompilerCodes(Run(program, Mill())));
+    }
+
+    // D344: SAVE inside the name of a subprogram, SAVE_CHECK or CHECKSAVE, is no attribute, so the parameterized
+    // return stands (NC-Programmierung SW4.92, p.511, p.523).
+    [Theory]
+    [InlineData("SAVE_CHECK")]
+    [InlineData("CHECKSAVE")]
+    public void JumpToEndInASubprogram_SaveInsideTheName_IsTheParameterizedReturn(string name)
+    {
+        string program = $$"""
+            FILE=BEGIN NCX=1
+            PROGRAM=BEGIN NAME="MAIN"
+            FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF
+            CALL={{name}}
+            RAPID X=10
+            PROGRAM=END
+            SUB=BEGIN NAME={{name}}
+            RAW:SIEMENS="PROC {{name}}"
+            JUMP=END
+            SUB=END
+            FILE=END
+            """;
+        CompileResult result = Run(program, Mill());
+
+        Assert.Empty(CompilerCodes(result));
+        Assert.Contains("RET(\"PROGRAM_END\",,$P_STACK)", TextOf(result), StringComparison.Ordinal);
+        Assert.Contains("PROC " + name, LinesOf(TextOf(result)));
+    }
+
+    // D344: a RAW PROC line with SBLOF or DISPLOF and without SAVE, or with SAVE only in its comment, leaves the
+    // parameterized return as it is (NC-Programmierung SW4.92, p.512, p.523).
+    [Theory]
+    [InlineData("PROC CHECK SBLOF")]
+    [InlineData("PROC CHECK DISPLOF")]
+    [InlineData("PROC CHECK ; SAVE")]
+    public void JumpToEndInASubprogram_ProcWithoutSave_IsTheParameterizedReturn(string proc)
+    {
+        string program = $$"""
+            FILE=BEGIN NCX=1
+            PROGRAM=BEGIN NAME="MAIN"
+            FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF
+            CALL=CHECK
+            RAPID X=10
+            PROGRAM=END
+            SUB=BEGIN NAME=CHECK
+            RAW:SIEMENS="{{proc}}"
+            JUMP=END
+            SUB=END
+            FILE=END
+            """;
+        CompileResult result = Run(program, Mill());
+
+        Assert.Empty(CompilerCodes(result));
+        Assert.Contains("RET(\"PROGRAM_END\",,$P_STACK)", TextOf(result), StringComparison.Ordinal);
+    }
+
+    // D344: the compiler itself never declares a subprogram SAVE, its PROC line is PROC NAME with the parameters
+    // alone (controllers siemens.md 8, 12 rule 1), so the RET it writes stands in a SAVE subprogram only where a RAW
+    // line of the file declares it.
+    [Fact]
+    public void ProcLine_OfASubprogramWithAndWithoutParameters_NeverDeclaresSave()
+    {
+        string program = """
+            FILE=BEGIN NCX=1
+            PROGRAM=BEGIN NAME="MAIN"
+            FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF
+            CALL=CHECK
+            CALL=POCK ARG:DEPTH=5
+            PROGRAM=END
+            SUB=BEGIN NAME=CHECK
+            JUMP=END
+            SUB=END
+            SUB=BEGIN NAME=POCK
+            LINE Z={-$DEPTH} F=100
+            SUB=END
+            FILE=END
+            """;
+        CompileResult result = Run(program, Mill());
+
+        Assert.Empty(CompilerCodes(result));
+        Assert.DoesNotContain("SAVE", TextOf(result), StringComparison.Ordinal);
+    }
+
     // Siemens 8: the comparisons bind weaker than AND and OR on the control, so they stand in parentheses; NOT binds
     // stronger than a comparison (language 4.12).
     [Fact]
