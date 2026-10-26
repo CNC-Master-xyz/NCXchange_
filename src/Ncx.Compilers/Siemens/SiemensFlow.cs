@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Ncx.Config.Templates;
 using Ncx.Core.Model;
 
@@ -10,7 +11,7 @@ namespace Ncx.Compilers.Siemens;
 /// reconstructed; CALL as NAME, NAME(1,2) with the PROC parameters, NAME P3, EXTCALL for a program outside the file;
 /// REPEAT label P=; RETURN as sub_end; VAR as R1= or the declared name.
 /// </summary>
-internal static class SiemensFlow
+internal static partial class SiemensFlow
 {
     /// <summary>
     /// LABEL=name as NAME: in a line of its own before the lines of the block, which a jump enters there (controllers
@@ -288,8 +289,7 @@ internal static class SiemensFlow
             return;
         }
 
-        if (write.Render(write.Machine.Format?.SubEnd, "[format] sub_end (machine-config 2)",
-            new TemplateValues()) is string text)
+        if (SiemensProgramFrame.SubEnd(write, write.Step.Section) is string text)
         {
             write.Write(text);
         }
@@ -330,24 +330,69 @@ internal static class SiemensFlow
 
     /// <summary>
     /// The PROC line of a subprogram with the parameters its calls give, REAL each: PROC NAME(REAL DEPTH, REAL
-    /// COUNT) (controllers siemens.md 8, 12 rule 1; controller-mapping 6, SUB=BEGIN and CALL + ARG).
+    /// COUNT) (controllers siemens.md 8, 12 rule 1; controller-mapping 6, SUB=BEGIN and CALL + ARG). Where the SUB
+    /// section carries a RAW PROC line of its own subprogram with those parameters, as the reader keeps PROC NAME SAVE,
+    /// that line stands in place of it, so that the unit has one PROC line and its attributes SAVE, SBLOF and DISPLOF
+    /// and the defaults of its parameters stay (840D sl NC-Programmierung SW4.92, p.510-512); a RAW PROC line of
+    /// another name or with other parameters is the ERROR CMP598.
     /// </summary>
     public static string ProcLine(SiemensBlock write, Section sub, string name)
     {
-        IReadOnlyList<string> parameters = write.File.ParametersOf(sub);
-        if (parameters.Count == 0)
+        // A parameter is a variable of the subprogram and takes its SINUMERIK name (language 4.9, ARG).
+        var names = new List<string>();
+        foreach (string parameter in write.File.ParametersOf(sub))
+        {
+            names.Add(SiemensExpressions.VariableName(write, parameter) ?? parameter);
+        }
+
+        if (write.File.ProcRawOf(sub) is Block rawBlock && rawBlock.Find("RAW")?.Value is StringValue raw)
+        {
+            if (SiemensFile.ProcParts(raw.Content) is var (rawName, rawParameters)
+                && string.Equals(rawName, name, StringComparison.OrdinalIgnoreCase)
+                && RealParameterNames(rawParameters) is List<string> rawNames
+                && rawNames.SequenceEqual(names, StringComparer.OrdinalIgnoreCase))
+            {
+                return raw.Content;
+            }
+
+            write.Diagnostics.Error(rawBlock, DiagnosticCodes.SiemensProcLineNotOwn,
+                $"The RAW line \"{raw.Content}\" of the subprogram {name} is a PROC line that does not name {name} "
+                + $"with the REAL parameters its calls give ({string.Join(", ", names)}): the unit carries one PROC "
+                + "line, and the compiler does not guess which (controllers siemens.md 8, 12 rule 1; 840D sl "
+                + "NC-Programmierung SW4.92, p.510-512).");
+        }
+
+        if (names.Count == 0)
         {
             return "PROC " + name;
         }
 
-        // A parameter is a variable of the subprogram and takes its SINUMERIK name (language 4.9, ARG).
-        var declared = new List<string>();
-        foreach (string parameter in parameters)
+        return "PROC " + name + "(" + string.Join(", ", names.Select(parameter => "REAL " + parameter)) + ")";
+    }
+
+    // The names of a PROC parameter list that declares REAL values only, a default allowed: REAL DEPTH=2, REAL W;
+    // empty without a list; null for a VAR, another type or an array, which the compiler's calls and EXTERN REAL do
+    // not give (controllers siemens.md 8).
+    private static List<string>? RealParameterNames(string? parameters)
+    {
+        var names = new List<string>();
+        if (string.IsNullOrWhiteSpace(parameters))
         {
-            declared.Add("REAL " + (SiemensExpressions.VariableName(write, parameter) ?? parameter));
+            return names;
         }
 
-        return "PROC " + name + "(" + string.Join(", ", declared) + ")";
+        foreach (string parameter in parameters.Split(','))
+        {
+            Match match = RealParameter().Match(parameter);
+            if (!match.Success)
+            {
+                return null;
+            }
+
+            names.Add(match.Groups["name"].Value);
+        }
+
+        return names;
     }
 
     /// <summary>
@@ -401,4 +446,9 @@ internal static class SiemensFlow
                 + ")");
         }
     }
+
+    // One parameter of a PROC line that is a REAL value, its default allowed (controllers siemens.md 8).
+    [GeneratedRegex(@"^\s*REAL\s+(?<name>[A-Z_][A-Z0-9_]*)\s*(?:=[^,]*)?$",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex RealParameter();
 }

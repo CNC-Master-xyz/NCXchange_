@@ -90,7 +90,7 @@ public sealed class SiemensFlowTests
     // CMP597 naming the block.
     [Theory]
     [InlineData("PROC CHECK SAVE")]
-    [InlineData("PROC CHECK(REAL WERT1) SAVE")]
+    [InlineData("N5 PROC CHECK SAVE")]
     [InlineData("PROC CHECK SBLOF SAVE DISPLOF")]
     public void JumpToEndInASubprogram_DeclaredSave_IsTheErrorCmp597(string proc)
     {
@@ -113,11 +113,11 @@ public sealed class SiemensFlowTests
         Assert.Equal(["CMP597"], CompilerCodes(result));
     }
 
-    // D344: a RAW PROC line without SAVE, SBLOF here, or a SAVE that is only part of a longer name, leaves the
-    // parameterized return as it is (NC-Programmierung SW4.92, p.512, p.523).
+    // D344: a RAW PROC line with SBLOF or DISPLOF and without SAVE leaves the parameterized return as it is
+    // (NC-Programmierung SW4.92, p.512, p.523).
     [Theory]
     [InlineData("PROC CHECK SBLOF")]
-    [InlineData("PROC SAVE_CHECK")]
+    [InlineData("PROC CHECK DISPLOF")]
     public void JumpToEndInASubprogram_ProcWithoutSave_IsTheParameterizedReturn(string proc)
     {
         string program = $$"""

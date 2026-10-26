@@ -164,6 +164,13 @@ public static partial class DiagnosticCodes
     public const string SiemensReturnInSaveSubprogram = "CMP597";
 
     /// <summary>
+    /// CMP598: a RAW PROC line in a SUB section that names another subprogram or declares other parameters than the
+    /// REAL ones its calls give: the unit carries one PROC line, and the compiler does not guess which (controllers
+    /// siemens.md 8, 12 rule 1; 840D sl NC-Programmierung SW4.92, p.510-512).
+    /// </summary>
+    public const string SiemensProcLineNotOwn = "CMP598";
+
+    /// <summary>
     /// CMP610: SYNC without a wait template in [sync], or with a mark outside its mark_range (machine-config 5;
     /// controllers siemens.md 9).
     /// </summary>
