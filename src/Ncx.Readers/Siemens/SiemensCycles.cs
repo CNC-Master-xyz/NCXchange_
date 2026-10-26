@@ -87,9 +87,17 @@ internal static class SiemensCycles
         }
 
         // The F of a position block is the feed of the control, which the cycle and the next feed motion use
-        // (controller-mapping 5, CYCLE_F).
-        if (block.Take("F") is SourceWord feed && SiemensExpression.ValueOf(block, feed.Text, out _) is Value value)
+        // (controller-mapping 5, CYCLE_F); an F with no NCX value keeps the block RAW (D5), and the feed of the control
+        // after it is one the reader does not know, as after a call that changes it.
+        if (block.Take("F") is SourceWord feed)
         {
+            if (SiemensExpression.ValueOf(block, feed.Text, out string? problem) is not Value value)
+            {
+                block.Facts.ControlFeed = null;
+                block.Draft.KeepAsRaw(problem!);
+                return;
+            }
+
             block.Facts.ControlFeed = value;
         }
 

@@ -187,4 +187,45 @@ public sealed class SiemensCycleTests
         Assert.Equal(Lines("TOLERANCE=0.02 TOLERANCE_MODE=FINISH", "TOLERANCE=OFF"),
             CheckedBody("CYCLE832(0.02,1,0.1)\nCYCLE832(0,0,1)"));
     }
+
+    // D346 with the manual audit of 2026-10-26: the F of an MCALL position block that has no NCX value, a DIV whose
+    // operand may be negative, keeps the block RAW with RDR506; the feed of the control after it is unknown, so the
+    // next feed motion writes no F and runs at the feed the RAW block set (D5; controller-mapping 5, CYCLE_F).
+    [Fact]
+    public void McallPositionF_WithADivThatMayBeNegative_KeepsTheBlockRawWithTheWarning()
+    {
+        NcxProgram program = FramedProgram(
+            "R1=4\nG0 X0 Y0 Z10\nF100\nMCALL CYCLE81(10,0,2,-5,)\nX10 Y10 F=R1 DIV 2\nMCALL\nG1 X30");
+        string body = BodyOf(NcxWriter.Write(program));
+
+        Assert.Contains(Raw("X10 Y10 F=R1 DIV 2") + "\n", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("CYCLE_CALL X=10 Y=10", body, StringComparison.Ordinal);
+        Assert.EndsWith("CYCLE=OFF\nLINE X=30\n", body, StringComparison.Ordinal);
+        Assert.Equal([DiagnosticCodes.SiemensDivisionRoundingUnknown, DiagnosticCodes.KeptAsRaw],
+            Codes(program).Take(2));
+    }
+
+    // The F of an MCALL position block that NCX cannot express, an indirect R[R1], keeps the block RAW with the
+    // reason, instead of being dropped (D5; controller-mapping 6, VAR).
+    [Fact]
+    public void McallPositionF_WithAnIndirectRParameter_KeepsTheBlockRaw()
+    {
+        NcxProgram program = FramedProgram(
+            "G0 X0 Y0 Z10\nF100\nMCALL CYCLE81(10,0,2,-5,)\nX10 Y10 F=R[R1]\nMCALL\nG1 X30");
+        string body = BodyOf(NcxWriter.Write(program));
+
+        Assert.Contains(Raw("X10 Y10 F=R[R1]") + "\n", body, StringComparison.Ordinal);
+        Assert.EndsWith("CYCLE=OFF\nLINE X=30\n", body, StringComparison.Ordinal);
+        Assert.Equal(DiagnosticCodes.KeptAsRaw, Codes(program)[0]);
+        Assert.Contains("R[R1]", program.Diagnostics.Items[0].Message, StringComparison.Ordinal);
+    }
+
+    // An F of an MCALL position block that converts is the feed of the control, as before (controller-mapping 5).
+    [Fact]
+    public void McallPositionF_ThatConverts_IsTheFeedOfTheControl()
+    {
+        Assert.Equal(Lines("RAPID X=0 Y=0 Z=10", Drill, "CYCLE_CALL X=10 Y=10", "CYCLE=OFF",
+                "LINE X=30 F={INT(14 / 2)}"),
+            CheckedBody("G0 X0 Y0 Z10\nF100\nMCALL CYCLE81(10,0,2,-5,)\nX10 Y10 F=14 DIV 2\nMCALL\nG1 X30"));
+    }
 }
