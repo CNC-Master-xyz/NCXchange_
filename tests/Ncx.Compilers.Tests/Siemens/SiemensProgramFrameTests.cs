@@ -341,6 +341,17 @@ public sealed class SiemensProgramFrameTests
         Assert.Equal(["CMP598"], CompilerCodes(Run(SubWithRaw(proc, "RAPID X=5"), Mill())));
     }
 
+    // The CMP598 of a subprogram whose calls give no parameters says so, and prints no empty list.
+    [Fact]
+    public void ProcLine_RawWithParametersTheCallsDoNotGive_SaysNoParameters()
+    {
+        CompileResult result = Run(SubWithRaw("PROC CHECK(REAL DEPTH) SAVE", "RAPID X=5"), Mill());
+
+        string text = result.Diagnostics.ToText();
+        Assert.Contains("no parameters", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("()", text, StringComparison.Ordinal);
+    }
+
     // A program that calls the subprogram CHECK, whose first block is the RAW line, then the block given.
     private static string SubWithRaw(string raw, string block)
     {

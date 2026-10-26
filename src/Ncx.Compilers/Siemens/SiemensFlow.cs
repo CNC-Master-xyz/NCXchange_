@@ -229,13 +229,20 @@ internal static partial class SiemensFlow
         // RET "can only be used in subprograms that were not defined with the attribute SAVE", and the manual names
         // no exception for the parameterized form and no other way to leave a SAVE subprogram to the program end
         // (840D sl NC-Programmierung SW4.92, p.511, p.523-526; D344): an ERROR where a RAW PROC line declares SAVE.
+        // TODO(question): the manual contradicts itself: the DISPLOF example of SW4.92 p.518 (Beispiel 1) is PROC
+        // CYCLE(AXIS TOMOV, REAL POSITION) SAVE DISPLOF ... RET (also SW4.94 EN p.508, BS.000504 p.175-176, 840D
+        // Arbeitsvorbereitung 2006 p.127-128), and p.526 says a return over several levels evaluates the SAVE of each
+        // level. CMP597 keeps the conservative reading of p.523 until that is answered (open questions, manual
+        // audit 2026-10-26, row 1).
         if (write.File.DeclaresSave(sub))
         {
             write.Error(DiagnosticCodes.SiemensReturnInSaveSubprogram,
                 $"JUMP=END in block {write.Block.Line.ToString(CultureInfo.InvariantCulture)} of the subprogram "
                 + $"{sub.Name ?? sub.Number?.ToString(CultureInfo.InvariantCulture)}, which its PROC line declares "
                 + "SAVE: the return RET(\"label\",,$P_STACK) that ends the program from the call cannot stand in a "
-                + "subprogram with the attribute SAVE (840D sl NC-Programmierung SW4.92, p.523; D344).");
+                + "subprogram with the attribute SAVE (840D sl NC-Programmierung SW4.92, p.523; D344); the manual "
+                + "contradicts itself, its example on p.518 ends a SAVE subprogram with RET, and this ERROR is the "
+                + "conservative reading until that is answered.");
             return;
         }
 
@@ -347,19 +354,21 @@ internal static partial class SiemensFlow
 
         if (write.File.ProcRawOf(sub) is Block rawBlock && rawBlock.Find("RAW")?.Value is StringValue raw)
         {
-            if (SiemensFile.ProcParts(raw.Content) is var (rawName, rawParameters)
-                && string.Equals(rawName, name, StringComparison.OrdinalIgnoreCase)
-                && RealParameterNames(rawParameters) is List<string> rawNames
+            if (SiemensFile.ProcParts(raw.Content) is ProcLineParts parts
+                && string.Equals(parts.Name, name, StringComparison.OrdinalIgnoreCase)
+                && RealParameterNames(parts.Parameters) is List<string> rawNames
                 && rawNames.SequenceEqual(names, StringComparer.OrdinalIgnoreCase))
             {
                 return raw.Content;
             }
 
+            string given = names.Count == 0
+                ? "no parameters"
+                : "the REAL parameters " + string.Join(", ", names);
             write.Diagnostics.Error(rawBlock, DiagnosticCodes.SiemensProcLineNotOwn,
                 $"The RAW line \"{raw.Content}\" of the subprogram {name} is a PROC line that does not name {name} "
-                + $"with the REAL parameters its calls give ({string.Join(", ", names)}): the unit carries one PROC "
-                + "line, and the compiler does not guess which (controllers siemens.md 8, 12 rule 1; 840D sl "
-                + "NC-Programmierung SW4.92, p.510-512).");
+                + $"with what its calls give, {given}: the unit carries one PROC line, and the compiler does not "
+                + "guess which (controllers siemens.md 8, 12 rule 1; 840D sl NC-Programmierung SW4.92, p.510-512).");
         }
 
         if (names.Count == 0)

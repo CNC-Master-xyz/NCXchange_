@@ -294,12 +294,16 @@ internal sealed partial class SiemensFile
     /// The name and the parameter list of a RAW PROC line, the text between the parentheses, null without them; null
     /// for a line that is no PROC line.
     /// </summary>
-    public static (string Name, string? Parameters)? ProcParts(string raw)
+    public static ProcLineParts? ProcParts(string raw)
     {
         Match match = ProcRawLine().Match(raw);
-        return match.Success
-            ? (match.Groups["name"].Value, match.Groups["parameters"].Success ? match.Groups["parameters"].Value : null)
-            : null;
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        Group parameters = match.Groups["parameters"];
+        return new ProcLineParts(match.Groups["name"].Value, parameters.Success ? parameters.Value : null);
     }
 
     /// <summary>

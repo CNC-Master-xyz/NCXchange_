@@ -113,6 +113,53 @@ public sealed class SiemensFlowTests
         Assert.Equal(["CMP597"], CompilerCodes(result));
     }
 
+    // D344: the CMP597 of a SAVE subprogram stands after a parameter list too, PROC CHECK(REAL WERT1) SAVE with the
+    // parameter its call gives (NC-Programmierung SW4.92, p.511-512, p.523).
+    [Fact]
+    public void JumpToEndInASubprogram_DeclaredSaveAfterParameters_IsTheErrorCmp597()
+    {
+        string program = """
+            FILE=BEGIN NCX=1
+            PROGRAM=BEGIN NAME="MAIN"
+            FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF
+            CALL=CHECK ARG:WERT1=1
+            RAPID X=10
+            PROGRAM=END
+            SUB=BEGIN NAME=CHECK
+            RAW:SIEMENS="PROC CHECK(REAL WERT1) SAVE"
+            JUMP=END IF={$WERT1 == 1}
+            SUB=END
+            FILE=END
+            """;
+
+        Assert.Equal(["CMP597"], CompilerCodes(Run(program, Mill())));
+    }
+
+    // D344: SAVE inside the name of a subprogram, SAVE_CHECK, is no attribute, so the parameterized return stands
+    // (NC-Programmierung SW4.92, p.511, p.523).
+    [Fact]
+    public void JumpToEndInASubprogram_SaveInsideTheName_IsTheParameterizedReturn()
+    {
+        string program = """
+            FILE=BEGIN NCX=1
+            PROGRAM=BEGIN NAME="MAIN"
+            FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF
+            CALL=SAVE_CHECK
+            RAPID X=10
+            PROGRAM=END
+            SUB=BEGIN NAME=SAVE_CHECK
+            RAW:SIEMENS="PROC SAVE_CHECK"
+            JUMP=END
+            SUB=END
+            FILE=END
+            """;
+        CompileResult result = Run(program, Mill());
+
+        Assert.Empty(CompilerCodes(result));
+        Assert.Contains("RET(\"PROGRAM_END\",,$P_STACK)", TextOf(result), StringComparison.Ordinal);
+        Assert.Contains("PROC SAVE_CHECK", LinesOf(TextOf(result)));
+    }
+
     // D344: a RAW PROC line with SBLOF or DISPLOF and without SAVE leaves the parameterized return as it is
     // (NC-Programmierung SW4.92, p.512, p.523).
     [Theory]
