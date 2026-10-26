@@ -187,4 +187,82 @@ public sealed class SiemensCycleTests
         Assert.Equal(Lines("TOLERANCE=0.02 TOLERANCE_MODE=FINISH", "TOLERANCE=OFF"),
             CheckedBody("CYCLE832(0.02,1,0.1)\nCYCLE832(0,0,1)"));
     }
+
+    // D346 with the manual audit of 2026-10-26: the F of an MCALL position block that has no NCX value, a DIV whose
+    // operand may be negative, keeps the block RAW with RDR506; the feed of the control after it is unknown, so the
+    // next feed motion writes no F and runs at the feed the RAW block set (D5; controller-mapping 5, CYCLE_F).
+    [Fact]
+    public void McallPositionF_WithADivThatMayBeNegative_KeepsTheBlockRawWithTheWarning()
+    {
+        NcxProgram program = FramedProgram(
+            "R1=4\nG0 X0 Y0 Z10\nF100\nMCALL CYCLE81(10,0,2,-5,)\nX10 Y10 F=R1 DIV 2\nMCALL\nG1 X30");
+        string body = BodyOf(NcxWriter.Write(program));
+
+        Assert.Contains(Raw("X10 Y10 F=R1 DIV 2") + "\n", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("CYCLE_CALL X=10 Y=10", body, StringComparison.Ordinal);
+        Assert.EndsWith("CYCLE=OFF\nLINE X=30\n", body, StringComparison.Ordinal);
+        Assert.Equal([DiagnosticCodes.SiemensDivisionRoundingUnknown, DiagnosticCodes.KeptAsRaw],
+            Codes(program).Take(2));
+    }
+
+    // The F of an MCALL position block that NCX cannot express, an indirect R[R1], keeps the block RAW with the
+    // reason, instead of being dropped (D5; controller-mapping 6, VAR).
+    [Fact]
+    public void McallPositionF_WithAnIndirectRParameter_KeepsTheBlockRaw()
+    {
+        NcxProgram program = FramedProgram(
+            "G0 X0 Y0 Z10\nF100\nMCALL CYCLE81(10,0,2,-5,)\nX10 Y10 F=R[R1]\nMCALL\nG1 X30");
+        string body = BodyOf(NcxWriter.Write(program));
+
+        Assert.Contains(Raw("X10 Y10 F=R[R1]") + "\n", body, StringComparison.Ordinal);
+        Assert.EndsWith("CYCLE=OFF\nLINE X=30\n", body, StringComparison.Ordinal);
+        Assert.Equal(DiagnosticCodes.KeptAsRaw, Codes(program)[0]);
+        Assert.Contains("R[R1]", program.Diagnostics.Items[0].Message, StringComparison.Ordinal);
+    }
+
+    // An F of an MCALL position block that converts is the feed of the control, as before (controller-mapping 5).
+    [Fact]
+    public void McallPositionF_ThatConverts_IsTheFeedOfTheControl()
+    {
+        Assert.Equal(Lines("RAPID X=0 Y=0 Z=10", Drill, "CYCLE_CALL X=10 Y=10", "CYCLE=OFF",
+                "LINE X=30 F={INT(14 / 2)}"),
+            CheckedBody("G0 X0 Y0 Z10\nF100\nMCALL CYCLE81(10,0,2,-5,)\nX10 Y10 F=14 DIV 2\nMCALL\nG1 X30"));
+    }
+
+    // D259: the F before an MCALL that a pattern the reader cannot expand keeps RAW leaves the feed it sets known,
+    // so the feed motion after the range writes it.
+    [Fact]
+    public void ModalRange_KeptRaw_LeavesTheFeedOfItsF()
+    {
+        string[] range =
+        [
+            "F200", "MCALL CYCLE81(10,0,2,-5,)", "CYCLE801(0,0,0,10,10,3,3,0,0,0,0)", "MCALL",
+        ];
+        NcxProgram program = FramedProgram("G0 X0 Y0 Z10\n" + string.Join('\n', range) + "\nG1 X30");
+
+        Assert.EndsWith(Lines(Raw(range[3]), "LINE X=30 F=200"), BodyOf(NcxWriter.Write(program)),
+            StringComparison.Ordinal);
+    }
+
+    // D5 with D346: a negative DTB dwells by revolutions of the master spindle; after a block kept RAW with an S the
+    // reader does not know that speed, and the cycle stays RAW (controller-mapping 5, CYCLE_DWELL).
+    [Theory]
+    [InlineData("S=R1 DIV 2")]
+    [InlineData("S=R[R1]")]
+    public void NegativeDtb_AfterARawBlockWithAnS_KeepsTheCycleRaw(string middle)
+    {
+        NcxProgram program = FramedProgram("S1000 M3\n" + middle + "\nG0 X0 Y0 Z10\nF100\nCYCLE82(10,0,2,-5,,-2)");
+
+        Assert.EndsWith(Raw("CYCLE82(10,0,2,-5,,-2)") + "\n", BodyOf(NcxWriter.Write(program)),
+            StringComparison.Ordinal);
+    }
+
+    // With the speed known, a negative DTB is converted to seconds (controller-mapping 5, CYCLE_DWELL).
+    [Fact]
+    public void NegativeDtb_WithTheSpeedKnown_IsTheDwellInSeconds()
+    {
+        string body = BodyOf(NcxWriter.Write(FramedProgram("S1000 M3\nG0 X0 Y0 Z10\nF100\nCYCLE82(10,0,2,-5,,-2)")));
+
+        Assert.Contains("CYCLE_DWELL=0.12", body, StringComparison.Ordinal);
+    }
 }

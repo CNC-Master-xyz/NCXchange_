@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Ncx.Config.Templates;
 using Ncx.Core.Model;
 
@@ -11,7 +12,7 @@ namespace Ncx.Compilers.Siemens;
 /// program_end at the end of a program, behind the label a JUMP=END goes to; RET or M17 per sub_end at the end of a
 /// subprogram; COMMENT and SECTION as comments with a semicolon.
 /// </summary>
-internal static class SiemensProgramFrame
+internal static partial class SiemensProgramFrame
 {
     /// <summary>
     /// The suffix of a main program unit (controllers siemens.md 1).
@@ -113,12 +114,26 @@ internal static class SiemensProgramFrame
         if (block.Has("SUB", null, "END"))
         {
             write.Written("SUB");
-            if (write.Render(write.Machine.Format?.SubEnd, "[format] sub_end (machine-config 2)", new TemplateValues())
-                is string end)
+            if (SubEnd(write, write.Step.Section) is string end)
             {
                 write.Write(end);
             }
         }
+    }
+
+    /// <summary>
+    /// The end of a subprogram, for SUB=END and RETURN: sub_end of the machine (machine-config 2). In a subprogram
+    /// whose PROC line declares SAVE, a RET of sub_end is M17, since RET "can only be used in subprograms that were not
+    /// defined with the attribute SAVE" (840D sl NC-Programmierung SW4.92, p.523) and M17 is the return at the end of
+    /// any subprogram (p.522, 3.2.2.8); the rest of sub_end stays as it is, and a sub_end without RET is not changed.
+    /// </summary>
+    public static string? SubEnd(SiemensBlock write, Section? sub)
+    {
+        string? end = write.Render(write.Machine.Format?.SubEnd, "[format] sub_end (machine-config 2)",
+            new TemplateValues());
+        return end is not null && sub is not null && write.File.DeclaresSave(sub)
+            ? PlainReturn().Replace(end, "M17")
+            : end;
     }
 
     /// <summary>
@@ -144,4 +159,8 @@ internal static class SiemensProgramFrame
             write.Write(text.Length == 0 ? "MSG()" : "MSG(\"" + text + "\")");
         }
     }
+
+    // RET without parameters, the word of sub_end that no SAVE subprogram may carry (SW4.92, p.523).
+    [GeneratedRegex(@"(?<![A-Z0-9_$])RET(?![A-Z0-9_$]|\s*\()", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex PlainReturn();
 }

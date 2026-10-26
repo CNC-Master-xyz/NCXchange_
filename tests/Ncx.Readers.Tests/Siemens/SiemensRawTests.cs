@@ -124,4 +124,45 @@ public sealed class SiemensRawTests
         AssertFormatsToItself(Text("%_N_TEST_MPF\nMSG(\"A;B\") ; NOTE\nG1 X1 F100 FZ=0.1\n"
             + "WORKPIECE(,\"\",,\"BOX\",112)\nM30\n"));
     }
+
+    // D5 with D346: a block kept RAW with an F sets a feed of the control the reader does not know, so the next
+    // feed motion writes no F and runs at the feed the RAW block set.
+    [Theory]
+    [InlineData("G1 X10 F=R1 DIV 2")]
+    [InlineData("F=R1 DIV 2")]
+    [InlineData("G1 X10 F=R[R1]")]
+    public void RawBlockWithAnF_LeavesTheFeedUnknown(string middle)
+    {
+        NcxProgram program = FramedProgram("G1 X5 F100\n" + middle + "\nG1 X30");
+        string body = BodyOf(NcxWriter.Write(program));
+
+        Assert.EndsWith(Lines(Raw(middle), "LINE X=30"), body, StringComparison.Ordinal);
+    }
+
+    // A block kept RAW without an F leaves the feed of the control as it was; the next feed motion writes it again,
+    // since the reader no longer knows what NCX wrote last (D29).
+    [Fact]
+    public void RawBlockWithoutAnF_LeavesTheFeedAsItWas()
+    {
+        NcxProgram program = FramedProgram("G1 X5 F100\nG1 X10 Y=R[R1]\nG1 X30");
+
+        Assert.EndsWith(Lines(Raw("G1 X10 Y=R[R1]"), "LINE X=30 F=100"), BodyOf(NcxWriter.Write(program)),
+            StringComparison.Ordinal);
+    }
+
+    // D346: where a DIV that may be negative keeps a G26, a LIMS, an S, an R assignment or the DPR of a cycle RAW, the
+    // RAW reason names the DIV, not a spindle the reader does not know or an empty DEPTH.
+    [Theory]
+    [InlineData("G26 S=R1 DIV 2")]
+    [InlineData("S1000 M3\nS=R1 DIV 2")]
+    [InlineData("R2=1+R3 DIV 2")]
+    [InlineData("G96 S100 LIMS=R1 DIV 2")]
+    [InlineData("G0 X0 Y0 Z10\nCYCLE81(10,0,2,,R1 DIV 2)")]
+    public void RawReason_OfADivThatMayBeNegative_NamesTheDiv(string source)
+    {
+        NcxProgram program = FramedProgram(source);
+
+        Assert.Contains(program.Diagnostics.Items, diagnostic => diagnostic.Code == DiagnosticCodes.KeptAsRaw
+            && diagnostic.Message.Contains("DIV for a negative operand", StringComparison.Ordinal));
+    }
 }
