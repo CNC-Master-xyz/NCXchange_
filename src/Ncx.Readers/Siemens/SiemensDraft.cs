@@ -59,6 +59,12 @@ internal sealed class SiemensDraft
     public List<SiemensWarning> Warnings { get; } = [];
 
     /// <summary>
+    /// The WARNINGs that say how the reader read the block, reported whether it writes the blocks or keeps the block
+    /// as RAW (D98).
+    /// </summary>
+    public List<SiemensWarning> ReadingWarnings { get; } = [];
+
+    /// <summary>
     /// Keeps the whole block as RAW, verbatim with a WARNING (D5, controller-mapping 9); the first reason stands.
     /// </summary>
     /// <param name="reason">Why, in the words of the machine.</param>

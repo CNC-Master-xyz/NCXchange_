@@ -41,4 +41,11 @@ public static partial class DiagnosticCodes
     /// back or its end label is missing (controllers siemens.md 8).
     /// </summary>
     public const string SiemensStructureNotClosed = "RDR505";
+
+    /// <summary>
+    /// RDR506, a WARNING: a DIV whose operand may be negative keeps its block as RAW, since how the control rounds the
+    /// integer division of a negative operand, towards zero or towards minus infinity, is not documented (D346; manual
+    /// audit 2026-10-26).
+    /// </summary>
+    public const string SiemensDivisionRoundingUnknown = "RDR506";
 }

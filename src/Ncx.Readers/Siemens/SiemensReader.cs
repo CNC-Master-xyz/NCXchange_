@@ -433,6 +433,11 @@ public sealed class SiemensReader : ReaderBase
     {
         SiemensDraft draft = reading.Draft;
         SiemensFacts facts = reading.Facts;
+        foreach (SiemensWarning warning in draft.ReadingWarnings)
+        {
+            Diagnostics.Warning(reading.Line, warning.Code, warning.Message);
+        }
+
         if (draft.RawReason is string reason)
         {
             EmitRaw(reading.Source, reason);

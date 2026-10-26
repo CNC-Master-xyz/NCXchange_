@@ -10,7 +10,8 @@ namespace Ncx.Readers.Siemens;
 /// 6; language 4.9, 4.12): R1 and R[1] to $R1, a DEF or GUD name to $NAME, a system variable through the
 /// [system_variables] of the machine (D51), == and &lt;&gt; to == and !=, AND OR NOT MOD as they are, SIN COS TAN
 /// ASIN ACOS ATAN2 SQRT ABS ROUND LN EXP to the NCX functions, TRUNC to INT, MINVAL and MAXVAL to MIN and MAX, POT to
-/// the square, DIV to INT of the division (D346). What NCX cannot express, an indirect R[R1], a string, XOR, the bit
+/// the square, DIV of two number literals of 0 or more to INT of the division (D346). What NCX cannot express, a DIV
+/// whose operand may be negative, an indirect R[R1], a string, XOR, the bit
 /// operators, the concatenation &lt;&lt;,
 /// an unmapped system variable, is a problem that keeps the block as RAW.
 /// </summary>
@@ -170,6 +171,57 @@ internal static partial class SiemensExpression
         divisions = 1;
     }
 
+    // TODO(question): the manuals show DIV only for operands that are not negative (840D sl NC-Programmierung SW4.92
+    // p.449: 7 DIV 4.1 = 1; HLL training 2010 p.242: 3 DIV 4 = 0), and none says whether -7 DIV 2 is -3 or -4 (manual
+    // audit 2026-10-26, D346). Until one does, DIV converts only where both operands are number literals of 0 or more,
+    // and any other DIV keeps the block RAW with the WARNING RDR506 (D5).
+    private static string DivisionRounding(SiemensBlock block, string text)
+    {
+        var warning = new SiemensWarning(DiagnosticCodes.SiemensDivisionRoundingUnknown,
+            $"{text.Trim()} divides with DIV an operand that may be negative, and how the control rounds DIV for a "
+            + "negative operand, towards zero or towards minus infinity, is not documented; the block is kept as RAW "
+            + "(D346, D5).");
+        if (!block.Draft.ReadingWarnings.Contains(warning))
+        {
+            block.Draft.ReadingWarnings.Add(warning);
+        }
+
+        return $"the rounding of DIV for a negative operand is not documented, so {text.Trim()} has no NCX form (D346)";
+    }
+
+    // True when both operands of a DIV are number literals of 0 or more: the left one is the product chain at the end
+    // of the translated text, no unary minus in front of it, the right one the number that follows DIV in the source.
+    private static bool OperandsNotNegative(string translated, string text, int afterDiv)
+    {
+        int start = ProductStart(translated);
+        if (!NonNegativeLiteral().IsMatch(translated.Substring(start).Trim()))
+        {
+            return false;
+        }
+
+        string before = translated.Substring(0, start).TrimEnd();
+        if (before.EndsWith('-'))
+        {
+            string rest = before.Substring(0, before.Length - 1).TrimEnd();
+            string last = rest.Length == 0 ? "" : rest.Substring(rest.LastIndexOf(' ') + 1);
+            bool binary = last.Length > 0 && Array.IndexOf(s_belowProduct, last) < 0
+                && last is not ("*" or "/" or "MOD") && !last.EndsWith('(') && !last.EndsWith(',');
+            if (!binary)
+            {
+                return false;
+            }
+        }
+
+        int right = SiemensScanner.SkipBlanks(text, afterDiv);
+        if (right >= text.Length || !(char.IsAsciiDigit(text[right]) || text[right] == '.'))
+        {
+            return false;
+        }
+
+        int end = SiemensScanner.ReadNumber(text, right);
+        return end > right && SiemensNumbers.Parse(text.Substring(right, end - right)) is not null;
+    }
+
     // Where the product chain at the end of the translated text begins: after the last operator of lower precedence
     // than * / MOD that stands outside parentheses, after the last argument comma, or at the start (language 4.12).
     private static int ProductStart(string text)
@@ -272,6 +324,13 @@ internal static partial class SiemensExpression
             // D346: DIV is the integer division, 3 DIV 4 = 0, and NCX writes it INT(a / b), since INT of language
             // 4.12 truncates towards zero (decisions.md; controller-mapping 6, functions).
             case "DIV":
+                CloseDivisions(output, ref divisions);
+                if (!OperandsNotNegative(output.ToString(), text, end))
+                {
+                    problem = DivisionRounding(block, text);
+                    return end;
+                }
+
                 OpenDivision(output, ref divisions);
                 return end;
 
@@ -367,6 +426,10 @@ internal static partial class SiemensExpression
 
         return "$" + name;
     }
+
+    // A number literal of 0 or more as the translation writes it, 7, 4.1, .5.
+    [GeneratedRegex(@"^([0-9]+(\.[0-9]*)?|\.[0-9]+)$", RegexOptions.CultureInvariant)]
+    private static partial Regex NonNegativeLiteral();
 
     // The name of an NCX variable follows ADDR (language 3, 4.9).
     [GeneratedRegex(@"^[A-Z][A-Z0-9_]*$", RegexOptions.CultureInvariant)]
