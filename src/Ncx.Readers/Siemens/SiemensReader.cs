@@ -448,6 +448,13 @@ public sealed class SiemensReader : ReaderBase
                 facts.ForgetChangesSince(before);
                 facts.Written.Clear();
                 facts.WrittenFeed = null;
+
+                // An F of the RAW block sets a feed of the control the reader does not know, so no later motion gets
+                // the feed before it (D5, D346).
+                if (reading.Source.Words.Any(word => word.Address == "F"))
+                {
+                    facts.ControlFeed = null;
+                }
             }
 
             return;

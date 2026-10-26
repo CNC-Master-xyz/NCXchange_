@@ -228,4 +228,19 @@ public sealed class SiemensCycleTests
                 "LINE X=30 F={INT(14 / 2)}"),
             CheckedBody("G0 X0 Y0 Z10\nF100\nMCALL CYCLE81(10,0,2,-5,)\nX10 Y10 F=14 DIV 2\nMCALL\nG1 X30"));
     }
+
+    // D259: the F before an MCALL that a pattern the reader cannot expand keeps RAW leaves the feed it sets known,
+    // so the feed motion after the range writes it.
+    [Fact]
+    public void ModalRange_KeptRaw_LeavesTheFeedOfItsF()
+    {
+        string[] range =
+        [
+            "F200", "MCALL CYCLE81(10,0,2,-5,)", "CYCLE801(0,0,0,10,10,3,3,0,0,0,0)", "MCALL",
+        ];
+        NcxProgram program = FramedProgram("G0 X0 Y0 Z10\n" + string.Join('\n', range) + "\nG1 X30");
+
+        Assert.EndsWith(Lines(Raw(range[3]), "LINE X=30 F=200"), BodyOf(NcxWriter.Write(program)),
+            StringComparison.Ordinal);
+    }
 }

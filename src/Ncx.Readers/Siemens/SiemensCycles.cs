@@ -87,13 +87,12 @@ internal static class SiemensCycles
         }
 
         // The F of a position block is the feed of the control, which the cycle and the next feed motion use
-        // (controller-mapping 5, CYCLE_F); an F with no NCX value keeps the block RAW (D5), and the feed of the control
-        // after it is one the reader does not know, as after a call that changes it.
+        // (controller-mapping 5, CYCLE_F); an F with no NCX value keeps the block RAW (D5), whose F then leaves the
+        // feed of the control unknown (SiemensReader.Write).
         if (block.Take("F") is SourceWord feed)
         {
             if (SiemensExpression.ValueOf(block, feed.Text, out string? problem) is not Value value)
             {
-                block.Facts.ControlFeed = null;
                 block.Draft.KeepAsRaw(problem!);
                 return;
             }
@@ -430,16 +429,18 @@ internal static class SiemensCycles
             }
 
             Value? value = word == "SURFACE" ? surface : Argument(word);
+            string? problem = null;
             if (word == "DEPTH" && value is null)
             {
-                value = Relative(surface);
+                value = Relative(surface, out problem);
             }
 
             if (value is null)
             {
                 if (word is "CLEARANCE" or "SAFE" or "DEPTH")
                 {
-                    Raw($"{entry.Native} leaves {native} empty, whose default the documents do not give (D181)");
+                    Raw(problem
+                        ?? $"{entry.Native} leaves {native} empty, whose default the documents do not give (D181)");
                     return false;
                 }
 
@@ -470,8 +471,9 @@ internal static class SiemensCycles
 
         // DEPTH is DP, or RFP less the unsigned DPR, which counts from the reference plane away from the retract
         // plane (controller-mapping 5; D334).
-        private Value? Relative(Value surface)
+        private Value? Relative(Value surface, out string? problem)
         {
+            problem = null;
             int index = IndexOf(entry.Signature, "DPR");
             if (index < 0 || index >= arguments.Count || arguments[index].Length == 0)
             {
@@ -479,7 +481,7 @@ internal static class SiemensCycles
             }
 
             _used.Add("DPR");
-            Value? relative = SiemensExpression.ValueOf(block, arguments[index], out _);
+            Value? relative = SiemensExpression.ValueOf(block, arguments[index], out problem);
             return relative is null ? null : Shift(surface, relative, towardsTheRetractPlane: false);
         }
 
