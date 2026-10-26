@@ -433,9 +433,23 @@ public sealed class SiemensReader : ReaderBase
     {
         SiemensDraft draft = reading.Draft;
         SiemensFacts facts = reading.Facts;
+        foreach (SiemensWarning warning in draft.ReadingWarnings)
+        {
+            Diagnostics.Warning(reading.Line, warning.Code, warning.Message);
+        }
+
         if (draft.RawReason is string reason)
         {
             EmitRaw(reading.Source, reason);
+
+            // An S of the RAW block that the reader did not read sets a spindle speed it does not know, which a dwell
+            // by revolutions would otherwise take from before it; this holds for a block that otherwise keeps the
+            // state, STOPRE S2000, as well (D5, D346).
+            if (SiemensSpindles.LeavesSpeedUnknown(reading))
+            {
+                facts.Rpm.Clear();
+            }
+
             if (!draft.RawKeepsState)
             {
                 // The control runs the RAW block and the reader does not know what it changed.
@@ -443,6 +457,13 @@ public sealed class SiemensReader : ReaderBase
                 facts.ForgetChangesSince(before);
                 facts.Written.Clear();
                 facts.WrittenFeed = null;
+
+                // An F of the RAW block sets a feed of the control the reader does not know, so no later motion gets
+                // the feed before it (D5, D346).
+                if (reading.Source.Words.Any(word => word.Address == "F"))
+                {
+                    facts.ControlFeed = null;
+                }
             }
 
             return;

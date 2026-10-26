@@ -118,12 +118,13 @@ internal static partial class SiemensVariables
                 return;
             }
 
+            string? problem = null;
             Value? value = SiemensArguments.StringOf(word.Text) is string text
                 ? new StringValue(text)
-                : SiemensExpression.ValueOf(block, word.Text, out string? problem);
+                : SiemensExpression.ValueOf(block, word.Text, out problem);
             if (value is null)
             {
-                block.Draft.KeepAsRaw($"{word.Address}={word.Text} has no NCX value (language 4.12)");
+                block.Draft.KeepAsRaw($"{word.Address}={word.Text} has no NCX value (language 4.12): {problem}");
                 return;
             }
 

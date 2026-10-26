@@ -195,13 +195,43 @@ public sealed class SiemensFlowTests
 
     // D346: DIV is the integer division of the control, 3 DIV 4 = 0, which NCX writes INT(a / b), since its INT
     // truncates towards zero; DIV takes the product chain it stands between, and the operator after it works on the
-    // quotient.
+    // quotient. The manuals show DIV only for operands that are not negative (840D sl NC-Programmierung SW4.92
+    // p.449: 7 DIV 4.1 = 1), so only number literals of 0 or more convert.
     [Fact]
-    public void Div_InAnExpression_IsTheIntegerDivisionOfItsOperands()
+    public void Div_OfNonNegativeLiterals_IsTheIntegerDivisionOfItsOperands()
     {
-        Assert.Equal(Lines("VAR:R1={INT(3 / 4)}", "VAR:R2={1 + INT($R3 / 2)}", "VAR:R4={INT($R1 * 2 / 3) + 1}",
-                "VAR:R5={MAX(1, INT($R1 / 2))}"),
-            CheckedBody("R1=3 DIV 4\nR2=1+R3 DIV 2\nR4=R1*2 DIV 3+1\nR5=MAXVAL(1,R1 DIV 2)"));
+        Assert.Equal(Lines("VAR:R1={INT(3 / 4)}", "VAR:R2={INT(7 / 4.1)}", "VAR:R3={1 + INT(7 / 2)}",
+                "VAR:R4={10 - INT(7 / 2) * 2}", "VAR:R5={MAX(1, INT(9 / 2))}"),
+            CheckedBody("R1=3 DIV 4\nR2=7 DIV 4.1\nR3=1+7 DIV 2\nR4=10-7 DIV 2*2\nR5=MAXVAL(1,9 DIV 2)"));
+    }
+
+    // D346 with the manual audit of 2026-10-26: how DIV rounds a negative operand, towards zero or towards minus
+    // infinity, is not documented, so a negative literal keeps the block RAW with the WARNING RDR506 (D5).
+    [Theory]
+    [InlineData("R1=-7 DIV 2")]
+    [InlineData("R1=7 DIV -2")]
+    [InlineData("R1=MAXVAL(1,-7 DIV 2)")]
+    public void Div_WithANegativeLiteral_StaysRawWithTheWarning(string source)
+    {
+        NcxProgram program = FramedProgram(source);
+
+        Assert.Equal(Lines(Raw(source)), BodyOf(NcxWriter.Write(program)));
+        Assert.Equal([DiagnosticCodes.SiemensDivisionRoundingUnknown, DiagnosticCodes.KeptAsRaw], Codes(program));
+    }
+
+    // D346 with the manual audit of 2026-10-26: a variable or a parenthesis may be negative when the control runs
+    // the block, so DIV with such an operand keeps the block RAW with the WARNING RDR506 (D5).
+    [Theory]
+    [InlineData("R2=1+R3 DIV 2")]
+    [InlineData("R4=R1*2 DIV 3+1")]
+    [InlineData("R5=7 DIV R1")]
+    [InlineData("R6=1+(7) DIV 2")]
+    public void Div_WithAVariableOperand_StaysRawWithTheWarning(string source)
+    {
+        NcxProgram program = FramedProgram(source);
+
+        Assert.Equal(Lines(Raw(source)), BodyOf(NcxWriter.Write(program)));
+        Assert.Equal([DiagnosticCodes.SiemensDivisionRoundingUnknown, DiagnosticCodes.KeptAsRaw], Codes(program));
     }
 
     // An end without its structure is an ERROR and stays RAW, a structure without its end a WARNING (siemens 8).

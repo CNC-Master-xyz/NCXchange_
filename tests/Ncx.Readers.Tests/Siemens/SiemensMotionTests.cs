@@ -180,4 +180,32 @@ public sealed class SiemensMotionTests
         Assert.Equal(Lines("TCPM=ON", "LINE X=1 Y=1 Z=1 TX=0 TY=0 TZ=1 F=100", "TCPM=OFF"),
             CheckedBody("TRAORI\nG1 X1 Y1 Z1 A3=0 B3=0 C3=1 F100\nTRAFOOF"));
     }
+
+    // D5 with D346: a block kept RAW with an S the reader could not read sets a speed the reader does not know, so a
+    // G4 S after it, which dwells by revolutions of that spindle, stays RAW instead of using the speed before it
+    // (controller-mapping 1, DWELL). The S2000 of a block that another word keeps RAW first is never read at all.
+    [Theory]
+    [InlineData("S=R1 DIV 2")]
+    [InlineData("S=R[R1]")]
+    [InlineData("IF $P_SEARCH\nS2000\nENDIF")]
+    [InlineData("TRANS X=R[R1] S2000")]
+    [InlineData("STOPRE S2000")]
+    public void G4S_AfterARawBlockWithAnS_StaysRaw(string middle)
+    {
+        NcxProgram program = FramedProgram("S1000 M3\n" + middle + "\nG4 S5");
+
+        Assert.EndsWith(Lines([.. middle.Split('\n').Select(Raw), Raw("G4 S5")]), BodyOf(NcxWriter.Write(program)),
+            StringComparison.Ordinal);
+    }
+
+    // A block kept RAW for another word whose S the reader did read runs at that speed, and G4 S after it dwells by
+    // its revolutions (controller-mapping 1, DWELL).
+    [Fact]
+    public void G4S_AfterARawBlockWhoseSWasRead_DwellsByThatSpeed()
+    {
+        NcxProgram program = FramedProgram("S1000 M3\nG0 X=R[R1] S2000\nG4 S5");
+
+        Assert.EndsWith(Lines(Raw("G0 X=R[R1] S2000"), "DWELL=0.15"), BodyOf(NcxWriter.Write(program)),
+            StringComparison.Ordinal);
+    }
 }
