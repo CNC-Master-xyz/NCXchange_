@@ -668,6 +668,14 @@ internal static class FanucCycles
                 + "the manual does not say whether the line holds there (machine-config 6, D256); its blocks stay RAW";
         }
 
+        if (block.Fanuc.BeforeLinesOf.TryGetValue(block.Line, out List<int>? lines)
+            && lines.Find(block.Fanuc.BeforeLineRaw.Contains) is int raw and > 0)
+        {
+            return $"the line \"{entry.Before}\" of the cycle {entry.Name} in front of {entry.Native} stands in a "
+                + $"block the reader keeps as RAW, line {raw}, which carries it to the control as it stands, so it is "
+                + "not read into the cycle (machine-config 6, D256, D5); its blocks stay RAW";
+        }
+
         if (!SeesWhatRunsBefore(block))
         {
             return $"the reader does not see which block runs before this one, or what a block between it and the "

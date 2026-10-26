@@ -96,6 +96,12 @@ internal sealed class FanucState
     public HashSet<int> BeforeLineWithACancel { get; } = [];
 
     /// <summary>
+    /// The lines of the blocks that matched the "before" line of a cycle but ended RAW, so that the line reaches the
+    /// control as RAW text and does not count for the cycle (D256, D5; FanucReader.ReadBlock).
+    /// </summary>
+    public HashSet<int> BeforeLineRaw { get; } = [];
+
+    /// <summary>
     /// The lines of the blocks that were read as the "before" line of the cycle block after them: the line matched
     /// the template of the entry, so the cycle is the machining the entry names (D256). A cycle block whose entry
     /// carries a "before" line that stands in no entry here is another machining, which the reader keeps as RAW.

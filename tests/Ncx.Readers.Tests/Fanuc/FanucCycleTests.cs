@@ -259,6 +259,41 @@ public sealed class FanucCycleTests
             program.Diagnostics.ToText(), StringComparison.Ordinal);
     }
 
+    // D256: M2 and M30 end the program in the reset state (B-64484EN p.297 and p.1135), and a reset cancels the
+    // rigid tapping mode (B-64484EN-2 p.103, Reset; B-64303EN-1 p.927), so the line before them does not reach a
+    // G84 after them, which keeps the reading of a G84 without its line.
+    [Theory]
+    [InlineData("M30")]
+    [InlineData("M2")]
+    public void RigidTapLine_WithAProgramEndBetween_DoesNotReachTheCycle(string end)
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\n" + end
+            + "\nG84 G99 Z-20. R5. F750\nG80\nM30\n%\n");
+        string text = NcxWriter.Write(program);
+        Assert.DoesNotContain("CYCLE=TAP", text, StringComparison.Ordinal);
+        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", text, StringComparison.Ordinal);
+        Assert.Contains("G84 without the line", program.Diagnostics.ToText(), StringComparison.Ordinal);
+    }
+
+    // D256: a line block the reader keeps as RAW is not read into the cycle - the RAW text carries the M29 S to the
+    // control, and a compiler writes the line in front of every TAP run, so a TAP after it would give the line twice;
+    // the G84 stays RAW with a reason that names the RAW line block.
+    [Theory]
+    [InlineData("M29 S500 P12\n", "M29 S500 P12")]
+    [InlineData("M29S500P12\nM177\n", "M29S500P12")]
+    [InlineData("M29 S500 Q1\nM8\n", "M29 S500 Q1")]
+    public void RigidTapLine_InABlockKeptAsRaw_KeepsTheCycleRawWithItsReason(string lines, string line)
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\n" + lines
+            + "G84 G99 Z-20. R5. F750\nG80\nM30\n%\n");
+        string text = NcxWriter.Write(program);
+        Assert.DoesNotContain("CYCLE=TAP", text, StringComparison.Ordinal);
+        Assert.Contains("RAW:FANUC=\"" + line + "\"", text, StringComparison.Ordinal);
+        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", text, StringComparison.Ordinal);
+        Assert.Contains("stands in a block the reader keeps as RAW", program.Diagnostics.ToText(),
+            StringComparison.Ordinal);
+    }
+
     // D256: a skipped line block runs or not by the operator's switch, so the reader cannot tell whether the line
     // reaches the G84; the cycle stays RAW with that reason and the skipped block is read as any skipped block is.
     [Theory]

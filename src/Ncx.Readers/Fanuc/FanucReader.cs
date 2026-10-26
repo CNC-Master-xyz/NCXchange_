@@ -437,6 +437,14 @@ public sealed partial class FanucReader : ReaderBase
             }
         }
 
+        // A "before" line in a block that ends RAW reaches the control as the RAW text, so it does not count for the
+        // cycle: a compiler writes the line in front of every TAP run, and a TAP after it would give the line twice
+        // (D256, D5). The cycle block then stays RAW with a reason that names the block (FanucCycles).
+        if (reading.Draft.IsRaw && fanuc.CycleBeforeRead.Remove(block.Line))
+        {
+            fanuc.BeforeLineRaw.Add(block.Line);
+        }
+
         Write(reading);
         EnterCalls(fanuc, reading);
         Derive(fanuc);
@@ -841,18 +849,19 @@ public sealed partial class FanucReader : ReaderBase
     // p.281-282). So the walk goes back from the cycle block over the blocks with neither an S word nor an axis word
     // and ends at the first block with one, which is a place of the line as well, since PS0203 concerns only what
     // stands between the M29 block and G84.
-    // It ends without the line at the head of a program and at a block with G80, a canned-cycle code or a group-01
+    // It ends without the line at the head of a program, at a block with G80, a canned-cycle code or a group-01
     // code, which cancel the rigid tapping mode (0i-D Connection Manual B-64303EN-1 p.927, 10.13.16.8; B-64484EN-2
-    // p.104, the cancel clears S to 0) - the block of an earlier cycle among them, whose own M29 S therefore does not
-    // reach a G84 after its G80. It ends unseen, with no place of the line, where the reader does not see what runs
-    // in front of a block or what a block does: a jump enters the cycle block or a block of the walk, a block is
-    // skipped by the operator's switch, a block calls, returns or branches, or the walk reaches the head of a section
-    // a block of the file calls. These are tested on every block of the walk before its S and axis words, so that
-    // they cover the line block itself.
+    // p.104, the cancel clears S to 0), and at the program end M2 or M30, whose reset cancels it as well (B-64484EN
+    // p.297, p.1135; B-64484EN-2 p.103, Reset) - the block of an earlier cycle among them, whose own M29 S therefore
+    // does not reach a G84 after its G80. It ends unseen, with no place of the line, where the reader does not see
+    // what runs in front of a block or what a block does: a jump enters the cycle block or a block of the walk, a
+    // block is skipped by the operator's switch, a block calls, returns or branches, or the walk reaches the head of a
+    // section a block of the file calls. These are tested on every block of the walk before its S and axis words, so
+    // that they cover the line block itself.
     // TODO(question): a block that may move an axis without an axis word - the tool change M6 or a T word, the tool
     // length compensation G43, G44, G49 - the manual neither allows nor forbids between M29 and G84; the walk ends
     // there unseen, so the cycle stays RAW with that reason rather than reading TAP or the other machining (manual
-    // audit 2026-10-26, D256).
+    // audit 2026-10-26, D256). Row 3 of "Manual audit 2026-10-26" in docs/implementation/03-open-questions.md.
     // A block with the entry's own native code, the G84 of an earlier cycle block of the same run, ends the walk with
     // no place of the line and no mark: whether the run was entered with the line is the reading of that cycle block
     // (FanucCycles.WithItsBeforeLine, the previous cycle of the run). It is tested before the cancel codes, of which
@@ -860,7 +869,7 @@ public sealed partial class FanucReader : ReaderBase
     // TODO(question): whether the line holds where its own block carries a group-01 code, "G0 Z10. M29 S500;" in
     // front of G84, the manuals do not say; the cancel of 10.13.16.8 is stated for after the tapping. The walk ends
     // at such a block with a reason of its own (BeforeLineWithACancel), so the cycle stays RAW rather than reading
-    // TAP or the other machining.
+    // TAP or the other machining. Row 4 of "Manual audit 2026-10-26" in docs/implementation/03-open-questions.md.
     private void MarkBeforeLines(FanucState fanuc, int cycleIndex, string entry)
     {
         IReadOnlyList<SourceBlock> blocks = fanuc.Blocks;
@@ -931,11 +940,18 @@ public sealed partial class FanucReader : ReaderBase
     }
 
     // Whether a block carries G80, a code of the canned cycles, group 09, or a code of group 01, which cancel the
-    // rigid tapping mode (0i-D Connection Manual B-64303EN-1 p.927, 10.13.16.8; controllers fanuc.md 3).
+    // rigid tapping mode (0i-D Connection Manual B-64303EN-1 p.927, 10.13.16.8; controllers fanuc.md 3), or the
+    // program end M2 or M30, which ends in the reset state (B-64484EN p.297, p.1135) - and a reset cancels the mode
+    // (B-64484EN-2 p.103, Reset) - or returns to the start of the program, so that no G84 after it runs in the mode.
     private bool CancelsTheMode(SourceBlock block)
     {
         foreach (SourceWord word in block.Words)
         {
+            if (word.Address == "M" && NativeCode.Of(word) is "M2" or "M30")
+            {
+                return true;
+            }
+
             if (word.Address == "G" && NativeCode.Of(word) is string code
                 && (code == "G80" || (ModalGroupOfCode.TryGetValue(code, out int group)
                     && group is FanucModalGroups.Motion or FanucModalGroups.Cycle)))
