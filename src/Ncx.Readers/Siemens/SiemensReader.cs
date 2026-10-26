@@ -441,6 +441,15 @@ public sealed class SiemensReader : ReaderBase
         if (draft.RawReason is string reason)
         {
             EmitRaw(reading.Source, reason);
+
+            // An S of the RAW block that the reader did not read sets a spindle speed it does not know, which a dwell
+            // by revolutions would otherwise take from before it; this holds for a block that otherwise keeps the
+            // state, STOPRE S2000, as well (D5, D346).
+            if (SiemensSpindles.LeavesSpeedUnknown(reading))
+            {
+                facts.Rpm.Clear();
+            }
+
             if (!draft.RawKeepsState)
             {
                 // The control runs the RAW block and the reader does not know what it changed.

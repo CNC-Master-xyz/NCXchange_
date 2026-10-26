@@ -243,4 +243,26 @@ public sealed class SiemensCycleTests
         Assert.EndsWith(Lines(Raw(range[3]), "LINE X=30 F=200"), BodyOf(NcxWriter.Write(program)),
             StringComparison.Ordinal);
     }
+
+    // D5 with D346: a negative DTB dwells by revolutions of the master spindle; after a block kept RAW with an S the
+    // reader does not know that speed, and the cycle stays RAW (controller-mapping 5, CYCLE_DWELL).
+    [Theory]
+    [InlineData("S=R1 DIV 2")]
+    [InlineData("S=R[R1]")]
+    public void NegativeDtb_AfterARawBlockWithAnS_KeepsTheCycleRaw(string middle)
+    {
+        NcxProgram program = FramedProgram("S1000 M3\n" + middle + "\nG0 X0 Y0 Z10\nF100\nCYCLE82(10,0,2,-5,,-2)");
+
+        Assert.EndsWith(Raw("CYCLE82(10,0,2,-5,,-2)") + "\n", BodyOf(NcxWriter.Write(program)),
+            StringComparison.Ordinal);
+    }
+
+    // With the speed known, a negative DTB is converted to seconds (controller-mapping 5, CYCLE_DWELL).
+    [Fact]
+    public void NegativeDtb_WithTheSpeedKnown_IsTheDwellInSeconds()
+    {
+        string body = BodyOf(NcxWriter.Write(FramedProgram("S1000 M3\nG0 X0 Y0 Z10\nF100\nCYCLE82(10,0,2,-5,,-2)")));
+
+        Assert.Contains("CYCLE_DWELL=0.12", body, StringComparison.Ordinal);
+    }
 }

@@ -150,10 +150,12 @@ public sealed class SiemensRawTests
             StringComparison.Ordinal);
     }
 
-    // D346: where a DIV that may be negative keeps a G26, a LIMS or the DPR of a cycle RAW, the RAW reason names the
-    // DIV, not a spindle the reader does not know or an empty DEPTH.
+    // D346: where a DIV that may be negative keeps a G26, a LIMS, an S, an R assignment or the DPR of a cycle RAW, the
+    // RAW reason names the DIV, not a spindle the reader does not know or an empty DEPTH.
     [Theory]
     [InlineData("G26 S=R1 DIV 2")]
+    [InlineData("S1000 M3\nS=R1 DIV 2")]
+    [InlineData("R2=1+R3 DIV 2")]
     [InlineData("G96 S100 LIMS=R1 DIV 2")]
     [InlineData("G0 X0 Y0 Z10\nCYCLE81(10,0,2,,R1 DIV 2)")]
     public void RawReason_OfADivThatMayBeNegative_NamesTheDiv(string source)

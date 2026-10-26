@@ -65,6 +65,12 @@ internal sealed class SiemensDraft
     public List<SiemensWarning> ReadingWarnings { get; } = [];
 
     /// <summary>
+    /// The S words whose speed the reader took into its facts, so that a block kept as RAW forgets only the speeds it
+    /// did not read (SiemensSpindles.LeavesSpeedUnknown).
+    /// </summary>
+    public HashSet<SourceWord> SpeedsRead { get; } = [];
+
+    /// <summary>
     /// Keeps the whole block as RAW, verbatim with a WARNING (D5, controller-mapping 9); the first reason stands.
     /// </summary>
     /// <param name="reason">Why, in the words of the machine.</param>

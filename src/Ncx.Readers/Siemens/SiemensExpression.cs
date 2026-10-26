@@ -11,7 +11,7 @@ namespace Ncx.Readers.Siemens;
 /// [system_variables] of the machine (D51), == and &lt;&gt; to == and !=, AND OR NOT MOD as they are, SIN COS TAN
 /// ASIN ACOS ATAN2 SQRT ABS ROUND LN EXP to the NCX functions, TRUNC to INT, MINVAL and MAXVAL to MIN and MAX, POT to
 /// the square, DIV of two number literals of 0 or more to INT of the division (D346). What NCX cannot express, a DIV
-/// whose operand may be negative, an indirect R[R1], a string, XOR, the bit
+/// with an operand that is not a number literal of 0 or more, an indirect R[R1], a string, XOR, the bit
 /// operators, the concatenation &lt;&lt;,
 /// an unmapped system variable, is a problem that keeps the block as RAW.
 /// </summary>
@@ -178,9 +178,9 @@ internal static partial class SiemensExpression
     private static string DivisionRounding(SiemensBlock block, string text)
     {
         var warning = new SiemensWarning(DiagnosticCodes.SiemensDivisionRoundingUnknown,
-            $"{text.Trim()} divides with DIV an operand that may be negative, and how the control rounds DIV for a "
-            + "negative operand, towards zero or towards minus infinity, is not documented; the block is kept as RAW "
-            + "(D346, D5).");
+            $"{text.Trim()} divides with DIV an operand that is not a number literal of 0 or more, and how the control "
+            + "rounds DIV for a negative operand, towards zero or towards minus infinity, is not documented; the block "
+            + "is kept as RAW (D346, D5).");
         if (!block.Draft.ReadingWarnings.Contains(warning))
         {
             block.Draft.ReadingWarnings.Add(warning);

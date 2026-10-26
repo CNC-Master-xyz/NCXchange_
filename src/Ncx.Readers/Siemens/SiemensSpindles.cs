@@ -160,6 +160,17 @@ internal static class SiemensSpindles
         return word.Address == "S" || (NumberOfAddress(word.Address, 'S') is int && word.Text.Length > 0);
     }
 
+    /// <summary>
+    /// True when a block kept as RAW sets a spindle speed the reader did not take into its facts: an S outside a dwell
+    /// block that ReadSpeed did not read, since an earlier part of the block kept it RAW (D5).
+    /// </summary>
+    /// <param name="block">The block, kept as RAW.</param>
+    public static bool LeavesSpeedUnknown(SiemensBlock block)
+    {
+        return block.FindCode("G4") is null
+            && block.Source.Words.Any(word => IsSpeed(word) && !block.Draft.SpeedsRead.Contains(word));
+    }
+
     // SETMS(n) makes spindle n the master spindle, SETMS alone returns to the configured one; the block writes no word,
     // the words after it carry the role (controllers siemens.md 5; controller-mapping 4).
     private static void ReadMaster(SiemensBlock block)
@@ -310,14 +321,24 @@ internal static class SiemensSpindles
         string? master = MasterRole(block);
         string? role = spindle is 0 ? master : RoleOf(block, spindle!.Value);
         block.MarkRead(word);
-        if (role is null || Number(block, word, out _) is not Value speed)
+        string? problem = null;
+        if (role is null || Number(block, word, out problem) is not Value speed)
         {
+            // The control runs the RAW block with this S, so the speed the reader knew before is no longer the speed
+            // of that spindle (D5).
+            if (role is not null)
+            {
+                block.Facts.Rpm.Remove(role);
+            }
+
             block.Draft.KeepAsRaw(role is null
                 ? "the S belongs to a spindle the reader does not know here, the master spindle of SETMS or one the "
                     + "machine file names no role for (controller-mapping 4)"
-                : $"S{word.Text} has no NCX value");
+                : problem ?? $"{word.Address}={word.Text} has no NCX value");
             return;
         }
+
+        block.Draft.SpeedsRead.Add(word);
 
         bool css = role == master && block.Facts.FeedType is "G96" or "G961" or "G962";
         AddSpindleWord(block, css ? "VC" : "RPM", role, speed);
