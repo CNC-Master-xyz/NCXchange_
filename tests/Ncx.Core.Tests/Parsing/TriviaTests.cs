@@ -24,8 +24,9 @@ public sealed class TriviaTests
         + "; after the frame\n"
         + "\n";
 
-    // Comment lines before and after the file frame and blank lines are collected with their line numbers and their
-    // text as read, whitespace included (D92).
+    // Comment lines before and after the file frame and blank lines are collected with their line numbers, their
+    // text as read, whitespace included (D92), and the index of the block they stand before, the number of blocks
+    // after FILE=END (D142).
     [Fact]
     public void D92_CommentAndBlankLines_AreTriviaWithTheirLineNumbers()
     {
@@ -34,12 +35,12 @@ public sealed class TriviaTests
         Assert.True(program.Diagnostics.Items.Count == 0, program.Diagnostics.ToText());
         var expected = new List<Trivia>
         {
-            new(1, "; before the frame"),
-            new(3, ""),
-            new(5, "  ; indented comment line"),
-            new(7, "\t"),
-            new(10, "; after the frame"),
-            new(11, ""),
+            new(1, "; before the frame", 0),
+            new(3, "", 1),
+            new(5, "  ; indented comment line", 2),
+            new(7, "\t", 3),
+            new(10, "; after the frame", 5),
+            new(11, "", 5),
         };
         Assert.Equal(expected, program.Trivia);
     }

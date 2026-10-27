@@ -7,9 +7,8 @@ namespace Ncx.Config.Templates;
 // its literal text between the placeholders, and a placeholder is its Name, Format, Width and IsText, as architecture
 // 6 draws it (wave-1 question #42).
 //
-// TODO(question): the introduction of machine-config lists the placeholders, while its sections 3 and 5 and the
-// example machine files also write {point}, {order}, {channel}, {radius}, {pair} and {ratio}. Any name is accepted as a
-// placeholder; whether a name the introduction does not list deserves a diagnostic is open (D152).
+// The introduction of machine-config is the complete list of placeholder names; a well-formed name outside it is a
+// WARNING and still read as a number (D152).
 
 /// <summary>
 /// One placeholder of a template, a name in braces with an optional format suffix: {tool}, {tool:02},
@@ -21,6 +20,17 @@ public sealed record Placeholder
     // introduction and 5a, D100).
     private const string PositionName = "position";
     private const string PositionPrefix = PositionName + ":";
+
+    // The placeholders of the machine-config introduction, the complete list (D152): {point}, {channel}, {radius},
+    // {order}, {pair} and {ratio} with D152, {rot} with D269, the stock placeholders with D351; {position:NAME} is
+    // read apart.
+    private static readonly HashSet<string> s_listedNames = new(StringComparer.Ordinal)
+    {
+        "tool", "name", "offset", "next", "kind", "rpm", "axis", "axes", "angle", "a", "b", "c", "mark", "channels",
+        "paths", "r", "d", "value", "index", "x", "y", "z", "move", "dir", "distance", "tol", "rotary", "mode",
+        "point", "channel", "radius", "order", "pair", "ratio", "rot", "max_x", "max_y", "max_z", "diameter",
+        "length", "dist",
+    };
 
     /// <summary>
     /// The name the value is found by in <see cref="TemplateValues"/>: "tool", "offset"; for a position the entry
@@ -49,15 +59,16 @@ public sealed record Placeholder
         get
         {
             // The placeholders that hold words are the ones their descriptions give words: {name}, {axis}, {axes}
-            // and {position:NAME} in the introduction of machine-config, {axes} as "U0 W0" in 3, {move} and
-            // {channels} in 5 (T="{name}", G28 U0 W0, TURN FMAX, 1,2). Every other placeholder is a number, {kind}
-            // included, which both example machines map to numbers (wave-1 question #44).
+            // and {position:NAME} in the introduction of machine-config, {axes} as "U0 W0" in 3, {move}, {rot} and
+            // {channels} in 5 (T="{name}", G28 U0 W0, TURN FMAX, TABLE ROT, 1,2; D269). Every other placeholder is a
+            // number, {kind} included, which both example machines map to numbers (wave-1 question #44), and so is a
+            // name outside the list (D152).
             if (Name.StartsWith(PositionPrefix, StringComparison.Ordinal))
             {
                 return true;
             }
 
-            return Name is "name" or "axis" or "axes" or "move" or "channels";
+            return Name is "name" or "axis" or "axes" or "move" or "rot" or "channels";
         }
     }
 
@@ -87,6 +98,14 @@ public sealed record Placeholder
         if (!IsName(name) || (colon >= 0 && suffix.Length == 0))
         {
             return NotAPlaceholder(braces, quotedTemplate, line, diagnostics);
+        }
+
+        // A well-formed name outside the list of the introduction is a WARNING and still read as a number (D152).
+        if (!(name == PositionName && colon >= 0) && !s_listedNames.Contains(name))
+        {
+            diagnostics.Warning(line, DiagnosticCodes.TemplatePlaceholderNotListed,
+                $"The template {quotedTemplate} has {braces}, a name the placeholder list of the machine-config "
+                + "introduction does not hold; it is read as a number (D152).");
         }
 
         if (colon < 0)

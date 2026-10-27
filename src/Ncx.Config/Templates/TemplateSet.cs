@@ -19,12 +19,19 @@ public sealed class TemplateSet
     // written, so that the user finds it by its text.
     private const int MachineFileLine = 1;
 
+    // The word a [workpiece] selection writes (language 4.10, machine-config 5).
+    private const string WorkpieceWord = "WORKPIECE";
+
     private readonly Dictionary<string, Template> _byText = new(StringComparer.Ordinal);
     private readonly List<Template> _templates = [];
 
     // The states of the function tables in the order of machine-config 5 and of the file, each named by the word of
     // its table with the key of the state as its value: SPINDLE:TOOL=CW for the M88 of [spindle.TOOL].
-    private readonly List<KeyValuePair<string, Template>> _functionStates = [];
+    private readonly List<FunctionStateTemplate> _functionStates = [];
+
+    // The selections of [workpiece], WORKPIECE=MAIN for the M34 of the Doosan, which a reader writes before the
+    // states of the function tables (D40, D155).
+    private readonly List<FunctionStateTemplate> _workpieceSelections = [];
 
     /// <summary>
     /// Parses every template text of the machine once, numbers written with the <see cref="DecimalSeparator"/> of the
@@ -38,7 +45,7 @@ public sealed class TemplateSet
     {
         DecimalSeparator = DecimalSeparatorOf(machine);
         bool readsComma = ReadsComma(machine.Machine, DecimalSeparator);
-        List<KeyValuePair<string, string>> functionStates = FunctionStates(machine);
+        List<FunctionStateTemplate> functionStates = FunctionStates(machine);
 
         // Each template text is parsed once, however many tables write it (code-guidelines 7): the M9 that switches
         // off every coolant channel of the Nakamura is one template.
@@ -54,9 +61,17 @@ public sealed class TemplateSet
             _templates.Add(template);
         }
 
-        foreach (KeyValuePair<string, string> state in functionStates)
+        _functionStates.AddRange(functionStates);
+        IReadOnlyDictionary<string, string> selections =
+            machine.Workpiece?.Templates ?? new Dictionary<string, string>();
+        foreach (KeyValuePair<string, string> selection in selections)
         {
-            _functionStates.Add(new KeyValuePair<string, Template>(state.Key, _byText[state.Value]));
+            _workpieceSelections.Add(new FunctionStateTemplate
+            {
+                Word = WorkpieceWord,
+                State = selection.Key,
+                Text = selection.Value,
+            });
         }
     }
 
@@ -72,7 +87,8 @@ public sealed class TemplateSet
     /// <summary>
     /// Every template of the machine, each text once: the ends of programs, the tool change, home and setpos, the
     /// clamps of the axes, the diameter switch, the function tables, the workpiece selection, the waits, the
-    /// transformations, retract, tolerance and the system variables (machine-config 2 to 7).
+    /// transformations and the path mode, retract, tolerance, the stock and the system variables (machine-config 2 to
+    /// 7).
     /// </summary>
     public IReadOnlyList<Template> Templates => _templates;
 
@@ -101,21 +117,64 @@ public sealed class TemplateSet
     {
         // Readers map M codes back to names through the tables of the machine and compare codes by number, so that a
         // source M08 matches the M8 of the table (machine-config 5, D105): the template of the state matches the whole
-        // native text, blanks between its words tolerated. An empty template writes nothing and names no code.
-        // TODO(question): a code that several states write, M9 of every coolant channel of the Nakamura, M3 of MAIN
-        // and TOOL on the Mori Seiki, M3 P11 of MAIN and SUB on the Doosan (whose M34 and M134 tell them apart),
-        // names the first state in the order of machine-config 5 and of the file; how the reader chooses among them
-        // with its source state (architecture 7) is open (D155).
-        foreach (KeyValuePair<string, Template> state in _functionStates)
+        // native text, blanks between its words tolerated. An empty template writes nothing and names no code. Of a
+        // code that several states write this names the first in the order of machine-config 5 and of the file; the
+        // reader that chooses among them with its source state asks FindFunctionsByCode (D155).
+        foreach (FunctionStateTemplate state in _functionStates)
         {
-            Template template = state.Value;
-            if (template.Text.Length > 0 && template.Matches(nativeCode, out _))
+            if (Match(state, nativeCode) is FunctionMatch match)
             {
-                return state.Key;
+                return match.Key;
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Every state of the machine that writes a native code, with the values it carried: first the [workpiece]
+    /// selections, then the states of the function tables, in the order of machine-config 5 and of the file, so that a
+    /// reader drops the states its source state rules out and writes the rest (machine-config 5, architecture 7,
+    /// D155). M9 on the Nakamura is the OFF of every coolant channel, M34 on the Doosan WORKPIECE=MAIN and the
+    /// SPINDLE of [spindle_mode.MAIN].
+    /// </summary>
+    /// <param name="nativeCode">The native text of the function, as many words as its template has: "M9",
+    /// "M03 P11".</param>
+    /// <returns>The states; empty when no state of the machine writes this code.</returns>
+    public IReadOnlyList<FunctionMatch> FindFunctionsByCode(string nativeCode)
+    {
+        // A code that is also a [workpiece] template gives the WORKPIECE word first, as the [workpiece] table is tried
+        // first (D40, D155).
+        var matches = new List<FunctionMatch>();
+        foreach (FunctionStateTemplate selection in _workpieceSelections)
+        {
+            if (Match(selection, nativeCode) is FunctionMatch match)
+            {
+                matches.Add(match);
+            }
+        }
+
+        foreach (FunctionStateTemplate state in _functionStates)
+        {
+            if (Match(state, nativeCode) is FunctionMatch match)
+            {
+                matches.Add(match);
+            }
+        }
+
+        return matches;
+    }
+
+    // A state names the code when its template, not empty, matches the whole native text (machine-config 5, D105).
+    private FunctionMatch? Match(FunctionStateTemplate state, string nativeCode)
+    {
+        Template template = _byText[state.Text];
+        if (template.Text.Length == 0 || !template.Matches(nativeCode, out TemplateValues values))
+        {
+            return null;
+        }
+
+        return new FunctionMatch { Word = state.Word, State = state.State, Table = state.Table, Values = values };
     }
 
     // Numbers are written with decimal_separator of [format] where the file writes it (machine-config 2). A file that
@@ -145,17 +204,13 @@ public sealed class TemplateSet
 
     // The function tables of machine-config 5 whose states are function values (D105), in the order of the section:
     // [spindle.ROLE], [spindle_mode.ROLE], [spindle_sync], [coolant] and [func]. Each state is named by the word of
-    // its table (language 4.5, 4.6) with the key of the state as its value, because the states of a table are the
-    // values of its word (machine-config 5).
-    // TODO(question): the architecture answers FindFunctionByCode("M88") with SPINDLE:TOOL=CW (architecture 7), and
-    // machine-config 5 calls the keys of a table the values of its word, while the language writes ORIENT, RPM, VC,
-    // CSS and RPM_MAX as words of their own (language 4.5, 4.11), SPINDLE_SYNC with two roles or OFF (4.5) and the
-    // default coolant channel as COOLANT without an address (4.6). A state is named as the word of its table with the
-    // key as its value, SPINDLE:MAIN=ORIENT, SPINDLE_SYNC=ON, COOLANT:STANDARD=ON; making the word of the language
-    // from it is left to the reader (D154).
-    private static List<KeyValuePair<string, string>> FunctionStates(MachineConfig machine)
+    // its table with the key of the state as its value, SPINDLE:MAIN=ORIENT, SPINDLE_SYNC=ON, COOLANT:STANDARD=ON:
+    // FindFunctionByCode keeps the table form of architecture 7, and the reader makes the word of the language from it
+    // by the mapping of machine-config 5, ORIENT:R={angle} or ORIENT:R=0 with RDR021, SPINDLE_SYNC=default,other for
+    // ON, a bare COOLANT for STANDARD (D154).
+    private static List<FunctionStateTemplate> FunctionStates(MachineConfig machine)
     {
-        var states = new List<KeyValuePair<string, string>>();
+        var states = new List<FunctionStateTemplate>();
         foreach (KeyValuePair<string, FunctionTable> spindle in machine.SpindleTables)
         {
             AddStates(states, "SPINDLE:" + spindle.Key, spindle.Value);
@@ -184,12 +239,12 @@ public sealed class TemplateSet
         return states;
     }
 
-    // Every state of one table: the word with the key of the state as its value, and the text of its template.
-    private static void AddStates(List<KeyValuePair<string, string>> states, string word, FunctionTable table)
+    // Every state of one table: the word, the key of the state, the table and the text of its template.
+    private static void AddStates(List<FunctionStateTemplate> states, string word, FunctionTable table)
     {
         foreach (KeyValuePair<string, string> state in table.States)
         {
-            states.Add(new KeyValuePair<string, string>(word + "=" + state.Key, state.Value));
+            states.Add(new FunctionStateTemplate { Word = word, State = state.Key, Table = table, Text = state.Value });
         }
     }
 
@@ -197,8 +252,7 @@ public sealed class TemplateSet
     // rule, which the expander executes and whose braces may be expressions (machine-config 5a, language 3), nor the
     // values of a placeholder (kind_map, move, mode), the rules of [func_meta], the codes of [raw] or the prefixes of
     // [variables] map.
-    private static List<string> TemplateTexts(
-        MachineConfig machine, List<KeyValuePair<string, string>> functionStates)
+    private static List<string> TemplateTexts(MachineConfig machine, List<FunctionStateTemplate> functionStates)
     {
         var texts = new List<string>();
 
@@ -206,8 +260,10 @@ public sealed class TemplateSet
         AddText(texts, machine.Format?.ProgramEnd);
         AddText(texts, machine.Format?.SubEnd);
         AddText(texts, machine.ToolChange?.Change);
+        AddText(texts, machine.ToolChange?.ChangeNamed);
         AddText(texts, machine.ToolChange?.ChangePreloaded);
         AddText(texts, machine.ToolChange?.Preload);
+        AddText(texts, machine.ToolChange?.PreloadNamed);
         AddText(texts, machine.ToolChange?.Unload);
         AddText(texts, machine.Home?.Template);
         AddText(texts, machine.Home?.Point);
@@ -222,11 +278,11 @@ public sealed class TemplateSet
         AddText(texts, machine.Diameter?.On);
         AddText(texts, machine.Diameter?.Off);
 
-        // The function tables, the workpiece selection with its mirror cycles, the waits, the transformations, retract
-        // and tolerance (machine-config 5).
-        foreach (KeyValuePair<string, string> state in functionStates)
+        // The function tables, the workpiece selection with its mirror cycles, the waits, the transformations and the
+        // path mode (D349), retract and tolerance (machine-config 5).
+        foreach (FunctionStateTemplate state in functionStates)
         {
-            texts.Add(state.Value);
+            texts.Add(state.Text);
         }
 
         if (machine.Workpiece is WorkpieceConfig workpiece)
@@ -255,10 +311,17 @@ public sealed class TemplateSet
         AddText(texts, machine.Transform?.RotaryPathFull);
         AddText(texts, machine.Transform?.RotaryFeedMmMin);
         AddText(texts, machine.Transform?.RotaryFeedDegMin);
+        AddText(texts, machine.Transform?.PathModeExactStop);
+        AddText(texts, machine.Transform?.PathModeContinuous);
         AddText(texts, machine.Retract?.Max);
         AddText(texts, machine.Retract?.By);
         AddText(texts, machine.Tolerance?.On);
+        AddText(texts, machine.Tolerance?.OnRotary);
         AddText(texts, machine.Tolerance?.Off);
+
+        // The blank of the control's graphic (machine-config 5, D351).
+        AddText(texts, machine.Stock?.Box);
+        AddText(texts, machine.Stock?.Cylinder);
 
         // The native line a catalog entry writes directly before its cycle block, "M29 S{rpm}" (machine-config 6,
         // D256).

@@ -2,7 +2,8 @@ namespace Ncx.Core.Catalog;
 
 /// <summary>
 /// The file and program words of language 4.1: the frame of the file and of its programs, the header words, units,
-/// comments, stops, dwell, source text kept as RAW, the optional block skip and the path tolerance.
+/// comments, stops, dwell, source text kept as RAW, the optional block skip, the path-control mode, the path
+/// tolerance and the rounding allowance.
 /// </summary>
 internal static class FileWords
 {
@@ -169,6 +170,21 @@ internal static class FileWords
             Section = "4.1",
             Description = "Optional block skip, bare or with the number 1 to 9 of the block skip switch (D53).",
         },
+        // The path-control mode, beside the tolerance words it is measured against; DEFAULT is the machine's own
+        // [dynamics] path_mode (D349, D350).
+        new WordDefinition
+        {
+            Key = "PATH_MODE",
+            Group = WordKind.Program,
+            ValueKinds = ValueKinds.Ident,
+            AllowedIdents = ["EXACT_STOP", "CONTINUOUS", "DEFAULT"],
+            Scope = Scope.Modal,
+            CanonicalRank = CanonicalRanks.PathMode,
+            Section = "4.1",
+            Description = "Path-control mode: every block ends at standstill (EXACT_STOP) or the control carries the "
+                + "speed through corners (CONTINUOUS); DEFAULT returns to the machine's [dynamics] path_mode, which "
+                + "is the start value (D349, D350).",
+        },
         new WordDefinition
         {
             Key = "TOLERANCE",
@@ -195,6 +211,24 @@ internal static class FileWords
             Section = "4.1",
             Description = "What the control optimizes for under the tolerance, accuracy or speed; default FINISH "
                 + "(D85).",
+        },
+
+        // The rounding allowance, one word with the fixed address ROTARY as TOLERANCE has (D363).
+        new WordDefinition
+        {
+            Key = "ROUND_LIMIT",
+            Group = WordKind.Program,
+            ValueKinds = ValueKinds.NumberOrExpr | ValueKinds.Ident,
+            AllowedIdents = ["OFF"],
+            AddrKind = AddrKind.ToleranceKind,
+            AddrRanks = new Dictionary<string, int> { ["ROTARY"] = CanonicalRanks.RoundLimitRotary },
+            AddressedValueKinds = ValueKinds.NumberOrExpr,
+            Scope = Scope.Modal,
+            CanonicalRank = CanonicalRanks.RoundLimit,
+            Section = "4.1",
+            Description = "How far rounding to the machine's decimals may move the programmed point, in the active "
+                + "units, OFF for no report; ROUND_LIMIT:ROTARY is the allowance of the rotary axes in degrees. State "
+                + "only, no control form (D363).",
         },
     ];
 }

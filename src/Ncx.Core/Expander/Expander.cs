@@ -47,6 +47,7 @@ public static class Expander
         var cycleEnds = new CycleRuleEnds();
         var blocks = new List<Block>();
         var newIndex = new int[program.Blocks.Count];
+        var firstIndex = new int[program.Blocks.Count + 1];
         for (int index = 0; index < program.Blocks.Count; index++)
         {
             BlockExpansion expansion =
@@ -55,6 +56,7 @@ public static class Expander
             // D204: the post blocks and the @RESTORE of a catalog cycle's rule stand at the block that ends the
             // cycle, outside everything that block's own rules generate.
             blocks.AddRange(cycleEnds.Before(index));
+            firstIndex[index] = blocks.Count;
             blocks.AddRange(expansion.Before);
             newIndex[index] = blocks.Count;
             blocks.Add(expansion.Block);
@@ -74,7 +76,16 @@ public static class Expander
             });
         }
 
-        return program with { Blocks = blocks, Sections = sections, Diagnostics = diagnostics };
+        // A comment-only or blank line keeps its place: it stands before the blocks generated for the block it stood
+        // before, and the lines after FILE=END after the last block (D92, D142).
+        firstIndex[program.Blocks.Count] = blocks.Count;
+        var trivia = new List<Trivia>();
+        foreach (Trivia line in program.Trivia)
+        {
+            trivia.Add(line with { BlockIndex = firstIndex[line.BlockIndex] });
+        }
+
+        return program with { Blocks = blocks, Sections = sections, Trivia = trivia, Diagnostics = diagnostics };
     }
 
     // For every block (architecture 5.5): the expansion rules it triggers, the outermost first; the rewriters in their

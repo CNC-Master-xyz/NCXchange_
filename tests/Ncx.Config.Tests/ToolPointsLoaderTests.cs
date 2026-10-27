@@ -15,6 +15,9 @@ public sealed class ToolPointsLoaderTests
         name = "Test mill"
         controller = "fanuc"
 
+        [coolant]
+        STANDARD = { ON = "M8", OFF = "M9" }
+
         """;
 
     // D373: the registers form with its keys and the rows.
@@ -118,7 +121,7 @@ public sealed class ToolPointsLoaderTests
 
         Diagnostic error = Assert.Single(diagnostics.Items);
         Assert.Equal(DiagnosticCodes.ToolPointConflict, error.Code);
-        Assert.Equal(12, error.Line);
+        Assert.Equal(15, error.Line);
     }
 
     // D373 (3): under memory C, and without the key, length = radius is legal.

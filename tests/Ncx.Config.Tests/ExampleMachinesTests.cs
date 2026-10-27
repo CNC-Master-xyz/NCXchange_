@@ -121,6 +121,57 @@ public sealed class ExampleMachinesTests
         Assert.Equal("ID200 NR2", machine.SystemVariables.Find("SYS_TOOL_LEN"));
     }
 
+    // D366: ANGLE in [format] decimals of the three mills, four decimals on Heidenhain, three on Fanuc and Siemens;
+    // D263: siemens-840dsl-mill.toml writes lines of up to 512 characters; D354: the Fanuc mill names helix_feed.
+    [Fact]
+    public void MillMachines_FormatData_IsTheDecidedOne()
+    {
+        Assert.Equal(3, Shipped("fanuc-mill-30i.toml").Format?.Decimals["ANGLE"]);
+        Assert.Equal(HelixFeed.Arc, Shipped("fanuc-mill-30i.toml").Format?.HelixFeed);
+        Assert.Equal(4, Shipped("heidenhain-itnc530.toml").Format?.Decimals["ANGLE"]);
+        Assert.Equal(3, Shipped("siemens-840dsl-mill.toml").Format?.Decimals["ANGLE"]);
+        Assert.Equal(512, Shipped("siemens-840dsl-mill.toml").Format?.MaxLineLength);
+    }
+
+    // D339: the Mori NTX1000 takes three M codes in a block, the second and third from the list of its manual
+    // (NTX1000SZM p.252-253); D299: millturn1.toml writes the verb on every motion block.
+    [Fact]
+    public void ExampleMachines_FormatData_IsTheDecidedOne()
+    {
+        OutputFormat? mori = Shipped("mori-ntx1000-mapps.toml").Format;
+        Assert.Equal(3, mori?.MCodesPerBlock);
+        Assert.Equal(47, mori?.MCodesCombinable?.Count);
+        Assert.Contains("M210", mori?.MCodesCombinable ?? []);
+        Assert.DoesNotContain("M3", mori?.MCodesCombinable ?? []);
+        Assert.Equal(MotionCode.EveryBlock, Shipped("millturn1.toml").Format?.MotionCode);
+    }
+
+    // D250: SYS_WEAR_Z and SYS_MPOS_B of the Nakamura; D314, D388 (9): the NTJX start mark is M198; D179: the sub
+    // spindle C axis is C/H on the Nakamura and the Doosan.
+    [Fact]
+    public void LatheMachines_Data_IsTheDecidedOne()
+    {
+        MachineConfig nakamura = Shipped("nakamura-ntjx.toml");
+        Assert.Equal("#11{index:03}", nakamura.SystemVariables.Find("SYS_WEAR_Z"));
+        Assert.Equal("#5025", nakamura.SystemVariables.Find("SYS_MPOS_B"));
+        Assert.Equal(198, nakamura.Sync?.StartMark);
+        foreach (MachineConfig lathe in new[] { nakamura, Shipped("doosan-puma-2600sy.toml") })
+        {
+            AxisDef c2 = Assert.Single(lathe.Axes, axis => axis.Id == "C2");
+            Assert.Equal("C", c2.Letter);
+            Assert.Equal("H", c2.IncrementalLetter);
+        }
+    }
+
+    // A file of machines/, loaded clean.
+    private static MachineConfig Shipped(string fileName)
+    {
+        var diagnostics = new Diagnostics("machines/" + fileName);
+        MachineConfig? machine = MachineConfigLoader.Load(ShippedPath(fileName), diagnostics);
+        Assert.True(machine is not null, diagnostics.ToText());
+        return machine;
+    }
+
     // P2-01: the WARNINGs of the eight files are listed in a committed file, each one a gap in a file.
     [Fact]
     public void MachineFiles_Warnings_AreTheCommittedList()

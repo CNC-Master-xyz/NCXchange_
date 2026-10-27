@@ -38,8 +38,8 @@ internal static class FlowValidation
             ValidationRule.Warning(DiagnosticCodes.JumpEndInSub,
                 "JUMP=END from inside a subprogram: it ends the program from a call.", "VM 3.6, 5"),
             ValidationRule.Warning(DiagnosticCodes.UnreachableBlock,
-                "Unreachable block of a program after an unconditional JUMP that no LABEL makes reachable.",
-                "language 4.13; VM 3.9, 5; D89"),
+                "Unreachable block of a program or subprogram after an unconditional JUMP that no LABEL makes "
+                + "reachable.", "language 4.13; VM 3.9, 5; D89, D195"),
             ValidationRule.Warning(DiagnosticCodes.ReturnInProgram,
                 "RETURN in the main program; it is treated as JUMP=END.", "language 4.9, 4.13; VM 3.6, 5"),
             ValidationRule.Error(DiagnosticCodes.BlockCapExceeded,
@@ -61,8 +61,8 @@ internal static class FlowValidation
 
     /// <summary>
     /// The pre-pass over one program or subprogram (virtual machine 3.6): its labels, duplicates and missing targets
-    /// being ERRORs before execution; JUMP=END from a subprogram and RETURN in a program; the blocks of a program
-    /// that no LABEL makes reachable (virtual machine 3.9, 5).
+    /// being ERRORs before execution; JUMP=END from a subprogram and RETURN in a program; the blocks of a program or
+    /// subprogram that no LABEL makes reachable (virtual machine 3.9, 5, D195).
     /// </summary>
     public static void CheckSection(NcxProgram program, Section section, Diagnostics diagnostics)
     {
@@ -75,10 +75,7 @@ internal static class FlowValidation
             CheckEarlyEnd(block, section, diagnostics);
         }
 
-        if (section.Kind == SectionKind.Program)
-        {
-            CheckReachable(program, section, diagnostics);
-        }
+        CheckReachable(program, section, diagnostics);
     }
 
     // A LABEL is the jump target and repeat start of its program or subprogram and unique there; a duplicate is an
@@ -146,13 +143,12 @@ internal static class FlowValidation
         }
     }
 
-    // Inside a program, a block after an unconditional JUMP that no LABEL makes reachable is unreachable: a WARNING per
-    // block (language 4.13, virtual machine 3.9, D89). A JUMP is unconditional without IF (language 4.9) and without
-    // SKIP, whose block the switch of the control may skip (language 4.1); RETURN in a program is treated as JUMP=END
-    // (virtual machine 3.6). A LABEL makes its block and the blocks after it reachable, and PROGRAM=END is the target
-    // of JUMP=END (language 4.9, virtual machine 2.7), so it is never unreachable.
-    // TODO(question): virtual machine 3.9 and language 4.13 name the unreachable block "inside a program" and virtual
-    // machine 5 lists it without that restriction; the blocks of a subprogram are not checked until D195 is answered.
+    // Inside a program or subprogram (D195), a block after an unconditional JUMP that no LABEL makes reachable is
+    // unreachable: a WARNING per block (language 4.13, virtual machine 3.9, D89). A JUMP is unconditional without IF
+    // (language 4.9) and without SKIP, whose block the switch of the control may skip (language 4.1); JUMP, RETURN and
+    // JUMP=END are unconditional exits, in a program RETURN being treated as JUMP=END (virtual machine 3.6). A LABEL
+    // makes its block and the blocks after it reachable, and the END block of the section is never unreachable:
+    // PROGRAM=END is the target of JUMP=END (language 4.9, virtual machine 2.7), and SUB=END closes the subprogram.
     private static void CheckReachable(NcxProgram program, Section section, Diagnostics diagnostics)
     {
         Block? unconditionalJump = null;
@@ -170,7 +166,7 @@ internal static class FlowValidation
                 diagnostics.Warning(block, DiagnosticCodes.UnreachableBlock, string.Create(
                     CultureInfo.InvariantCulture,
                     $"The block follows the unconditional {jump} of line {unconditionalJump.Line}, and no LABEL makes "
-                    + $"it reachable (language 4.13, virtual machine 3.9, D89)."));
+                    + $"it reachable in {SectionName(section)} (language 4.13, virtual machine 3.9, D89, D195)."));
                 continue;
             }
 

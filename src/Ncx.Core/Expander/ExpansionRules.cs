@@ -19,9 +19,9 @@ internal static class ExpansionRules
     /// </summary>
     public static IReadOnlyList<TriggeredRule> Of(Block block, MachineConfig machine)
     {
-        // TODO(question): architecture 5.5 and machine-config 5a do not say in which order the blocks of several rules
-        // on one block stand; they nest, the rule of the first word in canonical order outermost, and the blocks of the
-        // rewriters stand inside those of the rules, next to the block, until D199 is answered.
+        // The blocks of several rules on one block nest: the rules in canonical order of their triggering words, each
+        // table's rule once, the first outermost; the rewriters' blocks stand inside them, each rewriter inside the
+        // one before; generated blocks are not expanded again (D199; architecture 5.5).
         var triggered = new List<TriggeredRule>();
         foreach (Word word in CanonicalOrder.Sort(block))
         {

@@ -16,13 +16,12 @@ internal static class ClaimedBlocks
     /// <param name="builder">The builder of the program being read.</param>
     public static void CopyInto(NcxProgram claimed, NcxBuilder builder)
     {
-        // A comment line takes the line of the block begun last before it, 0 before the first (NcxBuilder.Trivia), and
-        // the writer places it by that line (D92); each is copied where its line puts it: before the first block, or
-        // after the last block of its line.
-        var copied = new HashSet<int>();
-        CopyTrivia(claimed, 0, copied, builder);
+        // A comment line records the index of the block it stands before (NcxBuilder.Trivia, D142), and is copied
+        // there: before the block of that index, the lines after the last block after it (D92).
+        int nextTrivia = 0;
         for (int index = 0; index < claimed.Blocks.Count; index++)
         {
+            nextTrivia = CopyTrivia(claimed, index, nextTrivia, builder);
             Block block = claimed.Blocks[index];
             builder.Begin(block.Line);
             foreach (Word word in block.Words)
@@ -36,23 +35,21 @@ internal static class ClaimedBlocks
             }
 
             builder.End();
-            bool lastOfItsLine = index + 1 == claimed.Blocks.Count || claimed.Blocks[index + 1].Line != block.Line;
-            if (lastOfItsLine)
-            {
-                CopyTrivia(claimed, block.Line, copied, builder);
-            }
         }
+
+        CopyTrivia(claimed, claimed.Blocks.Count, nextTrivia, builder);
     }
 
-    // The comment lines of one line that are not copied yet, in their order.
-    private static void CopyTrivia(NcxProgram claimed, int line, HashSet<int> copied, NcxBuilder builder)
+    // The comment lines that stand before the block of an index, from the first not copied yet; the index of the
+    // next one.
+    private static int CopyTrivia(NcxProgram claimed, int blockIndex, int nextTrivia, NcxBuilder builder)
     {
-        for (int index = 0; index < claimed.Trivia.Count; index++)
+        while (nextTrivia < claimed.Trivia.Count && claimed.Trivia[nextTrivia].BlockIndex <= blockIndex)
         {
-            if (claimed.Trivia[index].Line == line && copied.Add(index))
-            {
-                builder.Trivia(claimed.Trivia[index].Text);
-            }
+            builder.Trivia(claimed.Trivia[nextTrivia].Text);
+            nextTrivia++;
         }
+
+        return nextTrivia;
     }
 }

@@ -23,6 +23,9 @@ internal sealed class RunValidation
     // linear axis, and a rotary axis that is not a modulo axis (virtual machine 5, D100, D193).
     private readonly bool _comparesLimits;
 
+    // Where the STOCK of the program that runs may stand (StockValidation, D351).
+    private readonly StockPlacement _stockPlacement = new();
+
     // The line where the program that runs gave each form of the offsets first (ToolValidation).
     private readonly Dictionary<string, int> _offsetForms = new(StringComparer.Ordinal);
 
@@ -64,11 +67,11 @@ internal sealed class RunValidation
     /// </summary>
     public void CheckFile(NcxProgram program)
     {
-        // A job knows how many channels it runs; a file checked on its own decides by its programs (virtual machine
-        // 3.7, ChannelValidation).
+        // A job knows how many channels it runs; a file checked on its own decides by the machine and its programs
+        // (virtual machine 3.7, ChannelValidation, D196).
         bool singleChannelJob = _jobChannels is int channels
             ? channels < 2
-            : ChannelValidation.IsSingleChannelJob(program);
+            : ChannelValidation.IsSingleChannelJob(program, _machine);
         foreach (Section section in program.Sections)
         {
             FlowValidation.CheckSection(program, section, _diagnostics);
@@ -125,6 +128,7 @@ internal sealed class RunValidation
     {
         FrameValidation.CheckSetposNamesAnAxis(context);
         FrameValidation.CheckToleranceWords(context);
+        StockValidation.CheckStock(context, _stockPlacement);
         _maxFeed.AfterBlock(context);
         if (_positionsBefore is not null)
         {

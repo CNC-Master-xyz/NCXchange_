@@ -3,9 +3,10 @@ namespace Ncx.Core.Catalog;
 /// <summary>
 /// The rank table of D90, the canonical order of language 5 rule 6 bucket by bucket: a word of lower rank stands first.
 /// The ranks of D90 go in steps of ten, so that a later word fits between two others without renumbering (phase 0,
-/// P0-03); a later word takes a rank between two steps, and the steps stay as they are (D372: TOOL_POINT 435,
-/// TIP_OFFSET 465, POINT_RADIUS 467). The table generated from the catalog, docs/spec/generated/word-catalog.md, shows
-/// them next to the words.
+/// P0-03); the table generated from the catalog, docs/spec/generated/word-catalog.md, shows them next to the words.
+/// A word added later takes a free number between its neighbours instead, and is not a step of ten: MAX:X, MAX:Y and
+/// MAX:Z at 371 to 373 (D351), the tool point words TOOL_POINT, TIP_OFFSET and POINT_RADIUS at 435, 465 and 467
+/// (D372), PATH_MODE at 785 (D349), ROUND_LIMIT and ROUND_LIMIT:ROTARY at 813 and 816 (D363). No rank is renumbered.
 /// </summary>
 internal static class CanonicalRanks
 {
@@ -19,7 +20,8 @@ internal static class CanonicalRanks
     public const int Number = 70;
     public const int Channel = 80;
 
-    // Bucket 2: the verb. A block has at most one (language 5 rule 1), so the ten verbs share this rank.
+    // Bucket 2: the verb. A block has at most one (language 5 rule 1), so the eleven verbs share this rank, STOCK among
+    // them (D351).
     public const int Verb = 90;
 
     // Bucket 3: the axis words X Y Z A B C, then the machine axes; all absolute words in that order, then all
@@ -48,12 +50,10 @@ internal static class CanonicalRanks
     public const int Ny = 280;
     public const int Nz = 290;
 
-    // Bucket 5: CENTER:X, CENTER:Y, CENTER:Z, then the incremental forms.
-    // TODO(question): D90 sorts the words of one key by the address text, which would put CENTER:IX before CENTER:X,
-    // and lists bucket 5 as CENTER:X, CENTER:Y, CENTER:Z, then the incremental forms; the catalog follows the list of
-    // bucket 5. Under POLAR and CYLINDER the plane of ARC is the X word or the cylinder axis with the C word, and
-    // CENTER keeps its meaning there (virtual machine 3.1, 3.2, D102), so CENTER:C and CENTER:IC are plane axis
-    // addresses that D90 does not list; the catalog ranks C after Z and IC after IZ, as bucket 3 puts C after Z (D143).
+    // Bucket 5: CENTER:X, CENTER:Y, CENTER:Z, CENTER:C, then the incremental forms in the same order. Under POLAR and
+    // CYLINDER the C word is a plane axis of ARC and CENTER keeps its meaning (virtual machine 3.1, 3.2, D102), so
+    // CENTER:C ranks after CENTER:Z and CENTER:IC after CENTER:IZ; the address-text sort applies only to addresses
+    // without a rank of their own (D143; language 5 rule 6).
     public const int CenterX = 300;
     public const int CenterY = 310;
     public const int CenterZ = 320;
@@ -62,6 +62,12 @@ internal static class CanonicalRanks
     public const int CenterIncrementalY = 350;
     public const int CenterIncrementalZ = 360;
     public const int CenterIncrementalC = 370;
+
+    // The opposite corner of the bounding box of STOCK, at the end of bucket 5 after the incremental CENTER forms
+    // (language 4.2, 5 rule 6; D351).
+    public const int MaxX = 371;
+    public const int MaxY = 372;
+    public const int MaxZ = 373;
 
     // Bucket 6: R or ANGLE, which exclude each other in a valid block (language 4.3, D84).
     public const int R = 380;
@@ -119,11 +125,20 @@ internal static class CanonicalRanks
     public const int Tcpm = 760;
     public const int RotaryPath = 770;
     public const int RotaryFeed = 780;
+
+    // The path-control mode, between ROTARY_FEED and TOLERANCE (language 4.1, 5 rule 6; D349).
+    public const int PathMode = 785;
     public const int Tolerance = 790;
     public const int ToleranceRotary = 800;
     public const int ToleranceMode = 810;
 
-    // Bucket 13: the cycle words, then the native parameters of a CYCLE:<controller>=n block in source order (D94).
+    // The rounding allowance and its rotary form, after TOLERANCE_MODE at the end of bucket 12 (language 4.1, 5 rule 6;
+    // D363).
+    public const int RoundLimit = 813;
+    public const int RoundLimitRotary = 816;
+
+    // Bucket 13: the cycle words, then the native parameters of a CYCLE:<controller>=n block (D94) and the parameters
+    // of a catalog cycle (D114), in source order.
     public const int Cycle = 820;
     public const int Axis = 830;
     public const int Surface = 840;
@@ -165,8 +180,8 @@ internal static class CanonicalRanks
     public const int Section = 1120;
     public const int Message = 1130;
 
-    // TODO(question): D90 gives the pseudo-words @SAVE and @RESTORE of generated blocks no bucket, and every word has a
-    // rank. They stand last until D167 is answered; ncx format never writes a generated block (language 4.15).
+    // Bucket 18: the pseudo-words of generated blocks, @SAVE then @RESTORE, which stand in blocks of their own; ncx
+    // format never writes a generated block (language 4.15, 5 rule 6; D167, D388).
     public const int Save = 1140;
     public const int Restore = 1150;
 }

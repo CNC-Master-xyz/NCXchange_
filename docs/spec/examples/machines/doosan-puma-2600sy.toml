@@ -3,6 +3,8 @@
 # The point of this file: one channel with two work spindles, spindle selection by a P suffix on the M code, and cycle behaviour chosen by mode M codes.
 # D100 data (P2-04): home and limits in machine coordinates, rapid, max_feed and acceleration on every [[axis]], rpm_min, rpm_max and accel_time on every spindle table, the [positions] and [dynamics] tables. The numbers are plausible for a machine of this class and not verified on the machine.
 
+ncx_schema = 1                     # the version of the machine-configuration schema, not of NCXchange (machine-config 1, D348)
+
 [machine]
 name = "Doosan Puma 2600SY"
 controller = "fanuc"
@@ -120,7 +122,8 @@ home = 0
 [[axis]]
 id = "C2"
 ncx = "C2"                         # a program writes C; the VM resolves it to C2 while the sub spindle holds the workpiece (VM 3.8 rule 3)
-# TODO(question): docs/ does not give the address of the sub spindle C axis on the Puma 2600SY; C is written here, as for the Nakamura (D179).
+# M35 selects C1, M135 C2, and the selected axis is moved with plain C and H (Doosan 2600SY M functions p.2-3; MX programming book p.21, p.25 and p.31, G28 H0 G50 C0 after M35/M135 on p.29; PUMA operating
+# manual 2020 p.55); the command mix does not change the address (D179).
 letter = "C"
 incremental_letter = "H"
 kind = "rotary"
@@ -147,6 +150,7 @@ unload = "T{tool:02}00"
 auto_preload = false
 
 [spindle.MAIN]                     # turning spindle, selected by P11; M34 makes the left spindle the turning spindle
+# Rechecked for D155: the 2600SY list gives only P11 turning and P12 milling, and M34/M134 as turning mode left/right (Puma-2600SY M-Funktionen p.1-3); the P21 of the right spindle is the MX form (Doosan MX Programmierbuch p.21), not documented for this machine. So [workpiece] M34/M134 picks the side and the reader rules out the other work spindle's P11 state (D155).
 CW = "M03 P11"
 CCW = "M04 P11"
 OFF = "M05 P11"

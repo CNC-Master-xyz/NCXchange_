@@ -87,9 +87,8 @@ internal static class FormatCommand
             return ExitCodes.NotStarted;
         }
 
-        // TODO(question): language 3 says UTF-8 and does not say whether a byte order mark belongs to an NCX file. It
-        // is no part of the text the parser reads and goes back in front of the canonical text as it came, so that
-        // format changes nothing it is not asked to, until D111 is answered.
+        // A byte order mark is allowed and is no part of the text; format writes it back as read (D111; language 3,
+        // Encoding). The command strips it before the parser and puts it back in front of the canonical text.
         string byteOrderMark = text.StartsWith(InputFile.ByteOrderMark, StringComparison.Ordinal)
             ? InputFile.ByteOrderMark
             : "";

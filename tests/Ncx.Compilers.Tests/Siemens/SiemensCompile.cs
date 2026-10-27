@@ -85,10 +85,12 @@ internal static partial class SiemensCompile
         int start = millTurn.IndexOf("\n[transform]", StringComparison.Ordinal);
         int end = millTurn.IndexOf("\n[retract]", StringComparison.Ordinal);
         string transform = millTurn.Substring(start, end - start);
-        return Variant(MillFile, text => text.Insert(text.IndexOf("\n[positions]", StringComparison.Ordinal),
-            RotaryTable) + transform);
+        return Variant(MillFile, text =>
+        {
+            string mill = text.Insert(text.IndexOf("\n[positions]", StringComparison.Ordinal), RotaryTable);
+            return MachineText.With(mill, transform);
+        });
     }
-
     /// <summary>
     /// A machine file of the repository with a change of its text, with the Siemens cycle catalog.
     /// </summary>

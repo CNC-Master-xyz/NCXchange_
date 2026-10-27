@@ -1,10 +1,11 @@
 using Ncx.Core.Machine;
+using Ncx.Core.Model;
 
 namespace Ncx.Config;
 
 // Machine-config 5 and 5a: the function tables of the spindles, the synchronization, the coolant and the named
-// functions with their expansion rules, and the tables workpiece, sync, func_meta, transform, retract, tolerance and
-// raw.
+// functions with their expansion rules, and the tables workpiece, sync, func_meta, transform, retract, tolerance,
+// stock and raw.
 public static partial class MachineConfigLoader
 {
     private const string FrameSuffix = "_frame";
@@ -32,7 +33,7 @@ public static partial class MachineConfigLoader
     private static readonly string[] s_workpieceFrames = ["datum", "mirror"];
 
     private static readonly string[] s_syncKeys =
-        ["wait", "paths", "mark_range", "start_mark", "groups", "start_channel", "wait_channel"];
+        ["wait", "paths", "mark_range", "start_mark", "reserved_marks", "groups", "start_channel", "wait_channel"];
 
     private static readonly string[] s_syncPaths = ["list", "bitmask"];
     private static readonly string[] s_syncGroupKeys = ["channels", "range"];
@@ -40,13 +41,19 @@ public static partial class MachineConfigLoader
     private static readonly string[] s_transformKeys =
     [
         "CYLINDER_ON", "CYLINDER_OFF", "POLAR_ON", "POLAR_OFF", "TCPM_ON", "TCPM_OFF", "TILT_ON", "TILT_OFF",
-        "TILT_AXIS_ON", "TILT_TURN", "move", "ROTARY_PATH_SHORTEST", "ROTARY_PATH_FULL", "ROTARY_FEED_MM_MIN",
-        "ROTARY_FEED_DEG_MIN",
+        "TILT_AXIS_ON", "TILT_TURN", "move", "rot", "ROTARY_PATH_SHORTEST", "ROTARY_PATH_FULL", "ROTARY_FEED_MM_MIN",
+        "ROTARY_FEED_DEG_MIN", "PATH_MODE_EXACT_STOP", "PATH_MODE_CONTINUOUS",
     ];
 
     private static readonly string[] s_moveOptions = ["TURN", "MOVE", "STAY"];
+    private static readonly string[] s_rotOptions = ["TABLE", "COORD"];
     private static readonly string[] s_retractKeys = ["MAX", "BY"];
-    private static readonly string[] s_toleranceKeys = ["ON", "OFF", "mode"];
+    private static readonly string[] s_toleranceKeys =
+        ["ON", "ON_ROTARY", "OFF", "mode", "held_in", "held_value", "held_comment"];
+
+    private static readonly string[] s_stockKeys = ["BOX", "CYLINDER"];
+    private static readonly string[] s_spindleSyncKeys = ["pair"];
+    private const string PairKey = "pair";
     private static readonly string[] s_toleranceModes = ["FINISH", "ROUGH"];
     private static readonly string[] s_rawKeys = ["known"];
 
@@ -96,7 +103,68 @@ public static partial class MachineConfigLoader
     // [spindle_sync]: ON, OFF and PHASE, bound to a channel or to all of them (machine-config 5, D56).
     private static FunctionTable? ReadSpindleSync(ConfigTable? table)
     {
-        return table is null ? null : ReadFunctionTable(table, s_spindleSyncStates, spindleLimits: false);
+        return table is null
+            ? null
+            : ReadFunctionTable(table, s_spindleSyncStates, spindleLimits: false, s_spindleSyncKeys);
+    }
+
+    // [spindle_sync] pair = ["MAIN", "SUB"]: the two roles ON couples, the leader first, optional (D154); a pair is two
+    // different names, and anything else is reported.
+    private static IReadOnlyList<string> ReadSpindleSyncPair(ConfigTable? table)
+    {
+        if (table is null || !table.Has(PairKey))
+        {
+            return [];
+        }
+
+        IReadOnlyList<string> pair = table.TextList(PairKey);
+        if (pair.Count == 2 && pair[0] != pair[1])
+        {
+            return pair;
+        }
+
+        table.Diagnostics.Error(table.LineOf(PairKey), DiagnosticCodes.ValueNotAllowed,
+            "pair in [spindle_sync] must name two different roles, the leader first, as [\"MAIN\", \"SUB\"] "
+            + "(machine-config 5, D154).");
+        return [];
+    }
+
+    // [spindle_sync] ON couples the default spindle with the other work spindle; a machine with more than two work
+    // spindles, or whose default spindle is not a work spindle, names its pair, which is then required, and the pair
+    // names roles of [roles] (D154).
+    private static void CheckSpindleSyncPair(MachineConfig machine, ConfigTable? table, Diagnostics diagnostics)
+    {
+        if (table is null)
+        {
+            return;
+        }
+
+        foreach (string role in machine.SpindleSyncPair)
+        {
+            if (!machine.Roles.ContainsKey(role))
+            {
+                diagnostics.Error(table.LineOf(PairKey), DiagnosticCodes.ValueNotAllowed,
+                    $"pair in [spindle_sync] names the role {role}, which [roles] does not declare (machine-config 5, "
+                    + "D154).");
+            }
+        }
+
+        int workSpindles = 0;
+        foreach (ResourceDef resource in machine.Resources)
+        {
+            workSpindles += resource.Type == ResourceType.WorkSpindle ? 1 : 0;
+        }
+
+        ResourceDef? leader = machine.ResolveDefaultSpindle();
+        bool pairNeeded = workSpindles > 2 || (leader is not null && leader.Type != ResourceType.WorkSpindle);
+        if (table.Has(PairKey) || !pairNeeded)
+        {
+            return;
+        }
+
+        diagnostics.Error(table.Line, DiagnosticCodes.MissingKey,
+            "[spindle_sync] has no pair, which is required where the default spindle is not a work spindle or the "
+            + "machine has more than two work spindles (machine-config 5, D154).");
     }
 
     // A function table: its states are function values, a string or a bare integer that means M and the number, with
@@ -104,13 +172,16 @@ public static partial class MachineConfigLoader
     // its expansion rule (5a); a spindle table carries the machine limits (D64). The states of a [func] entry are free,
     // those of the other tables the values of their word, and another key there is unknown (machine-config 5, F23).
     private static FunctionTable ReadFunctionTable(
-        ConfigTable table, IReadOnlyList<string>? states, bool spindleLimits)
+        ConfigTable table, IReadOnlyList<string>? states, bool spindleLimits, IReadOnlyList<string>? ownKeys = null)
     {
         var otherKeys = new List<string>(s_bindingAndRuleKeys);
         if (spindleLimits)
         {
             otherKeys.AddRange(s_spindleLimitKeys);
         }
+
+        // The keys of one table that are neither states nor bindings, the pair of [spindle_sync] (D154).
+        otherKeys.AddRange(ownKeys ?? []);
 
         if (states is not null)
         {
@@ -283,14 +354,16 @@ public static partial class MachineConfigLoader
             },
             MarkRange = markRange is null ? null : new MarkRange(markRange[0], markRange[1]),
             StartMark = table.Integer("start_mark"),
+            ReservedMarks = table.IntegerList("reserved_marks"),
             Groups = groups,
             StartChannel = table.Template("start_channel"),
             WaitChannel = table.Template("wait_channel"),
         };
     }
 
-    // [transform]: the templates of the transformations, the tilted planes and the rotary axis options, and the values
-    // of {move} per MOVE option; an empty template is kept, the target cannot write the word (machine-config 5, D82).
+    // [transform]: the templates of the transformations, the tilted planes, the rotary axis options and the path mode
+    // (D349), and the values of {move} per MOVE option and of {rot} per ROT option (D269); an empty template is kept,
+    // the target cannot write the word (machine-config 5, D82).
     private static TransformTable? ReadTransform(ConfigTable? table)
     {
         if (table is null)
@@ -316,6 +389,9 @@ public static partial class MachineConfigLoader
             RotaryFeedMmMin = table.Template("ROTARY_FEED_MM_MIN"),
             RotaryFeedDegMin = table.Template("ROTARY_FEED_DEG_MIN"),
             Move = table.Table("move")?.PlaceholderValues(s_moveOptions) ?? new Dictionary<string, string>(),
+            Rot = table.Table("rot")?.PlaceholderValues(s_rotOptions) ?? new Dictionary<string, string>(),
+            PathModeExactStop = table.Template("PATH_MODE_EXACT_STOP"),
+            PathModeContinuous = table.Template("PATH_MODE_CONTINUOUS"),
         };
     }
 
@@ -331,7 +407,10 @@ public static partial class MachineConfigLoader
         return new RetractTable { Max = table.Template("MAX"), By = table.Template("BY") };
     }
 
-    // [tolerance]: the templates of the TOLERANCE words and the values of {mode} (machine-config 5, D85).
+    // [tolerance]: the templates of the TOLERANCE words, ON_ROTARY written while TOLERANCE:ROTARY is set (D151), the
+    // values of {mode} (machine-config 5, D85), and where the control holds a value the template cannot carry: the
+    // phrase, the value in millimetres, zero or greater like the control-held keys of D357, and the comment option
+    // (D367).
     private static ToleranceTable? ReadTolerance(ConfigTable? table)
     {
         if (table is null)
@@ -343,9 +422,41 @@ public static partial class MachineConfigLoader
         return new ToleranceTable
         {
             On = table.Template("ON"),
+            OnRotary = table.Template("ON_ROTARY"),
             Off = table.Template("OFF"),
             Mode = table.Table("mode")?.PlaceholderValues(s_toleranceModes) ?? new Dictionary<string, string>(),
+            HeldIn = table.Text("held_in"),
+            HeldValue = NotNegative(table, "held_value"),
+            HeldComment = table.Flag("held_comment"),
         };
+    }
+
+    // A distance the control holds is zero or greater; a negative one is the ERROR of a value not allowed (D357,
+    // D367).
+    private static decimal? NotNegative(ConfigTable table, string key)
+    {
+        decimal? value = table.Number(key);
+        if (value < 0)
+        {
+            table.Diagnostics.Error(table.LineOf(key), DiagnosticCodes.ValueNotAllowed,
+                $"{key} in {table.Name} must be zero or greater, not {value} ({table.Section}, D367).");
+            return null;
+        }
+
+        return value;
+    }
+
+    // [stock]: the templates of STOCK=BOX and STOCK=CYLINDER, in the house style of [retract], several lines joined
+    // by \n (machine-config 5, D351).
+    private static StockTable? ReadStock(ConfigTable? table)
+    {
+        if (table is null)
+        {
+            return null;
+        }
+
+        table.WarnUnknownKeys(s_stockKeys);
+        return new StockTable { Box = table.Template("BOX"), Cylinder = table.Template("CYLINDER") };
     }
 
     // [raw]: the builder codes the reader keeps as RAW with the builder's name (machine-config 5, F23).

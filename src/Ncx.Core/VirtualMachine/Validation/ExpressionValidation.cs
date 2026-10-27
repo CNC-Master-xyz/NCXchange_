@@ -43,6 +43,10 @@ internal static class ExpressionValidation
                 "A second comparison behind a comparison.", "language 4.12"),
             ValidationRule.Error(DiagnosticCodes.ExpressionArgumentCount,
                 "A function with a number of arguments it does not take.", "language 4.12; D118"),
+            ValidationRule.Error(DiagnosticCodes.ExpressionIndexNeedsSystemVariable,
+                "An index on a variable that is not a SYS_ name.", "language 4.12; D145"),
+            ValidationRule.Error(DiagnosticCodes.ExpressionIndexNotAWholeNumber,
+                "A literal index that is no whole number of 0 or more.", "language 4.12; D145"),
             ValidationRule.Error(DiagnosticCodes.SystemVariableAssigned, "Assignment to a SYS_ variable.",
                 "VM 2.7, 5"),
             ValidationRule.Warning(DiagnosticCodes.UnresolvedExpressions,
@@ -59,10 +63,14 @@ internal static class ExpressionValidation
                 "language 4.12"),
             ValidationRule.Error(DiagnosticCodes.ResultOutOfRange,
                 "A number beyond the range of the decimal arithmetic.", "language 4.12"),
+            // VM907 keeps its row as retired, so that the documentation can still cite it (D98, D145).
+#pragma warning disable CS0618
             ValidationRule.Error(DiagnosticCodes.IndexNeedsSystemVariable,
-                "An index on a variable that is not a SYS_ name.", "language 4.12; D51"),
-            ValidationRule.Error(DiagnosticCodes.IndexSelectsNoRegister, "An index that selects no register.",
-                "language 4.12; D51"),
+                "Retired (D145): an index on a variable that is not a SYS_ name is PAR112.", "language 4.12; D145"),
+#pragma warning restore CS0618
+            ValidationRule.Error(DiagnosticCodes.IndexSelectsNoRegister,
+                "A computed index that selects no register: negative after rounding half away from zero.",
+                "language 4.12; D51, D145"),
             ValidationRule.Error(DiagnosticCodes.ValueNotAnInteger,
                 "An expression gives a number with decimals where its word takes an integer.", "language 3, 4; VM 5"),
         ],

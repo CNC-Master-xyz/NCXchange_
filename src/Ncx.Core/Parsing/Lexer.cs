@@ -172,7 +172,9 @@ internal static class Lexer
             return;
         }
 
-        LexedWord? word = WordLexer.Lex(text.Substring(start, end - start), start + 1, line, options, diagnostics);
+        // The column of the word counts the code points of the line before it (D166).
+        LexedWord? word = WordLexer.Lex(text.Substring(start, end - start), Columns.Of(text, start), line, options,
+            diagnostics);
         if (word is not null)
         {
             words.Add(word);

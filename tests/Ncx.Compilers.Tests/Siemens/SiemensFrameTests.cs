@@ -255,16 +255,16 @@ public sealed class SiemensFrameTests
     [Fact]
     public void Tolerance_OnAndOff_IsCycle832()
     {
-        Assert.Equal(Lines("CYCLE832(0.02,3,0.05)", "CYCLE832(0,0,1)"),
+        Assert.Equal(Lines("CYCLE832(0.02,13,0.05)", "CYCLE832(0,0,1)"),
             MillTurnBody("TOLERANCE=0.02 TOLERANCE:ROTARY=0.05 TOLERANCE_MODE=ROUGH", "TOLERANCE=OFF"));
     }
 
-    // D151: the ON template needs {rotary}; without TOLERANCE:ROTARY the template is unusable, the ERROR of the
-    // template (machine-config introduction).
+    // D151: without TOLERANCE:ROTARY the ON template is written, the SINUMERIK Operate form without an orientation
+    // tolerance, whose third parameter is 1.
     [Fact]
-    public void Tolerance_WithoutRotary_IsTheErrorOfTheTemplate()
+    public void Tolerance_WithoutRotary_IsTheOnTemplate()
     {
-        Assert.Equal(["CFG100"], Codes(Run(Program(MillTurnHeader, "TOLERANCE=0.02"), MillTurn())));
+        Assert.Equal(Lines("CYCLE832(0.02,1,1)"), MillTurnBody("TOLERANCE=0.02"));
     }
 
     // Controller-mapping 1, RETRACT: without a template of [retract] only the kinematics module could compute it, an

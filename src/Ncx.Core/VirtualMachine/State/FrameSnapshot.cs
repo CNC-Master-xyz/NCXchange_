@@ -1,3 +1,5 @@
+using Ncx.Core.Machine;
+
 namespace Ncx.Core.VirtualMachine.State;
 
 /// <summary>
@@ -73,6 +75,16 @@ public sealed record FrameSnapshot
     /// tolerance, rotary tolerance and tolerance mode (D85).
     /// </summary>
     public required ToleranceState Tolerance { get; init; }
+
+    /// <summary>
+    /// path mode: exact stop or continuous path, which the runtime estimate reads (D349, D350).
+    /// </summary>
+    public required PathMode PathMode { get; init; }
+
+    /// <summary>
+    /// round limit and rotary round limit, which the compiler reads (D363).
+    /// </summary>
+    public required RoundLimitState RoundLimit { get; init; }
 
     /// <summary>
     /// workpiece holder: the resource id of the holder the program machines (D57); null when the machine names none.

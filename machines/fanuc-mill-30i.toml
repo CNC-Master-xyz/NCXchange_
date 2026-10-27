@@ -1,8 +1,10 @@
 # NCX machine configuration: plain vertical machining center on Fanuc Series 30i, one path, three linear axes X Y Z, one milling spindle (S1) with a tool magazine (H1), the table (TABLE1).
 # Written from controllers/fanuc.md and the Fanuc column of spec/controller-mapping.md with the generic words only: no builder tables, no RAW:BUILDER vocabulary. Schema draft 8. Not verified on a machine.
 # The point of this file: the machine of the Fanuc reader and compiler of phase 3 (sources/2.5D_FRAESEN.fanuc.nc, BOHREN.fanuc.nc, 3D_FRAESEN.fanuc.nc) and one of the two machines that 2.5D_FRAESEN, PATTERN_LOOP and INCREMENTAL_SUB check with (P2-04).
-# D100: every number under [[axis]], [positions], [dynamics] and the spindle limits is plausible for a machine of this class and not verified on the machine. The reference point is the machine zero, so the G91 G28 Z0 of the Fanuc sources and the M91 moves to Z0 and X0 Y0 of the Heidenhain sources end at the same place (2.5D_FRAESEN note 4).
-# The tables of lathes, rotary axes and several paths ([diameter], [spindle_mode], [spindle_sync], [workpiece], [sync], [transform]) have nothing to configure on this machine.
+# D100: every number under [[axis]], [positions], [dynamics], [cycles] and the spindle limits is plausible for a machine of this class and not verified on the machine. The reference point is the machine zero, so the G91 G28 Z0 of the Fanuc sources and the M91 moves to Z0 and X0 Y0 of the Heidenhain sources end at the same place (2.5D_FRAESEN note 4).
+# The tables of lathes, rotary axes and several paths ([diameter], [spindle_mode], [spindle_sync], [workpiece], [sync]) have nothing to configure on this machine; [transform] holds only the path mode templates G61 and G64 (D349). No [stock]: the control has no blank form (D351).
+
+ncx_schema = 1                     # the version of the machine-configuration schema, not of NCXchange (machine-config 1, D348)
 
 [machine]
 name = "Generic Fanuc 30i vertical mill"
@@ -20,7 +22,7 @@ tool_table = "fanuc-mill-30i.tools.toml"   # beside this file (D10); two example
 
 [format]
 decimal_separator = "."
-decimals = { X = 3, Y = 3, Z = 3, F = 3, S = 0 }
+decimals = { X = 3, Y = 3, Z = 3, ANGLE = 3, F = 3, S = 0 }   # ANGLE, the arc sweep, three decimals like a Fanuc angle (D366)
 trailing_zeros = false             # the decimal point is written on every real number all the same (fanuc 10 rule 5)
 block_numbers = { enabled = true, start = 10, step = 10 }   # N10, N20, ... as in the sources
 line_ending = "CRLF"
@@ -33,7 +35,8 @@ header = "G0 G40\nG80 G90 G94 G98" # the start block of the sources (fanuc 1: N1
 plane_with_first_motion = true     # G17 with the first motion, N70 G0 G17 X50.4 of the sources
 motion_code_after_tool_change = true   # G0 G90 X10. after T2 M6 of BOHREN.fanuc.nc
 length_offset_with_tool_axis = true    # G43 Z2. H1: the length offset with the first move of the tool axis
-# TODO(question): the four keys above are the [format] options phase 3 asks for the habits of the sources (implementation 13, Risks); machine-config 2 does not name them yet.
+# The four keys above are the [format] options of the habits of the sources, adopted as coded; only the Fanuc compiler reads them (machine-config 2, D276).
+helix_feed = "arc"                 # F along the arc in the plane on a helix: parameter 1403#5 HTG = 0, the Fanuc default (D354; 30i-B operator's manual B-64484EN p.2072-2073)
 
 [tool_change]
 change = "T{tool} M6"              # TOOL=n and a bare TOOL ({tool} from the VM, D91): the Fanuc machining center form (machine-config 3)
@@ -44,7 +47,7 @@ preload_position = "after_change"  # T0 and T2 stand right after T1 M6 in the so
 offsets_with_change = false        # G43 H and D are written where the OFFSET words stand (fanuc 5)
 tool_name_allowed = false          # Fanuc tools are numbers
 # No change_preloaded: BOHREN.fanuc.nc writes T2 M6 also when tool 2 is preloaded, so every change is written with its T word.
-# TODO(question): the preload templates of machine-config 3 use {tool}, while its placeholder list defines {tool} as the tool in the spindle after the block and {next} as the preloaded tool; this file follows the table of machine-config 3 (D150).
+# In the preload template both {tool} and {next} mean the n of PRELOAD=n (machine-config introduction, D150); {next} is the preferred spelling in new files.
 
 [tool_points]
 form = "registers"                 # H and D index the flat register pool; the M-series T has no relation to them (D373; fanuc 5)
@@ -61,7 +64,7 @@ template = "G92 {axes}"            # G92 declares the current position (fanuc 4)
 [roles]
 TOOL = "S1"                        # the only spindle of a mill (language 4.10)
 TABLE = "TABLE1"
-# TODO(question): language 4.10 recommends no role name for the tool holder of a mill, and the default machine of D103 calls both its holder and its tool spindle TOOL; H1 has no role here, TOOL and PRELOAD without a role address go to default_holder (VM 3.8 rule 2) (D128).
+# TOOL is the role of the tool spindle; the holder H1 has no role and is default_holder, which TOOL and PRELOAD without a role address reach (VM 3.8 rule 2, D128).
 
 [[resource]]
 id = "S1"
@@ -145,17 +148,28 @@ MAX = ""                           # empty: a computed G53 move when the kinemat
 BY = ""
 
 [tolerance]                        # the TOLERANCE words (D85)
-ON = "G5.1 Q1"                     # AI contour control on; the tolerance itself sits in a parameter and stays RAW (fanuc 4)
+ON = "G5.1 Q1"                     # AI contour control on, alone in its block; no per-program form carries the tolerance, so the compiler reports the value (fanuc 4, D367; 30i-B B-64484EN p.635-636)
 OFF = "G5.1 Q0"
+held_in = "the AI contour control parameters; a tolerance value only in nano smoothing parameter 19581"   # not verified on a machine (D100, D367; 30i-B B-64484EN p.128-129)
+# no held_value: the generic file knows no machine's setting, so CMP015 stays a WARNING (D367)
+# no levels table: the precision level R1 to R10 of G5.1 Q1 R_ is no carrier of the TOLERANCE value (D368; fanuc 4)
+
+[transform]                        # the path mode, G group 15 (D349; 30i-B B-64484EN-2 p.27-28); G62, G63 stay RAW and G61.1 stays with TOLERANCE
+PATH_MODE_EXACT_STOP = "G61"
+PATH_MODE_CONTINUOUS = "G64"
 
 [cycles]
 catalog = "fanuc.toml"             # the Fanuc cycle catalog shipped with NCXchange (machine-config 6)
+chip_break_lift = 0.5              # parameter 5114, the retract d of the G73 high-speed peck (30i-B B-64484GE-2, connector p.62, 75, 84; D357)
+peck_clearance = 1.0               # parameter 5115, the clearance d of the G83 re-approach above the last depth (same pages; D357)
+# surface_clearance is left out: SURFACE is read as 0 (D158)
 
 [variables]
 unassigned = "error"
 map = { Q = "#1{index:02}", QL = "#{index}", QR = "#5{index:02}" }   # Heidenhain-named variables to Fanuc ranges, each a template of the number: Q1 -> #101, QR1 -> #501 (machine-config 7, D173, PATTERN_LOOP)
 block_cap = 1000000
 call_depth = 8
+repeat_counters = ["#149", "#148"] # one counter per REPEAT nesting depth, from #100..#149, which exist without the extended-variables option (machine-config 7, D280)
 
 [system_variables]                 # NCX SYS_ names to native system variables (D51); X Y Z are the axes 1 to 3
 SYS_POS_X = "#5041"                # workpiece position (fanuc 7)

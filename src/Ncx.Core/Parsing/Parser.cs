@@ -13,15 +13,27 @@ namespace Ncx.Core.Parsing;
 /// </summary>
 public static class Parser
 {
+    // The UTF-8 byte order mark as it stands at the start of a decoded text (D111).
+    private const char ByteOrderMark = '\uFEFF';
+
     /// <summary>
     /// Parses the text of a file.
     /// </summary>
-    /// <param name="text">The whole text, UTF-8 decoded, LF or CRLF line endings (language 3, Encoding).</param>
+    /// <param name="text">The whole text, UTF-8 decoded, LF or CRLF line endings, with or without a byte order mark
+    /// (language 3, Encoding; D111).</param>
     /// <param name="fileName">The name of the file, which every diagnostic carries (D98).</param>
     /// <param name="options">A user file, or the generated text of the expander (D95).</param>
     /// <returns>The program with its blocks, trivia, sections and diagnostics.</returns>
     public static NcxProgram Parse(string text, string fileName, ParserOptions options)
     {
+        // A UTF-8 byte order mark at the start of the file is allowed and is no part of the text; the program records
+        // it next to the line ending, so that format writes it back as read (D111; language 3, Encoding).
+        bool hasByteOrderMark = text.StartsWith(ByteOrderMark);
+        if (hasByteOrderMark)
+        {
+            text = text.Substring(1);
+        }
+
         var diagnostics = new Diagnostics(fileName);
         LineEnding? lineEnding = Lexer.DetectLineEnding(text, diagnostics);
         var blocks = new List<Block>();
@@ -30,12 +42,13 @@ public static class Parser
         for (int index = 0; index < lines.Count; index++)
         {
             // One line is one block; blank, whitespace-only and comment-only lines are not blocks but trivia, kept
-            // with their line number and their text as read (language 3, Block; D92).
+            // with their line number, their text as read (language 3, Block; D92) and the index of the block they
+            // stand before (D142).
             int line = index + 1;
             Block? block = ParseBlock(lines[index], line, options, diagnostics);
             if (block is null)
             {
-                trivia.Add(new Trivia(line, lines[index]));
+                trivia.Add(new Trivia(line, lines[index], blocks.Count));
             }
             else
             {
@@ -48,6 +61,7 @@ public static class Parser
         {
             FileName = fileName,
             LineEnding = lineEnding,
+            HasByteOrderMark = hasByteOrderMark,
             Blocks = blocks,
             Sections = structure.Sections,
             FileBegin = structure.FileBegin,
@@ -176,16 +190,17 @@ public static class Parser
             : new StateKeyValue(text.Substring(0, colon), text.Substring(colon + 1));
     }
 
-    // Every word is checked against its catalog entry. A key the catalog does not list is one of two provisional
+    // Every word is checked against its catalog entry. A key the catalog does not list is one of three provisional
     // words, decided on the whole block because the condition is a property of the block: in a block that carries
     // CYCLE:controller=n it is a native parameter, one of the machine-axis form included (D94); elsewhere a key of the
-    // machine-axis form is a machine axis word, which rule 2 places under its verb (D93). Any other key is unknown
-    // and an ERROR (virtual machine 3 step 1; architecture 4.1). The parameter names of a cycle catalog entry
-    // (CYCLE=RECT_POCKET LENGTH=60, language 4.7.1) are unknown keys as well, by the open question of
-    // WordCatalog.IsNativeParameterAllowed.
+    // machine-axis form is a machine axis word, which rule 2 places under its verb (D93); in a block whose CYCLE value
+    // is no built-in name and not OFF any other key is a parameter of the catalog cycle, which the virtual machine
+    // checks against the machine's cycle catalog (language 4.7.1, D114). Any other key is unknown and an ERROR
+    // (virtual machine 3 step 1; architecture 4.1).
     private static void CheckWords(Block block, Diagnostics diagnostics)
     {
         bool nativeBlock = WordCatalog.IsNativeParameterAllowed(block);
+        bool catalogBlock = WordCatalog.IsCatalogCycleBlock(block);
         foreach (Word word in block.Words)
         {
             if (word.Definition is WordDefinition definition)
@@ -202,17 +217,24 @@ public static class Parser
                 CheckProvisionalWord(word, block, "a machine axis word", "language 4.3, D93", bareAllowed: true,
                     diagnostics);
             }
+            else if (catalogBlock)
+            {
+                CheckProvisionalWord(word, block, "a parameter of a cycle of the cycle catalog",
+                    "language 4.7.1, D114", bareAllowed: false, diagnostics);
+            }
             else
             {
                 diagnostics.Error(block, DiagnosticCodes.UnknownKey,
-                    $"{word.Key} is no word of the catalog, no machine axis word (D93) and no native cycle parameter "
-                    + "(D94); the block is kept as written (virtual machine 3 step 1, architecture 4.1).");
+                    $"{word.Key} is no word of the catalog, no machine axis word (D93), no native cycle parameter "
+                    + "(D94) and no parameter of a catalog cycle (D114); the block is kept as written (virtual machine "
+                    + "3 step 1, architecture 4.1).");
             }
         }
     }
 
-    // A machine axis word and a native parameter take a number or an expression and no address (language 3, ADDR;
-    // D93, D94). A bare machine axis word is the question of rule 2: bare under HOME only.
+    // A machine axis word, a native parameter and a catalog cycle parameter take a number or an expression and no
+    // address (language 3, ADDR; D93, D94, D114). A bare machine axis word is the question of rule 2: bare under HOME
+    // only.
     private static void CheckProvisionalWord(Word word, Block block, string kind, string source, bool bareAllowed,
         Diagnostics diagnostics)
     {

@@ -7,9 +7,10 @@ tables of section 4 of `../ncx-language.md` with the section it comes from, the 
 (internal, D95), and every form with a rank of its own: the addresses of a fixed set (`OFFSET:LEN`,
 `CENTER:IX`, `TOLERANCE:ROTARY`), the reset form of `SHIFT`, `TILT` and `TILT_AXIS`, the machine axis words
 (D93) and the native cycle parameters (D94). Words of one key with an open address (a role, a channel, a
-variable) sort under their rank by the address text. The ten verbs share one rank; a block has at most one.
-The ranks of D90 go in steps of ten; a word added later takes a rank between two steps and nothing is
-renumbered (D372: `TOOL_POINT` 435, `TIP_OFFSET` 465, `POINT_RADIUS` 467).
+variable) sort under their rank by the address text. The eleven verbs share one rank; a block has at most
+one. The ranks of D90 go in steps of ten; a word added later takes a rank between two steps and nothing is
+renumbered (`MAX:X` 371, D351; `TOOL_POINT` 435, `TIP_OFFSET` 465, `POINT_RADIUS` 467, D372; `PATH_MODE` 785,
+D349; `ROUND_LIMIT` 813, D363).
 
 | Rank | Word | Value | Verb | Axis words | Address | Scope | Section | Meaning |
 |---:|---|---|---|---|---|---|---|---|
@@ -25,6 +26,7 @@ renumbered (D372: `TOOL_POINT` 435, `TIP_OFFSET` 465, `POINT_RADIUS` 467).
 | 90 | `TILT` | none, `RESET` | verb | carries |  | modal | 4.2 | Tilted working plane by the spatial angles A, B, C, appended to the chain; TILT=RESET removes it and what follows. |
 | 90 | `TILT_AXIS` | none, `RESET` | verb | carries |  | modal | 4.2 | Tilted working plane by the rotary axis positions of this machine, appended to the chain; TILT_AXIS=RESET removes it and what follows (D82). |
 | 90 | `SETPOS` | none | verb | carries |  | block | 4.2 | Declares that the current position has these coordinates in the active workpiece frame; nothing moves (D55, D101). |
+| 90 | `STOCK` | `BOX`, `CYLINDER` | verb | carries |  | block | 4.2 | The blank for the control's graphic by its bounding box, X Y Z one corner and MAX:X MAX:Y MAX:Z the opposite one; STOCK=CYLINDER is the cylinder inscribed in it about the tool axis. Once per program, after the first ORIGIN and before the first motion (D351). |
 | 90 | `RAPID` | none | verb | carries |  | block | 4.3 | Rapid positioning (G0, FMAX) to the target given by the axis words. |
 | 90 | `LINE` | none | verb | carries |  | block | 4.3 | Linear interpolation at the active feed (G1, L with F). |
 | 90 | `ARC` | `CW`, `CCW` | verb | carries |  | block | 4.3 | Circular interpolation in the working plane to the target, with CENTER or R, or over a sweep ANGLE around CENTER. |
@@ -59,6 +61,9 @@ renumbered (D372: `TOOL_POINT` 435, `TIP_OFFSET` 465, `POINT_RADIUS` 467).
 | 350 | `CENTER:IY` | number, expression |  | is one | `IY` | block | 4.3 | Arc center on a plane axis, CENTER:X absolute, CENTER:IX incremental from the start point of the arc (the I J K of Fanuc and Siemens). |
 | 360 | `CENTER:IZ` | number, expression |  | is one | `IZ` | block | 4.3 | Arc center on a plane axis, CENTER:X absolute, CENTER:IX incremental from the start point of the arc (the I J K of Fanuc and Siemens). |
 | 370 | `CENTER:IC` | number, expression |  | is one | `IC` | block | 4.3 | Arc center on a plane axis, CENTER:X absolute, CENTER:IX incremental from the start point of the arc (the I J K of Fanuc and Siemens). |
+| 371 | `MAX:X` | number, expression |  | is one | `X` | block | 4.2 | The corner of the STOCK box opposite X Y Z, always absolute in the workpiece frame of the block (D351). |
+| 372 | `MAX:Y` | number, expression |  | is one | `Y` | block | 4.2 | The corner of the STOCK box opposite X Y Z, always absolute in the workpiece frame of the block (D351). |
+| 373 | `MAX:Z` | number, expression |  | is one | `Z` | block | 4.2 | The corner of the STOCK box opposite X Y Z, always absolute in the workpiece frame of the block (D351). |
 | 380 | `R` | number, expression |  | is one |  | block | 4.3 | Arc radius, not 0, positive for an arc of 180 degrees or less, negative for more; the key belongs to arcs only (D96). |
 | 390 | `ANGLE` | number, expression |  | is one |  | block | 4.3 | Sweep angle of an ARC in degrees, greater than 0, in the direction of its verb, instead of the plane end point (D84). |
 | 400 | `F` | number, expression |  |  |  | modal | 4.3 | Feed in the active feed mode. |
@@ -77,7 +82,7 @@ renumbered (D372: `TOOL_POINT` 435, `TIP_OFFSET` 465, `POINT_RADIUS` 467).
 | 500 | `CSS` | `ON`, `OFF` |  |  | role, optional | modal | 4.11 | Constant surface speed (G96, G97): the spindle follows VC while it is on. |
 | 510 | `VC` | number, expression |  |  | role, optional | modal | 4.11 | Cutting speed for CSS in m/min or ft/min (the S of G96 S140). |
 | 520 | `RPM_MAX` | number, expression |  |  | role, optional | modal | 4.11 | Speed limit under CSS (G50 S, LIMS). |
-| 530 | `SPINDLE_MODE` | `SPINDLE`, `AXIS` |  |  | role, optional | modal | 4.5 | Work spindle as rotating spindle or as positioning C axis (M70, SPOS); in AXIS mode its axis is driven with C. |
+| 530 | `SPINDLE_MODE` | `SPINDLE`, `AXIS` |  |  | role, required | modal | 4.5 | Work spindle as rotating spindle or as positioning C axis (M70, SPOS); in AXIS mode its axis is driven with C. |
 | 540 | `ORIENT` | number, expression |  |  | role, optional | block | 4.5 | Oriented spindle stop in degrees (M19, SPOS=); the spindle is stopped afterwards. |
 | 550 | `SPINDLE_SYNC` | list, `OFF` |  |  |  | modal | 4.5 | Synchronous spindles, a list of two spindle roles of which the second follows the first; OFF ends it (D56). |
 | 560 | `PHASE` | number, expression |  |  |  | with partner | 4.5 | Angular offset in degrees of a phase-synchronous run; only with SPINDLE_SYNC. |
@@ -92,20 +97,23 @@ renumbered (D372: `TOOL_POINT` 435, `TIP_OFFSET` 465, `POINT_RADIUS` 467).
 | 650 | `FRAME` | `MACHINE` |  |  |  | block | 4.2 | The coordinates of this block refer to the machine datum (G53, M91). |
 | 660 | `SHIFT=RESET` | `RESET` |  |  |  | modal | 4.2 | Removes the entry of `SHIFT` and what follows it from the frame chain; a frame word, not the verb. |
 | 670 | `ROTATE` | number, expression, `RESET` |  |  |  | modal | 4.2 | Rotation of the working plane about the tool axis in degrees, appended to the chain; ROTATE=RESET removes it and what follows. |
-| 680 | `MIRROR` | list, identifier |  |  |  | modal | 4.2 | Mirrors the named axes, an axis list or a single axis, appended to the chain; MIRROR=OFF. |
+| 680 | `MIRROR` | list, identifier |  |  |  | modal | 4.2 | Mirrors the named axes, an axis list or a single axis, appended to the chain; MIRROR=OFF cuts the chain at the last mirror (D124). |
 | 690 | `TILT=RESET` | `RESET` |  |  |  | modal | 4.2 | Removes the entry of `TILT` and what follows it from the frame chain; a frame word, not the verb. |
 | 700 | `TILT_AXIS=RESET` | `RESET` |  |  |  | modal | 4.2 | Removes the entry of `TILT_AXIS` and what follows it from the frame chain; a frame word, not the verb. |
 | 710 | `MOVE` | `TURN`, `MOVE`, `STAY` |  |  |  | block | 4.2 | How the machine reaches the tilted plane, with TILT or TILT_AXIS; default STAY (D82). |
-| 720 | `ROT` | `TABLE`, `COORD` |  |  |  | block | 4.2 | On table kinematics, whether the table turns or only the coordinate system, with TILT or TILT_AXIS; default TABLE (D82). |
+| 720 | `ROT` | `TABLE`, `COORD` |  |  |  | block | 4.2 | Whether the table turns or only the coordinate system, with TILT or TILT_AXIS; the option acts through a free rotary axis, whoever carries it; default TABLE (D82, D191). |
 | 730 | `POINT` | integer |  |  |  | block | 4.3 | The reference point HOME moves to, POINT=2 for the second (G30 P2); only with HOME. |
 | 740 | `CYLINDER` | number, expression, `OFF` |  |  |  | modal | 4.2 | Cylinder surface transformation, on with the reference radius as the value, off with OFF; there is no ON form (D54, D96, D102). |
 | 750 | `POLAR` | `ON`, `OFF` |  |  |  | modal | 4.2 | Face transformation, Cartesian programming of the face with X and C (G12.1, TRANSMIT; D54, D102). |
 | 760 | `TCPM` | `ON`, `OFF` |  |  |  | modal | 4.2 | Tool center point control for 5-axis simultaneous motion (G43.4, TRAORI, M128; D54). |
 | 770 | `ROTARY_PATH` | `SHORTEST`, `FULL` |  |  |  | modal | 4.2 | Rotary axes take the shortest way (M126) or turn exactly as programmed (M127); default FULL (D86). |
 | 780 | `ROTARY_FEED` | `MM_MIN`, `DEG_MIN` |  |  |  | modal | 4.2 | Feed of rotary axes in length per minute at the tool tip (M116) or in degrees per minute (M117); default DEG_MIN (D86). |
+| 785 | `PATH_MODE` | `EXACT_STOP`, `CONTINUOUS`, `DEFAULT` |  |  |  | modal | 4.1 | Path-control mode: every block ends at standstill (EXACT_STOP) or the control carries the speed through corners (CONTINUOUS); DEFAULT returns to the machine's [dynamics] path_mode, which is the start value (D349, D350). |
 | 790 | `TOLERANCE` | number, expression, `OFF` |  |  | tolerance kind, optional | modal | 4.1 | Path tolerance in the active units, OFF for the control's default; TOLERANCE:ROTARY is the orientation tolerance of the rotary axes in degrees (D85). |
 | 800 | `TOLERANCE:ROTARY` | number, expression |  |  | `ROTARY` | modal | 4.1 | Path tolerance in the active units, OFF for the control's default; TOLERANCE:ROTARY is the orientation tolerance of the rotary axes in degrees (D85). |
 | 810 | `TOLERANCE_MODE` | `FINISH`, `ROUGH` |  |  |  | modal | 4.1 | What the control optimizes for under the tolerance, accuracy or speed; default FINISH (D85). |
+| 813 | `ROUND_LIMIT` | number, expression, `OFF` |  |  | tolerance kind, optional | modal | 4.1 | How far rounding to the machine's decimals may move the programmed point, in the active units, OFF for no report; ROUND_LIMIT:ROTARY is the allowance of the rotary axes in degrees. State only, no control form (D363). |
+| 816 | `ROUND_LIMIT:ROTARY` | number, expression |  |  | `ROTARY` | modal | 4.1 | How far rounding to the machine's decimals may move the programmed point, in the active units, OFF for no report; ROUND_LIMIT:ROTARY is the allowance of the rotary axes in degrees. State only, no control form (D363). |
 | 820 | `CYCLE` | identifier; with an address: integer, string, identifier |  |  | controller, optional | modal | 4.7 | Defines the active cycle by name (DRILL, a catalog name, OFF), or natively with a controller address and the native cycle of that family as its cycle catalog writes it (CYCLE:HEIDENHAIN=251, CYCLE:FANUC=G71, CYCLE:SIEMENS=CYCLE952, CYCLE:FANUC="G83.5"; D94, D144). |
 | 830 | `AXIS` | identifier |  |  |  | with partner | 4.7 | Drilling axis of the cycle, an axis name; default the tool axis of the active WORKPLANE (D59). |
 | 840 | `SURFACE` | number, expression |  |  |  | with partner | 4.7 | Absolute coordinate of the workpiece surface along the drilling axis (Q203). |

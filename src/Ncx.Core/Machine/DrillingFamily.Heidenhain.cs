@@ -8,9 +8,8 @@ public static partial class DrillingFamily
     // SAFE = Q203 + Q204 (heidenhain 5, controller-mapping 5).
     private static readonly string[] s_heidenhainAbsolute = ["CLEARANCE", "DEPTH", "SAFE"];
 
-    // The words that rules carry, not a Q parameter (controller-mapping 5): CYCLE_RETRACT is the cycle with or without
-    // Q204, AXIS the tool axis of the TOOL CALL.
-    private static readonly string[] s_heidenhainRuleWords = ["CYCLE_RETRACT", "AXIS"];
+    // The words that rules carry, not a Q parameter, follow from the params (CycleEntry.RuleWords, D157):
+    // CYCLE_RETRACT from Q204 against Q200 (D226), AXIS the tool axis of the TOOL CALL (controller-mapping 5).
 
     // The Q parameters in the control's order, as examples/sources/BOHREN.h writes the cycles 200, 203, 207 and 201
     // (heidenhain 8.7).
@@ -26,6 +25,14 @@ public static partial class DrillingFamily
     private static readonly string[] s_cycle202 =
         ["Q200", "Q201", "Q206", "Q211", "Q208", "Q203", "Q204", "Q214", "Q336"];
 
+    // D164: the values the compiler writes at the Q parameters no NCX word carries, as cycles/heidenhain.toml writes
+    // them: no dwell above (Q210), no degression (Q212), and a rapid retract on 203 (Q208 = MAX, as the Fanuc G83
+    // and G73). Q256 is no default: [cycles] chip_break_lift is its one source (D358).
+    private static readonly Dictionary<string, string> s_cycle200Defaults = new() { ["Q210"] = "0" };
+
+    private static readonly Dictionary<string, string> s_cycle203Defaults =
+        new() { ["Q210"] = "0", ["Q212"] = "0", ["Q208"] = "MAX" };
+
     // DRILL and DRILL_DWELL are cycle 200, PECK and CHIP_BREAK cycle 203, TAP 207, REAM 201, BORE 202
     // (controller-mapping 5).
     // D163: cycle 200 with Q211 = 0 is DRILL and with any other Q211 DRILL_DWELL, cycle 203 with Q213 = 0 is PECK and
@@ -38,20 +45,24 @@ public static partial class DrillingFamily
             Controller = Controller.Heidenhain,
             Entries =
             [
-                HeidenhainEntry("DRILL", "200", s_cycle200, HeidenhainDrillParams()),
-                HeidenhainEntry("DRILL_DWELL", "200", s_cycle200, HeidenhainDrillParams()),
-                HeidenhainEntry("PECK", "203", s_cycle203, HeidenhainPeckParams()),
-                HeidenhainEntry("CHIP_BREAK", "203", s_cycle203, HeidenhainPeckParams()),
-                HeidenhainEntry("TAP", "207", s_cycle207, HeidenhainTapParams()),
-                HeidenhainEntry("REAM", "201", s_cycle201, HeidenhainDrillParams()),
-                HeidenhainEntry("BORE", "202", s_cycle202, HeidenhainDrillParams()),
+                HeidenhainEntry("DRILL", "200", s_cycle200, HeidenhainDrillParams(), "BOHREN", s_cycle200Defaults),
+                HeidenhainEntry("DRILL_DWELL", "200", s_cycle200, HeidenhainDrillParams(), "BOHREN",
+                    s_cycle200Defaults),
+                HeidenhainEntry("PECK", "203", s_cycle203, HeidenhainPeckParams(), "UNIVERSALBOHREN",
+                    s_cycle203Defaults),
+                HeidenhainEntry("CHIP_BREAK", "203", s_cycle203, HeidenhainPeckParams(), "UNIVERSALBOHREN",
+                    s_cycle203Defaults),
+                HeidenhainEntry("TAP", "207", s_cycle207, HeidenhainTapParams(), "GEW.-BOHREN GS NEU", null),
+                HeidenhainEntry("REAM", "201", s_cycle201, HeidenhainDrillParams(), "REIBEN", null),
+                HeidenhainEntry("BORE", "202", s_cycle202, HeidenhainDrillParams(), null, null),
             ],
         };
     }
 
-    // One Heidenhain drilling entry: its signature, its Q parameters, the planes relative to Q203.
-    private static CycleEntry HeidenhainEntry(
-        string name, string native, string[] signature, Dictionary<string, string> parameters)
+    // One Heidenhain drilling entry: its signature, its Q parameters, the planes relative to Q203, the title after
+    // CYCL DEF n (D270) and the defaults of its unmapped Q parameters (D164).
+    private static CycleEntry HeidenhainEntry(string name, string native, string[] signature,
+        Dictionary<string, string> parameters, string? title, Dictionary<string, string>? defaults)
     {
         return new CycleEntry
         {
@@ -60,7 +71,9 @@ public static partial class DrillingFamily
             Signature = signature,
             Params = parameters,
             AbsoluteFromSurface = s_heidenhainAbsolute,
-            RuleWords = s_heidenhainRuleWords,
+            Title = title,
+            Defaults = defaults ?? new Dictionary<string, string>(),
+            Family = Controller.Heidenhain,
         };
     }
 

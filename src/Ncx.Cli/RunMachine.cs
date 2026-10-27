@@ -136,6 +136,11 @@ internal sealed record RunMachine
         }
 
         RunMachine withCatalog = WithCatalog(machine, machineFile, folders, diagnostics);
+        if (withCatalog.Machine is MachineConfig merged && !CheckHeldDistances(merged, machineFile, diagnostics))
+        {
+            withCatalog = Stopped;
+        }
+
         return withCatalog with { FileName = machineFile.Name, MachineFile = machineFile, Project = project };
     }
 
@@ -217,6 +222,19 @@ internal sealed record RunMachine
         }
 
         return new RunMachine { Machine = CycleCatalogLoader.WithCatalog(machine, catalog), InputsRead = true };
+    }
+
+    // D358: once the catalog file is under the machine, or the built-in drilling family where [cycles] names no
+    // catalog, the [cycles] keys the machine sets are checked against it: CFG156 where a key and the defaults of an
+    // entry give the same native parameter, CFG158 where a Heidenhain catalog writes Q256 and the machine sets no
+    // chip_break_lift. They stand on the line of [cycles], in the machine file. False when an ERROR stops the run.
+    private static bool CheckHeldDistances(MachineConfig machine, FoundFile machineFile, Diagnostics diagnostics)
+    {
+        CyclesConfig cycles = machine.Cycles ?? new CyclesConfig();
+        var heldDiagnostics = new Diagnostics(machineFile.Name);
+        CycleCatalogLoader.CheckHeldDistances(machine.CycleCatalog, cycles.SetKeys(), cycles.Line, heldDiagnostics);
+        AddAll(diagnostics, heldDiagnostics);
+        return !heldDiagnostics.HasErrors;
     }
 
     // The diagnostics of one file after those reported before it (D98).

@@ -104,7 +104,7 @@ public sealed partial class ConvertCommandTests : IDisposable
         Assert.Equal(["CLI002", "CLI200"], Codes(_error));
     }
 
-    // D229, as recommended: a controller program whose bytes are no UTF-8 is read as Windows-1252 with the WARNING
+    // D229: a controller program whose bytes are no UTF-8 is read as Windows-1252 with the WARNING
     // CLI352 on its first line, and the NCX text carries its umlauts as UTF-8 (language 3, Encoding).
     [Fact]
     public void Convert_ProgramThatIsNoUtf8_IsReadAsWindows1252WithAWarning()

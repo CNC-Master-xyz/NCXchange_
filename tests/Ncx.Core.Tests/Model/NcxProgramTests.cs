@@ -92,16 +92,21 @@ public sealed class NcxProgramTests
             FileEnd = fileEnd,
             Trivia =
             [
-                new Trivia(1, "; NCX example"),
-                new Trivia(2, ""),
-                new Trivia(4, "   "),
-                new Trivia(6, "; Notes"),
+                new Trivia(1, "; NCX example", 0),
+                new Trivia(2, "", 0),
+                new Trivia(4, "   ", 1),
+                new Trivia(6, "; Notes", 2),
             ],
             Diagnostics = new Diagnostics("PATTERN_LOOP.ncx"),
         };
 
         Assert.Equal(
-            [new Trivia(1, "; NCX example"), new Trivia(2, ""), new Trivia(4, "   "), new Trivia(6, "; Notes")],
+            [
+                new Trivia(1, "; NCX example", 0),
+                new Trivia(2, "", 0),
+                new Trivia(4, "   ", 1),
+                new Trivia(6, "; Notes", 2),
+            ],
             program.Trivia);
         Assert.Same(fileBegin, program.FileBegin);
         Assert.Same(fileEnd, program.FileEnd);

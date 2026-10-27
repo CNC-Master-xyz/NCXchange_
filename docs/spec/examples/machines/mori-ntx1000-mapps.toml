@@ -3,6 +3,8 @@
 # The point of this file: the two-step ATC of the tool spindle maps exactly onto PRELOAD (the T word) and TOOL (G361), the spindle synchronization codes must be written in both channel programs, the sub spindle moves on a named linear axis A, and turret 2 tools use offsets +30 for spindle 2.
 # D100 data (P2-04): home and limits in machine coordinates, rapid, max_feed and acceleration on every [[axis]], rpm_min, rpm_max and accel_time on every spindle table, the [positions] and [dynamics] tables. The numbers are plausible for a machine of this class and not verified on the machine.
 
+ncx_schema = 1                     # the version of the machine-configuration schema, not of NCXchange (machine-config 1, D348)
+
 [machine]
 name = "Mori Seiki NTX1000 SZM"
 controller = "fanuc"
@@ -25,6 +27,15 @@ line_ending = "CRLF"
 program_end = "M30"                # written for PROGRAM=END (D48)
 sub_end = "M99"
 external_call = "M198"             # the M code list has M198 (option) as the subprogram call in the external I/O device (D322)
+m_codes_per_block = 3              # the multiple M code function: at most three M codes in a block (D339; NTX1000SZM programming manual p.252)
+# The multiple M code function codes: only they may be the second and third M code of a block, and a spindle code (M3, M4, M13, M14) never shares a block
+# with them (D339; NTX1000SZM programming manual p.252-253, notes 1 and 2)
+m_codes_combinable = [
+    "M10", "M11", "M210", "M211", "M19", "M219", "M25", "M26", "M85", "M86", "M37", "M38",
+    "M340", "M341", "M342", "M343", "M344", "M345", "M2000", "M2001", "M2002", "M2003", "M2004", "M2005",
+    "M2006", "M2007", "M2008", "M2009", "M2010", "M2011", "M2012", "M2013", "M2014", "M2015", "M2016", "M2017",
+    "M2018", "M2019", "M2020", "M2040", "M2041", "M2042", "M2043", "M2044", "M2045", "M2046", "M2047",
+]
 
 [roles]
 MAIN = "S1"
@@ -242,7 +253,6 @@ MAIN_CHUCK = { CLOSE = "M10", OPEN = "M11" }
 SUB_CHUCK = { CLOSE = "M210", OPEN = "M211" }
 TAILSTOCK = { FORWARD = "M13", BACK = "M14" }
 THREAD_CHAMFER = { ON = "M23", OFF = "M24" }
-SYNC_TAP = { ON = "M329" }
 RADIUS_MODE = { ON = "M582", OFF = "M583" }
 B_CONTOUR = { ON = "M594", OFF = "M595" }
 CUTOFF_DETECT = { RUN = "M80" }
@@ -269,5 +279,20 @@ TILT_OFF = "G69"
 
 [cycles]
 catalog = "fanuc-lathe.toml"       # the Fanuc lathe catalog: drilling along Z and along X by for_axis, turning cycles in system A numbers (machine-config 6, D160, D174)
+
+# The builder's rigid-tapping line is machine data: Mori Seiki switches synchronized tapping with M329, so the TAP entry of the catalog takes it as its
+# "before" line in place of the Fanuc M29 (NTX1000SZM PX-NT 4-K0DEEN p.467 and p.472), and SYNC_TAP is no [func] table, as RIGID_TAP in
+# fanuc-mill-30i.toml (machine-config 6, D256, D361).
+[[cycle]]
+name = "TAP"
+native = "G84"
+before = "M329 S{rpm}"
+
+[[cycle]]
+name = "TAP"
+for_axis = "X"
+native = "G88"
+before = "M329 S{rpm}"
+
 [raw]
 known = ["G38", "G362", "G330", "G320", "G325", "G334", "G335", "G336", "G337", "G338", "G339", "G343", "G460", "G461", "G462", "G463", "G464", "G478"]   # push check, tool change via 4th zero point, tool life management, probing, steady rest sync

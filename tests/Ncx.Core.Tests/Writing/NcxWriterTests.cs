@@ -327,6 +327,50 @@ public sealed class NcxWriterTests
             NcxWriter.Write(expanded, new WriterOptions { IncludeGenerated = true }));
     }
 
+    // A UTF-8 byte order mark at the start of the file is no part of the text, and format writes it back as read
+    // (D111; language 3, Encoding).
+    [Fact]
+    public void D111_ByteOrderMark_IsWrittenBackAsRead()
+    {
+        string text = "\uFEFF" + Lines("FILE=BEGIN NCX=1", "PROGRAM=BEGIN NAME=\"BOM\"", "PROGRAM=END", "FILE=END");
+
+        Assert.Equal(text, Format(text));
+    }
+
+    // A program built by a reader gets no byte order mark (D111).
+    [Fact]
+    public void D111_ProgramBuiltByAReader_GetsNoByteOrderMark()
+    {
+        var builder = new NcxBuilder(new Diagnostics("built.ncx"));
+        builder.Begin(1).Word("FILE", null, new IdentValue("BEGIN")).Word("NCX", null, new IntegerValue(1, "1")).End();
+        builder.Begin(2).Word("FILE", null, new IdentValue("END")).End();
+
+        string written = NcxWriter.Write(builder.Build());
+
+        Assert.False(written.StartsWith('\uFEFF'), written);
+    }
+
+    // A column is one Unicode code point of the line, so a character outside the basic plane counts once and the
+    // semicolon still stands in column 57 (D166; language 5 rule 7).
+    [Fact]
+    public void D166_CommentColumn_CountsCodePoints()
+    {
+        string written = Canonical("COMMENT=\"\U0001F600 \u00E9\" ; note");
+
+        int column = 1;
+        foreach (System.Text.Rune rune in written.EnumerateRunes())
+        {
+            if (rune.Value == ';')
+            {
+                break;
+            }
+
+            column++;
+        }
+
+        Assert.Equal(CommentColumn, column);
+    }
+
     // One line read as a block of a user file, without diagnostics, and written in canonical form.
     private static string Canonical(string line)
     {

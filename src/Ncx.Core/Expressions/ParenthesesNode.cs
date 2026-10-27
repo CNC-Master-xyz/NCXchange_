@@ -12,9 +12,7 @@ public sealed record ParenthesesNode(ExprNode Inner) : ExprNode
     /// </summary>
     public override string ToCanonical()
     {
-        // TODO(question): language 4.12 lets a program write parentheses the grammar does not need, ((1)) or
-        // ($Q1 < $Q2) AND ($Q3 > 0), and does not say whether the canonical text keeps them. They are kept as written,
-        // which loses nothing of the program (language 2 rule 8) until D112 is settled.
+        // Written parentheses are kept, also where the grammar does not need them, ((1)) (D112; language 2 rule 8).
         return "(" + Inner.ToCanonical() + ")";
     }
 }

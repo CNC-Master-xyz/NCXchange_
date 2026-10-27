@@ -39,14 +39,19 @@ internal static class ProgramEndRules
             state.Unknown.Remove(BlockContext.StateKey("PHASE", spindle.Key));
         }
 
-        // Cylinder, polar, tcpm, rotary path and feed, tolerance: PROGRAM=END sets OFF and the defaults (virtual
-        // machine 4); POLAR and CYLINDER going OFF leave their axes unknown in the workpiece frame (3.4), TCPM going
-        // OFF the tool vector and the surface normal (D81).
+        // Cylinder, polar, tcpm, rotary path and feed, path mode, tolerance, round limit: PROGRAM=END sets OFF and the
+        // defaults, the path mode its start value from [dynamics] path_mode (virtual machine 4, D349, D350, D363);
+        // POLAR and CYLINDER going OFF leave their axes unknown in the workpiece frame (3.4), TCPM going OFF the tool
+        // vector and the surface normal (D81).
         state.Frame.Cylinder = null;
         state.Frame.Polar = false;
         state.Frame.Tcpm = false;
         state.Frame.RotaryPath = RotaryPath.Full;
         state.Frame.RotaryFeed = RotaryFeed.DegMin;
+        state.Frame.PathMode = state.Frame.StartPathMode;
+        state.Frame.RoundLimit = new RoundLimitState { Value = null, Rotary = null };
+        state.Unknown.Remove("ROUND_LIMIT");
+        state.Unknown.Remove(BlockContext.StateKey("ROUND_LIMIT", "ROTARY"));
         state.Frame.Tolerance = new ToleranceState { Value = null, Rotary = null, Mode = ToleranceMode.Finish };
         state.Unknown.Remove("CYLINDER");
         state.Unknown.Remove("TOLERANCE");

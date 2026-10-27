@@ -77,7 +77,8 @@ public sealed class PluginLoaderTests : IDisposable
         PluginSet plugins = TestPlugins.Load(_folder.FullName, _diagnostics, TestPlugins.FaultyRules,
             TestPlugins.ShopRules);
 
-        Assert.Equal(["BrokenTextRule", "ThrowingRule", "BeforeToolChange", "CoolantClutchRule"],
+        Assert.Equal(
+            ["BrokenTextRule", "MixedPseudoWordRule", "ThrowingRule", "BeforeToolChange", "CoolantClutchRule"],
             TestPlugins.ClassNames(plugins.Rewriters));
     }
 

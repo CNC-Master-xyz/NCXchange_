@@ -101,5 +101,6 @@ STATE_CHANGE(49): Y 62.846 -> 0 (MACHINE)
 STATE_CHANGE(50): SPINDLE:S2 CW -> OFF
 STATE_CHANGE(51): F 1.5 -> ?
 STATE_CHANGE(51): FEED_MODE PER_REV -> PER_MIN
-PROGRAM_END(51): name "2.5D FRAESEN", number 1, blocks 44, distance 664.763235
+TOOL_END(51): tool 1, holder H1, rpm 1592, blocks 40, feedDistance 550.856466, rapidDistance 113.906769, unknownLengthMotions 4, distance 664.763235
+PROGRAM_END(51): name "2.5D FRAESEN", number 1, blocks 44, feedDistance 550.856466, rapidDistance 113.906769, unknownLengthMotions 4, distance 664.763235
 FILE_END(52): file 2.5D_FRAESEN.ncx, programs "2.5D FRAESEN", subprograms none

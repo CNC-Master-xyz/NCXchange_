@@ -20,6 +20,9 @@ public sealed class MachineConfigLoaderTests
 
             [formt]
             decimals = { X = 3 }
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Diagnostic warning = Assert.Single(diagnostics.Items);
@@ -42,6 +45,9 @@ public sealed class MachineConfigLoaderTests
             [spindle.MAIN]
             CW = "M3"
             rpm_mx = 5000
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Diagnostic warning = Assert.Single(diagnostics.Items);
@@ -62,6 +68,9 @@ public sealed class MachineConfigLoaderTests
 
             [format]
             decimals = "3"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Diagnostic error = Assert.Single(diagnostics.Items);
@@ -84,6 +93,9 @@ public sealed class MachineConfigLoaderTests
 
             [format]
             trailing_zeros = "no"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """, diagnostics);
 
         Assert.Null(machine);
@@ -101,6 +113,9 @@ public sealed class MachineConfigLoaderTests
 
             [[resource]]
             id = "S1"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Diagnostic error = Assert.Single(diagnostics.Items);
@@ -117,6 +132,9 @@ public sealed class MachineConfigLoaderTests
         Diagnostics diagnostics = Report("""
             [format]
             decimals = { X = 3 }
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Diagnostic error = Assert.Single(diagnostics.Items);
@@ -132,6 +150,9 @@ public sealed class MachineConfigLoaderTests
             [machine]
             name = "Test mill"
             controller = "fanox"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Diagnostic error = Assert.Single(diagnostics.Items);
@@ -157,6 +178,9 @@ public sealed class MachineConfigLoaderTests
             [[resource]]
             id = "S2"
             type = "work_spindle"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Diagnostic error = Assert.Single(diagnostics.Items);
@@ -182,6 +206,9 @@ public sealed class MachineConfigLoaderTests
             [[resource]]
             id = "S2"
             type = "work_spindle"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.Equal(2, machine.Resources.Count);
@@ -204,6 +231,9 @@ public sealed class MachineConfigLoaderTests
             [[resource]]
             id = "T2"
             type = "tool_holder"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Diagnostic error = Assert.Single(diagnostics.Items);
@@ -224,6 +254,9 @@ public sealed class MachineConfigLoaderTests
             id = "S1"
             type = "work_spindle"
             axis = "C1"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Diagnostic error = Assert.Single(diagnostics.Items);
@@ -267,6 +300,7 @@ public sealed class MachineConfigLoaderTests
             CW = "M03 P11"
 
             [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             HIGH_PRESSURE = { ON = "H07={value} M07", OFF = "M09" }
             """);
 
@@ -297,6 +331,9 @@ public sealed class MachineConfigLoaderTests
 
             [transform]
             TILT_ON = "G068.2 X{x} Y{y} Z{z} I{a} J{b} K{c}"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.Equal("M30", machine.Format?.ProgramEnd);
@@ -318,6 +355,9 @@ public sealed class MachineConfigLoaderTests
 
             [func]
             DOOR = { OPEN = -8 }
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.Equal(DiagnosticCodes.WrongType, Assert.Single(diagnostics.Items).Code);
@@ -334,6 +374,9 @@ public sealed class MachineConfigLoaderTests
 
             [func]
             DOOR = { OPEN = { X = 1 } }
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Diagnostic error = Assert.Single(diagnostics.Items);
@@ -369,6 +412,9 @@ public sealed class MachineConfigLoaderTests
             name = "Test mill"
             name = "Other mill"
             controller = "fanuc"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Diagnostic error = Assert.Single(diagnostics.Items);
@@ -396,6 +442,9 @@ public sealed class MachineConfigLoaderTests
             default_workpiece = "TABLE1"
             tool_table = "dmu50.tools.toml"
             kinematics = "dmu50.kin.toml"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         MachineIdentity identity = machine.Machine;
@@ -423,6 +472,9 @@ public sealed class MachineConfigLoaderTests
             [machine]
             name = "Test mill"
             controller = "siemens"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.Equal(LimitPolicy.Warn, machine.Limits);
@@ -443,6 +495,7 @@ public sealed class MachineConfigLoaderTests
             controller = "fanuc"
 
             [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             THROUGH = { ON = "M51", OFF = "M9", requires = { SPINDLE = "OFF" }, restore = ["SPINDLE"] }
 
             [func]
@@ -479,6 +532,9 @@ public sealed class MachineConfigLoaderTests
 
             [func]
             DOOR = { OPEN = "M68", CLOSE = "M69", channel = 1 }
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.Equal(2, machine.SpindleSync?.Channel);
@@ -500,6 +556,9 @@ public sealed class MachineConfigLoaderTests
             [spindle_sync]
             ON = "M35"
             channels = "all"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
         Diagnostics diagnostics = Report("""
             [machine]
@@ -509,6 +568,9 @@ public sealed class MachineConfigLoaderTests
             [spindle_sync]
             ON = "M35"
             channels = "some"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.True(machine.SpindleSync?.AllChannels);
@@ -547,6 +609,9 @@ public sealed class MachineConfigLoaderTests
             block_time = 0.001
             path_mode = "exact_stop"
             corner_speed = 2000
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         AxisDef axis = Assert.Single(machine.Axes);
@@ -589,6 +654,9 @@ public sealed class MachineConfigLoaderTests
             ncx = "B"
             kind = "rotary"
             limits = [-120, 120]
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.True(machine.FindAxis("C1")?.Modulo);
@@ -622,6 +690,9 @@ public sealed class MachineConfigLoaderTests
             id = "C1"
             ncx = "C"
             kind = "rotary"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.True(machine.FindAxis("X1")?.FramesInDiameter);
@@ -652,6 +723,9 @@ public sealed class MachineConfigLoaderTests
             kind = "linear"
             programming = "radius"
             frames_in_diameter = true
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.Equal(2, diagnostics.Items.Count);
@@ -672,6 +746,9 @@ public sealed class MachineConfigLoaderTests
             ncx = "X"
             kind = "linear"
             limits = [650]
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Diagnostic error = Assert.Single(diagnostics.Items);
@@ -690,6 +767,9 @@ public sealed class MachineConfigLoaderTests
 
             [dynamics]
             block_time = inf
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.Equal(DiagnosticCodes.WrongType, Assert.Single(diagnostics.Items).Code);
@@ -709,6 +789,9 @@ public sealed class MachineConfigLoaderTests
             SUB = "G59 M427"
             SUB_frame = "mirror"
             SUB_mirror = { ON = "G360", OFF = "G361" }
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         WorkpieceConfig? workpiece = machine.Workpiece;
@@ -730,6 +813,9 @@ public sealed class MachineConfigLoaderTests
 
             [func_meta]
             SUB_CHUCK.CLOSE = "workpiece_transfer_to = SUB"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.Equal("workpiece_transfer_to = SUB", machine.FuncMeta.Find("SUB_CHUCK", "CLOSE"));
@@ -750,6 +836,9 @@ public sealed class MachineConfigLoaderTests
             mark_range = [100, 199]
             start_mark = 199
             groups = [{ channels = [1, 2], range = [100, 199] }, { channels = [3, 4], range = [800, 849] }]
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         SyncConfig? sync = machine.Sync;
@@ -770,13 +859,16 @@ public sealed class MachineConfigLoaderTests
     [InlineData("program_name", ChannelFiles.ProgramName)]
     public void ChannelFiles_EachValue_LoadsItsNaming(string value, ChannelFiles expected)
     {
-        MachineConfig machine = LoadClean($"""
+        MachineConfig machine = LoadClean($$"""
             [machine]
             name = "Test lathe"
             controller = "fanuc"
 
             [format]
-            channel_files = "{value}"
+            channel_files = "{{value}}"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.Equal(expected, machine.Format?.ChannelFiles);
@@ -803,6 +895,9 @@ public sealed class MachineConfigLoaderTests
             [tolerance]
             ON = "CYCL DEF 32.0 TOLERANZ\nCYCL DEF 32.1 T{tol}"
             mode = { FINISH = 0, ROUGH = 1 }
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.Equal("", machine.Transform?.TiltAxisOn);
@@ -825,6 +920,9 @@ public sealed class MachineConfigLoaderTests
             [tool_change]
             change = "G361 B{b} D{kind}"
             kind_map = { ROTARY = 1, TURNING = "1." }
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.Equal("1", machine.ToolChange?.KindMap["ROTARY"]);
@@ -848,6 +946,9 @@ public sealed class MachineConfigLoaderTests
 
             [raw]
             known = ["G411", "G300"]
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.Equal(2, Assert.Single(machine.Resources).Channel);
@@ -872,6 +973,9 @@ public sealed class MachineConfigLoaderTests
             [system_variables]
             SYS_POS_X = "#5041"
             SYS_WEAR_Z = "#11{index:03}"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.Equal(UnassignedVariable.Zero, machine.Variables.Unassigned);
@@ -899,6 +1003,9 @@ public sealed class MachineConfigLoaderTests
             [[node]]
             id = "TABLE1"
             parent = "X1"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.NotNull(machine.Kinematics);
@@ -923,6 +1030,9 @@ public sealed class MachineConfigLoaderTests
             name = "PECK"
             native = "G83"
             pre = ["FUNC:PECK_MODE=RETRACT"]
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.Equal("fanuc.toml", machine.Cycles?.CatalogFile);

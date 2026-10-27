@@ -150,8 +150,8 @@ internal static class HeidenhainFrames
     // TOLERANCE, TOLERANCE:ROTARY and TOLERANCE_MODE together, cycle 32 through [tolerance] ON with {tol}, {mode} and
     // {rotary}, and OFF for TOLERANCE=OFF, on change (controllers heidenhain.md 2; controller-mapping 1, TOLERANCE;
     // machine-config 5; D85).
-    // TODO(question): D151: the ON template of machines/heidenhain-itnc530.toml needs {rotary}, which TOLERANCE:ROTARY
-    // leaves out when the program sets none; the placeholder then has no value, and the template reports it.
+    // ON_ROTARY is written instead of ON while TOLERANCE:ROTARY is set; a machine without it writes ON (D151). The
+    // report of a value the template cannot carry, CMP015, is the compiler framework's (D367).
     private static void WriteTolerance(HeidenhainBlock writing)
     {
         bool tolerance = writing.Take("TOLERANCE") is not null;
@@ -192,6 +192,10 @@ internal static class HeidenhainFrames
             values.Set("rotary", rotary);
         }
 
-        writing.Template(table?.On, "[tolerance] ON (machine-config 5, D85)", values);
+        bool rotaryTemplate = state.Rotary is not null && table?.OnRotary is not null;
+        string what = rotaryTemplate
+            ? "[tolerance] ON_ROTARY (machine-config 5, D151)"
+            : "[tolerance] ON (machine-config 5, D85)";
+        writing.Template(rotaryTemplate ? table?.OnRotary : table?.On, what, values);
     }
 }

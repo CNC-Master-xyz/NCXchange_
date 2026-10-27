@@ -266,6 +266,16 @@ public sealed class ExprParser
             return new VariableNode(name.Text, null);
         }
 
+        // Only a SYS_ name takes an index, which selects a register or table row; an index on any other variable is
+        // plainly wrong text and an ERROR of the parser, so that every command reports it (D145; language 4.12).
+        if (!SystemNames.IsSystem(name.Text))
+        {
+            Report(DiagnosticCodes.ExpressionIndexNeedsSystemVariable,
+                $"${name.Text} {Place(name)} of {Braced} has an index, and only a SYS_ name has registers or table "
+                + "rows for an index to select (language 4.12, D145).");
+            return null;
+        }
+
         ExprNode? index = ParseExpr();
         if (index is null)
         {
@@ -280,7 +290,32 @@ public sealed class ExprParser
             return null;
         }
 
+        // An index written as a literal number is a whole number of 0 or more; $SYS_WEAR_Z[-1] and
+        // $SYS_WEAR_Z[99.5] are ERRORs, since no writer emits them (D145). A computed index is rounded when it is
+        // evaluated.
+        if (LiteralIndexOf(index) is decimal literal && (literal < 0 || literal != decimal.Truncate(literal)))
+        {
+            Report(DiagnosticCodes.ExpressionIndexNotAWholeNumber,
+                $"The index {index} {Place(openBracket)} of {Braced} is no whole number of 0 or more; a literal index "
+                + "selects a register or table row by its number (language 4.12, D145).");
+            return null;
+        }
+
         return new VariableNode(name.Text, index);
+    }
+
+    // The number an index writes as a literal, a number with or without a minus and parentheses around it; null for
+    // a computed index (D145).
+    private static decimal? LiteralIndexOf(ExprNode index)
+    {
+        return index switch
+        {
+            ParenthesesNode parentheses => LiteralIndexOf(parentheses.Inner),
+            UnaryNode { Operator: UnaryOperator.Minus } minus => -LiteralIndexOf(minus.Operand),
+            NumberNode number when decimal.TryParse(number.Text, NumberStyles.AllowDecimalPoint,
+                CultureInfo.InvariantCulture, out decimal value) => value,
+            _ => null,
+        };
     }
 
     // function "(" expr { "," expr } ")": one of the seventeen names, then at least one argument, the arguments

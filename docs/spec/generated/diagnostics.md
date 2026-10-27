@@ -31,7 +31,7 @@ The file frame, the programs and subprograms, and the words of a block (language
 | `PAR013` | ERROR | A word in a HOME block that is not a bare axis name. | language 4.3, 5 rule 2 |
 | `PAR014` | ERROR | An axis word without a value outside a HOME block. | language 4.3, 5 rule 2; D93 |
 | `PAR015` | ERROR | Duplicate key: a key twice in one block with one address. | language 5 rule 4; VM 5 |
-| `PAR016` | ERROR | IF, ARG, TIMES, WITH, FRAME, MOVE, ROT, POINT or PHASE without its verb or partner word in the block. | language 5 rule 5; VM 5 |
+| `PAR016` | ERROR | IF, ARG, TIMES, WITH, FRAME, MOVE, ROT, POINT or PHASE without its verb or partner word in the block; NAME, NUMBER or CHANNEL without its program or section block; a cycle parameter without CYCLE. | language 5 rule 5; VM 5; D116 |
 | `PAR017` | ERROR | TOOL_POINT, TIP_OFFSET or POINT_RADIUS in a block that is neither a TOOL block nor a block of their own. | language 4.4; VM 5; D372, D392 |
 | `PAR020` | ERROR | Missing or misplaced FILE=BEGIN: it is the first block of the file and stands nowhere else. | language 4.1; VM 5; D92 |
 | `PAR021` | ERROR | FILE=BEGIN without NCX, the format version. | language 4.1; VM 5 |
@@ -71,15 +71,19 @@ The blocks the expander generates from the expansion rules of the machine config
 
 ## Frame
 
-SETPOS, the path tolerance and the tilted plane (language 4.1, 4.2; VM 2.1, 3.4, 5). MOVE and ROT without TILT or TILT_AXIS are PAR016 of the structure.
+SETPOS, the path tolerance, the tilted plane and the blank (language 4.1, 4.2; VM 2.1, 3.4, 5). MOVE and ROT without TILT or TILT_AXIS are PAR016 of the structure.
 
 | Code | Severity | Rule | Section |
 |---|---|---|---|
 | `VM050` | ERROR | SETPOS with an axis unknown in every frame, except directly after a HOME of that axis that found no reference point. | VM 3.4, 5; D100, D101 |
 | `VM051` | ERROR | A TILT_AXIS axis word on an axis the machine does not declare rotary. | language 4.2; VM 3.4, 5; D117 |
-| `VM420` | ERROR | TOLERANCE:ROTARY or TOLERANCE_MODE without an active TOLERANCE. | language 4.1; VM 5; D85 |
+| `VM420` | ERROR | TOLERANCE:ROTARY or TOLERANCE_MODE without an active TOLERANCE, ROUND_LIMIT:ROTARY without an active ROUND_LIMIT. | language 4.1; VM 5; D85, D363 |
 | `VM421` | ERROR | SETPOS without an axis word. | language 4.2; VM 5 |
-| `VM422` | WARNING | ROT on a target without table kinematics: the machine file has no rotary axis on a table. Not checked without a machine file. | language 4.2; VM 5; D82 |
+| `VM422` | WARNING | ROT on a machine file without any rotary axis, whatever the owner: no free rotary axis can arise. Not checked without a machine file. | language 4.2; VM 5; D82, D191 |
+| `VM423` | ERROR | STOCK without all six coordinate words of its form, X Y Z and MAX:X MAX:Y MAX:Z. | language 4.2; VM 5; D351 |
+| `VM424` | ERROR | STOCK with a side of zero or negative extent, or STOCK=CYLINDER whose two sides across the tool axis of the WORKPLANE differ, so that its footprint is not a circle. | language 4.2; VM 5; D351 |
+| `VM425` | ERROR | A second STOCK in one program, a STOCK before the first ORIGIN or one after the first motion verb. | language 4.2; VM 5; D351 |
+| `VM426` | WARNING | ROT written with TILT_AXIS, on any target and without a machine file too: the control ignores the transformation type there. | language 4.2; VM 5; D191 |
 | `VM215` | ERROR | CYLINDER=n while the workpiece holder has no rotary axis. | language 4.2; VM 3.4, 3.8, 5; D146 |
 
 ## Motion
@@ -183,6 +187,7 @@ The cycle call (language 4.7; VM 3.3, 5; D59, D94).
 | `VM251` | ERROR | CYCLE_CALL of a built-in drilling cycle without DEPTH or CLEARANCE; a catalog or CYCLE:controller=n cycle carries its own parameters. Suppressed inside a subprogram that no program of the file calls (D99). | VM 3.3, 5; D94 |
 | `VM252` | ERROR | AXIS naming an axis that is not a linear axis of the machine. | language 4.7; VM 3.3, 5; D59 |
 | `VM253` | ERROR | CYCLE_CALL of a built-in drilling cycle with a word on its drilling axis; the cycle's own planes move that axis, and a pre-positioning is a RAPID of its own. | language 4.7; VM 3.3, 5; D189 |
+| `VM254` | ERROR | A parameter of a catalog cycle that the machine's cycle catalog does not map for that cycle; without a machine file it is the WARNING VM003. | language 4.7.1; VM 5; D114 |
 
 ## Flow
 
@@ -197,7 +202,7 @@ Labels, jumps, calls and the reach of the blocks of a program (language 4.9, 4.1
 | `VM520` | ERROR | Duplicate LABEL in one program or subprogram. | language 4.9; VM 3.6, 5 |
 | `VM521` | ERROR | Missing jump target: a JUMP or REPEAT to a label its program or subprogram does not hold. | language 4.9; VM 3.6, 5 |
 | `VM522` | WARNING | JUMP=END from inside a subprogram: it ends the program from a call. | VM 3.6, 5 |
-| `VM523` | WARNING | Unreachable block of a program after an unconditional JUMP that no LABEL makes reachable. | language 4.13; VM 3.9, 5; D89 |
+| `VM523` | WARNING | Unreachable block of a program or subprogram after an unconditional JUMP that no LABEL makes reachable. | language 4.13; VM 3.9, 5; D89, D195 |
 | `VM524` | WARNING | RETURN in the main program; it is treated as JUMP=END. | language 4.9, 4.13; VM 3.6, 5 |
 | `VM750` | ERROR | Block cap exceeded: possible endless loop. INTERPRETED mode. | VM 3.6, 5; machine-config 7 |
 | `VM751` | ERROR | A REPEAT nested deeper than the configured depth, which calls and repeats share. INTERPRETED mode. | VM 3.6, 5; machine-config 7 |
@@ -223,6 +228,8 @@ Expressions and variables (language 4.9, 4.12; VM 1, 2.7, 3.6, 5; D38, D51). The
 | `PAR109` | ERROR | A part after a complete expression. | language 4.12 |
 | `PAR110` | ERROR | A second comparison behind a comparison. | language 4.12 |
 | `PAR111` | ERROR | A function with a number of arguments it does not take. | language 4.12; D118 |
+| `PAR112` | ERROR | An index on a variable that is not a SYS_ name. | language 4.12; D145 |
+| `PAR113` | ERROR | A literal index that is no whole number of 0 or more. | language 4.12; D145 |
 | `VM080` | ERROR | Assignment to a SYS_ variable. | VM 2.7, 5 |
 | `VM540` | WARNING | Unresolved expression in STATIC mode, counted and reported once per run. | VM 1, 5 |
 | `VM900` | ERROR | Division by zero. | language 4.12; VM 5 |
@@ -231,8 +238,8 @@ Expressions and variables (language 4.9, 4.12; VM 1, 2.7, 3.6, 5; D38, D51). The
 | `VM903` | ERROR | A SYS_ name the configuration does not map, or an unknown state, read in INTERPRETED mode. | VM 2.7, 3.6; D51 |
 | `VM905` | ERROR | An operation without a real result. | language 4.12 |
 | `VM906` | ERROR | A number beyond the range of the decimal arithmetic. | language 4.12 |
-| `VM907` | ERROR | An index on a variable that is not a SYS_ name. | language 4.12; D51 |
-| `VM908` | ERROR | An index that selects no register. | language 4.12; D51 |
+| `VM907` | ERROR | Retired (D145): an index on a variable that is not a SYS_ name is PAR112. | language 4.12; D145 |
+| `VM908` | ERROR | A computed index that selects no register: negative after rounding half away from zero. | language 4.12; D51, D145 |
 | `VM754` | ERROR | An expression gives a number with decimals where its word takes an integer. | language 3, 4; VM 5 |
 
 ## Resource

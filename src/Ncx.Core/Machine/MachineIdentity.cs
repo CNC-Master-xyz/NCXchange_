@@ -69,4 +69,46 @@ public sealed record MachineIdentity
     /// file leaves it out.
     /// </summary>
     public string? DefaultWorkpiece { get; init; }
+
+    /// <summary>
+    /// arc_tolerance: the arc tolerance of D36 in millimetres, like rapid and max_feed, converted for an INCH program;
+    /// null when the file leaves it out, and then the D36 defaults per unit apply, 0.01 mm and 0.0005 in (D139,
+    /// virtual machine 3.2).
+    /// </summary>
+    public decimal? ArcTolerance { get; init; }
+
+    /// <summary>
+    /// arc_radius_tolerance: how far the radius from the written start and the radius to the written end of an arc
+    /// may differ before the compiler reports CMP030, in millimetres, converted for an INCH program; null when the
+    /// file leaves it out, and then one output step of the centre's address applies (D364). Fanuc parameter 3410 and
+    /// the Heidenhain circleDeviation (7431 on the iTNC 530) are the control's own form of this limit (Fanuc 30i-B
+    /// parameter manual B-64490EN-05 p.196; TNC 640 technical manual 892899-18 p.2636, cnc-manuals).
+    /// </summary>
+    public decimal? ArcRadiusTolerance { get; init; }
+
+    /// <summary>
+    /// dwell_increment: the seconds per unit of a Fanuc G4 P, also of G4 X/U without a decimal point and of the P of
+    /// the canned cycles; 0.001 when the file leaves it out (D159). The unit follows the increment system, or is 1 ms
+    /// under parameter 1015#7 DWT; NCX assumes 3405#1 DWL = 0, a dwell in seconds (Fanuc 30i-B operator's manual
+    /// B-64484EN p.188, parameter manual B-64490EN-05 p.59 and p.195, cnc-manuals).
+    /// </summary>
+    public decimal DwellIncrement { get; init; } = 0.001m;
+
+    /// <summary>
+    /// base_units: the basic system of a Siemens control, MD10240 $MN_SCALING_SYSTEM_IS_METRIC, as a value of UNITS,
+    /// MM or INCH; null when the file leaves it out, and then units_default stands for it (D292; SINUMERIK
+    /// 840D sl/828D function manual basic functions 2012 p.346, cnc-manuals). See <see cref="ResolvedBaseUnits"/>.
+    /// </summary>
+    public string? BaseUnits { get; init; }
+
+    /// <summary>
+    /// The basic system the Siemens compiler and reader work against: base_units, or units_default without it (D292).
+    /// </summary>
+    public string? ResolvedBaseUnits => BaseUnits ?? UnitsDefault;
+
+    /// <summary>
+    /// extended_units: MD10260 $MN_CONVERT_SCALING_SYSTEM = 1, G700 and G710 are available; false when the file leaves
+    /// it out (D292; SINUMERIK 840D sl programming manual NC programming SW4.94 p.158, cnc-manuals).
+    /// </summary>
+    public bool ExtendedUnits { get; init; }
 }

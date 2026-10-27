@@ -14,7 +14,8 @@ public static partial class DiagnosticCodes
     public const string RawPresent = "VM400";
 
     /// <summary>
-    /// VM420: TOLERANCE:ROTARY or TOLERANCE_MODE without an active TOLERANCE (language 4.1, virtual machine 5, D85).
+    /// VM420: TOLERANCE:ROTARY or TOLERANCE_MODE without an active TOLERANCE, ROUND_LIMIT:ROTARY without an active
+    /// ROUND_LIMIT (language 4.1, virtual machine 5, D85, D363).
     /// </summary>
     public const string ToleranceWordWithoutTolerance = "VM420";
 
@@ -24,10 +25,34 @@ public static partial class DiagnosticCodes
     public const string SetposWithoutAxis = "VM421";
 
     /// <summary>
-    /// VM422, a WARNING: ROT on a target without table kinematics, a machine file without a rotary axis on a table
-    /// (language 4.2, virtual machine 5, D82).
+    /// VM422, a WARNING: ROT on a machine file without any rotary axis, whatever its owner, so that no free rotary axis
+    /// can arise (language 4.2, virtual machine 5, D82, D191). The name keeps the code's first reading.
     /// </summary>
     public const string RotWithoutTableKinematics = "VM422";
+
+    /// <summary>
+    /// VM423: a STOCK without all six coordinate words of its form, X Y Z and MAX:X MAX:Y MAX:Z (language 4.2, virtual
+    /// machine 5, D351).
+    /// </summary>
+    public const string StockWithoutItsCorners = "VM423";
+
+    /// <summary>
+    /// VM424: a STOCK with a side of zero or negative extent, or a STOCK=CYLINDER whose footprint across the tool axis
+    /// is not a circle (language 4.2, virtual machine 5, D351).
+    /// </summary>
+    public const string StockExtentInvalid = "VM424";
+
+    /// <summary>
+    /// VM425: a second STOCK in one program, a STOCK before the first ORIGIN or one after the first motion verb
+    /// (language 4.2, virtual machine 5, D351).
+    /// </summary>
+    public const string StockMisplaced = "VM425";
+
+    /// <summary>
+    /// VM426, a WARNING: ROT written with TILT_AXIS, which the control ignores on any target (language 4.2, virtual
+    /// machine 5, D191, D388).
+    /// </summary>
+    public const string RotWithTiltAxis = "VM426";
 
     /// <summary>
     /// VM440, a WARNING: F in a RAPID block (virtual machine 5).
@@ -112,8 +137,8 @@ public static partial class DiagnosticCodes
     public const string JumpEndInSub = "VM522";
 
     /// <summary>
-    /// VM523, a WARNING: a block of a program after an unconditional JUMP that no LABEL makes reachable (language 4.13,
-    /// virtual machine 3.9, 5, D89).
+    /// VM523, a WARNING: a block of a program or subprogram after an unconditional JUMP that no LABEL makes reachable
+    /// (language 4.13, virtual machine 3.9, 5, D89, D195).
     /// </summary>
     public const string UnreachableBlock = "VM523";
 
