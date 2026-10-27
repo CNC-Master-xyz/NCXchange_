@@ -87,12 +87,9 @@ internal static class FormatCommand
             return ExitCodes.NotStarted;
         }
 
-        // A byte order mark is allowed and is no part of the text; format writes it back as read (D111; language 3,
-        // Encoding). The command strips it before the parser and puts it back in front of the canonical text.
-        string byteOrderMark = text.StartsWith(InputFile.ByteOrderMark, StringComparison.Ordinal)
-            ? InputFile.ByteOrderMark
-            : "";
-        NcxProgram program = Parser.Parse(text.Substring(byteOrderMark.Length), file, new ParserOptions());
+        // A byte order mark is allowed and is no part of the text: the parser skips it and records it, and the writer
+        // writes it back as read (D111; language 3, Encoding).
+        NcxProgram program = Parser.Parse(text, file, new ParserOptions());
         Diagnostics diagnostics = program.Diagnostics;
 
         // The run stops on ERROR: the diagnostics are printed, nothing is written, and the exit code is 1
@@ -103,7 +100,7 @@ internal static class FormatCommand
             return ExitCodes.Error;
         }
 
-        string canonical = byteOrderMark + NcxWriter.Write(program);
+        string canonical = NcxWriter.Write(program);
         bool differs = false;
         if (check)
         {

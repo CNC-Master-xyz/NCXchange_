@@ -41,14 +41,13 @@ internal static class AnnotateCommand
         PipelineRun run = Pipeline.Run(settings, [annotations]);
 
         // The copy carries the values of every block the run executed, and the byte order mark of the file where it
-        // was, as ncx format keeps it (virtual machine 6; wave-1 question #80); there is none when there was no
-        // program to run.
+        // was, as ncx format keeps it (virtual machine 6; D111); there is none when there was no program to run.
         // When an ERROR stops the run, annotate writes the whole copy, the values on the blocks executed before it, and
         // nothing when the file, the machine file, the parser or the expander stopped the run before its first block
         // (architecture 10, virtual machine 6; D205).
         if (run.Program is NcxProgram program)
         {
-            output.Write(run.ByteOrderMark + AnnotatedText.Write(program, annotations));
+            output.Write(AnnotatedText.Write(program, annotations));
         }
 
         error.Write(run.Diagnostics.ToText());
