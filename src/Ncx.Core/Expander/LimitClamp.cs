@@ -149,7 +149,8 @@ internal static class LimitClamp
     // limits; ARC is no clamped verb, since a clamped end point would no longer lie on its circle. Every other target
     // keeps the WARNING of the virtual machine wherever it knows the machine position (D203). The word and the limits
     // are both in the program's convention: an X of a diameter axis is a diameter, as its limits in the file are
-    // (D137).
+    // (D137). On a switchable axis the word is a diameter or a radius by DIAMETER, a state the expander never sees
+    // (architecture 5.5), so its target is not clamped and the virtual machine's WARNING reports it (D137, D203).
     // D193: the limits of a rotary axis are travel limits and are clamped like a linear axis's, unless its [[axis]]
     // carries modulo = true, which makes them its display range (decisions.md; machine-config 4).
     private static Word? ClampTarget(Word word, decimal target, Block block, MachineConfig machine,
@@ -162,7 +163,9 @@ internal static class LimitClamp
         }
 
         AxisDef? axis = machine.ResolveAxis(name);
-        if (axis is null || (axis.Kind == AxisKind.Rotary && axis.Modulo))
+        if (axis is null
+            || (axis.Kind == AxisKind.Rotary && axis.Modulo)
+            || axis.Programming == Programming.Switchable)
         {
             return null;
         }

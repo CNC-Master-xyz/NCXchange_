@@ -442,6 +442,37 @@ public sealed class SetposTests
         Assert.DoesNotContain("SETPOS:X", vm.State.Unknown);
     }
 
+    // D319 with nested rotations: SETPOS X=0 at X=10 Y=0 under ROTATE=30 and ROTATE=60 records (10, 0) in the frame
+    // turned by 90; the first RESET turns it by 60 into the frame of ROTATE=30, Y taking its component in that frame,
+    // and the second by 30 into the unrotated frame: (0, 10), the displacement in space.
+    [Fact]
+    public void D319_TwoRotateResetsAfterSetpos_TurnTheShiftTwice()
+    {
+        VmHarness vm = new VmHarness(VmMachines.Default())
+            .Execute("UNITS=MM", "ROTATE=30", "ROTATE=60", "RAPID X=10 Y=0", "SETPOS X=0", "ROTATE=RESET");
+
+        Assert.Equal(5m, vm.State.Frame.SetposShift["X"]);
+        Assert.Equal(8.660254m, vm.State.Frame.SetposShift["Y"]);
+
+        vm.Execute("ROTATE=RESET");
+
+        Assert.Equal(0m, vm.State.Frame.SetposShift["X"]);
+        Assert.Equal(10m, vm.State.Frame.SetposShift["Y"]);
+        Assert.DoesNotContain("SETPOS:Y", vm.State.Unknown);
+    }
+
+    // D319: a component turned onto an axis that holds a shift of its own from another frame has no frame: that
+    // setpos shift is unknown.
+    [Fact]
+    public void D319_TurnedComponentOntoAnAxisWithItsOwnShift_IsUnknown()
+    {
+        VmHarness vm = new VmHarness(VmMachines.Default())
+            .Execute("UNITS=MM", "RAPID Y=4", "SETPOS Y=0", "ROTATE=90", "RAPID X=10", "SETPOS X=0", "ROTATE=RESET");
+
+        Assert.Contains("SETPOS:Y", vm.State.Unknown);
+        Assert.DoesNotContain("SETPOS:X", vm.State.Unknown);
+    }
+
     // D319: a removed MIRROR negates the shift of the axis it mirrors; a removed SHIFT only folds back and leaves the
     // setpos shift as it is.
     [Fact]

@@ -112,6 +112,22 @@ public static partial class MachineConfigLoader
             // frames_in_diameter: whether frame offsets of a diameter axis are diameters (MD20360, D125, D388).
             string? parallel = table.Choice("parallel", s_linearAxes);
             bool framesInDiameter = table.Flag("frames_in_diameter");
+
+            // parallel belongs to a rotary axis and frames_in_diameter to a diameter or switchable axis; anywhere else
+            // the key says nothing true of its axis (CFG005, D146, D388).
+            if (table.Has("parallel") && kind != AxisKind.Rotary)
+            {
+                table.Diagnostics.Error(table.LineOf("parallel"), DiagnosticCodes.ValueNotAllowed,
+                    $"{table.Name} sets parallel, which only a rotary axis takes (machine-config 4, D146).");
+            }
+
+            if (table.Has("frames_in_diameter")
+                && programming is not (Programming.Diameter or Programming.Switchable))
+            {
+                table.Diagnostics.Error(table.LineOf("frames_in_diameter"), DiagnosticCodes.ValueNotAllowed,
+                    $"{table.Name} sets frames_in_diameter, which only an axis with programming = \"diameter\" or "
+                    + "\"switchable\" takes (machine-config 4, D388).");
+            }
             IReadOnlyDictionary<string, string> clamp =
                 table.Table("clamp")?.Templates(s_onOff) ?? new Dictionary<string, string>();
             if (id is null || ncxName is null || kind is not AxisKind axisKind)

@@ -99,6 +99,20 @@ public sealed class MotionValidationTests
             StringComparison.Ordinal);
     }
 
+    // D192: an axis the block names and leaves where it stood does not move: Z=5 again is no part of the comparison,
+    // while the full circle of an ARC moves both plane axes although it ends where it started.
+    [Fact]
+    public void D192_NamedAxisThatDoesNotMove_IsNotCompared()
+    {
+        VmHarness vm = new VmHarness(ValidationMachines.MillTurnWithLimits())
+            .Execute("UNITS=MM F=9000 SPINDLE:TOOL=CW WORKPLANE=ZX", "RAPID X=100 Z=5", "LINE X=110 Z=5");
+        vm.AssertNoDiagnostics();
+
+        vm.Execute("ARC=CCW X=110 Z=5 CENTER:X=100 CENTER:Z=5");
+
+        Assert.Equal(1, vm.Count(DiagnosticCodes.FeedAboveMaxFeed));
+    }
+
     // D192: one WARNING per F word, on its first exceeding block; a new F word may warn again.
     [Fact]
     public void D192_FeedAboveTheMaxFeed_WarnsOncePerFWord()

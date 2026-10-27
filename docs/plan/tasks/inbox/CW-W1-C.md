@@ -25,7 +25,7 @@ Claude (agent), 2026-10-27, branch `w1-c` on `main` at 649c923.
 
 - D121: `Vec3.RoundToDecimal(double)` rounds every double the VM stores (arc end, centre, sweep, motion length) to `Vec3.VmDecimals` = 6, half away from zero; `MotionRules.PositionDecimals` and `MotionEvents.SweepDecimals` are gone. VM 3.2, architecture 4.2, 11 risks. Re-accepted: `2.5D_FRAESEN.events.txt`, the numbers of the analytics tests (tool list, segments, runtime, `analyze --from`). `A/ReportText.cs` is untouched (N13); its comments and the one in `ToolVectors/ToolVectorAnalytic.cs` still name `PositionDecimals`/`SweepDecimals` (W3-3).
 - D123: `FrameRules.SelectOrigin` marks workpiece/polar/cylinder positions unknown when the datum changes; a repeated datum only empties the chain.
-- D125: `ApplyShift` halves SHIFT X under DIAMETER=ON (`DiameterRules`). The Siemens compiler marker (`SiemensFrames.cs:348`) stays for W2-9; its tests pass unchanged.
+- D125: `ApplyShift` halves SHIFT X under DIAMETER=ON (`DiameterRules`). Review fix: `SiemensFrames.WriteShift` writes a TRANS rewritten from the chain entry with the state factor (`FormatComputed` and `StateFactor`, as `SiemensArcs` does), so it stays a diameter (test `D125_ShiftRewrittenFromTheChainUnderDiamon_KeepsTheDiameter`); its marker is gone.
 - D126: marker in `ApplyTilt` turned into a comment; spec only.
 - D129: VM500 passes while the workpiece holder's spindle runs; MILLTURN_TRANSFER loses its VM500 with and without millturn1 (expected files, P1-04 paragraph, F30 row amended).
 - D132: `ApplyTool` consumes any preload; VM 3.5 row, VM 3 step 3 exception, code-guidelines 2 sample, architecture 5.2, language 4.4.
@@ -43,4 +43,12 @@ Claude (agent), 2026-10-27, branch `w1-c` on `main` at 649c923.
 - D388 (10): `[[axis]] frames_in_diameter` read and documented (machine-config 4), loader test.
 - For W1-I (D351): `VirtualMachine.ResolveAxisWords` skips STOCK as it skips TILT.
 - Gap closed 2026-10-27 (delegated): VM214 `VectorUnderCycleCall`, VM215 `CylinderWithoutRotaryAxis` (the codes PLAN 2.1 reserved, names in the form of their neighbours); the radial tool axis of the cylinder plane is X about Z and Z about X or Y; a removed tilt makes the setpos shifts of every linear axis unknown when a shift declared under it was not 0.
-- Note (D126/D183 against D230): D230 lets a rotary axis word under a tilt keep its machine position, while D126 and D183 keep IC right after TILT_AXIS an ERROR; implemented as D126/D183 say (any tilt in the chain excludes the IX rule).
+- D230 with D126 and D183, a consistent reading: D230 keeps the machine position of a rotary axis that a word moves under a tilt, while D126 and D183 decide whether IX may add in another frame; any tilt in the chain excludes that IX rule, so IC right after TILT_AXIS stays the VM202 ERROR.
+
+Review fixes, 2026-10-27:
+
+- D319: an axis that takes a turned component now carries the frame of the turned shift (`SetposChain`), so a second RESET turns it again (ROTATE=30, ROTATE=60, SETPOS X=0 at 10/0, two RESETs give 0/10); with a shift of its own, not 0, from another frame it becomes unknown.
+- D192: `MaxFeedCheck` counts only the axes that changed and the plane axes of an ARC, not an axis named and left where it stood.
+- Loader: `parallel` on a non-rotary axis and `frames_in_diameter` on an axis that is not diameter or switchable are CFG005.
+- D137/D203: `LimitClamp.ClampTarget` leaves the target of a switchable axis alone, since the expander cannot see DIAMETER.
+- Merge order: FrameState.cs, FrameHandlers.cs and FrameValidation.cs overlap W1-I; W1-C merges first and W1-I rebases.

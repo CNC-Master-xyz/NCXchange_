@@ -134,6 +134,26 @@ public sealed class LimitClampTests
         Assert.Empty(expanded.Diagnostics.Items);
     }
 
+    // D137, D203: the X of a switchable axis is a diameter or a radius by DIAMETER, which the expander does not see,
+    // so its machine-frame target is not clamped; Z still is.
+    [Fact]
+    public void D137_MachineFrameTargetOfASwitchableAxis_IsNotRewritten()
+    {
+        MachineConfig clamp = ExpanderMachines.Clamp();
+        var axes = new List<AxisDef>();
+        foreach (AxisDef axis in clamp.Axes)
+        {
+            axes.Add(axis.NcxName == "X" ? axis with { Programming = Programming.Switchable } : axis);
+        }
+
+        NcxProgram expanded = ExpanderHarness.Expand(
+            ExpanderHarness.File("UNITS=MM", "RAPID X=700 Z=-300 FRAME=MACHINE"), clamp with { Axes = axes });
+
+        Assert.Equal(
+            ExpanderHarness.File("UNITS=MM", "RAPID X=700 Z=-200 FRAME=MACHINE"),
+            ExpanderHarness.WriteWithGenerated(expanded));
+    }
+
     // D203: under "clamp" only absolute axis words of RAPID and LINE under FRAME=MACHINE are rewritten; an ARC is no
     // clamped verb, and the virtual machine reports its target instead.
     [Fact]

@@ -723,8 +723,10 @@ internal static class FrameRules
     }
 
     // A ROTATE by a known angle about the tool axis of its plane: the shift vector s of the two plane axes in the
-    // rotated frame is R·s in the frame that remains (D319). An axis of the plane whose SETPOS stood before the ROTATE
-    // keeps its own shift and takes the turned component on top; an unknown component leaves both unknown.
+    // rotated frame is R·s in the frame that remains (D319). The axis of the plane that receives a turned component
+    // without a SETPOS under the ROTATE now holds a shift declared in the same frame as the turned one, so a later
+    // RESET turns it again; when it already held a shift of its own, not 0 and from another frame, the sum has no
+    // frame and its setpos shift is unknown. An unknown component leaves both unknown.
     private static void TurnInPlane(ChannelState state, Workplane workplane, decimal angle, List<string> declaredAfter,
         List<string> unknown)
     {
@@ -734,6 +736,11 @@ internal static class FrameRules
         string second = plane.SecondAxis;
         bool firstTurns = declaredAfter.Contains(first);
         bool secondTurns = declaredAfter.Contains(second);
+        if (!firstTurns && !secondTurns)
+        {
+            return;
+        }
+
         if ((firstTurns && state.Unknown.Contains(SetposKey(first)))
             || (secondTurns && state.Unknown.Contains(SetposKey(second))))
         {
@@ -746,18 +753,40 @@ internal static class FrameRules
         double radians = (double)angle * Math.PI / 180d;
         double turnedFirst = (sFirst * Math.Cos(radians)) - (sSecond * Math.Sin(radians));
         double turnedSecond = (sFirst * Math.Sin(radians)) + (sSecond * Math.Cos(radians));
-        SetTurned(frame, first, firstTurns, turnedFirst);
-        SetTurned(frame, second, secondTurns, turnedSecond);
+        IReadOnlyList<TransformEntry> declaredIn = frame.SetposChain[firstTurns ? first : second];
+        SetTurned(frame, first, firstTurns, turnedFirst, declaredIn, unknown);
+        SetTurned(frame, second, secondTurns, turnedSecond, declaredIn, unknown);
     }
 
-    private static void SetTurned(FrameState frame, string axis, bool declaredAfter, double turned)
+    // The turned component of one plane axis: it replaces the shift of an axis declared under the ROTATE; an axis that
+    // receives it takes the frame of the turned shift, or becomes unknown when it held a shift of its own (D319).
+    private static void SetTurned(FrameState frame, string axis, bool declaredAfter, double turned,
+        IReadOnlyList<TransformEntry> declaredIn, List<string> unknown)
     {
         if (!frame.SetposShift.TryGetValue(axis, out decimal own))
         {
             return;
         }
 
-        frame.SetposShift[axis] = Vec3.RoundToDecimal(turned) + (declaredAfter ? 0m : own);
+        decimal component = Vec3.RoundToDecimal(turned);
+        if (declaredAfter)
+        {
+            frame.SetposShift[axis] = component;
+            return;
+        }
+
+        if (component == 0m)
+        {
+            return;
+        }
+
+        if (own != 0m && !unknown.Contains(axis))
+        {
+            unknown.Add(axis);
+        }
+
+        frame.SetposShift[axis] = own + component;
+        frame.SetposChain[axis] = declaredIn;
     }
 
     // The setpos shifts that a removed tilt or expression angle leaves unknown: those declared after it on the axes

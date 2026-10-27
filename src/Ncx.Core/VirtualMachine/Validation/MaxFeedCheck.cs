@@ -1,4 +1,5 @@
 using System.Globalization;
+using Ncx.Core.Geometry;
 using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.State;
@@ -175,16 +176,29 @@ internal sealed class MaxFeedCheck
             && speed.Direction != SpindleDirection.Off;
     }
 
-    // The axes the block moves: every axis whose stored position it changed, and every axis it names.
+    // The axes the block moves: every axis whose stored position it changed, and for an ARC the two axes of its plane,
+    // which move along the circle even where the arc ends on the coordinate it started from (virtual machine 3.2, 8).
+    // An axis the block names and leaves where it stood does not move (D192).
     private static List<string> MovedAxes(BlockContext context, IReadOnlyDictionary<string, AxisPosition> before)
     {
         var moved = new List<string>();
         foreach (KeyValuePair<string, AxisPosition> position in context.State.Motion.Position)
         {
-            bool changed = !before.TryGetValue(position.Key, out AxisPosition was) || was != position.Value;
-            if (changed || context.AxisOf.ContainsValue(position.Key))
+            if (!before.TryGetValue(position.Key, out AxisPosition was) || was != position.Value)
             {
                 moved.Add(position.Key);
+            }
+        }
+
+        if (context.Block.Verb?.Key == "ARC")
+        {
+            Plane plane = ArcRules.PlaneOf(context.State.Frame);
+            foreach (string name in new[] { plane.FirstAxis, plane.SecondAxis })
+            {
+                if (context.Resources.KeyOfAxis(name, context.State) is string axis && !moved.Contains(axis))
+                {
+                    moved.Add(axis);
+                }
             }
         }
 

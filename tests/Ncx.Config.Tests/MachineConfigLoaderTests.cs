@@ -630,6 +630,34 @@ public sealed class MachineConfigLoaderTests
         Assert.False(machine.FindAxis("C1")?.FramesInDiameter);
     }
 
+    // Machine-config 4, D146, D388: parallel on a linear axis and frames_in_diameter on an axis programmed in radii
+    // say nothing true of their axis, each a CFG005.
+    [Fact]
+    public void D146_ParallelOnALinearAxisAndFramesInDiameterOnARadiusAxis_AreErrors()
+    {
+        Diagnostics diagnostics = Report("""
+            [machine]
+            name = "Test mill"
+            controller = "siemens"
+
+            [[axis]]
+            id = "X1"
+            ncx = "X"
+            kind = "linear"
+            parallel = "Z"
+
+            [[axis]]
+            id = "Z1"
+            ncx = "Z"
+            kind = "linear"
+            programming = "radius"
+            frames_in_diameter = true
+            """);
+
+        Assert.Equal(2, diagnostics.Items.Count);
+        Assert.All(diagnostics.Items, error => Assert.Equal(DiagnosticCodes.ValueNotAllowed, error.Code));
+    }
+
     // Machine-config 4: limits are a minimum and a maximum.
     [Fact]
     public void Axis_LimitsWithOneNumber_ReportsWrongType()
