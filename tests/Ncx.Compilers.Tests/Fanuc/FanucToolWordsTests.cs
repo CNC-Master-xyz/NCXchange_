@@ -27,7 +27,7 @@ public sealed class FanucToolWordsTests
         Assert.Equal("T1 M6\nG0 G17 X0. Y0.\nG43 Z2. H1\nG49 Z50.\n", body);
     }
 
-    // Length_offset_with_tool_axis (the TODO(question) of OutputFormat): an OFFSET:LEN of the TOOL block, as the
+    // Length_offset_with_tool_axis (D276, machine-config 2): an OFFSET:LEN of the TOOL block, as the
     // Heidenhain reading writes it, stands in the first block that moves the tool axis.
     [Fact]
     public void LengthOffset_OfTheToolBlock_WaitsForTheFirstMoveOfTheToolAxis()
@@ -107,7 +107,7 @@ public sealed class FanucToolWordsTests
     }
 
     // Controllers fanuc.md 4: G28 and G53 end at machine positions that the offset does not move, so the offset waits
-    // for the first move of the tool axis in the workpiece frame (the TODO(question) of OutputFormat).
+    // for the first move of the tool axis in the workpiece frame (D276, machine-config 2).
     [Fact]
     public void LengthOffset_WaitingOverHomeAndG53_StandsWithTheNextMoveOfTheWorkpiece()
     {
@@ -253,7 +253,7 @@ public sealed class FanucToolWordsTests
     }
 
     // Controller-mapping 4 and 1: coolant from [coolant], STOP as M0 and M1, MFUNC as the M code with a WARNING
-    // (language 4.6).
+    // (language 4.6); one M code per block where m_codes_per_block is left out, and M0 always alone (D339).
     [Fact]
     public void Functions_CoolantStopAndMFunc_AreTheirMCodes()
     {
@@ -261,7 +261,7 @@ public sealed class FanucToolWordsTests
             FanucCompile.Program("COOLANT=ON", "STOP=OPTIONAL", "MFUNC=136", "COOLANT=OFF STOP=PROGRAM"),
             FanucCompile.Mill());
 
-        Assert.Contains("\nM8\nM1\nM136\nM9 M0\n", FanucCompile.TextOf(result), StringComparison.Ordinal);
+        Assert.Contains("\nM8\nM1\nM136\nM9\nM0\n", FanucCompile.TextOf(result), StringComparison.Ordinal);
         Assert.Contains(FanucCompile.CompilerDiagnostics(result),
             diagnostic => diagnostic.Code == DiagnosticCodes.FanucMFuncWritten);
     }

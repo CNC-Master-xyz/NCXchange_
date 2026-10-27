@@ -112,9 +112,10 @@ internal static class FanucProgramFrame
     }
 
     // O with the program number and the name in parentheses, the name shown on the screen (controllers fanuc.md 1;
-    // controller-mapping 1, PROGRAM=BEGIN); then the start block of the machine.
-    // TODO(question): a program without NUMBER has no O number, and no document says what the Fanuc compiler writes
-    // for it; it is an ERROR until that is answered.
+    // controller-mapping 1, PROGRAM=BEGIN); then the units in a block of their own (D283) and the start block of the
+    // machine. D257: without NUMBER a NAME of digits is the O number, otherwise the lowest number from 1 that the file
+    // does not use, 8000 to 9999 left out, with the WARNING CMP310 (FanucProgramNumbers); the name stays in
+    // parentheses.
     private static void WriteProgramBegin(FanucBlock write)
     {
         foreach (string key in new[] { "PROGRAM", "NAME", "NUMBER", "CHANNEL" })
@@ -122,41 +123,33 @@ internal static class FanucProgramFrame
             write.Written(key);
         }
 
-        int? number = write.Step.Section?.Number;
-        if (number is not int programNumber)
+        if (write.Step.Section is not Section program || write.ProgramNumbers.NumberOf(program) is not int number)
         {
-            write.Error(DiagnosticCodes.FanucProgramWithoutNumber,
-                "The program has no NUMBER, and a Fanuc program is named by its O number (controllers fanuc.md 1; "
-                + "language 4.1, NUMBER).");
             return;
         }
 
-        string? name = write.Step.Section?.Name;
-        string o = ProgramNumber(write, programNumber.ToString(CultureInfo.InvariantCulture));
-        write.Write(name is null ? o : o + " (" + write.CommentText(WithSquareBrackets(write, name)) + ")");
-        WriteHeader(write);
-    }
-
-    // The start block (controllers fanuc.md 1: N10 G0 G40, N20 G80 G90 G94 G98): the lines of [format] header, whose G
-    // codes the control has active afterwards; without one G90, which fanuc 10 rule 1 writes once in the header, where
-    // the G-code system has it. The units of units_default are active on the control at the start (controller-mapping
-    // 1, UNITS: G20/G21, else TOML).
-    // TODO(question): D34 has the writers of NCX emit a complete header, and no document says whether the Fanuc
-    // compiler writes G20/G21 when UNITS equals the units_default of the machine; the control starts in units_default,
-    // so G21 is written only where the program's units differ, until that is answered.
-    private static void WriteHeader(FanucBlock write)
-    {
-        if (write.Machine.Machine.UnitsDefault is string units)
+        string? name = program.Name;
+        string o = ProgramNumber(write, number.ToString(CultureInfo.InvariantCulture));
+        if (write.ProgramNumbers.IsGenerated(program))
         {
-            string? code = FanucCodes.UnitsCode(units == "INCH"
-                ? Ncx.Core.VirtualMachine.State.Units.Inch
-                : Ncx.Core.VirtualMachine.State.Units.Mm, write.System);
-            if (code is not null)
-            {
-                write.Target.Set(FanucCodes.Units, code);
-            }
+            write.Warning(DiagnosticCodes.FanucProgramNumberGenerated,
+                $"The program {name ?? "without NAME"} has no NUMBER and no NAME of digits, so it is written as {o}, "
+                + "the lowest number the output file does not use, 8000 to 9999 left to the builder (D257; "
+                + "controllers fanuc.md 1; language 4.1, NUMBER).");
         }
 
+        write.Write(name is null ? o : o + " (" + write.CommentText(WithSquareBrackets(write, name)) + ")");
+        FanucUnits.WriteStart(write);
+        WriteHeader(write);
+        FanucFlow.ClearCounters(write);
+    }
+
+    // The start block (controllers fanuc.md 1: N10 G0 G40, N20 G80 G90 G94 G98): the lines of [format] header, a
+    // template like program_end whose G codes the control has active afterwards (D276); without one G90, which fanuc
+    // 10 rule 1 writes once in the header, where the G-code system has it. The units stand before it in a block of
+    // their own (D283, FanucUnits).
+    private static void WriteHeader(FanucBlock write)
+    {
         string? header = write.Machine.Format?.Header;
         if (header is null)
         {
@@ -193,7 +186,7 @@ internal static class FanucProgramFrame
     private static void WriteProgramEnd(FanucBlock write)
     {
         // A length offset that still waits for the tool axis stands before the end, never dropped (language 2 rule 8;
-        // the TODO(question) of OutputFormat).
+        // D276: the waiting G43 H keeps its coded places).
         write.Written("PROGRAM");
         FanucToolWords.WriteWaitingLength(write);
         string prefix = write.Labels.EndLabel is int end ? "N" + end.ToString(CultureInfo.InvariantCulture) + " " : "";
@@ -232,6 +225,8 @@ internal static class FanucProgramFrame
             return;
         }
 
+        // D213, D280: a RETURN inside a repeat ends it, and the counter is 0 again for the next call.
+        FanucFlow.ClearLeftRepeats(write, "END", null);
         string? end = write.Render(write.Machine.Format?.SubEnd, "[format] sub_end (machine-config 2)",
             new TemplateValues());
         if (end is not null)

@@ -19,6 +19,14 @@ public sealed class FanucCompiler : CompilerBase
     // The labels of each program and subprogram of the file being compiled, as block numbers.
     private readonly Dictionary<Section, FanucLabels> _labels = [];
 
+    // The block numbers the lines of the O program being written carry themselves, the labels and N of RAW lines
+    // among them: no N may stand twice in one O program (D277).
+    private readonly HashSet<int> _ownNumbers = [];
+
+    // The O numbers of the programs of the file (D257) and its REPEAT ranges (D280), found once per file.
+    private FanucProgramNumbers? _programNumbers;
+    private FanucRepeats? _repeats;
+
     // The skipped blocks whose changes to the target state wait to be made unknown: the target state of the program or
     // walk of the block, what it held before the block, and the state of NCX before the block.
     private readonly List<(TargetState Target, Dictionary<string, string> Before, ChannelSnapshot NcxBefore)> _skipped =
@@ -64,12 +72,10 @@ public sealed class FanucCompiler : CompilerBase
 
     /// <summary>
     /// The number a label line carries itself, N20, and the end that a conditional JUMP=END names, N6 M30: block
-    /// numbers matter as jump targets (controllers fanuc.md 1; controller-mapping 6, LABEL).
+    /// numbers matter as jump targets (controllers fanuc.md 1; controller-mapping 6, LABEL). D277: block_numbers skips
+    /// every label number, and no N may stand twice in one O program, which WriteBlock checks (CMP318; fanuc 10 rule
+    /// 6).
     /// </summary>
-    // TODO(question): the documents do not say how the numbers of the labels share the N numbers of a program with
-    // block_numbers (controllers fanuc.md 1, 10 rule 6; machine-config 2; controller-mapping 6, LABEL), and a number
-    // that stands twice makes the target of GOTO ambiguous; block_numbers gives no line the number of a label of the
-    // file and goes on past it, until that is answered.
     protected override int? OwnBlockNumber(string line)
     {
         int end = 1;
@@ -97,8 +103,17 @@ public sealed class FanucCompiler : CompilerBase
         {
             _labels.Clear();
             _skipped.Clear();
+            _programNumbers = null;
+            _repeats = null;
         }
 
+        if (block.Has("PROGRAM", null, "BEGIN") || block.Has("SUB", null, "BEGIN"))
+        {
+            _ownNumbers.Clear();
+        }
+
+        _programNumbers ??= FanucProgramNumbers.Of(LookAhead.Steps);
+        _repeats ??= FanucRepeats.Of(LookAhead.Steps, Machine, Templates);
         var write = new FanucBlock
         {
             Step = Step,
@@ -109,9 +124,11 @@ public sealed class FanucCompiler : CompilerBase
             Templates = Templates,
             Diagnostics = Diagnostics,
             Labels = LabelsOf(Step.Section),
-            Writer = Line,
+            Writer = text => WriteLine(text, block),
             CommentText = CommentText,
             PointRegisters = PointRegistersOf(after),
+            ProgramNumbers = _programNumbers,
+            Repeats = _repeats,
             Stock = StockOf(Step),
         };
         MakeSkippedUnknown(write);
@@ -121,6 +138,21 @@ public sealed class FanucCompiler : CompilerBase
         }
 
         write.ReportUnwritten();
+    }
+
+    // A line of the block; one that carries its own N, a label or a RAW line, carries a number no other line of its O
+    // program carries (D277; controllers fanuc.md 10 rule 6).
+    private void WriteLine(string text, Block block)
+    {
+        string numbered = text.StartsWith('/') ? text.TrimStart('/').TrimStart("0123456789".ToCharArray()) : text;
+        if (!TakesBlockNumber(numbered) && OwnBlockNumber(numbered) is int own && !_ownNumbers.Add(own))
+        {
+            Diagnostics.Error(block, DiagnosticCodes.FanucBlockNumberTwice,
+                $"N{own.ToString(CultureInfo.InvariantCulture)} stands twice in one O program, so a GOTO to it names "
+                + "no one block (D277; controllers fanuc.md 10 rule 6).");
+        }
+
+        Line(text);
     }
 
     // RAW of this controller or of the machine's builder is written as it is (language 4.1, D5); the definition of a
@@ -154,6 +186,11 @@ public sealed class FanucCompiler : CompilerBase
     private void WriteWords(FanucBlock write)
     {
         write.Written("SKIP");
+        if (FanucFrames.CenterUnderCylinder(write))
+        {
+            return;
+        }
+
         if (TakesWaitingLengthBefore(write))
         {
             FanucToolWords.WriteWaitingLength(write);
@@ -170,6 +207,7 @@ public sealed class FanucCompiler : CompilerBase
         WriteTools(write);
         FanucToolWords.WriteSpindleLines(write);
         FanucFrames.WriteTransformations(write);
+        FanucUnits.Check(write);
         FanucMotion.WriteModalWords(write);
         FanucCycles.Write(write);
         FanucMotion.Write(write);
@@ -188,8 +226,8 @@ public sealed class FanucCompiler : CompilerBase
     // A path may run the lines after the block without those before it, or the lines of the block not at all: a LABEL
     // that a jump reaches, a JUMP, a CALL of a subprogram written from an unknown target state (D99), a skipped block
     // that moves the tool axis or sets the length offset itself (controller-mapping 1, SKIP); a length offset that
-    // waits for the tool axis stands before it (language 4.4, OFFSET:LEN is modal; the TODO(question) of
-    // OutputFormat).
+    // waits for the tool axis stands before it (language 4.4, OFFSET:LEN is modal; D276: the waiting G43 H keeps its
+    // coded places).
     private static bool TakesWaitingLengthBefore(FanucBlock write)
     {
         Block block = write.Block;

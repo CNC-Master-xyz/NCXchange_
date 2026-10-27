@@ -90,13 +90,45 @@ internal static partial class FanucAxes
         };
     }
 
+    /// <summary>
+    /// The letter of the rotary axis of the workpiece holder, which G7.1 names (D146): the axis its [[resource]] names
+    /// or a rotary axis it owns, a table's among them; C where the machine names none.
+    /// </summary>
+    public static string CylinderLetter(FanucBlock write)
+    {
+        return CylinderAxis(write)?.Letter ?? "C";
+    }
+
     // An axis name of a program resolves through [[axis]]; A, B and C name the rotary axis of the workpiece holder
-    // (virtual machine 3.8 rule 3).
+    // (virtual machine 3.8 rule 3). D146: under CYLINDER the C word is the length on the circumference of the rotary
+    // axis of the workpiece holder, and the compiler writes that axis's letter, never the NCX letter.
     private static AxisDef? Resolve(FanucBlock write, string axis)
     {
+        if (axis == "C" && write.After.Frame.Cylinder is not null && CylinderAxis(write) is AxisDef rotary)
+        {
+            return rotary;
+        }
+
         return write.After.Frame.WorkpieceHolder is string holder
             ? write.Machine.ResolveAxis(axis, holder)
             : write.Machine.ResolveAxis(axis);
+    }
+
+    // The rotary axis of the workpiece holder after the block (machine-config 4, D146).
+    private static AxisDef? CylinderAxis(FanucBlock write)
+    {
+        if (write.After.Frame.WorkpieceHolder is not string holder)
+        {
+            return null;
+        }
+
+        if (write.Machine.FindResource(holder)?.Axis is string id && write.Machine.FindAxis(id) is AxisDef named
+            && named.Kind == AxisKind.Rotary)
+        {
+            return named;
+        }
+
+        return write.Machine.Axes.FirstOrDefault(axis => axis.Kind == AxisKind.Rotary && axis.Owner == holder);
     }
 
     private static int RankOf(string axis)

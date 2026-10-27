@@ -275,6 +275,8 @@ CW = "M53"
 CCW = "M54"
 OFF = "M55"
 ORIENT = "M419"
+# no VC, CSS_OFF or RPM_MAX: the Fanuc compiler falls back to the family codes, G96 S{value}, G97 and G50 S{value} in
+# G-code system A or G92 S{value} in B and C and on a mill; a key of the table overrides the fallback (D258)
 
 [spindle.TOOL]
 CW = "M88"

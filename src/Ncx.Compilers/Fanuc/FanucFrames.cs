@@ -346,7 +346,29 @@ internal static class FanucFrames
         }
     }
 
-    // CYLINDER=r switches on with its reference radius, {r}, and OFF switches off (language 4.2; D96).
+    /// <summary>
+    /// D143: under G7.1 an arc takes R only, never I, J or K, so an ARC with CENTER under CYLINDER has no Fanuc output;
+    /// the block is the ERROR CMP317 and writes nothing else (controller-mapping 1, CYLINDER; Fanuc 0i-TC B-64114GE/01
+    /// p. 78).
+    /// </summary>
+    /// <returns>True where the block is that ERROR.</returns>
+    public static bool CenterUnderCylinder(FanucBlock write)
+    {
+        bool center = write.Block.Words.Any(word => word.Key == "CENTER");
+        if (write.Block.Verb?.Key != "ARC" || !center || write.After.Frame.Cylinder is null)
+        {
+            return false;
+        }
+
+        write.WrittenAll();
+        write.Error(DiagnosticCodes.FanucCenterUnderCylinder,
+            "ARC with CENTER under CYLINDER has no Fanuc output: under G7.1 an arc takes R only, never I, J or K; "
+            + "write the arc with R (D143; controller-mapping 1, CYLINDER).");
+        return true;
+    }
+
+    // CYLINDER=r switches on with its reference radius, {r}, and OFF switches off (language 4.2; D96). D146: without a
+    // template G7.1 names the rotary axis of the workpiece holder by its letter, never the NCX letter C.
     private static void WriteCylinder(FanucBlock write, TransformTable? transform)
     {
         if (write.Block.Find("CYLINDER") is not Word cylinder)
@@ -358,7 +380,10 @@ internal static class FanucFrames
         write.Written(cylinder);
         var values = new TemplateValues();
         bool off = cylinder.Value.ToCanonical() == "OFF";
-        string? template = off ? transform?.CylinderOff ?? "G7.1 C0" : transform?.CylinderOn ?? "G7.1 C{r}";
+        string letter = FanucAxes.CylinderLetter(write);
+        string? template = off
+            ? transform?.CylinderOff ?? "G7.1 " + letter + "0"
+            : transform?.CylinderOn ?? "G7.1 " + letter + "{r}";
         if (!off && FanucFunctions.NumberOf(cylinder.Value) is decimal radius)
         {
             write.SetReal(values, "r", radius, template);

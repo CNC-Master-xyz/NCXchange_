@@ -322,18 +322,29 @@ internal static partial class FanucCompile
 
     /// <summary>
     /// The lines of the compiled program between its start block and its end on the mill of the sources: every line
-    /// after G80 G90 G94 G98 up to M30.
+    /// after G80 G90 G94 G98 up to M30. The units stand in a block of their own before the start block (D283).
     /// </summary>
     /// <param name="ncxBlocks">The blocks, one per line.</param>
     /// <param name="extra">Further tables of the machine file, as for <see cref="Mill"/>.</param>
     public static string Body(string ncxBlocks, string extra = "")
     {
         string text = TextOf(Run(Program(ncxBlocks.Split('\n')), Mill(extra: extra)));
-        const string Start = "%\nO0001 (T)\nG0 G40\nG80 G90 G94 G98\n";
+        const string Start = "%\nO0001 (T)\nG21\nG0 G40\nG80 G90 G94 G98\n";
         const string End = "M30\n%\n";
         Assert.StartsWith(Start, text, StringComparison.Ordinal);
         Assert.EndsWith(End, text, StringComparison.Ordinal);
         return text.Substring(Start.Length, text.Length - Start.Length - End.Length);
+    }
+
+    /// <summary>
+    /// The mill of <see cref="Mill"/> with [variables] repeat_counters, #149 for the outermost REPEAT and #148 for one
+    /// inside it (D280).
+    /// </summary>
+    /// <param name="counters">The value of the key.</param>
+    public static string MillWithCounters(string counters = "[\"#149\", \"#148\"]")
+    {
+        return Mill().Replace("[variables]\n", "[variables]\nrepeat_counters = " + counters + "\n",
+            StringComparison.Ordinal);
     }
 
     /// <summary>

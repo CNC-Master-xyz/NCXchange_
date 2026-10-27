@@ -197,7 +197,7 @@ public sealed class FanucFlowTests
     }
 
     // Controllers fanuc.md 1 (N numbers matter as jump targets), machine-config 2 (block_numbers): the number of a
-    // label is given to no other line, so GOTO 20 names one block (the TODO(question) of FanucCompiler).
+    // label is given to no other line, so GOTO 20 names one block (D277).
     [Fact]
     public void Label_UnderBlockNumbers_KeepsItsNumberForItself()
     {
@@ -208,8 +208,8 @@ public sealed class FanucFlowTests
             "VAR:V1=0", "LABEL=20", "RAPID X=1 Y=1", "VAR:V1={$V1 + 1}", "JUMP=20 IF={$V1 < 3}"), machine));
 
         Assert.Equal(
-            "%\nO0001 (T)\nN10 G0 G40\nN30 G80 G90 G94 G98\nN40 #1 = 0\nN20\nN50 G80\nN60 G0 G17 G90 X1. Y1.\n"
-            + "N70 #1 = #1 + 1\nN80 IF [#1 LT 3] GOTO 20\nN90 M30\n%\n", text);
+            "%\nO0001 (T)\nN10 G21\nN30 G0 G40\nN40 G80 G90 G94 G98\nN50 #1 = 0\nN20\nN60 G80\n"
+            + "N70 G0 G17 G90 X1. Y1.\nN80 #1 = #1 + 1\nN90 IF [#1 LT 3] GOTO 20\nN100 M30\n%\n", text);
     }
 
     // Virtual machine 1 (the STATIC walk does not follow JUMP), controllers fanuc.md 10 rule 1: a jump reaches the
@@ -444,17 +444,6 @@ public sealed class FanucFlowTests
         string body = FanucCompile.Body("LABEL=START\nRAPID X=1 Y=1\nSKIP JUMP=START");
 
         Assert.Equal("G17 X1. Y1.\n/M99\n", body);
-    }
-
-    // Controller-mapping 6, REPEAT + TIMES: the counter variable of the compiler is named nowhere (the TODO(question)
-    // of FanucFlow).
-    [Fact]
-    public void Repeat_IsTheErrorCmp304()
-    {
-        Diagnostic error = FanucCompile.ErrorOf(FanucCompile.Run(
-            FanucCompile.Program("LABEL=1", "RAPID X=1 Y=1", "REPEAT=1 TIMES=3"), FanucCompile.Mill()));
-
-        Assert.Equal(DiagnosticCodes.FanucRepeatNotWritten, error.Code);
     }
 
     // Fanuc 7: FRAC has no form in custom macro B.

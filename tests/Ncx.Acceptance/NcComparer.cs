@@ -11,9 +11,10 @@ namespace Ncx.Acceptance;
 /// comments and blank lines, trimming whitespace, and formatting every number of both sides with the target machine's
 /// [format] decimals (so 70. and 70.0 and 70 are equal, and -.534 equals -0.534), the remaining lines are equal in
 /// order; the header block of the source may carry modal words in another order than the compiled one, so a header line
-/// is compared as a set of words; a TOOL CALL or T M6 line is compared as a set of words; the program_end line is not a
-/// difference where the source ends in another form or in none (wave-1 question #12, answered by D49). Everything else,
-/// including the order of words inside a motion block, must match. A difference the documents cannot settle is an
+/// is compared as a set of words; a TOOL CALL or T M6 line is compared as a set of words; a units block of the compiled
+/// header that the source lacks is not a difference (D283); the program_end line is not a difference where the source
+/// ends in another form or in none (wave-1 question #12, answered by D49). Everything else, including the order of
+/// words inside a motion block, must match. A difference the documents cannot settle is an
 /// <see cref="NcException"/> grounded in its question and used exactly once; any other difference is shown as a unified
 /// diff.
 /// </summary>
@@ -29,6 +30,9 @@ internal sealed partial class NcComparer
 
     // The codes that end a program in the sources: M30 and M2, and M17 on Siemens (controller-mapping 1, PROGRAM=END).
     private static readonly string[] s_programEnds = ["M30", "M2", "M17"];
+
+    // The units codes of Fanuc, G20 and G21, G70 and G71 in G-code system C (controllers fanuc.md 3; D283).
+    private static readonly string[] s_unitsCodes = ["G20", "G21", "G70", "G71"];
 
     private readonly MachineConfig _machine;
     private readonly bool _parenthesesAreComments;
@@ -131,6 +135,17 @@ internal sealed partial class NcComparer
                 sourceIndex++;
                 compiledIndex++;
                 agreed++;
+                continue;
+            }
+
+            // D283: the Fanuc compiler writes the units in a block of their own at the start of every program, which
+            // a source may lack, so a units block of the compiled header is not a difference (13-phase-3 comparison
+            // rules).
+            if (compiledIndex < actual.Count && actual[compiledIndex].IsHeader
+                && s_unitsCodes.Contains(actual[compiledIndex].Text))
+            {
+                compiledIndex++;
+                agreed = 0;
                 continue;
             }
 
