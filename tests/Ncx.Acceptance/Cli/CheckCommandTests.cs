@@ -217,7 +217,7 @@ public sealed class CheckCommandTests : IDisposable
         int exitCode = _cli.Run("check", file, "--skip-blocks", skipBlocks);
 
         Assert.Equal(2, exitCode);
-        Assert.StartsWith("ncx(1): ERROR CLI001: ", _cli.Error, StringComparison.Ordinal);
+        Assert.StartsWith("ncx: ERROR CLI001: ", _cli.Error, StringComparison.Ordinal);
     }
 
     // D133: a bare SKIP is switch 0 of --skip-blocks, so 0 skips the bare SKIP blocks and a list without it leaves
@@ -254,7 +254,7 @@ public sealed class CheckCommandTests : IDisposable
         int exitCode = _cli.Run("check");
 
         Assert.Equal(2, exitCode);
-        Assert.StartsWith("ncx(1): ERROR CLI001: ", _cli.Error, StringComparison.Ordinal);
+        Assert.StartsWith("ncx: ERROR CLI001: ", _cli.Error, StringComparison.Ordinal);
     }
 
     // The help of check names the shared options (architecture 10, F28).

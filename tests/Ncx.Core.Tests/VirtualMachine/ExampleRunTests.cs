@@ -80,7 +80,7 @@ public sealed class ExampleRunTests
         VmHarness vm = Run("MILLTURN_TRANSFER.ncx");
 
         List<string> messages = vm.Messages(DiagnosticCodes.NotCheckedNoMachineFile);
-        var spindleOffLines = new List<int>();
+        var spindleOffLines = new List<int?>();
         foreach (Diagnostic diagnostic in vm.Diagnostics.Items)
         {
             if (diagnostic.Code == DiagnosticCodes.SpindleOffBeforeLine)

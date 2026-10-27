@@ -1,0 +1,3 @@
+# A built-in machine of the BuiltInFiles tests (D371).
+[machine]
+name = "Sample"

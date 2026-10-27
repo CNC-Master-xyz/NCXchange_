@@ -24,7 +24,7 @@ Fanuc and ISO programs into canonical NCX, per section 9 of `controllers/fanuc.m
 
 ## Done when
 
-- `ncx convert 2.5D_FRAESEN.fanuc.nc --machine fanuc-mill-30i` equals `examples/2.5D_FRAESEN.ncx` (M4).
+- `ncx convert 2.5D_FRAESEN.fanuc.nc --machine fanuc-mill-30i` reads into the blocks of `examples/2.5D_FRAESEN.ncx`, except the Fanuc reader differences its notes list, each tied to its rule (M4; D217, amended 2026-10-27).
 - `BOHREN.fanuc.nc` reads into the expected `CYCLE=` words (expected file added to the acceptance project).
 - Every Fanuc/ISO file of the corpus converts without a crash.
 

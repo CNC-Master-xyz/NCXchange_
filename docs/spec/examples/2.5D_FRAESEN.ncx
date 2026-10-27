@@ -1,18 +1,18 @@
 ; NCX example: contour and circular pocket. The Heidenhain source "2.5D FRAESEN.h" (H) and the Fanuc source "2.5D FRAESEN" (F)
-; both read into this file. Source blocks are shown as line comments for reading along; they are not part of NCX.
+; both read into this file, except the reader differences the notes list (D217). Source blocks are shown as line comments for reading along; they are not part of NCX.
 FILE=BEGIN NCX=1
 PROGRAM=BEGIN NAME="2.5D FRAESEN" NUMBER=1              ; H0 BEGIN PGM 2.5D FRAESEN MM  |  F: O0001 (2.5D FRAESEN)
 FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF   ; header state; F: N10 G0 G40, N20 G80 G90 G94 G98, N70 G17
 ORIGIN=1                                                ; H1 CYCL DEF 247 Q339=1  |  F: N30 G54
-; H2/H3 BLK FORM (stock definition) has no NCX word yet
+; H2/H3 BLK FORM (stock definition): RAW:HEIDENHAIN in the Heidenhain reading, left out here, see note 8
 
-SECTION="SIDE MILL D10 L35 SD10"                        ; H4 * - ...  |  F: (SIDE MILL D10 L35 SD10)
-TOOL=1 OFFSET:LEN=1 OFFSET:RAD=1 RPM=1592               ; H5 TOOL CALL 1 Z S1592  |  F: N40 T1 M6, N60 S1592, N80 G43 H1, N120 D1
+SECTION="SIDE MILL D10 L35 SD10"                        ; H4 * - ...  (F: the comment line (SIDE MILL D10 L35 SD10) is trivia, note 5)
+TOOL=1 OFFSET:LEN=1 OFFSET:RAD=1 RPM=1592               ; H5 TOOL CALL 1 Z S1592  (F: N40 T1 M6; the offsets and S stand elsewhere, note 2)
 PRELOAD=0                                               ; H6 TOOL DEF 0  |  F: N50 T0
 SPINDLE=CW                                              ; H7 M3  |  F: N60 M3
 
 SECTION="UMFAHREN"
-RAPID X=50.4 Y=-7.025 COMP=OFF                          ; H9 L X50,4 Y-7,025 R0 FMAX  |  F: N70 G0 G17 X50.4 Y-7.025
+RAPID X=50.4 Y=-7.025 COMP=OFF                          ; H9 L X50,4 Y-7,025 R0 FMAX  (F: N70 G0 G17 X50.4 Y-7.025 has no G40 here, note 6)
 RAPID Z=2                                               ; H10 L Z2 FMAX  |  F: N80 G43 Z2. H1
 COOLANT=ON                                              ; H11 M8  |  F: N90 M8
 RAPID Z=-8                                              ; H12 L Z-8 FMAX  |  F: N100 Z-8.
@@ -54,9 +54,18 @@ FILE=END                                                ; F: closing %
 ; Notes
 ; 1. FEED_MODE=PER_REV is never switched back in either source; PROGRAM=END resets the state.
 ; 2. The Heidenhain reader emits OFFSET:LEN and OFFSET:RAD with the tool call (offsets are implicit there); the Fanuc reader emits them where G43 H and D appear.
-;    ncx format does not move them; the two readers therefore produce the same words at slightly different positions. Accepted (D7).
+;    ncx format does not move them; the two readers therefore produce the same words at slightly different positions. Accepted (D7). The same holds for
+;    the speed: TOOL CALL 1 Z S1592 puts RPM on the TOOL block (heidenhain 7 rule 2), while the Fanuc reader writes RPM with the M3 of N60 S1592 M3,
+;    the block S belongs to (fanuc 9 rule 2): SPINDLE=CW RPM=1592.
 ; 3. Fanuc M2 and Heidenhain M30 both map to PROGRAM=END; the compiler writes M30 or M2 from the machine configuration (program_end). The Heidenhain
 ;    sample has no M30 before END PGM, so its reader emits PROGRAM=END at END PGM with a warning; the Fanuc closing % is FILE=END.
 ; 4. G28 is a reference point return, M91 an explicit move in machine coordinates. The Fanuc reader emits HOME Z and HOME X Y, the Heidenhain reader
 ;    the FRAME=MACHINE moves shown here; both end at the same place when the reference point is the machine zero. Compiling HOME for Heidenhain
 ;    writes M91 moves to the reference coordinates of the machine configuration.
+; 5. A Klartext * - line is a SECTION (P3-01); a Fanuc comment-only line such as (SIDE MILL D10 L35 SD10) is trivia, not a SECTION (controller-mapping 1,
+;    D92). The Fanuc reading therefore has none of the three SECTION blocks.
+; 6. The R0 of H9 is COMP=OFF in the RAPID; the Fanuc source cancels the compensation with the G40 of its header (N10 G0 G40), which the header state
+;    above carries, so the Fanuc reading writes that RAPID without COMP=OFF.
+; 7. NUMBER=1 comes from O0001 only; Klartext has no program number (language 4.1; controller-mapping 1), so the Heidenhain reading has no NUMBER.
+; 8. BLK FORM is RAW:HEIDENHAIN with a WARNING in the Heidenhain reading (heidenhain 1, 7 rule 9); the example leaves it out, so that it still compiles
+;    to Fanuc (language 4.1, RAW row).

@@ -5,8 +5,9 @@ namespace Ncx.Cli;
 public static partial class DiagnosticCodes
 {
     /// <summary>
-    /// CLI200: --machine, or the machine key of ncx.toml, names no file at that path and no machine file of that name
-    /// in the machine folders; decided before the run starts, exit code 2 (D97; architecture 10, machine-config 10).
+    /// CLI200: --machine, or the machine key of ncx.toml, names no file at that path, no machine file of that name in
+    /// the machine folders and no built-in machine file of that name; decided before the run starts, exit code 2 (D97,
+    /// D371; architecture 10, machine-config 10).
     /// </summary>
     public const string MachineNotFound = "CLI200";
 
@@ -17,8 +18,9 @@ public static partial class DiagnosticCodes
     public const string ProjectFileUnreadable = "CLI201";
 
     /// <summary>
-    /// CLI202: the cycle catalog that [cycles] catalog of the machine names is in none of the cycle folders, or cannot
-    /// be read as UTF-8 text; decided before the run starts, exit code 2 (D97; machine-config 6, 10).
+    /// CLI202: the cycle catalog that [cycles] catalog of the machine names is in none of the cycle folders and no
+    /// built-in catalog, or cannot be read as UTF-8 text; decided before the run starts, exit code 2 (D97, D207, D371;
+    /// machine-config 6, 10).
     /// </summary>
     public const string CycleCatalogUnreadable = "CLI202";
 }

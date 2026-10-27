@@ -248,7 +248,7 @@ public sealed class FormatCommandTests : IDisposable
         int exitCode = Run("format", file, "--machine", "fanuc-mill-30i");
 
         Assert.Equal(2, exitCode);
-        Assert.StartsWith("ncx(1): ERROR CLI001: ", _error.ToString(), StringComparison.Ordinal);
+        Assert.StartsWith("ncx: ERROR CLI001: ", _error.ToString(), StringComparison.Ordinal);
         Assert.Equal("", _output.ToString());
     }
 
@@ -262,7 +262,7 @@ public sealed class FormatCommandTests : IDisposable
         int exitCode = Run("format", file, "--check", "--output", outputFile);
 
         Assert.Equal(2, exitCode);
-        Assert.StartsWith("ncx(1): ERROR CLI001: ", _error.ToString(), StringComparison.Ordinal);
+        Assert.StartsWith("ncx: ERROR CLI001: ", _error.ToString(), StringComparison.Ordinal);
         Assert.False(File.Exists(outputFile));
     }
 
@@ -276,7 +276,7 @@ public sealed class FormatCommandTests : IDisposable
         int exitCode = Run(args);
 
         Assert.Equal(2, exitCode);
-        Assert.StartsWith("ncx(1): ERROR CLI001: ", _error.ToString(), StringComparison.Ordinal);
+        Assert.StartsWith("ncx: ERROR CLI001: ", _error.ToString(), StringComparison.Ordinal);
     }
 
     // The help of format names its options and ends with exit code 0.
