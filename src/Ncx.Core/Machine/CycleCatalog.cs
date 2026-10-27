@@ -298,11 +298,17 @@ public sealed record CycleCatalog
     {
         foreach (KeyValuePair<string, decimal> fixedValue in entry.Fixed)
         {
-            decimal? value = nativeValues.TryGetValue(fixedValue.Key, out decimal given) ? given
-                : entry.Defaults.TryGetValue(fixedValue.Key, out string? assumed)
-                    && decimal.TryParse(assumed, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal number)
-                    ? number
-                    : null;
+            decimal? value = null;
+            if (nativeValues.TryGetValue(fixedValue.Key, out decimal given))
+            {
+                value = given;
+            }
+            else if (entry.Defaults.TryGetValue(fixedValue.Key, out string? assumed)
+                && decimal.TryParse(assumed, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal number))
+            {
+                value = number;
+            }
+
             if (value != fixedValue.Value)
             {
                 return false;

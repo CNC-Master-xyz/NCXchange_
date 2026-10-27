@@ -276,7 +276,7 @@ public sealed class ShippedCatalogsTests
         Assert.Equal("SLOT1", slot.Native);
         Assert.Equal(["NUM=1", "_AMODE=2", "_DMODE=1000"], Pairs(slot.Fixed));
         Assert.Equal("SLOT2", circSlot.Native);
-        Assert.Equal(["NUM=1"], Pairs(circSlot.Fixed));
+        Assert.Equal(["NUM=1", "_DMODE=1000"], Pairs(circSlot.Fixed));
         Assert.Equal("_MID", slot.NativeOf("PECK"));
         Assert.Equal("FFD", slot.NativeOf("CYCLE_F"));
         Assert.Equal(Sorted(heidenhain.Find("SLOT")!.Words), Sorted(slot.Words));

@@ -28,7 +28,7 @@ Every name the shipped catalogs use, once, with its meaning and its native per f
 | `RECT_POCKET` | rectangular pocket | | 251 | |
 | `CIRC_POCKET` | circular pocket | | 252 | |
 | `SLOT` | one straight slot at the call position (D379) | | 253 | `SLOT1` (sl form) |
-| `CIRC_SLOT` | circular slot (D379) | | 254 | `SLOT2` with `NUM` = 1 |
+| `CIRC_SLOT` | circular slot (D379) | | 254 | `SLOT2` with `NUM` = 1 (sl form) |
 | `RECT_STUD` | rectangular stud | | 256 | |
 | `CIRC_STUD` | circular stud | | 257 | |
 | `TURN_OD` | one longitudinal turning pass, outer or inner diameter | lathe `G90` | | |

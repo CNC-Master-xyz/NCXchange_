@@ -57,13 +57,26 @@ public static partial class CycleCatalogLoader
     // having no such address.
     private static string? HeldNative(Controller? controller, CycleEntry entry, string key)
     {
-        string? native = (controller, key) switch
+        string? native = null;
+        if (controller == Controller.Heidenhain)
         {
-            (Controller.Heidenhain, ChipBreakLiftKey) => HeidenhainLift,
-            (Controller.Siemens, ChipBreakLiftKey) => "_VRT",
-            (Controller.Siemens, PeckClearanceKey) => "_DIS1",
-            _ => null,
-        };
+            if (key == ChipBreakLiftKey)
+            {
+                native = HeidenhainLift;
+            }
+        }
+        else if (controller == Controller.Siemens)
+        {
+            if (key == ChipBreakLiftKey)
+            {
+                native = "_VRT";
+            }
+            else if (key == PeckClearanceKey)
+            {
+                native = "_DIS1";
+            }
+        }
+
         return native is not null && entry.Signature.Contains(native) ? native : null;
     }
 }

@@ -161,6 +161,7 @@ native = "SLOT2"                                                                
 signature = ["RTP", "RFP", "SDIS", "_DP", "_DPR", "NUM", "AFSL", "WID", "_CPA", "_CPO", "RAD", "STA1", "INDA", "FFD", "FFP1", "_MID", "CDIR", "_FAL", "VARI", "_MIDF", "FFP2", "SSF", "_FFCP", "_UMODE", "_FS", "_ZFS", "_GMODE", "_DMODE", "_AMODE"]
 params = { SAFE = "RTP", SURFACE = "RFP", CLEARANCE = "SDIS", DEPTH = "_DP", PECK = "_MID", CYCLE_F = "FFD" }
 absolute_from_surface = ["CLEARANCE"]
-fixed = { NUM = 1 }
+fixed = { NUM = 1, _DMODE = 1000 }
 # D379: SLOT2's NUM counts circular slots on a circle (SW4.92 p.1055), so CIRC_SLOT, cycle 254, is SLOT2 with NUM = 1 only; a SLOT2 with NUM > 1 stays native
-# (D94). The words are those of SLOT and of 254. The geometry positions (AFSL, WID, RAD, STA1, INDA) carry no NCX word, as in 254.
+# (D94). The _DMODE thousands digit 1 marks the sl form, "Funktionen SLOT2 ab SW 2.5" (SW4.92 p.1057), as for SLOT1, so a SLOT2 without it stays RAW or
+# native (D5; gap closed 2026-10-27). The words are those of SLOT and of 254. The geometry positions (AFSL, WID, RAD, STA1, INDA) carry no NCX word, as in 254.

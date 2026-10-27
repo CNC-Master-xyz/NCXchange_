@@ -144,7 +144,10 @@ internal static class FanucCycles
             }
 
             write.Written(word);
+            // D362: a CYCLE_DWELL of 0 is the behaviour the control has anyway and is dropped silently; G81, G83, G73
+            // and G86 have no P (D177).
             bool carried = entry is null
+                || (key == "CYCLE_DWELL" && IsZero(word.Value))
                 || (entry.Words.Contains(key)
                     && (key != "PITCH" || entry.CycleF is not null || entry.NativeOf(key) is not null));
             if (!carried)
@@ -155,6 +158,17 @@ internal static class FanucCycles
                     + "(machine-config 6; controller-mapping 5; language 2 rule 8).");
             }
         }
+    }
+
+    // Whether a word's value is the number 0 (D362).
+    private static bool IsZero(Value value)
+    {
+        return value switch
+        {
+            IntegerValue integer => integer.Number == 0,
+            DecimalValue number => number.Number == 0m,
+            _ => false,
+        };
     }
 
     // G80 in a line of its own where the control has a canned cycle active, or where the target state does not know
