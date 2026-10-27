@@ -257,8 +257,8 @@ public sealed class HeidenhainMotionTests
     [Fact]
     public void Rule2_FormulaWithoutAFreeQl_IsTheErrorCmp102()
     {
-        var mill = HeidenhainCompile.MillWith("comment_charset = \"ASCII\"",
-            "comment_charset = \"ASCII\"\ncounter_registers = [\"QL0\", \"QL499\"]");
+        var mill = HeidenhainCompile.MillWith("counter_registers = [\"QL90\", \"QL99\"]",
+            "counter_registers = [\"QL0\", \"QL499\"]");
         CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program("RAPID X={$Q1 + 5} Y=0"), mill);
 
         Assert.Empty(result.Files);

@@ -7,4 +7,5 @@ namespace Ncx.Compilers.Heidenhain;
 /// </summary>
 /// <param name="Label">The LABEL block where the part begins.</param>
 /// <param name="Repeat">The REPEAT block where it ends.</param>
-internal sealed record RepeatPart(Block Label, Block Repeat);
+/// <param name="Entries">The JUMP and REPEAT blocks of the section outside the part whose label lies inside it.</param>
+internal sealed record RepeatPart(Block Label, Block Repeat, IReadOnlyList<Block> Entries);

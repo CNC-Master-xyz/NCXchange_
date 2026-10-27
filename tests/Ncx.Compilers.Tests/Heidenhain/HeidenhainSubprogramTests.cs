@@ -105,4 +105,14 @@ public sealed class HeidenhainSubprogramTests
 
         Assert.DoesNotContain(DiagnosticCodes.HeidenhainArgumentReadAfterCall, HeidenhainCompile.Codes(result));
     }
+
+    // D149: QL is local to a program, so a QL argument of CALL PGM never reaches the caller's QL: no CMP125.
+    [Fact]
+    public void CallPgm_WhoseQlArgumentTheCallerReadsAfterIt_ReportsNothing()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "VAR:QL1=2", "CALL=\"PART2\" ARG:QL1=5", "RAPID X={$QL1}"));
+
+        Assert.DoesNotContain(DiagnosticCodes.HeidenhainArgumentReadAfterCall, HeidenhainCompile.Codes(result));
+    }
 }

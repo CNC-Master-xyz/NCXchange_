@@ -70,3 +70,17 @@ Left over / for other owners:
 - D266: the framework's file name (`CompilerBase.Layout.FileNameOf`, W2-1) still compares names ordinally; W2-1 makes
   it case-insensitive (CMP005), after which file name and BEGIN PGM agree.
 - W1-F gap note (BLK FORM signs, `X+0 Y+0 Z-40`): the `[stock]` hook is W2-1's; not touched here.
+
+Review fixes (2026-10-27, one commit):
+- B1 (D213): a JUMP or REPEAT outside a counter loop's part whose label lies inside it writes `QLc = 0` before its
+  jump line (`HeidenhainRepeats.ResetsOnEntry`).
+- B2 (D213): counter registers that a word of the file names are skipped (`HeidenhainSpills.NamedParameters`, which
+  now also reads Q and QR names from RAW); none free is CMP130.
+- B3 (D271): when a subprogram's walk holds a JUMP=END, every program's end label takes one number of the
+  subprograms' numbering, so the shared SUB text does not depend on its caller.
+- `counter_registers = ["QL90", "QL99"]` shipped in `machines/heidenhain-itnc530.toml` (the only copy: the file is
+  not among docs/spec/examples/machines).
+- N3: a JUMP or RETURN whose label got no number (CMP129) takes its IF, so no CMP101 besides. N4: a QL argument of
+  CALL PGM is not CMP125, QL being program-local.
+- controller-mapping 6 (REPEAT, CALL + ARG), heidenhain 7 rule 3 (the D272 jump reads back as JUMP plus LABEL), the
+  Heidenhain README, 03 row 234 moved after 233, the STRCOMP case-sensitivity note.

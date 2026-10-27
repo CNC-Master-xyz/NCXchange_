@@ -13,12 +13,17 @@ namespace Ncx.Compilers.Heidenhain;
 /// later one is renumbered; the next free number is the lowest number of the range no label has. The subprograms are
 /// numbered once for the whole compile, since the text of a SUB section stands in every file that calls it (D99): their
 /// names, the labels in them and their return labels (D272) share one numbering, and the labels of each program and
-/// its JUMP=END label take numbers the subprograms do not have.
+/// its JUMP=END label take numbers the subprograms do not have. Where a subprogram holds a JUMP=END, the end labels of
+/// all programs take one number of the subprograms' numbering, so that the SUB's text does not depend on its caller.
 /// </summary>
 internal sealed class HeidenhainLabelNumbers
 {
     // The first label number; LBL 0 ends a subprogram (controllers heidenhain.md 1).
     private const long First = 1;
+
+    // The key of the JUMP=END labels and of the one end label all programs share when a subprogram jumps to the end.
+    private const string EndPrefix = "END ";
+    private const string SharedEnd = "END *";
 
     private readonly Dictionary<string, long> _numbers = new(StringComparer.Ordinal);
     private readonly long _max;
@@ -56,8 +61,34 @@ internal sealed class HeidenhainLabelNumbers
             }
         }
 
+        // A JUMP=END in a subprogram jumps to the end label of whichever program calls it, and the SUB's text is one
+        // for every caller (D99): then every program's end label takes one number from the subprograms' numbering.
+        List<HeidenhainLabelKey> ends = [];
+        if (EndInSubprogram(lookAhead))
+        {
+            foreach (List<HeidenhainLabelKey> keys in programs.Values)
+            {
+                ends.AddRange(keys.FindAll(key => key.Key.StartsWith(EndPrefix, StringComparison.Ordinal)));
+                keys.RemoveAll(key => key.Key.StartsWith(EndPrefix, StringComparison.Ordinal));
+            }
+
+            if (ends.Count > 0)
+            {
+                subs.Add(ends[0] with { Key = SharedEnd });
+                subs.Sort((one, other) => one.Block.Line.CompareTo(other.Block.Line));
+            }
+        }
+
         var taken = new HashSet<long>();
         numbers.Assign(subs, taken, diagnostics);
+        if (numbers._numbers.TryGetValue(SharedEnd, out long shared))
+        {
+            foreach (HeidenhainLabelKey end in ends)
+            {
+                numbers._numbers[end.Key] = shared;
+            }
+        }
+
         foreach (List<HeidenhainLabelKey> keys in programs.Values)
         {
             numbers.Assign(keys, new HashSet<long>(taken), diagnostics);
@@ -178,6 +209,20 @@ internal sealed class HeidenhainLabelNumbers
         return keys;
     }
 
+    // Whether a subprogram's walk holds a JUMP=END.
+    private static bool EndInSubprogram(LookAhead lookAhead)
+    {
+        foreach (BlockStep step in lookAhead.Steps)
+        {
+            if (step.Section is { Kind: SectionKind.Sub } && step.Block.Has("JUMP", null, "END"))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static string LabelKey(Section? section, Value label)
     {
         return "LABEL " + (section?.FirstBlock.ToString(CultureInfo.InvariantCulture) ?? "-") + " "
@@ -192,7 +237,7 @@ internal sealed class HeidenhainLabelNumbers
 
     private static string EndKey(Section program)
     {
-        return "END " + program.FirstBlock.ToString(CultureInfo.InvariantCulture);
+        return EndPrefix + program.FirstBlock.ToString(CultureInfo.InvariantCulture);
     }
 
     private static string ReturnKey(Section sub)

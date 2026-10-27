@@ -145,8 +145,16 @@ internal static class HeidenhainFlow
 
         if (labels.Count == 0)
         {
+            // A jump whose LBL has no number was reported where the numbers were given (CMP129); its IF goes with it.
+            if (writing.Block.Has("JUMP") || writing.Block.Has("RETURN"))
+            {
+                writing.Take("IF");
+            }
+
             return;
         }
+
+        WriteEntryResets(writing);
 
         string? test = writing.Take("IF") is Word condition ? Condition(writing, condition) : AlwaysTrue;
         if (test is null)
@@ -270,6 +278,7 @@ internal static class HeidenhainFlow
 
         string label = LabelNumber(writing, repeat.Value);
         string text = count.ToString(CultureInfo.InvariantCulture);
+        WriteEntryResets(writing);
         if (writing.Repeats.CounterOf(writing.Block) is string counter)
         {
             string passes = (count + 1).ToString(CultureInfo.InvariantCulture);
@@ -284,6 +293,17 @@ internal static class HeidenhainFlow
 
         // The repeat brings what the control has at the call to the blocks after the label (HeidenhainArrivals).
         HeidenhainArrivals.Check(writing, repeat);
+    }
+
+    // D213: a JUMP or REPEAT that enters the part of a counter loop from outside does not pass the reset before the
+    // loop's label, so it sets the counter to 0 before its jump line; a conditional jump not taken loses nothing, since
+    // every arrival at the part starts the repeat fresh.
+    private static void WriteEntryResets(HeidenhainBlock writing)
+    {
+        foreach (string counter in writing.Repeats.ResetsOnEntry(writing.Block))
+        {
+            writing.Line(counter + " = 0");
+        }
     }
 
     // RETURN returns to the caller before SUB=END is reached (language 4.9, 4.13). In a program, which no caller
@@ -322,8 +342,9 @@ internal static class HeidenhainFlow
             && variable.Name.Substring(2).All(char.IsAsciiDigit);
     }
 
-    // D169: == and != compare two strings by exact text. Klartext compares two QS parameters with STRCOMP, which gives
-    // 0 when they are identical (iTNC 530 DIN/ISO 606420-01, connector p. 291; the Klartext formula is the same):
+    // D169: == and != compare two strings by exact, case-sensitive text. Klartext compares two QS parameters with
+    // STRCOMP, which gives 0 when they are identical (iTNC 530 DIN/ISO 606420-01, connector p. 291; the Klartext
+    // formula is the same); no manual states whether STRCOMP compares case-sensitively, which "identisch" suggests:
     // the result is spilled into a QL parameter (D338) and FN 9 or FN 10 tests it against 0. Any other comparison
     // with a string, or a string against a number, has no Klartext form: the ERROR CMP126 (decisions.md D169).
     private static string? StringCondition(HeidenhainBlock writing, Word condition, BinaryNode comparison)

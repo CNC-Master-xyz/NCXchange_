@@ -108,7 +108,12 @@ internal static class HeidenhainSubprograms
         Section? section = writing.Step.Section;
         foreach (Word argument in writing.Block.Words)
         {
-            if (argument.Key != "ARG" || argument.Addr is not string name)
+            // QL is local to a program (iTNC 530 Klartext 340490-05 p. 282-283), so a QL argument of CALL PGM never
+            // reaches the caller's QL; only the global Q and QR survive the call.
+            bool external = writing.Block.Find("CALL")?.Value is StringValue target
+                && !writing.After.Flow.Subs.ContainsKey(target.Content);
+            if (argument.Key != "ARG" || argument.Addr is not string name
+                || (external && name.StartsWith("QL", StringComparison.Ordinal)))
             {
                 continue;
             }

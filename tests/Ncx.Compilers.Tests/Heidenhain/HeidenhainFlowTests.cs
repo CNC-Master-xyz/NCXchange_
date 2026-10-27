@@ -710,15 +710,14 @@ public sealed class HeidenhainFlowTests
         Assert.Equal(6, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainNoFreeLabel).Line);
     }
 
-    // D213: a REPEAT whose part a JUMP leaves is a counter loop in a register of [format] counter_registers: the
-    // counter set to 0 before the label, counted at the REPEAT and set to 0 after the last pass.
+    // D213: a REPEAT whose part a JUMP leaves is a counter loop in a register of [format] counter_registers, QL90 to
+    // QL99 on the iTNC 530 of the repository: the counter set to 0 before the label, counted at the REPEAT and set to
+    // 0 after the last pass.
     [Fact]
     public void Repeat_ThatAJumpLeaves_IsACounterLoop()
     {
-        var mill = HeidenhainCompile.MillWith("comment_charset = \"ASCII\"",
-            "comment_charset = \"ASCII\"\ncounter_registers = [\"QL90\", \"QL99\"]");
         CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
-            "RAPID X=0 Y=0", "LABEL=1", "RAPID IX=5", "JUMP=2 IF={$Q1 > 0}", "REPEAT=1 TIMES=3", "LABEL=2"), mill);
+            "RAPID X=0 Y=0", "LABEL=1", "RAPID IX=5", "JUMP=2 IF={$Q1 > 0}", "REPEAT=1 TIMES=3", "LABEL=2"));
 
         Assert.Equal(
             "L X+0 Y+0 R0 FMAX\nQL90 = 0\nLBL 1\nL IX+5 FMAX\nFN 11: IF +Q1 GT +0 GOTO LBL 2\nQL90 = QL90 + 1\n"
@@ -731,8 +730,9 @@ public sealed class HeidenhainFlowTests
     [Fact]
     public void Repeat_ThatAJumpLeavesOnAMachineWithoutCounterRegisters_IsTheErrorCmp130()
     {
+        var mill = HeidenhainCompile.MillWith(CounterRegisters, "# no counter registers");
         CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
-            "RAPID X=0 Y=0", "LABEL=1", "RAPID IX=5", "JUMP=END IF={$Q1 > 0}", "REPEAT=1 TIMES=3"));
+            "RAPID X=0 Y=0", "LABEL=1", "RAPID IX=5", "JUMP=END IF={$Q1 > 0}", "REPEAT=1 TIMES=3"), mill);
 
         Assert.Empty(result.Files);
         Assert.Equal(8, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainRepeatWithoutCounter).Line);
@@ -759,5 +759,85 @@ public sealed class HeidenhainFlowTests
 
         Assert.Empty(result.Files);
         Assert.Equal(5, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainStringComparison).Line);
+    }
+
+    // D213: a JUMP from outside back into a counter loop's part does not pass the reset before the label, so it sets
+    // the counter to 0 before its jump line, and the repeat starts fresh with its passes.
+    [Fact]
+    public void Repeat_LeftByAJumpAndEnteredAgainByAJump_ResetsTheCounterAtTheEntry()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "RAPID X=0 Y=0", "LABEL=1", "RAPID IX=5", "JUMP=2 IF={$Q1 > 0}", "REPEAT=1 TIMES=3", "LABEL=2",
+            "JUMP=1 IF={$Q1 < 3}"), CounterMill("[\"QL90\", \"QL99\"]"));
+
+        Assert.Equal(
+            "L X+0 Y+0 R0 FMAX\nQL90 = 0\nLBL 1\nL IX+5 FMAX\nFN 11: IF +Q1 GT +0 GOTO LBL 2\nQL90 = QL90 + 1\n"
+            + "FN 12: IF +QL90 LT +4 GOTO LBL 1\nQL90 = 0\nLBL 2\nQL90 = 0\nFN 12: IF +Q1 LT +3 GOTO LBL 1",
+            HeidenhainCompile.Body(result));
+    }
+
+    // D213, D388 (12): a counter register the program names itself is skipped; with none left, CMP130.
+    [Fact]
+    public void Repeat_CounterRegisterTheProgramNames_IsSkipped()
+    {
+        string[] blocks =
+        [
+            "VAR:QL90=7", "RAPID X=0 Y=0", "LABEL=1", "RAPID IY={$QL90}", "JUMP=2 IF={$Q1 > 0}", "REPEAT=1 TIMES=3",
+            "LABEL=2",
+        ];
+
+        string body = HeidenhainCompile.Body(HeidenhainCompile.Run(HeidenhainCompile.Program(blocks),
+            CounterMill("[\"QL90\", \"QL99\"]")));
+        CompileResult full = HeidenhainCompile.Run(HeidenhainCompile.Program(blocks),
+            CounterMill("[\"QL90\", \"QL90\"]"));
+
+        Assert.Contains("QL91 = 0\nLBL 1", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("QL90 = 0", body, StringComparison.Ordinal);
+        Assert.Equal(9, HeidenhainCompile.Single(full, DiagnosticCodes.HeidenhainRepeatWithoutCounter).Line);
+    }
+
+    // D271, D99: a JUMP=END in a subprogram two programs call jumps to the same end label number in both files, so
+    // that the SUB's text does not depend on its caller.
+    [Fact]
+    public void JumpToTheEnd_InASubprogramOfTwoPrograms_UsesOneEndLabel()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"PA\"", "UNITS=MM", "CALL=50", "PROGRAM=END",
+            "PROGRAM=BEGIN NAME=\"PB\"", "UNITS=MM", "LABEL=1", "LABEL=2", "CALL=50", "JUMP=1 IF={$Q3 > 0}",
+            "JUMP=2 IF={$Q3 > 1}", "PROGRAM=END",
+            "SUB=BEGIN NAME=50", "RAPID IX=1", "JUMP=END IF={$Q1 > 0}", "SUB=END",
+            "FILE=END"));
+
+        Assert.False(result.Diagnostics.HasErrors, result.Diagnostics.ToText());
+        Assert.Equal(2, result.Files.Count);
+        foreach (CompiledFile file in result.Files)
+        {
+            List<string> lines = HeidenhainCompile.LinesOf(file.Text);
+            Assert.Contains("FN 11: IF +Q1 GT +0 GOTO LBL 1", lines);
+            Assert.Equal("LBL 1", lines[lines.IndexOf("M30") - 1]);
+        }
+    }
+
+    // D271: a JUMP=END whose label finds no free number is CMP129 alone, without a CMP101 for its IF.
+    [Fact]
+    public void JumpToTheEnd_WithoutAFreeLabel_IsCmp129Alone()
+    {
+        var mill = HeidenhainCompile.MillWith("comment_charset = \"ASCII\"",
+            "comment_charset = \"ASCII\"\nlabel_max = 1");
+        CompileResult result = HeidenhainCompile.Run(
+            HeidenhainCompile.Program("LABEL=1", "JUMP=END IF={$Q1 > 0}", "RAPID X=0"), mill);
+
+        Assert.Contains(DiagnosticCodes.HeidenhainNoFreeLabel, HeidenhainCompile.Codes(result));
+        Assert.DoesNotContain(DiagnosticCodes.HeidenhainWordWithoutKlartext, HeidenhainCompile.Codes(result));
+    }
+
+    // The counter_registers line of machines/heidenhain-itnc530.toml.
+    private const string CounterRegisters = "counter_registers = [\"QL90\", \"QL99\"]";
+
+    // The iTNC 530 with another [format] counter_registers.
+    private static Ncx.Core.Machine.MachineConfig CounterMill(string range)
+    {
+        return HeidenhainCompile.MillWith(CounterRegisters, "counter_registers = " + range);
     }
 }

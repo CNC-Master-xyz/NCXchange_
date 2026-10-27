@@ -25,6 +25,27 @@ internal sealed partial class HeidenhainSpills
     /// </summary>
     public static HeidenhainSpills Of(LookAhead lookAhead, CounterRange? counters)
     {
+        HashSet<string> named = NamedParameters(lookAhead);
+        var spills = new HeidenhainSpills();
+        for (int number = Highest; number >= 0; number--)
+        {
+            string name = "QL" + number.ToString(CultureInfo.InvariantCulture);
+            bool counter = counters is { Prefix: "QL" } && number >= counters.First && number <= counters.Last;
+            if (!named.Contains(name) && !counter)
+            {
+                spills._free.Add(name);
+            }
+        }
+
+        return spills;
+    }
+
+    /// <summary>
+    /// The names of the run's words: the variables their values read, their addresses (VAR:QL5) and the QL parameters
+    /// of RAW text.
+    /// </summary>
+    public static HashSet<string> NamedParameters(LookAhead lookAhead)
+    {
         var named = new HashSet<string>(StringComparer.Ordinal);
         foreach (BlockStep step in lookAhead.Steps)
         {
@@ -46,18 +67,7 @@ internal sealed partial class HeidenhainSpills
             }
         }
 
-        var spills = new HeidenhainSpills();
-        for (int number = Highest; number >= 0; number--)
-        {
-            string name = "QL" + number.ToString(CultureInfo.InvariantCulture);
-            bool counter = counters is { Prefix: "QL" } && number >= counters.First && number <= counters.Last;
-            if (!named.Contains(name) && !counter)
-            {
-                spills._free.Add(name);
-            }
-        }
-
-        return spills;
+        return named;
     }
 
     /// <summary>
@@ -68,6 +78,6 @@ internal sealed partial class HeidenhainSpills
         return index < _free.Count ? _free[index] : null;
     }
 
-    [GeneratedRegex(@"QL[0-9]+", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"Q[LR]?[0-9]+", RegexOptions.CultureInvariant)]
     private static partial Regex Parameter();
 }

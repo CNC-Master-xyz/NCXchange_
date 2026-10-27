@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Ncx.Config.Templates;
 using Ncx.Core.Model;
@@ -239,7 +240,7 @@ internal static partial class HeidenhainProgramFrame
             string candidate = name;
             for (int suffix = 2; taken.Contains(candidate); suffix++)
             {
-                candidate = name + "_" + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                candidate = name + "_" + suffix.ToString(CultureInfo.InvariantCulture);
             }
 
             taken.Add(candidate);
