@@ -94,38 +94,38 @@ public sealed class Diagnostics
 
     /// <summary>
     /// Reports an ERROR on a block; on a generated block the diagnostic carries the line of the block it was
-    /// generated for (D98).
+    /// generated for (D98), and the message starts with the rule or rewriter that made it and why (D200).
     /// </summary>
     /// <param name="block">The block the rule is about.</param>
     /// <param name="code">The code of the rule, a constant of DiagnosticCodes.</param>
     /// <param name="message">The message, naming the rule and the block.</param>
     public void Error(Block block, string code, string message)
     {
-        Report(Severity.Error, block.Line, block.OriginLine, code, message);
+        Report(Severity.Error, block.Line, block.OriginLine, code, OnBlock(block, message));
     }
 
     /// <summary>
     /// Reports a WARNING on a block; on a generated block the diagnostic carries the line of the block it was
-    /// generated for (D98).
+    /// generated for (D98), and the message starts with the rule or rewriter that made it and why (D200).
     /// </summary>
     /// <param name="block">The block the rule is about.</param>
     /// <param name="code">The code of the rule, a constant of DiagnosticCodes.</param>
     /// <param name="message">The message, naming the rule and the block.</param>
     public void Warning(Block block, string code, string message)
     {
-        Report(Severity.Warning, block.Line, block.OriginLine, code, message);
+        Report(Severity.Warning, block.Line, block.OriginLine, code, OnBlock(block, message));
     }
 
     /// <summary>
     /// Reports an INFO on a block; on a generated block the diagnostic carries the line of the block it was
-    /// generated for (D98).
+    /// generated for (D98), and the message starts with the rule or rewriter that made it and why (D200).
     /// </summary>
     /// <param name="block">The block the note is about.</param>
     /// <param name="code">The code of the note, a constant of DiagnosticCodes.</param>
     /// <param name="message">The note.</param>
     public void Info(Block block, string code, string message)
     {
-        Report(Severity.Info, block.Line, block.OriginLine, code, message);
+        Report(Severity.Info, block.Line, block.OriginLine, code, OnBlock(block, message));
     }
 
     /// <summary>
@@ -150,6 +150,16 @@ public sealed class Diagnostics
         }
 
         return text.ToString();
+    }
+
+    // A diagnostic on a generated block starts its message with the rule or rewriter that made the block and its
+    // reason, as trace and annotate name them, so that two blocks generated for one line can be told apart (D200):
+    // "[tool_change] (pre): message".
+    private static string OnBlock(Block block, string message)
+    {
+        return block.Generated is GeneratedBlock generated
+            ? $"{generated.Source} ({generated.Reason}): {message}"
+            : message;
     }
 
     // Every diagnostic of this list is about its file; a diagnostic on a generated block also names the line of the

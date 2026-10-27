@@ -158,7 +158,7 @@ The tasks of wave 2 (P1-03 to P1-07, P2-04, P3-01, P3-02 with its part P3-02c, P
 | 30 | P1-05 | Which state variables does STATE_CHANGE report, and under which names? | D197 | `src/Ncx.Core/VirtualMachine/Events/StateChanges.cs:38` |
 | 31 | P1-06 | Does a function table's rule fire on every state it has (COOLANT:THROUGH=OFF too)? | settled 2026-10-01 (D198) | `src/Ncx.Core/Expander/ExpansionRules.cs:42` |
 | 32 | P1-06 | In which order do the blocks of several rules and rewriters on one block stand? | D199 | `src/Ncx.Core/Expander/ExpansionRules.cs:22` |
-| 33 | P1-06 | Which line does a generated block carry in a diagnostic? | D200 | `src/Ncx.Core/Expander/GeneratedText.cs:149` |
+| 33 | P1-06 | Which line does a generated block carry in a diagnostic? | settled 2026-10-27 (D200) | `src/Ncx.Core/Expander/GeneratedText.cs:149` |
 | 34 | P1-06 | Is a generated block skipped with the SKIP block it was generated for? | D201 | `src/Ncx.Core/Expander/GeneratedText.cs:102` |
 | 35 | P1-06 | Which state variables may @SAVE and @RESTORE name? | D202 | `src/Ncx.Core/VirtualMachine/RestoreRules.cs:35` |
 | 36 | P1-06 | Under limits = "clamp", what is F compared against? | D192 (with 20) | `src/Ncx.Core/Expander/LimitClamp.cs:121` |

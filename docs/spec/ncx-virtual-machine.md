@@ -113,7 +113,7 @@ A new `CYCLE` replaces all parameters; nothing is inherited from the previous cy
 
 ### 2.9 Diagnostics
 
-`block.index` (1-based line in the file, plus the file name for called programs) and a diagnostics list of (severity, code, file, line, message), where a diagnostic on a generated block also carries the line of the block it was generated for (`OriginLine`); a diagnostic is rendered as `file(line): ERROR VM042: message`, on a generated block as `file(line, from 12): ...` (D98). ERROR stops the run; WARNING is reported and the run continues; INFO carries notes that are neither (a plugin's inserted blocks) and never changes the outcome or the exit code.
+`block.index` (1-based line in the file, plus the file name for called programs) and a diagnostics list of (severity, code, file, line, message), where a diagnostic on a generated block also carries the line of the block it was generated for (`OriginLine`); a diagnostic is rendered as `file(line): ERROR VM042: message`, on a generated block as `file(line, from 12): ...` (D98). A block the expander generates has the line of its origin, so a diagnostic on it reads `file(12, from 12)`, and its message starts with the rule or rewriter that made the block and its reason, `[tool_change] (pre): ...` (D200). ERROR stops the run; WARNING is reported and the run continues; INFO carries notes that are neither (a plugin's inserted blocks) and never changes the outcome or the exit code.
 
 ## 3. Block execution
 

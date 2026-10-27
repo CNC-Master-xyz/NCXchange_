@@ -363,7 +363,7 @@ public sealed partial class BatchCommandTests : IDisposable
         return codes;
     }
 
-    [GeneratedRegex(@"\): (?:ERROR|WARNING|INFO) ([A-Z]+[0-9]{3}): ", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@": (?:ERROR|WARNING|INFO) ([A-Z]+[0-9]{3}): ", RegexOptions.CultureInvariant)]
     private static partial Regex DiagnosticCode();
 
     // A row of the files of the report: its name, then its result.
