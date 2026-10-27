@@ -69,7 +69,10 @@ public abstract partial class CompilerBase
         numbers.Add(Number("diameter", planeAxes[0], radius * 2m));
         numbers.Add(Number("length", toolAxis, high[toolAxis] - low[toolAxis]));
         numbers.Add(Number("dist", toolAxis, high[toolAxis]));
-        if (cylinder && CylinderInexpressible(template, toolAxis, planeAxes, low, high) is string reason)
+        string? reason = toolAxis != "Z" && !TemplateText.Has(template, "axis")
+            ? $"the [stock] {form} template has no {{axis}} and the tool axis is {toolAxis}"
+            : cylinder ? CylinderInexpressible(template, planeAxes, low, high) : null;
+        if (reason is not null)
         {
             ReportInexpressible(block, form, reason);
             return null;
@@ -90,10 +93,16 @@ public abstract partial class CompilerBase
     private void CheckStockBesideRawBlank(NcxProgram program, MachineConfig machine, Diagnostics diagnostics)
     {
         _stockBesideRawBlank.Clear();
-        string[] heads = new[] { machine.Stock?.Box, machine.Stock?.Cylinder }
-            .Where(template => !string.IsNullOrEmpty(template)).Select(template => Head(template!))
-            .Where(head => head.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        if (heads.Length == 0)
+        var heads = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string? template in (string?[])[machine.Stock?.Box, machine.Stock?.Cylinder])
+        {
+            if (!string.IsNullOrEmpty(template) && Head(template) is { Length: > 0 } head)
+            {
+                heads.Add(head);
+            }
+        }
+
+        if (heads.Count == 0)
         {
             return;
         }
@@ -112,7 +121,7 @@ public abstract partial class CompilerBase
                 stock ??= block.Verb?.Key == "STOCK" ? block : null;
                 rawBlank |= block.Find("RAW") is Word { Value: StringValue raw } word
                     && (word.Addr is null || word.Addr == family || word.Addr == builder)
-                    && heads.Contains(Head(raw.Content), StringComparer.OrdinalIgnoreCase);
+                    && heads.Contains(Head(raw.Content));
             }
 
             if (stock is not null && rawBlank)
@@ -133,16 +142,12 @@ public abstract partial class CompilerBase
         return end < 0 ? trimmed : trimmed[..end];
     }
 
-    // A cylinder the template cannot place: one without {axis} is written about Z and needs WORKPLANE=XY; one without
-    // a coordinate of the plane axes is centred on the tool axis through the datum (siemens-840dsl-mill.toml).
-    private static string? CylinderInexpressible(string template, string toolAxis, string[] planeAxes,
+    // A template without {axis}, BOX or CYLINDER, is written about Z and needs WORKPLANE=XY (StockOf). A cylinder
+    // template without a coordinate of the plane axes is centred on the tool axis through the datum
+    // (siemens-840dsl-mill.toml).
+    private static string? CylinderInexpressible(string template, string[] planeAxes,
         Dictionary<string, decimal> low, Dictionary<string, decimal> high)
     {
-        if (toolAxis != "Z" && !TemplateText.Has(template, "axis"))
-        {
-            return $"the [stock] CYLINDER template has no {{axis}} and the tool axis is {toolAxis}";
-        }
-
         bool placed = planeAxes.Any(axis => TemplateText.Has(template, axis.ToLowerInvariant())
             || TemplateText.Has(template, "max_" + axis.ToLowerInvariant()));
         bool centred = planeAxes.All(axis => low[axis] + high[axis] == 0m);

@@ -9,7 +9,7 @@ namespace Ncx.Compilers;
 /// compilers write it after the tolerance words of the block; an empty or missing template is the WARNING of the
 /// family, CMP361, CMP533 or CMP120, and nothing is written (machine-config 5; language 4.1).
 /// </summary>
-public static class PathModeTemplate
+internal static class PathModeTemplate
 {
     /// <summary>
     /// The template; null or empty when the machine has none.

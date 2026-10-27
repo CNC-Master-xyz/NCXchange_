@@ -67,6 +67,17 @@ public sealed class StockWriterTests
         Assert.DoesNotContain("WORKPIECE", SiemensCompile.TextOf(result), StringComparison.Ordinal);
     }
 
+    // A BOX template without {axis} is written about Z: under WORKPLANE=ZX it is CMP013.
+    [Fact]
+    public void Siemens_BoxUnderZx_IsCmp013()
+    {
+        CompileResult result = SiemensCompile.Run(SiemensCompile.Program(SiemensCompile.MillHeader, "WORKPLANE=ZX",
+            "ORIGIN=1", Box, "RAPID Z=50"), SiemensCompile.Mill());
+
+        Assert.Contains(DiagnosticCodes.StockNotExpressible, SiemensCompile.Codes(result));
+        Assert.DoesNotContain("WORKPIECE", SiemensCompile.TextOf(result), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Fanuc_Box_IsCmp012()
     {

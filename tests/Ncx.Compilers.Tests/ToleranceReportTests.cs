@@ -50,6 +50,18 @@ public sealed class ToleranceReportTests
             message => message.Contains("TOLERANCE:ROTARY 0.5 deg", StringComparison.Ordinal));
     }
 
+    // D367: held_in names where the path tolerance is held, so the {rotary} report does not quote it.
+    [Fact]
+    public void RotaryReport_DoesNotQuoteHeldIn()
+    {
+        string machine = WithTolerance("held_in = \"parameter 19581\"\n");
+
+        List<Diagnostic> found = Reports(machine, "TOLERANCE=0.01 TOLERANCE:ROTARY=0.5");
+
+        Assert.Contains("parameter 19581", found[0].Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("parameter 19581", found[1].Message, StringComparison.Ordinal);
+    }
+
     // D151: while TOLERANCE:ROTARY is set the machine's ON_ROTARY is written, which carries {rotary}.
     [Fact]
     public void RotaryTolerance_WithOnRotary_WritesOnRotary()

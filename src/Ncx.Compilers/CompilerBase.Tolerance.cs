@@ -65,7 +65,8 @@ public abstract partial class CompilerBase
             return;
         }
 
-        string where = table?.HeldIn is string heldIn
+        // held_in names where the control holds the path tolerance, so only {tol} quotes it (D367).
+        string where = placeholder == "tol" && table?.HeldIn is string heldIn
             ? $"the control holds it in {heldIn}"
             : "the control keeps the value it holds";
         string message = $"{word.Split('=')[0]} {value} is not written: the [tolerance] template has no "

@@ -13,6 +13,9 @@ namespace Ncx.Compilers.Fanuc;
 /// </summary>
 internal static class FanucProgramFrame
 {
+    // The words of a STOCK block (D351).
+    private static readonly string[] s_stockKeys = ["STOCK", "X", "Y", "Z", "MAX"];
+
     // Oxxxx: four digits, eight on the 30i (controllers fanuc.md 1).
     private const int LeastDigits = 4;
     private const int MostDigits = 8;
@@ -261,7 +264,7 @@ internal static class FanucProgramFrame
             return;
         }
 
-        foreach (string key in new[] { "STOCK", "X", "Y", "Z", "MAX" })
+        foreach (string key in s_stockKeys)
         {
             write.Written(key);
         }

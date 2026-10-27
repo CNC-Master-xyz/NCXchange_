@@ -125,8 +125,9 @@ internal static class FanucMotion
         }
 
         // Under G43.5 I J K of an arc are its tool vector, so a vector arc has the radius form only (D185; controllers
-        // fanuc.md 4); an arc by its centre with a vector is the ERROR CMP017.
-        if (verb == "ARC" && block.Has("TX") && !block.Has("R"))
+        // fanuc.md 4; 30i-B B-64484EN p.785-787: under G43.5 I J K are the tool direction, only R can be given); an
+        // arc by its centre with a vector is the ERROR CMP017.
+        if (verb == "ARC" && (block.Has("TX") || block.Has("TY") || block.Has("TZ")) && !block.Has("R"))
         {
             write.Error(DiagnosticCodes.VectorArcNotWritable,
                 "An ARC with a tool vector is written in its radius form on Fanuc, as I J K of G43.5 are the vector; "

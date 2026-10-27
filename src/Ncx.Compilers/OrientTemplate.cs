@@ -7,7 +7,7 @@ namespace Ncx.Compilers;
 /// compiler writes it only for ORIENT:R=0; any other angle, or one from an expression, needs a template with {angle},
 /// and without one it is the ERROR CMP007 and nothing is written for the word (machine-config 5).
 /// </summary>
-public static class OrientTemplate
+internal static class OrientTemplate
 {
     /// <summary>
     /// Whether the ORIENT template can write the word; reports CMP007 when it cannot. A missing template is left to

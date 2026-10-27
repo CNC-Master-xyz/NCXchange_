@@ -6,7 +6,7 @@ namespace Ncx.Compilers;
 /// <summary>
 /// What a template of the machine file holds, read before it is rendered (machine-config 3).
 /// </summary>
-public static class TemplateText
+internal static class TemplateText
 {
     /// <summary>
     /// True when the template has the placeholder: "tol" for {tol}.

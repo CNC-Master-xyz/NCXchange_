@@ -14,6 +14,9 @@ namespace Ncx.Compilers.Siemens;
 /// </summary>
 internal static partial class SiemensProgramFrame
 {
+    // The words of a STOCK block (D351).
+    private static readonly string[] s_stockKeys = ["STOCK", "X", "Y", "Z", "MAX"];
+
     /// <summary>
     /// The suffix of a main program unit (controllers siemens.md 1).
     /// </summary>
@@ -175,7 +178,7 @@ internal static partial class SiemensProgramFrame
             return;
         }
 
-        foreach (string key in new[] { "STOCK", "X", "Y", "Z", "MAX" })
+        foreach (string key in s_stockKeys)
         {
             write.Written(key);
         }

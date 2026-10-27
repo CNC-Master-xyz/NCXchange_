@@ -68,6 +68,12 @@ machine-config 5 (`[stock]` and `[tolerance]` rules); with the earlier commits l
 VM 3.5, 3.9, heidenhain 8 rule 6, architecture 13. Open questions settled: 73, 74, 75, 146, 217, 211, 227 and the
 P3-03 rows 2, 4, 5, 7, 9, 10, 11, 14, 15, the P3-06 row 80 and the P5-02 row 148.
 
+Review fixes (one commit): the G43.5 citation at the Fanuc vector-arc check, which now looks at TX, TY or TZ; a
+`[stock]` BOX template without `{axis}` is CMP013 outside WORKPLANE=XY as the CYLINDER is; the CMP015 text quotes
+`held_in` only for `{tol}`; the template helpers are internal.
+
+Kept: an explicit `PRELOAD=0` right after `TOOL` is still folded into `{next}` (D52), because the program asked for it.
+
 Left over / for other owners:
 - D159: the P of the Fanuc canned cycles (`round(seconds / dwell_increment)`) and the reader are W2-4's;
   `FanucExpressions.WordValue` keeps the factor 1000 for `CYCLE_DWELL` until then.

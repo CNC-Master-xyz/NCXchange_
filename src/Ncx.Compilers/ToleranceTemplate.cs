@@ -9,7 +9,7 @@ namespace Ncx.Compilers;
 /// TOLERANCE:ROTARY is set and the machine has it, ON otherwise (D151); and the optional comment beside the switch
 /// that held_comment asks for (D367).
 /// </summary>
-public static class ToleranceTemplate
+internal static class ToleranceTemplate
 {
     /// <summary>
     /// True when the compiler writes ON_ROTARY rather than ON.
