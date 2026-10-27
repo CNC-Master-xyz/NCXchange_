@@ -42,12 +42,13 @@ public static class Parser
         for (int index = 0; index < lines.Count; index++)
         {
             // One line is one block; blank, whitespace-only and comment-only lines are not blocks but trivia, kept
-            // with their line number and their text as read (language 3, Block; D92).
+            // with their line number, their text as read (language 3, Block; D92) and the index of the block they
+            // stand before (D142).
             int line = index + 1;
             Block? block = ParseBlock(lines[index], line, options, diagnostics);
             if (block is null)
             {
-                trivia.Add(new Trivia(line, lines[index]));
+                trivia.Add(new Trivia(line, lines[index], blocks.Count));
             }
             else
             {
@@ -232,7 +233,8 @@ public static class Parser
     }
 
     // A machine axis word, a native parameter and a catalog cycle parameter take a number or an expression and no
-    // address (language 3, ADDR; D93, D94, D114). A bare machine axis word is the question of rule 2: bare under HOME only.
+    // address (language 3, ADDR; D93, D94, D114). A bare machine axis word is the question of rule 2: bare under HOME
+    // only.
     private static void CheckProvisionalWord(Word word, Block block, string kind, string source, bool bareAllowed,
         Diagnostics diagnostics)
     {
