@@ -250,6 +250,12 @@ internal static class HeidenhainArcs
         center.Sort((first, second) => first.Incremental == second.Incremental
             ? string.CompareOrdinal(first.Axis, second.Axis)
             : first.Incremental ? 1 : -1);
+        if (PoleOnTheGrid(writing, center) is string onTheGrid)
+        {
+            writing.Line("CC " + onTheGrid);
+            return true;
+        }
+
         string? pole = HeidenhainAxes.Write(writing, center);
         if (pole is null)
         {
@@ -258,6 +264,85 @@ internal static class HeidenhainArcs
 
         writing.Line("CC " + pole);
         return true;
+    }
+
+    // D364: the pole of literal CENTER words on the output grid, CC X Y absolute and CC IX IY from the written start:
+    // the one of the nine grid points around the rounded centre whose radii from the written start and to the written
+    // end agree best (ArcOnTheGrid), with CMP030 where they still differ by more than [machine] arc_radius_tolerance.
+    // Null where the block or the virtual machine gives no such centre: an expression, a word off the plane, a start,
+    // end or centre the virtual machine does not know in the workpiece frame, or CP IPA, whose end the control
+    // computes about the pole, so that no written end point is there to agree with (D365).
+    private static string? PoleOnTheGrid(HeidenhainBlock writing, List<HeidenhainAxisWord> center)
+    {
+        if (writing.Block.Find("ANGLE") is not null || ToolAxisWord(writing) is not null)
+        {
+            return null;
+        }
+
+        string[] plane = HeidenhainAxes.PlaneAxes(writing.After.Frame.Workplane);
+        MotionEvent? arc = null;
+        foreach (VmEvent step in writing.Step.Events)
+        {
+            arc = step is MotionEvent { Center: not null } motion ? motion : arc;
+        }
+
+        if (arc is null || center.Count != 2 || writing.After.Frame.Polar || writing.After.Frame.Cylinder is not null
+            || center.Any(word => !plane.Contains(word.Axis) || HeidenhainNumbers.NumberOf(word.Word.Value) is null)
+            || center[0].Axis == center[1].Axis)
+        {
+            return null;
+        }
+
+        var axes = new Dictionary<string, GridAxis>(StringComparer.Ordinal);
+        foreach (HeidenhainAxisWord word in center)
+        {
+            if (GridAxisOf(writing, arc, word.Axis, word.Incremental) is not GridAxis axis)
+            {
+                return null;
+            }
+
+            axes[word.Axis] = axis;
+        }
+
+        GridCentre centre = ArcOnTheGrid.Choose(axes[plane[0]], axes[plane[1]]);
+        decimal tolerance = ArcOnTheGrid.ToleranceOf(writing.Machine, writing.After.Frame.Units,
+            Math.Max(axes[plane[0]].CentreStep, axes[plane[1]].CentreStep));
+        if (ArcOnTheGrid.Report(centre, tolerance) is string message)
+        {
+            writing.Warning(DiagnosticCodes.ArcRadiiDifferOnTheGrid, message);
+        }
+
+        var words = new List<string>();
+        foreach (HeidenhainAxisWord word in center)
+        {
+            writing.MarkWritten(word.Word);
+            bool first = word.Axis == plane[0];
+            decimal value = first ? centre.First : centre.Second;
+            decimal start = first ? centre.WrittenStartFirst : centre.WrittenStartSecond;
+            string letter = HeidenhainAxes.LetterOf(writing, word.Axis);
+            words.Add((word.Incremental ? "I" : "") + letter
+                + HeidenhainNumbers.Signed(writing, letter, word.Incremental ? value - start : value));
+        }
+
+        return string.Join(" ", words);
+    }
+
+    // One plane axis of the arc in the workpiece frame of the program, where CC and C take their coordinates (virtual
+    // machine 3.4); null where the virtual machine does not know it there.
+    private static GridAxis? GridAxisOf(HeidenhainBlock writing, MotionEvent arc, string axis, bool incremental)
+    {
+        if (!arc.From.TryGetValue(axis, out AxisPosition from) || !arc.To.TryGetValue(axis, out AxisPosition to)
+            || !arc.Center!.TryGetValue(axis, out AxisPosition centre)
+            || HeidenhainSetpos.WorkpieceCoordinate(writing.Before, axis, from) is not decimal start
+            || HeidenhainSetpos.WorkpieceCoordinate(writing.Before, axis, to) is not decimal end
+            || HeidenhainSetpos.WorkpieceCoordinate(writing.Before, axis, centre) is not decimal middle)
+        {
+            return null;
+        }
+
+        string letter = HeidenhainAxes.LetterOf(writing, axis);
+        decimal step = ArcOnTheGrid.StepOf(writing.Numbers.WrittenDecimalsOf(letter));
+        return new GridAxis(start, end, middle, step, step, incremental);
     }
 
     // C X+70 Y+50 DR+ to the end point about the pole. A block without an end point in the plane is the full circle,

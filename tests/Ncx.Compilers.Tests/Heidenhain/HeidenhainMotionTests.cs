@@ -291,24 +291,27 @@ public sealed class HeidenhainMotionTests
     }
 
     // Heidenhain 8 rule 4: the canonical form CC plus C; DR+ is CCW (language 4.3; controller-mapping 2, CENTER:X).
+    // D364: the pole one grid step beside X50 Y50 makes the radii from the written start and to the written end agree
+    // within 0.0001.
     [Fact]
     public void Rule4_ArcWithCenter_IsCcPlusC()
     {
         CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
             "RAPID X=50.534 Y=69.993", "LINE Z=-1 F=100", "ARC=CCW X=70 Y=50 CENTER:X=50 CENTER:Y=50"));
 
-        Assert.Equal("L X+50,534 Y+69,993 R0 FMAX\nL Z-1 F100\nCC X+50 Y+50\nC X+70 Y+50 DR+",
+        Assert.Equal("L X+50,534 Y+69,993 R0 FMAX\nL Z-1 F100\nCC X+50,001 Y+50,001\nC X+70 Y+50 DR+",
             HeidenhainCompile.Body(result));
     }
 
-    // Controller-mapping 2, CENTER:IX: the incremental centre is CC IX IY, incremental from the start of the arc.
+    // Controller-mapping 2, CENTER:IX: the incremental centre is CC IX IY, incremental from the start of the arc, on
+    // the grid of that offset (D364).
     [Fact]
     public void Rule4_ArcWithIncrementalCenter_IsCcWithIncrementalWords()
     {
         CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
             "RAPID X=50.534 Y=69.993", "LINE Z=-1 F=100", "ARC=CCW X=70 Y=50 CENTER:IX=-0.534 CENTER:IY=-19.993"));
 
-        Assert.Equal("L X+50,534 Y+69,993 R0 FMAX\nL Z-1 F100\nCC IX-0,534 IY-19,993\nC X+70 Y+50 DR+",
+        Assert.Equal("L X+50,534 Y+69,993 R0 FMAX\nL Z-1 F100\nCC IX-0,533 IY-19,992\nC X+70 Y+50 DR+",
             HeidenhainCompile.Body(result));
     }
 
@@ -424,7 +427,8 @@ public sealed class HeidenhainMotionTests
     }
 
     // Heidenhain 8 rule 4, controllers heidenhain.md 2, D84: a sweep beyond a turn is CP IPA about the pole, the sign
-    // of IPA that of the direction, with the travel of the helix.
+    // of IPA that of the direction, with the travel of the helix. The control computes the end of CP IPA about the
+    // pole, so the pole is the rounded centre (D364 picks among the grid points only where the end point is written).
     [Fact]
     public void Rule4_SweepBeyondATurn_IsCpIpaAboutThePole()
     {

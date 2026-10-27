@@ -35,6 +35,13 @@ internal static class FanucArcs
 
         write.Written("CENTER");
         MotionEvent? motion = MotionOf(write.Step);
+        if (!CentreFromAnExpression(write, first, second) && OnTheGrid(write, motion, first, second) is GridCentre grid)
+        {
+            write.Main.Word(CentreLetter(first) + GridOffset(write, first, grid.First - grid.WrittenStartFirst));
+            write.Main.Word(CentreLetter(second) + GridOffset(write, second, grid.Second - grid.WrittenStartSecond));
+            return;
+        }
+
         string? firstOffset = CentreOffset(write, motion, first);
         string? secondOffset = CentreOffset(write, motion, second);
         if (firstOffset is not null && secondOffset is not null)
@@ -79,6 +86,12 @@ internal static class FanucArcs
         string code = write.Block.Verb?.Value.ToCanonical() == "CCW" ? "G3" : "G2";
         string centre = CentreLetter(first) + Offset(write, motion, first) + " " + CentreLetter(second)
             + Offset(write, motion, second);
+        if (OnTheGrid(write, motion, first, second) is GridCentre grid)
+        {
+            centre = CentreLetter(first) + GridOffset(write, first, grid.First - grid.WrittenStartFirst) + " "
+                + CentreLetter(second) + GridOffset(write, second, grid.Second - grid.WrittenStartSecond);
+        }
+
         bool helix = motion.From.TryGetValue(toolAxis, out AxisPosition fromTool) && fromTool.Known
             && motion.To.TryGetValue(toolAxis, out AxisPosition toTool) && toTool.Known
             && fromTool.Value != toTool.Value;
@@ -160,6 +173,59 @@ internal static class FanucArcs
             $"The start of the arc is not known, so the offset of its centre along {axis} cannot be written as "
             + $"{CentreLetter(axis)} (controllers fanuc.md 4; controller-mapping 2, CENTER:X).");
         return null;
+    }
+
+    // D364: the centre on the grid of I J K, the offset from the written start in radius values (D28, D60): the
+    // written end point is the rounded end, and the centre the one of the nine grid points around the rounded centre
+    // whose radii from the written start and to the written end agree best (ArcOnTheGrid), with CMP030 where they
+    // still differ by more than [machine] arc_radius_tolerance. Null where the virtual machine does not know the
+    // start, the end or the centre in the plane.
+    private static GridCentre? OnTheGrid(FanucBlock write, MotionEvent? motion, string first, string second)
+    {
+        if (motion?.Center is null || !Known(motion.Center, first, second) || !Known(motion.From, first, second)
+            || !Known(motion.To, first, second))
+        {
+            return null;
+        }
+
+        GridAxis firstAxis = GridAxisOf(write, motion, first);
+        GridAxis secondAxis = GridAxisOf(write, motion, second);
+        GridCentre centre = ArcOnTheGrid.Choose(firstAxis, secondAxis);
+        decimal tolerance = ArcOnTheGrid.ToleranceOf(write.Machine, write.After.Frame.Units,
+            Math.Max(firstAxis.CentreStep, secondAxis.CentreStep));
+        if (ArcOnTheGrid.Report(centre, tolerance) is string message)
+        {
+            write.Warning(DiagnosticCodes.ArcRadiiDifferOnTheGrid, message);
+        }
+
+        return centre;
+    }
+
+    // One plane axis of the arc: the point written with the factor of a diameter, the offset I J K in radius values.
+    private static GridAxis GridAxisOf(FanucBlock write, MotionEvent motion, string axis)
+    {
+        decimal step = ArcOnTheGrid.StepOf(write.Numbers.WrittenDecimalsOf(FanucMotion.DecimalsAddress(write, axis)));
+        return new GridAxis(motion.From[axis].Value, motion.To[axis].Value, motion.Center![axis].Value,
+            step / FanucAxes.StateFactor(write, axis), step, Incremental: true);
+    }
+
+    private static string GridOffset(FanucBlock write, string axis, decimal offset)
+    {
+        return write.FormatComputed(FanucMotion.DecimalsAddress(write, axis), offset);
+    }
+
+    // A CENTER:IX from an expression is written as its expression, not from the virtual machine (FanucExpressions).
+    private static bool CentreFromAnExpression(FanucBlock write, string first, string second)
+    {
+        foreach (string axis in new[] { first, second })
+        {
+            if (write.Block.Find("CENTER", "I" + axis) is { Value: ExprValue })
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // The centre minus the start point, in radius values as the virtual machine stores them (D28, D60).

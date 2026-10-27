@@ -79,6 +79,8 @@ Words of other groups (`G500`, `SUPA`, `DIAMON`, `CFC`, `NORM`, `G451`, `G601`) 
 - `PRESETON(C, 0)` declares the current position of an axis (loses the reference status), `PRESETONS` keeps it.
 - `WORKPIECE(, "", , "CYLINDER", 0, 1, -108, 0, 53.5)`: blank definition for the simulation (name, clamping, datum, shape `CYLINDER`/`PIPE`/`RECTANGLE`/`BOX`/`N_CORNER`, then the dimensions), header information only. The reader keeps it `RAW` in release 1 although the `STOCK` word exists, which the compiler writes through the `[stock]` template (D351, D352).
 
+Centres on the output grid (D364): with an end point written, the compiler picks the centre (`I=AC()` on the grid of the plane addresses, `I J K` on the grid of the offset from the written start) among the nine grid points one step around the rounded centre, the one whose radius from the written start and radius to the written end agree best, with the WARNING CMP030 above `[machine] arc_radius_tolerance`, or one output step without it. `AR=` with the centre writes no end point, so its centre is the rounded one and the end the control computes is checked against the rounded end point instead (D365).
+
 ## 4. Frames
 
 Under `DIAMON` a frame offset of the facing axis is a radius on the control (MD20360 bit 3 off, Funktionshandbuch Grundfunktionen 2012 p.901-903): on an X axis whose `programming` is diameter or switchable the reader doubles the X of `TRANS`, `ATRANS`, `G58` and `G59` into the NCX diameter, and takes it as written where `[[axis]] frames_in_diameter = true` (D125, D388). A `CYCLE800` with a non-zero `_X0` or `_X1` stays `RAW` there, since whether the cycle takes them as radii depends on MD20360 bit 14 (D125, D333).

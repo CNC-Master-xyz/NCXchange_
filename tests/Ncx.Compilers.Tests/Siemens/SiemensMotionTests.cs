@@ -86,12 +86,25 @@ public sealed class SiemensMotionTests
     }
 
     // Siemens 12 rule 2: TURN= for sweeps beyond a turn, with the end point the virtual machine computes (siemens 3:
-    // TURN=2 adds two full turns before the end point; D84).
+    // TURN=2 adds two full turns before the end point; D84). D364: the rounded end X59.513 Y53.083 lies 10.0001 from
+    // X50 Y50; the grid point I=AC(49.999) beside it makes both radii 10.001 within 0.00005.
     [Fact]
     public void SweepBeyondOneTurn_IsWrittenWithTheEndPointAndTurn()
     {
-        Assert.Equal(Lines("G0 X60 Y50 Z0", "G3 X59.513 Y53.083 Z-5.4 I=AC(50) J=AC(50) TURN=2 F200"),
+        Assert.Equal(Lines("G0 X60 Y50 Z0", "G3 X59.513 Y53.083 Z-5.4 I=AC(49.999) J=AC(50) TURN=2 F200"),
             MillBody("RAPID X=60 Y=50 Z=0", "ARC=CCW IZ=-5.4 CENTER:X=50 CENTER:Y=50 ANGLE=737.956 F=200"));
+    }
+
+    // D364: the absolute centre X50 Y50 of N310 of 2.5D_FRAESEN lies 20.00013 from the written start and 20 from the
+    // written end; I=AC(50.001) J=AC(50.001) one grid step beside it agrees within 0.0001; an incremental centre lies
+    // on the grid of the offset from the written start.
+    [Theory]
+    [InlineData("CENTER:X=50 CENTER:Y=50", "I=AC(50.001) J=AC(50.001)")]
+    [InlineData("CENTER:IX=-0.534 CENTER:IY=-19.993", "I-0.533 J-19.992")]
+    public void ArcWithCentre_TakesTheCentreOnTheGridWhoseRadiiAgreeBest(string centre, string written)
+    {
+        Assert.Equal(Lines("G0 X50.534 Y69.993", "G3 X70 Y50 " + written + " F100"),
+            MillBody("RAPID X=50.534 Y=69.993", "ARC=CCW X=70 Y=50 " + centre + " F=100"));
     }
 
     // Siemens 12 rule 2: on an older 840D the sweep is split into turns, each back to its start with the tool axis

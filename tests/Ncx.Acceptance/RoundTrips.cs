@@ -258,7 +258,7 @@ public sealed class RoundTrips : IDisposable
     }
 
     // The differences of each round trip that the documents cannot settle, in their order. The Fanuc sources come back
-    // as they are.
+    // as they are, except the centre D364 moves on the grid.
     private static List<NcException> RoundTripDifferences(string source)
     {
         return source switch
@@ -267,6 +267,8 @@ public sealed class RoundTrips : IDisposable
             [
                 ChipBreaks("24", "19"),
             ],
+            "2.5D_FRAESEN.fanuc.nc" => [FanucCompilerTests.s_centreOnTheGrid],
+            "2.5D_FRAESEN.h" => [HeidenhainCompilerTests.PoleOnTheGrid()],
             _ => [],
         };
     }
@@ -279,7 +281,7 @@ public sealed class RoundTrips : IDisposable
         if (program == "2.5D_FRAESEN.ncx")
         {
             return machine == FanucMill
-                ? [FanucCompilerTests.s_movesOfNote4]
+                ? [FanucCompilerTests.s_centreOnTheGrid, FanucCompilerTests.s_movesOfNote4]
                 : HeidenhainCompilerTests.Differences25DFraesen();
         }
 

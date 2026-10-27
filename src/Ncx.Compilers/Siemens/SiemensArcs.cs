@@ -194,6 +194,11 @@ internal static class SiemensArcs
     // siemens.md 3, 12 rule 2; controller-mapping 2, CENTER).
     private static void WriteCenter(SiemensBlock write)
     {
+        if (WriteCenterOnTheGrid(write))
+        {
+            return;
+        }
+
         foreach (Word word in write.Block.Words)
         {
             if (word.Key != "CENTER" || word.Addr is not string address)
@@ -223,6 +228,111 @@ internal static class SiemensArcs
                         : SiemensAxes.Address(letter, value, "AC", expression: false));
             }
         }
+    }
+
+    // D364: the center of literal CENTER words on the output grid, I=AC() on the grid of the plane addresses and I on
+    // the grid of the offset from the written start: the one of the nine grid points around the rounded center whose
+    // radii from the written start and to the written end agree best (ArcOnTheGrid), with CMP030 where they still
+    // differ by more than [machine] arc_radius_tolerance. False where the block or the virtual machine gives no such
+    // center: an expression, a center under TRACYL, a start, end or center the virtual machine does not know, or AR=
+    // with the center, whose end the control computes, so that no written end point is there to agree with (D365).
+    private static bool WriteCenterOnTheGrid(SiemensBlock write)
+    {
+        (string First, string Second, string Tool) plane = Plane(write);
+        MotionEvent? arc = ArcOf(write.Step);
+        if (write.After.Frame.Cylinder is not null || arc?.Center is null || write.Block.Find("ANGLE") is not null)
+        {
+            return false;
+        }
+
+        var words = new Dictionary<string, Word>(StringComparer.Ordinal);
+        foreach (Word word in write.Block.Words)
+        {
+            if (word.Key != "CENTER" || word.Addr is not string address)
+            {
+                continue;
+            }
+
+            string axis = address.Length > 1 && address[0] == 'I' ? address.Substring(1) : address;
+            if ((axis != plane.First && axis != plane.Second) || word.Value is not (IntegerValue or DecimalValue))
+            {
+                return false;
+            }
+
+            words[axis] = word;
+        }
+
+        if (!words.TryGetValue(plane.First, out Word? firstWord)
+            || !words.TryGetValue(plane.Second, out Word? secondWord)
+            || CentreOnTheGrid(write, arc, plane.First, plane.Second, words) is not GridCentre centre)
+        {
+            return false;
+        }
+
+        WriteGridWord(write, plane.First, firstWord, centre.First, centre.WrittenStartFirst);
+        WriteGridWord(write, plane.Second, secondWord, centre.Second, centre.WrittenStartSecond);
+        return true;
+    }
+
+    // The centre on the grid of its written form, CMP030 reported; null where the virtual machine does not know the
+    // start, the end or the centre in the plane.
+    private static GridCentre? CentreOnTheGrid(SiemensBlock write, MotionEvent arc, string first, string second,
+        Dictionary<string, Word>? words)
+    {
+        if (arc.Center is null || !KnownIn(arc.Center, first, second) || !KnownIn(arc.From, first, second)
+            || !KnownIn(arc.To, first, second))
+        {
+            return null;
+        }
+
+        GridAxis firstAxis = GridAxisOf(write, arc, first, words?[first]);
+        GridAxis secondAxis = GridAxisOf(write, arc, second, words?[second]);
+        GridCentre centre = ArcOnTheGrid.Choose(firstAxis, secondAxis);
+        decimal tolerance = ArcOnTheGrid.ToleranceOf(write.Machine, write.After.Frame.Units,
+            Math.Max(firstAxis.CentreStep, secondAxis.CentreStep));
+        if (ArcOnTheGrid.Report(centre, tolerance) is string message)
+        {
+            write.Warning(DiagnosticCodes.ArcRadiiDifferOnTheGrid, message);
+        }
+
+        return centre;
+    }
+
+    // One plane axis: the point written with its state factor (a diameter, D60), an absolute centre the same way, an
+    // incremental one in radius values; null word for the absolute I=AC() of TURN=.
+    private static GridAxis GridAxisOf(SiemensBlock write, MotionEvent arc, string axis, Word? word)
+    {
+        bool incremental = word?.Addr is string address && address.Length > 1 && address[0] == 'I';
+        string letter = SiemensAxes.LetterOf(write, axis);
+        decimal step = ArcOnTheGrid.StepOf(write.Numbers.WrittenDecimalsOf(SiemensAxes.DecimalsAddress(write, letter)));
+        decimal factor = Math.Abs(SiemensAxes.StateFactor(write, axis));
+        return new GridAxis(arc.From[axis].Value, arc.To[axis].Value, arc.Center![axis].Value, step / factor,
+            incremental ? step : step / factor, incremental);
+    }
+
+    // I=AC() of the absolute centre in the state factor, I of the incremental one from the written start.
+    private static void WriteGridWord(SiemensBlock write, string axis, Word word, decimal centre, decimal start)
+    {
+        write.Written(word);
+        string letter = CenterLetter(axis)!;
+        string address = SiemensAxes.DecimalsAddress(write, SiemensAxes.LetterOf(write, axis));
+        bool incremental = word.Addr!.Length > 1 && word.Addr[0] == 'I';
+        if (incremental)
+        {
+            decimal sign = axis == "Z" && SiemensAxes.IsZNegated(write) ? -1m : 1m;
+            write.Main.Word(SiemensLine.ArcRank,
+                SiemensAxes.Address(letter, write.FormatComputed(address, (centre - start) * sign), "", false));
+            return;
+        }
+
+        write.Main.Word(SiemensLine.ArcRank, SiemensAxes.Address(letter,
+            write.FormatComputed(address, centre * SiemensAxes.StateFactor(write, axis)), "AC", expression: false));
+    }
+
+    private static bool KnownIn(IReadOnlyDictionary<string, AxisPosition> points, string first, string second)
+    {
+        return points.TryGetValue(first, out AxisPosition one) && one.Known
+            && points.TryGetValue(second, out AxisPosition two) && two.Known;
     }
 
     // The value of a center word with its factor.
@@ -311,6 +421,15 @@ internal static class SiemensArcs
     {
         (string First, string Second, string Tool) plane = Plane(write);
         var words = new List<string>();
+        if (CentreOnTheGrid(write, arc, plane.First, plane.Second, words: null) is GridCentre centre)
+        {
+            words.Add(SiemensAxes.Address(CenterLetter(plane.First)!, write.FormatComputed(SiemensAxes.DecimalsAddress(
+                write, plane.First), centre.First * SiemensAxes.StateFactor(write, plane.First)), "AC", false));
+            words.Add(SiemensAxes.Address(CenterLetter(plane.Second)!, write.FormatComputed(SiemensAxes.DecimalsAddress(
+                write, plane.Second), centre.Second * SiemensAxes.StateFactor(write, plane.Second)), "AC", false));
+            return words;
+        }
+
         foreach (string name in new[] { plane.First, plane.Second })
         {
             if (arc.Center is null || !arc.Center.TryGetValue(name, out AxisPosition center) || !center.Known

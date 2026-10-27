@@ -85,11 +85,26 @@ public sealed partial class HeidenhainCompilerTests : IDisposable
 
     /// <summary>
     /// The differences of 2.5D_FRAESEN.ncx compiled for the iTNC 530 against 2.5D_FRAESEN.h: the stock definition the
-    /// example keeps as a comment (D217).
+    /// example keeps as a comment (D217), and the pole of block 34 on the output grid (D364).
     /// </summary>
     internal static List<NcException> Differences25DFraesen()
     {
-        return [StockDefinition("BLK FORM 0.1 Z X0 Y0 Z-20", "BLK FORM 0.2 X100 Y100 Z0")];
+        return [StockDefinition("BLK FORM 0.1 Z X0 Y0 Z-20", "BLK FORM 0.2 X100 Y100 Z0"), PoleOnTheGrid()];
+    }
+
+    /// <summary>
+    /// Block 34 of 2.5D_FRAESEN.h: the pole X50 Y50 lies 20.00013 from the written start X50,534 Y69,993 and 20 from
+    /// the end X70 Y50; D364 picks the grid point one step beside it, whose radii agree within 0.0001.
+    /// </summary>
+    internal static NcException PoleOnTheGrid()
+    {
+        return new NcException
+        {
+            Grounds = "D364: the compiler picks the pole among the nine grid points around the rounded centre whose "
+                + "radii from the written start and to the written end agree best",
+            Source = ["CC X50 Y50"],
+            Compiled = ["CC X+50,001 Y+50,001"],
+        };
     }
 
     /// <summary>

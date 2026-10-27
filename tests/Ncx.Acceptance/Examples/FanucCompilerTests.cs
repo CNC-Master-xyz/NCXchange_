@@ -37,6 +37,18 @@ public sealed class FanucCompilerTests : IDisposable
         Compiled = ["G53 Z0.", "G53 X0. Y0."],
     };
 
+    /// <summary>
+    /// N310 of 2.5D_FRAESEN.fanuc.nc: the centre X50 Y50 lies 20.00013 from the written start and 20 from the written
+    /// end; D364 picks the grid point one step beside it, I-0.533 J-19.992, whose radii agree within 0.0001.
+    /// </summary>
+    internal static readonly NcException s_centreOnTheGrid = new()
+    {
+        Grounds = "D364: the compiler picks the centre among the nine grid points around the rounded centre whose "
+            + "radii from the written start and to the written end agree best",
+        Source = ["G3 X70. Y50. I-.534 J-19.993"],
+        Compiled = ["G3 X70. Y50. I-.533 J-19.992"],
+    };
+
     private readonly CliHarness _cli = new();
 
     public void Dispose()
@@ -55,7 +67,8 @@ public sealed class FanucCompilerTests : IDisposable
 
         string compiled = RoundTrip(source, mill);
 
-        string? difference = new NcComparer(mill).Compare(Fixture.ReadText("sources/" + source), compiled, []);
+        string? difference = new NcComparer(mill).Compare(Fixture.ReadText("sources/" + source), compiled,
+            source == "2.5D_FRAESEN.fanuc.nc" ? [s_centreOnTheGrid] : []);
         Assert.True(difference is null, difference);
     }
 
@@ -73,7 +86,7 @@ public sealed class FanucCompilerTests : IDisposable
         string compiled = Compile(example, mill);
 
         string? difference = new NcComparer(mill).Compare(Fixture.ReadText("sources/2.5D_FRAESEN.fanuc.nc"), compiled,
-            [s_movesOfNote4]);
+            [s_centreOnTheGrid, s_movesOfNote4]);
         Assert.True(difference is null, difference);
     }
 

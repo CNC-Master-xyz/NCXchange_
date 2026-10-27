@@ -79,6 +79,8 @@ Lathe G-code systems: Fanuc lathes come in three G-code systems selected by a pa
 - Polar coordinates `G16`/`G15` with the radius in X and the angle in Y: converted to Cartesian by the reader.
 - Chamfer and corner rounding attached to a motion block, `,C2` and `,R4` (with a comma), are expanded by the reader into the line and arc they stand for.
 
+Centres on the output grid (D364): the virtual machine keeps the resolved centre at six decimals (D121). The compiler writes the rounded end point and picks `I J K` among the nine points of the grid of the offset from the written start one step around the rounded offset, the one whose radius from the written start and radius to the written end agree best, and among equals the nearest to the exact centre; a remaining difference above `[machine] arc_radius_tolerance`, or one output step without it, is the WARNING CMP030. N310 of 2.5D_FRAESEN is written `I-.533 J-19.992` for `I-.534 J-19.993`, whose radii differ by 0.00013.
+
 ## 5. Tools
 
 The `T` word means different things per machine kind, and the two-word model of NCX (`PRELOAD`, `TOOL`) covers all of them:
