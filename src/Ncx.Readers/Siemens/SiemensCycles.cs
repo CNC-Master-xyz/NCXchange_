@@ -1,3 +1,4 @@
+using System.Globalization;
 using Ncx.Core.Machine;
 using Ncx.Core.Model;
 
@@ -98,9 +99,66 @@ internal static class SiemensCycles
             }
 
             block.Facts.ControlFeed = value;
+            cycle = WithLiteralFeed(block, cycle, value);
         }
 
         Returned(block, cycle);
+    }
+
+    // D387: a literal F on a position block under MCALL is both the feed of the cycle and the path feed: a cycle that
+    // takes the modal F as its CYCLE_F drills this hole and the later ones of the range with it, so the CYCLE block
+    // stands again with that CYCLE_F, all other words unchanged, directly before the CYCLE_CALL. A cycle with a feed of
+    // its own (CYCLE85 FFR, CYCLE84) takes only the path feed, and a non-literal F stays the feed of the control.
+    // Gap closed 2026-10-27 (delegated, code wave 2): an F equal to the CYCLE_F the cycle has already writes no CYCLE
+    // block again, since nothing changes (N11: the compiler writes the F on the position block, X.. Y.. F..).
+    private static SiemensCycle WithLiteralFeed(SiemensBlock block, SiemensCycle cycle, Value feed)
+    {
+        CycleEntry? entry = null;
+        if (cycle.Words.Count > 0 && cycle.Words[0].Value is IdentValue name)
+        {
+            entry = block.Machine.CycleCatalog.Find(name.Name);
+        }
+
+        if (SiemensNumbers.NumberOf(feed) is null || entry is null || !entry.IsAddressWord("CYCLE_F"))
+        {
+            return cycle;
+        }
+
+        var words = new List<Word>();
+        bool replaced = false;
+        foreach (Word word in cycle.Words)
+        {
+            if (word.Key == "CYCLE_F")
+            {
+                if (word.Value.ToCanonical() == feed.ToCanonical())
+                {
+                    return cycle;
+                }
+
+                words.Add(word with { Value = feed });
+                replaced = true;
+            }
+            else
+            {
+                words.Add(word);
+            }
+        }
+
+        if (!replaced)
+        {
+            words.Add(new Word { Key = "CYCLE_F", Value = feed });
+        }
+
+        var definition = new SiemensDraftBlock();
+        foreach (Word word in words)
+        {
+            definition.Add(word.Key, word.Addr, word.Value);
+        }
+
+        block.Draft.Before.Add(definition);
+        SiemensCycle redefined = cycle with { Words = words };
+        block.Facts.ModalCycle = redefined;
+        return redefined;
     }
 
     /// <summary>
@@ -255,7 +313,7 @@ internal static class SiemensCycles
             return;
         }
 
-        if (Define(block, call) is not SiemensCycle cycle)
+        if (Define(block, call, modal: true) is not SiemensCycle cycle)
         {
             return;
         }
@@ -269,14 +327,12 @@ internal static class SiemensCycles
         facts.Unknown.Remove(SiemensFacts.Cycle);
     }
 
-    // CYCLE81(...) alone calls the cycle once at the current position: CYCLE= and a CYCLE_CALL (controller-mapping 5,
-    // CYCLE_CALL).
-    // TODO(question): wave-2 question #74, whether a cycle called once is closed with CYCLE=OFF; as controller-mapping
-    // 5 writes the direct call, it is CYCLE= and one CYCLE_CALL, without CYCLE=OFF.
+    // CYCLE81(...) alone calls the cycle once at the current position: CYCLE=, a CYCLE_CALL and CYCLE=OFF, since only
+    // MCALL is modal (controller-mapping 5, CYCLE_CALL; D224).
     private static void ReadDirectCall(SiemensBlock block, SourceWord call)
     {
         block.MarkRead(call);
-        if (Define(block, call) is not SiemensCycle cycle)
+        if (Define(block, call, modal: false) is not SiemensCycle cycle)
         {
             return;
         }
@@ -287,6 +343,7 @@ internal static class SiemensCycles
         }
 
         block.Draft.After.Add(new SiemensDraftBlock().WithVerb("CYCLE_CALL"));
+        block.Draft.After.Add(new SiemensDraftBlock().Add("CYCLE", new IdentValue("OFF")));
         block.Facts.ModalCycle = null;
         Returned(block, cycle);
     }
@@ -298,7 +355,8 @@ internal static class SiemensCycles
     /// </summary>
     /// <param name="block">The block being read.</param>
     /// <param name="call">The call word with its arguments.</param>
-    public static SiemensCycle? Define(SiemensBlock block, SourceWord call)
+    /// <param name="modal">True for MCALL, whose positions come from the blocks that follow.</param>
+    public static SiemensCycle? Define(SiemensBlock block, SourceWord call, bool modal)
     {
         CycleCatalog catalog = block.Machine.CycleCatalog;
         List<string> arguments = SiemensArguments.Split(call.Text);
@@ -312,22 +370,50 @@ internal static class SiemensCycles
             }
         }
 
-        // TODO(question): D181, the default of a position the source leaves empty, VARI of CYCLE83 among them, and the
-        // meaning of the trailing mode integers; a call that leaves a fixed value empty, or sets a mode, stays RAW.
-        CycleEntry? entry = catalog.FindNative(call.Address, numbers);
+        // D164, D181: a position the source leaves empty takes the control's default, which the entry records in
+        // defaults where the reader needs it to tell two entries apart (VARI of CYCLE83 is 0); the mode integers are
+        // read only where an entry fixes them, the depth mode of CYCLE830 and SLOT1 included (D379, D380), and a call
+        // that sets any other mode stays RAW.
+        CycleEntry? entry = catalog.FindNative(call.Address, SiemensCycleForms.Selecting(call.Address, numbers));
         string? problem = entry is null
-            ? $"{call.Address} leaves a value empty that tells its NCX cycle, VARI of CYCLE83 (D181)"
+            ? NoEntry(catalog, call.Address)
             : arguments.Count > entry.Signature.Count
                 ? $"{call.Address} has more parameters than the signature of its catalog entry"
-                : ModeSet(entry, arguments);
+                : ModeSet(entry, arguments) ?? SiemensCycleForms.NativeOnly(block, entry, arguments, modal);
         if (problem is not null)
         {
             block.Draft.KeepAsRaw(problem);
             return null;
         }
 
-        var reading = new CycleReading(block, entry!, arguments);
+        var reading = new CycleReading(block, entry!, arguments,
+            SiemensCycleForms.DepthIsIncremental(call.Address, numbers));
         return reading.Words();
+    }
+
+    // Why no entry of the native cycle fits the call: the values its fixed values ask for, VARI of CYCLE83, NUM and
+    // _DMODE of SLOT1 (machine-config 6, fixed).
+    private static string NoEntry(CycleCatalog catalog, string native)
+    {
+        var forms = new List<string>();
+        foreach (CycleEntry entry in catalog.Entries)
+        {
+            if (entry.Native != native || entry.Fixed.Count == 0)
+            {
+                continue;
+            }
+
+            var values = new List<string>();
+            foreach (KeyValuePair<string, decimal> fixedValue in entry.Fixed)
+            {
+                values.Add(fixedValue.Key + "=" + fixedValue.Value.ToString(CultureInfo.InvariantCulture));
+            }
+
+            forms.Add(entry.Name + " " + string.Join(" ", values));
+        }
+
+        return $"{native} sets none of the values that select an entry of the cycle catalog "
+            + $"({string.Join("; ", forms)}) (machine-config 6; D181)";
     }
 
     // The drilling axis stands at the plane the cycle returns to after a call (virtual machine 3.3).
@@ -345,15 +431,16 @@ internal static class SiemensCycles
         block.Facts.Tangent = null;
     }
 
+    // A mode integer the entry does not fix and the call sets: the reader keeps it RAW (D181).
     private static string? ModeSet(CycleEntry entry, List<string> arguments)
     {
         foreach (string mode in s_modes)
         {
             int index = IndexOf(entry.Signature, mode);
-            if (index >= 0 && index < arguments.Count && arguments[index].Length > 0
+            if (index >= 0 && index < arguments.Count && arguments[index].Length > 0 && !entry.Fixed.ContainsKey(mode)
                 && SiemensNumbers.NumberOf(SiemensNumbers.Parse(arguments[index])) != 0)
             {
-                return $"{mode} of {entry.Native} sets a mode whose meaning the documents do not give (D181)";
+                return $"{mode} of {entry.Native} sets a mode that no NCX word carries (D181)";
             }
         }
 
@@ -374,7 +461,7 @@ internal static class SiemensCycles
     }
 
     // The reading of one call against its entry.
-    private sealed class CycleReading(SiemensBlock block, CycleEntry entry, List<string> arguments)
+    private sealed class CycleReading(SiemensBlock block, CycleEntry entry, List<string> arguments, bool incremental)
     {
         private readonly List<Word> _words = [new() { Key = "CYCLE", Value = new IdentValue(entry.Name) }];
         private readonly HashSet<string> _used = new(StringComparer.Ordinal);
@@ -395,9 +482,8 @@ internal static class SiemensCycles
                 }
             }
 
-            // The cycle always returns to RTP: CYCLE_RETRACT=SAFE with SAFE = RTP (controller-mapping 5).
-            // TODO(question): D157, which catalog entries carry the rule words; an entry that maps SAFE to RTP carries
-            // CYCLE_RETRACT, as D157 recommends.
+            // The cycle always returns to RTP: CYCLE_RETRACT=SAFE with SAFE = RTP (controller-mapping 5); D157: an
+            // entry that maps SAFE to RTP carries CYCLE_RETRACT as a rule word.
             if (entry.NativeOf("SAFE") == "RTP")
             {
                 _words.Add(new Word { Key = "CYCLE_RETRACT", Value = new IdentValue("SAFE") });
@@ -433,6 +519,21 @@ internal static class SiemensCycles
             if (word == "DEPTH" && value is null)
             {
                 value = Relative(surface, out problem);
+            }
+            else if (word == "DEPTH" && incremental && value is not null)
+            {
+                // D380, D379: an incremental _DP counts from RFP away from the retract plane, as DPR does (D334).
+                value = Shift(surface, SiemensNumbers.NumberOf(value) is decimal amount
+                    ? SiemensNumbers.Of(Math.Abs(amount))
+                    : value, towardsTheRetractPlane: false);
+                if (value is null)
+                {
+                    return false;
+                }
+            }
+            else if (word == "PITCH" && value is null && !MetricPitch(out value))
+            {
+                return false;
             }
 
             if (value is null)
@@ -474,13 +575,14 @@ internal static class SiemensCycles
         private Value? Relative(Value surface, out string? problem)
         {
             problem = null;
-            int index = IndexOf(entry.Signature, "DPR");
+            string name = IndexOf(entry.Signature, "DPR") >= 0 ? "DPR" : "_DPR";
+            int index = IndexOf(entry.Signature, name);
             if (index < 0 || index >= arguments.Count || arguments[index].Length == 0)
             {
                 return null;
             }
 
-            _used.Add("DPR");
+            _used.Add(name);
             Value? relative = SiemensExpression.ValueOf(block, arguments[index], out problem);
             return relative is null ? null : Shift(surface, relative, towardsTheRetractPlane: false);
         }
@@ -505,7 +607,31 @@ internal static class SiemensCycles
             return new IdentValue(axis);
         }
 
-        // DTB is positive seconds, negative revolutions, which the reader converts with the speed it knows
+        // MPIT is the ISO metric thread size, whose ISO 261 coarse pitch is PITCH, the sign giving the hand as the sign
+        // of PIT does (D181; DrillingFamily.IsoCoarsePitch; SW4.92 p.1089); false, with the block RAW, for a size
+        // that is no ISO coarse size. True with no value where the call gives neither.
+        private bool MetricPitch(out Value? value)
+        {
+            value = null;
+            int index = IndexOf(entry.Signature, "MPIT");
+            if (index < 0 || index >= arguments.Count || arguments[index].Length == 0)
+            {
+                return true;
+            }
+
+            _used.Add("MPIT");
+            if (SiemensNumbers.NumberOf(SiemensNumbers.Parse(arguments[index])) is not decimal size
+                || DrillingFamily.IsoCoarsePitch(size) is not decimal pitch)
+            {
+                Raw($"MPIT={arguments[index]} of {entry.Native} is no ISO metric coarse thread size M3 to M48 (D181)");
+                return false;
+            }
+
+            value = SiemensNumbers.Of(size < 0 ? -pitch : pitch);
+            return true;
+        }
+
+        // The dwell is positive seconds, negative revolutions, which the reader converts with the speed it knows
         // (controller-mapping 5, CYCLE_DWELL).
         private Value? Dwell(Value value)
         {
@@ -517,7 +643,8 @@ internal static class SiemensCycles
             string? role = SiemensSpindles.MasterRole(block);
             if (role is null || !block.Facts.Rpm.TryGetValue(role, out decimal rpm) || rpm <= 0)
             {
-                Raw($"DTB of {entry.Native} dwells by revolutions of a spindle whose speed the reader does not know");
+                Raw($"{entry.CycleDwell} of {entry.Native} dwells by revolutions of a spindle whose speed the reader "
+                    + "does not know");
                 return null;
             }
 
@@ -602,7 +729,9 @@ internal static class SiemensCycles
             return retract > reference ? 1 : -1;
         }
 
-        // A position no word of the entry carries is not written, with a WARNING (D164; wave-2 question #79).
+        // A position no word of the entry carries is not written, with a WARNING (D164; wave-2 question #79); the
+        // reference point of SLOT1 and SLOT2, which the call position carries (D379), and a distance the machine
+        // holds with the same value (D358) are carried.
         private void WarnNotCarried()
         {
             var unmapped = new List<string>();
@@ -610,7 +739,7 @@ internal static class SiemensCycles
             {
                 string native = entry.Signature[index];
                 if (arguments[index].Length > 0 && !_used.Contains(native) && !entry.Fixed.ContainsKey(native)
-                    && Array.IndexOf(s_modes, native) < 0)
+                    && Array.IndexOf(s_modes, native) < 0 && !Carried(native, arguments[index]))
                 {
                     unmapped.Add(native);
                 }
@@ -623,6 +752,26 @@ internal static class SiemensCycles
                     + $"word in the catalog entry {entry.Name} and {(unmapped.Count == 1 ? "is" : "are")} not written "
                     + "(controllers siemens.md 7, machine-config 6)."));
             }
+        }
+
+        // The positions a rule carries beside the params: _CPA/_CPO and the reserved RAD and INDA of SLOT1 (D379);
+        // _VRT and _DIS1 where they equal the [cycles] key the compiler writes them from, or the control's own value
+        // where the key is left out, _VRT 0 or 1 mm and _DIS1 0, automatic (D358; SW4.92 p.1087).
+        private bool Carried(string native, string argument)
+        {
+            if (native is "_CPA" or "_CPO" || (entry.Native == "SLOT1" && native is "RAD" or "INDA"))
+            {
+                return true;
+            }
+
+            decimal? value = SiemensNumbers.NumberOf(SiemensNumbers.Parse(argument));
+            CyclesConfig? cycles = block.Machine.Cycles;
+            return native switch
+            {
+                "_VRT" => value == (cycles?.ChipBreakLift ?? 1m) || (value == 0 && cycles?.ChipBreakLift is null or 1m),
+                "_DIS1" => value == (cycles?.PeckClearance ?? 0m),
+                _ => false,
+            };
         }
 
         private SiemensCycle? Raw(string reason)
