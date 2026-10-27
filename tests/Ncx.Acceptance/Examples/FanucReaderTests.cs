@@ -25,13 +25,10 @@ public sealed partial class FanucReaderTests
 {
     // The blocks of examples/2.5D_FRAESEN.ncx that the Fanuc reading writes otherwise, in their order: the example is
     // written as both readings together and its notes name where the two differ. An empty reading means the Fanuc
-    // source has no block there.
-    // TODO(question): the phase plan (P3-02) expects the Fanuc source to equal the example block for block with
-    // comments and trivia stripped, while the example itself gives the Fanuc reading other blocks (notes 2 and 4: the
-    // offsets where G43 H and D stand, D7; HOME for G28), and controller-mapping 1 makes a comment-only Fanuc line
-    // trivia and no SECTION (D92), S belongs to the M3 of its block (controllers fanuc.md 5), and N70 of the source
-    // carries no G40 for the COMP=OFF of the Heidenhain R0. The test compares every other block of the example as the
-    // plan says, until D217 is answered.
+    // source has no block there. The reader reproduces the example except the differences its notes list, each tied to
+    // its rule (D217): no SECTION, since a comment-only Fanuc line is trivia (note 5; controller-mapping 1, D92); the
+    // offsets where G43 H and D stand (note 2, D7); RPM with the M3 of its block (note 2; fanuc 9 rule 2); no COMP=OFF
+    // where N70 carries no G40 (note 6); HOME for G28 (note 4).
     internal static readonly KeyValuePair<string, string>[] s_fanucReading =
     [
         new("SECTION=\"SIDE MILL D10 L35 SD10\"", ""),
