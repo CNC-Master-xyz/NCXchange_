@@ -265,6 +265,7 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
             return;
         }
 
+        SiemensTools.ReportNames(write);
         if (change)
         {
             WriteToolChange(SiemensTools.ChangeValues(write));

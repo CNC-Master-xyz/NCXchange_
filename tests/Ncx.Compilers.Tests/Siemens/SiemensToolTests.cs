@@ -277,6 +277,28 @@ public sealed class SiemensToolTests
         Assert.Equal(["CFG100"], Codes(Run(Program(MillHeader, "TOOL=\"DRILL_D8\""), Mill())));
     }
 
+    // D172: a tool name with a special character or of more than 31 characters is the WARNING CMP515 (840D sl
+    // NC-Programmierung SW4.92 p.67; Bedienhandbuch Fräsen 2013 p.554-555), for TOOL and PRELOAD.
+    [Theory]
+    [InlineData("TOOL=\"DRILL D8\"")]
+    [InlineData("TOOL=\"BOHRER_Ø8\"")]
+    [InlineData("PRELOAD=\"DRILL.8\"")]
+    [InlineData("TOOL=\"A234567890123456789012345678901X\"")]
+    public void ToolName_WithASpecialCharacterOrTooLong_IsTheWarningCmp515(string block)
+    {
+        Assert.Contains("CMP515", CompilerCodes(Run(Program(MillHeader, block), Mill())));
+    }
+
+    // D172: letters of either case, digits, _ and - pass, as the corpus writes T="SF8-ST-NL30-SL21" (siemens.md 1).
+    [Theory]
+    [InlineData("TOOL=\"DRILL_D8\"")]
+    [InlineData("TOOL=\"SF8-ST-NL30-SL21\"")]
+    [InlineData("PRELOAD=\"Bohrer\"")]
+    public void ToolName_OfLettersDigitsUnderscoreAndHyphen_HasNoCmp515(string block)
+    {
+        Assert.DoesNotContain("CMP515", CompilerCodes(Run(Program(MillHeader, block), Mill())));
+    }
+
     // Controller-mapping 4, ORIENT: SPOS= of the configured master spindle.
     [Fact]
     public void Orient_IsSposOfTheTemplate()

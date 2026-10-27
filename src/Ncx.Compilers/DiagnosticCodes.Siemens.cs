@@ -60,6 +60,14 @@ public static partial class DiagnosticCodes
     public const string SiemensToolPointNotMapped = "CMP514";
 
     /// <summary>
+    /// CMP515, a WARNING: a tool name of TOOL or PRELOAD that the control may not take, with a character other than an
+    /// ASCII letter, a digit, an underscore or a hyphen, or longer than 31 characters; it is written as it stands, case
+    /// kept (840D sl NC-Programmierung SW4.92 p.67: no special characters; Bedienhandbuch Fräsen 2013 p.554-555: at
+    /// most 31 ASCII characters; D172).
+    /// </summary>
+    public const string SiemensToolNameNotPortable = "CMP515";
+
+    /// <summary>
     /// CMP530: ORIGIN names a datum beyond G599, the last settable frame of the control (controllers siemens.md 4;
     /// controller-mapping 1, ORIGIN).
     /// </summary>

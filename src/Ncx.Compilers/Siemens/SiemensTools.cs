@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Ncx.Config.Templates;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.State;
@@ -10,10 +11,38 @@ namespace Ncx.Compilers.Siemens;
 /// T and M6 per [tool_change], which the framework writes, with {offset} the D of the holder; D from OFFSET where the
 /// change does not carry it, the one register of the cutting edge for length and radius.
 /// </summary>
-internal static class SiemensTools
+internal static partial class SiemensTools
 {
     // The target key of the active D (controllers siemens.md 5).
     private const string Edge = "D";
+
+    // The longest tool name the control takes: 31 ASCII characters (Bedienhandbuch Fräsen 2013, p.554-555).
+    private const int MaxNameLength = 31;
+
+    /// <summary>
+    /// A WARNING for a tool name of TOOL or PRELOAD that the control may not take (D172): "Der Werkzeugnamen darf keine
+    /// Sonderzeichen enthalten" (840D sl NC-Programmierung SW4.92, connector p.67), and at most 31 ASCII characters
+    /// (840D sl/828D Bedienhandbuch Fräsen 2013, connector p.554-555). Names are case-sensitive on the control, so the
+    /// compiler writes them exactly as the program gives them and checks nothing about case.
+    /// </summary>
+    // Gap closed 2026-10-27 (delegated): the manual names no list of special characters; the check allows ASCII
+    // letters, digits, the underscore and the hyphen, which the corpus writes (T="SF8-ST-NL30-SL21", siemens.md 1).
+    public static void ReportNames(SiemensBlock write)
+    {
+        foreach (string key in new[] { "TOOL", "PRELOAD" })
+        {
+            if (write.Block.Find(key) is not Word word || word.Value is not StringValue name
+                || (PlainName().IsMatch(name.Content) && name.Content.Length <= MaxNameLength))
+            {
+                continue;
+            }
+
+            write.Warning(DiagnosticCodes.SiemensToolNameNotPortable,
+                $"{key}=\"{name.Content}\" is written as it stands, and the control may refuse the name: a tool name "
+                + "holds no special characters, only letters, digits, _ and -, and at most 31 characters (840D sl "
+                + "NC-Programmierung SW4.92, p.67; Bedienhandbuch Fräsen 2013, p.554-555; D172).");
+        }
+    }
 
     /// <summary>
     /// The values the controller gives the change template itself: {offset}, the D of the holder after the block
@@ -142,4 +171,8 @@ internal static class SiemensTools
             + $"is one register for length and radius; D{state.OffsetLen.ToString(CultureInfo.InvariantCulture)} is "
             + "written (controller-mapping 3, OFFSET:LEN; controllers siemens.md 5).");
     }
+
+    // ASCII letters, digits, the underscore and the hyphen, one or more (D172).
+    [GeneratedRegex("^[A-Za-z0-9_-]+$", RegexOptions.CultureInvariant)]
+    private static partial Regex PlainName();
 }
