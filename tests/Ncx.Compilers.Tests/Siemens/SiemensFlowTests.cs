@@ -310,8 +310,8 @@ public sealed class SiemensFlowTests
             Body(Run(Program(MillTurnHeader, "VAR:R1={$SYS_MPOS_X}", "VAR:R2={$SYS_POS_X}"), WithActualValues(""))));
     }
 
-    // D240, D388: under DIAMETER=OFF, or on an axis that keeps actual values in diameters (frames_in_diameter),
-    // $AA_IM[X] maps one to one.
+    // D240, D388: under DIAMETER=OFF on an axis that keeps actual values in radii, or under DIAMETER=ON on one that
+    // keeps them in diameters (frames_in_diameter), $AA_IM[X] maps one to one.
     [Theory]
     [InlineData("DIAMETER=OFF", "")]
     [InlineData("DIAMETER=ON", "frames_in_diameter = true\n")]
@@ -320,6 +320,17 @@ public sealed class SiemensFlowTests
         CompileResult result = Run(Program(MillTurnHeader, diameter, "VAR:R1={$SYS_MPOS_X}"), WithActualValues(key));
 
         Assert.Contains("R1=$AA_IM[X]", LinesOf(Body(result)));
+    }
+
+    // D240, D388: with frames_in_diameter (MD20360 bits 6/7) $AA_IM[X] reads a diameter under DIAMOF too, so the
+    // NCX radius under DIAMETER=OFF is half of it.
+    [Fact]
+    public void MachinePositionOfX_UnderDiameterOffWithFramesInDiameter_IsHalfAaIm()
+    {
+        CompileResult result = Run(Program(MillTurnHeader, "DIAMETER=OFF", "VAR:R1={$SYS_MPOS_X}"),
+            WithActualValues("frames_in_diameter = true\n"));
+
+        Assert.Contains("R1=($AA_IM[X]/2)", LinesOf(Body(result)));
     }
 
     // millturn1.toml with the actual values of X in [system_variables] and a key after programming of the X axis.

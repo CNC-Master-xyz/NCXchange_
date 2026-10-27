@@ -98,10 +98,25 @@ public static partial class DiagnosticCodes
     public const string SiemensRetractNotWritable = "CMP534";
 
     /// <summary>
-    /// CMP535: a ROTATE or MIRROR before a tilt in the chain, which CYCLE800 with a new swivel plane deletes, and no
-    /// rule for an additive swivel is drafted (840D sl/828D Bedienhandbuch Fräsen 2013 p.481, 483; D333).
+    /// CMP535: a ROTATE, a MIRROR or another tilt before a tilt in the chain, which CYCLE800 with a new swivel plane
+    /// deletes, and no rule for an additive swivel is drafted (840D sl/828D Bedienhandbuch Fräsen 2013 p.481, 483;
+    /// D333).
     /// </summary>
     public const string SiemensFrameBeforeTilt = "CMP535";
+
+    /// <summary>
+    /// CMP536: a word under CYLINDER that TRACYL cannot take: an ARC, whose direction against G19 is not settled, a Y
+    /// word, or a rotary word other than the rotary axis of the workpiece holder (840D sl/828D Arbeitsvorbereitung
+    /// 2013 p.352-353; D146).
+    /// </summary>
+    public const string SiemensCylinderNotWritable = "CMP536";
+
+    /// <summary>
+    /// CMP537, a WARNING: a shift of X before a tilt under DIAMETER=ON goes into _X0 of CYCLE800 as a radius, and
+    /// whether MD20360 bit 14 makes the cycle take a diameter is not verified (Funktionshandbuch Grundfunktionen 2012
+    /// p.901-903; D125, D333).
+    /// </summary>
+    public const string SiemensTiltShiftUnderDiameter = "CMP537";
 
     /// <summary>
     /// CMP550: an ARC with ANGLE whose start, center or end the virtual machine does not know, so that neither AR nor

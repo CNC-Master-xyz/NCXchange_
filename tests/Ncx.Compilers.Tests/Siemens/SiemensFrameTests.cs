@@ -79,6 +79,18 @@ public sealed class SiemensFrameTests
             Body(Run(Program(MillTurnHeader, "SHIFT X=20 Z=5", "ROTATE=30", "ROTATE=RESET"), machine)));
     }
 
+    // D125, D388: with frames_in_diameter (MD20360 bit 3) frames are diameters "ohne Umrechnung", under DIAMETER=OFF
+    // too (Funktionshandbuch Grundfunktionen 2012 p.903), so the radius word X=10 is written TRANS X20.
+    [Fact]
+    public void Shift_OfXUnderDiameterOffWithFramesInDiameter_IsTransWithTheDiameter()
+    {
+        MachineConfig machine = Replaced(MillTurnFile, "programming = \"switchable\"",
+            "programming = \"switchable\"\nframes_in_diameter = true");
+        string header = MillTurnHeader.Replace("DIAMETER=ON", "DIAMETER=OFF", StringComparison.Ordinal);
+
+        Assert.Contains("TRANS X20", LinesOf(Body(Run(Program(header, "SHIFT X=10"), machine))));
+    }
+
     // D125: an expression of X under DIAMETER=ON is halved in the TRANS.
     [Fact]
     public void Shift_OfAnXExpressionUnderDiameterOn_IsHalved()
@@ -164,6 +176,32 @@ public sealed class SiemensFrameTests
         Assert.Equal(Lines("TRANS X10", "CYCLE800(1,\"TC1\",0,27,10,0,0,0,30,0,0,0,0,-1,100,1)", "CYCLE800()",
                 "TRANS X10"),
             Body(Run(Program(MillHeader, "SHIFT X=10", "TILT B=30 MOVE=TURN", "TILT=RESET"), FiveAxis())));
+    }
+
+    // D333: a second swivel to a new plane deletes the first one and the programmed frames (Bedienhandbuch Fräsen
+    // 2013 p.483), so a tilt with another tilt before it in the chain, with or without a shift between them, is the
+    // ERROR CMP535 until a rule for additive swivels is drafted.
+    [Theory]
+    [InlineData("TILT A=10 MOVE=TURN")]
+    [InlineData("SHIFT X=5")]
+    public void Tilt_OnAnotherTilt_IsTheErrorCmp535(string between)
+    {
+        string[] blocks = between.StartsWith("TILT", StringComparison.Ordinal)
+            ? ["TILT B=30 MOVE=TURN", between]
+            : ["TILT B=30 MOVE=TURN", between, "TILT A=10 MOVE=TURN"];
+
+        Assert.Contains("CMP535", CompilerCodes(Run(Program(MillHeader, blocks), FiveAxis())));
+    }
+
+    // D125, D333: an X shift before a tilt under DIAMETER=ON goes into _X0 as a radius, with the WARNING CMP537,
+    // since MD20360 bit 14 may make the cycle take a diameter (unverified).
+    [Fact]
+    public void Tilt_AfterAnXShiftUnderDiameterOn_IsTheWarningCmp537()
+    {
+        CompileResult result = Run(Program(MillTurnHeader, "SHIFT X=20", "TILT B=45 MOVE=TURN"), MillTurn());
+
+        Assert.Equal(["CMP537"], CompilerCodes(result));
+        Assert.Contains("CYCLE800(1,\"TC1\",0,27,10,0,0,0,45,0,0,0,0,-1,100,1)", LinesOf(Body(result)));
     }
 
     // D333: a ROTATE or a MIRROR before a tilt is the ERROR CMP535, since the new swivel deletes it and no rule for
@@ -321,16 +359,32 @@ public sealed class SiemensFrameTests
             MillTurnBody("DIAMETER=OFF", "RAPID X=20", "DIAMETER=ON", "RAPID X=40"));
     }
 
-    // D146: under TRACYL the C word, a length on the circumference, is written as the Y of the transformation and Z
-    // stays along the cylinder (840D sl/828D Arbeitsvorbereitung 2013 p.352-353); the NCX letter C is never written.
+    // D146: under TRACYL the C word of the workpiece holder's rotary axis, a length on the circumference, is written
+    // as the Y of the transformation in G19, Z stays along the cylinder, and TRAFOOF writes the plane of the program
+    // again (840D sl/828D Arbeitsvorbereitung 2013 p.352-353: N40 TRACYL(40), N50 G19); the NCX letter C is never
+    // written.
     [Fact]
-    public void Cylinder_TheCWord_IsTheYOfTracyl()
+    public void Cylinder_TheCWord_IsTheYOfTracylInG19()
     {
         string body = MillTurnBody("SPINDLE_MODE:MAIN=AXIS", "CYLINDER=20", "LINE X=30 F=100", "LINE Z=-10 C=15",
-            "ARC=CW Z=-20 C=25 R=10", "LINE IC=5", "CYLINDER=OFF", "RAPID C=0");
+            "LINE IC=5", "CYLINDER=OFF", "RAPID C=0");
 
-        Assert.Equal(Lines("M70", "TRACYL(40)", "G1 X30 F100", "G1 Z-10 Y15", "G2 Z-20 Y25 CR=10", "G1 Y=IC(5)",
-            "TRAFOOF", "G0 C0"), body);
+        Assert.Equal(Lines("M70", "TRACYL(40)", "G19", "G1 X30 F100", "G1 Z-10 Y15", "G1 Y=IC(5)", "TRAFOOF", "G18",
+            "G0 C0"), body);
+    }
+
+    // D146: an ARC under CYLINDER, whose direction in the cylinder plane against G19 waits on W3-5, a Y word and a
+    // rotary word other than the workpiece holder's (C2 of the sub spindle) are the ERROR CMP536.
+    [Theory]
+    [InlineData("ARC=CW Z=-20 C=25 R=10")]
+    [InlineData("LINE Y=5")]
+    [InlineData("LINE C2=10")]
+    public void Cylinder_ArcYOrAnotherRotaryWord_IsTheErrorCmp536(string block)
+    {
+        CompileResult result = Run(Program(MillTurnHeader, "SPINDLE_MODE:MAIN=AXIS", "SPINDLE_MODE:SUB=AXIS",
+            "CYLINDER=20", "LINE X=30 F=100", "LINE Z=-10 C=15", block), MillTurn());
+
+        Assert.Contains("CMP536", Codes(result));
     }
 
     // D125: under DIAMETER=ON the VM stores the X of SHIFT X=20 as the radius 10; the TRANS that MIRROR=OFF rewrites
@@ -345,12 +399,12 @@ public sealed class SiemensFrameTests
         Assert.Equal(2, body.Split("TRANS X10 Z-2").Length - 1);
     }
 
-    // Controller-mapping 1, TCPM, CYLINDER and POLAR: TRAORI, TRACYL with the working diameter, TRANSMIT and TRAFOOF of
-    // [transform] (millturn1.toml; D96).
+    // Controller-mapping 1, TCPM, CYLINDER and POLAR: TRAORI, TRACYL with the working diameter and its plane G19,
+    // TRANSMIT and TRAFOOF of [transform], the plane of the program again after TRACYL (millturn1.toml; D96, D146).
     [Fact]
     public void Transformations_AreTheTemplatesOfTheMachine()
     {
-        Assert.Equal(Lines("TRACYL(60)", "TRAFOOF", "TRANSMIT", "TRAFOOF", "TRAORI", "TRAFOOF"),
+        Assert.Equal(Lines("TRACYL(60)", "G19", "TRAFOOF", "G18", "TRANSMIT", "TRAFOOF", "TRAORI", "TRAFOOF"),
             MillTurnBody("CYLINDER=30", "CYLINDER=OFF", "POLAR=ON", "POLAR=OFF", "TCPM=ON", "TCPM=OFF"));
     }
 

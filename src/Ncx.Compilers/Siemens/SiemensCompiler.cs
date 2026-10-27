@@ -224,6 +224,7 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
         WriteTools(write);
         SiemensSpindles.Write(write);
         SiemensFrames.WriteTransformations(write);
+        SiemensFrames.ReportCylinder(write);
         SiemensCycles.WriteBefore(write);
         SiemensMotion.WriteModalWords(write);
         SiemensFrames.WriteOrigin(write);

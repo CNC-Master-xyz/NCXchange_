@@ -253,8 +253,15 @@ internal static partial class SiemensExpressions
 
         // D240: $AA_IW[X] reads a diameter under DIAMON and maps one to one; $AA_IM[X], the machine frame, reads a
         // radius unless MD20360 bits 6/7 are set, so under DIAMETER=ON its NCX value, a diameter, is twice the
-        // control's (840D sl Grundlagen 2013 p.169-170; Funktionshandbuch Grundfunktionen 2012 p.901-903).
-        return MachineXActual().IsMatch(text) && SiemensAxes.ReadsRadius(write) ? "(" + text + "*2)" : text;
+        // control's; with the bits set it is a diameter under DIAMOF too, half of it the NCX radius (840D sl
+        // Grundlagen 2013 p.169-170; Funktionshandbuch Grundfunktionen 2012 p.901-903).
+        if (!MachineXActual().IsMatch(text))
+        {
+            return text;
+        }
+
+        decimal factor = SiemensAxes.ActualValueFactor(write);
+        return factor == 2m ? "(" + text + "*2)" : factor == 0.5m ? "(" + text + "/2)" : text;
     }
 
     /// <summary>

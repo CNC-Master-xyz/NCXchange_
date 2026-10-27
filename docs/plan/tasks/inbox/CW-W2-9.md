@@ -43,3 +43,11 @@ Gap closed 2026-10-27 (delegated): D292's INFO is CMP551 once at the UNITS block
 Gap closed 2026-10-27 (delegated): D333's ERROR is CMP535 `SiemensFrameBeforeTilt`; a shift on an axis other than X, Y, Z before a tilt, or a template without `{x}` `{y}` `{z}`, is CMP532.
 
 Left over: positional feed parameters of the cycle signatures (FFR and the like, W2-7's SiemensCycles) are not converted under D292; arc centers under TRACYL go through SiemensArcs (W3-5), which already uses `LetterOf`.
+
+Claude (agent), 2026-10-27, review fixes.
+- D333: a tilt with another tilt before it in the chain, with or without a shift between them, is CMP535 (a second new swivel deletes the first, Bedienhandbuch Fräsen 2013 p.483). An X shift before a tilt under DIAMETER=ON is the new WARNING CMP537 (MD20360 bit 14 unverified).
+- D146: TRACYL is followed by G19 and TRAFOOF by the plane of the program (Arbeitsvorbereitung 2013 p.352); only the workpiece holder's rotary axis maps to Y; an ARC, a Y word or another rotary word under CYLINDER is the new ERROR CMP536 (the arc direction against G19 is left to W3-5). The test that pinned TRACYL without a plane is updated.
+- D125, D240: `frames_in_diameter` now applies under DIAMETER=OFF too ("ohne Umrechnung", Grundfunktionen 2012 p.903): TRANS X of a radius word doubled, `$AA_IM[X]` halved.
+- Still open for the merge of main: D292 on the positional cycle feeds in W2-7's `CycleFeed` (review item 3).
+
+Gap closed 2026-10-27 (delegated): D146's CMP536 SiemensCylinderNotWritable; D333's WARNING CMP537 SiemensTiltShiftUnderDiameter.

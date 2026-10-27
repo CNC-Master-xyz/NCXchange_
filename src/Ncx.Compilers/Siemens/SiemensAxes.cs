@@ -57,11 +57,22 @@ internal static partial class SiemensAxes
 
     /// <summary>
     /// True for the rotary word of the cylinder plane under CYLINDER=n, which TRACYL writes as the linear Y, a length
-    /// on the circumference (D146).
+    /// on the circumference (D146): a word that names the rotary axis of the workpiece holder, the axis C resolves to
+    /// (virtual machine 3.8 rule 3). Another rotary word under CYLINDER is no length of this cylinder (ReportCylinder).
     /// </summary>
     public static bool IsCylinderLength(SiemensBlock write, string axis)
     {
-        return write.After.Frame.Cylinder is not null && axis is "A" or "B" or "C";
+        return write.After.Frame.Cylinder is not null
+            && Resolve(write, axis) is { Kind: AxisKind.Rotary } named
+            && Resolve(write, "C") is AxisDef holderAxis && named.Id == holderAxis.Id;
+    }
+
+    /// <summary>
+    /// True for a rotary axis word, whatever axis it names (machine-config 4).
+    /// </summary>
+    public static bool IsRotary(SiemensBlock write, string axis)
+    {
+        return Resolve(write, axis)?.Kind == AxisKind.Rotary;
     }
 
     // D146: under TRACYL the control takes the developed surface in the axes of the transformation: Y around the
@@ -145,12 +156,16 @@ internal static partial class SiemensAxes
     /// </summary>
     public static decimal FrameWordFactor(SiemensBlock write, string axis)
     {
-        if (axis != "X" || FramesInDiameter(write))
+        if (axis != "X")
         {
             return WordFactor(write, axis);
         }
 
-        return write.After.Frame.Diameter ? 0.5m : 1m;
+        // MD20360 bit 3: frames of a facing axis are diameters "ohne Umrechnung", under DIAMOF too (Funktionshandbuch
+        // Grundfunktionen 2012 p.903), so a radius word is doubled; without it they are radii, so a diameter word is
+        // halved.
+        bool diameterWord = write.After.Frame.Diameter;
+        return FramesInDiameter(write) ? (diameterWord ? 1m : 2m) : (diameterWord ? 0.5m : 1m);
     }
 
     /// <summary>
@@ -159,18 +174,31 @@ internal static partial class SiemensAxes
     /// </summary>
     public static decimal FrameStateFactor(SiemensBlock write, string axis)
     {
-        return axis == "X" && !FramesInDiameter(write) ? 1m : StateFactor(write, axis);
+        if (axis != "X")
+        {
+            return StateFactor(write, axis);
+        }
+
+        return FramesInDiameter(write) ? 2m : 1m;
     }
 
     /// <summary>
-    /// True where a machine-frame actual value of X, $AA_IM[X], reads the radius of the diameter the program means:
-    /// DIAMETER=ON on an X axis written in diameters whose control keeps actual values in radii, MD20360 bits 6 and 7
-    /// off, which [[axis]] frames_in_diameter = false says (D240, D388; Funktionshandbuch Grundfunktionen 2012
-    /// p.901-903).
+    /// The factor from a machine-frame actual value of X, $AA_IM[X], to the NCX value: 2 under DIAMETER=ON on an X axis
+    /// written in diameters whose control keeps actual values in radii (MD20360 bits 6 and 7 off, [[axis]]
+    /// frames_in_diameter = false), 1/2 under DIAMETER=OFF where they are diameters (frames_in_diameter = true), else 1
+    /// (D240, D388; Funktionshandbuch Grundfunktionen 2012 p.901-903).
     /// </summary>
-    public static bool ReadsRadius(SiemensBlock write)
+    public static decimal ActualValueFactor(SiemensBlock write)
     {
-        return write.After.Frame.Diameter && WritesDiameter(write) && !FramesInDiameter(write);
+        // MD20360 bits 6/7 set: actual values are diameters under DIAMOF too, so a radius of the program is half of
+        // them; off: they are radii, so a diameter of the program is twice them.
+        bool diameterWord = write.After.Frame.Diameter;
+        if (FramesInDiameter(write))
+        {
+            return diameterWord ? 1m : 0.5m;
+        }
+
+        return diameterWord && WritesDiameter(write) ? 2m : 1m;
     }
 
     /// <summary>
@@ -303,11 +331,11 @@ internal static partial class SiemensAxes
         };
     }
 
-    // The frames of X are diameters where the X axis is written in diameters and the machine sets frames_in_diameter
-    // (MD20360 bit 3; D125, D388); a radius otherwise, the default of the control.
+    // The frames of X are diameters where the machine sets frames_in_diameter, whatever DIAMON says (MD20360 bit 3;
+    // D125, D388); a radius otherwise, the default of the control.
     private static bool FramesInDiameter(SiemensBlock write)
     {
-        return WritesDiameter(write) && write.Machine.ResolveAxis("X")?.FramesInDiameter == true;
+        return write.Machine.ResolveAxis("X")?.FramesInDiameter == true;
     }
 
     // The X axis is written in diameters where it is programmed so, or switchable and switched on (D60).

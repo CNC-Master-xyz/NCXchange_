@@ -26,6 +26,9 @@ internal static partial class SiemensFrames
     private const string ProgrammableFrame = "TRANS";
     private const string Swivel = "CYCLE800";
 
+    // The target key of the plane, group 6, as SiemensMotion keeps it (controllers siemens.md 2).
+    private const string PlaneGroup = "G17";
+
     // The words of the transform chain (language 4.2).
     private static readonly string[] s_chainWords = ["SHIFT", "ROTATE", "MIRROR", "TILT", "TILT_AXIS", "MOVE", "ROT"];
 
@@ -555,16 +558,28 @@ internal static partial class SiemensFrames
     // D333: {x} {y} {z}, the _X0/_Y0/_Z0 of CYCLE800, the sum of the shifts between the last tilt before this one and
     // it, which the new swivel would delete as TRANS (Bedienhandbuch Fräsen 2013, connector p.481, 483;
     // Arbeitsvorbereitung 2013, connector p.712-713: "Bezugspunkt vor der Drehung"). A frame value of X is a radius
-    // unless the machine keeps frames in diameters (D125, D388). A ROTATE or MIRROR there is the ERROR CMP535 until a
-    // rule for additive swivels is drafted; a shift the template has no placeholder for is CMP532. False where the
-    // tilt cannot be written.
+    // unless the machine keeps frames in diameters (D125, D388). A ROTATE, a MIRROR or another tilt before it is the
+    // ERROR CMP535 until a rule for additive swivels is drafted; a shift the template has no placeholder for is
+    // CMP532. False where the tilt cannot be written.
     private static bool SetReferencePoint(SiemensBlock write, IReadOnlyList<TransformEntry> chain, int index,
         string? template, string what, TemplateValues values)
     {
         var sums = new Dictionary<string, decimal> { ["X"] = 0m, ["Y"] = 0m, ["Z"] = 0m };
-        for (int before = index - 1; before >= 0 && !IsTilt(chain[before]); before--)
+        for (int before = index - 1; before >= 0; before--)
         {
             TransformEntry entry = chain[before];
+
+            // A second swivel to a new plane deletes the earlier swivel with the programmed frames (Bedienhandbuch
+            // Fräsen 2013, connector p.483), so a tilt on a tilt would lose the first one silently (D333).
+            if (IsTilt(entry))
+            {
+                write.Error(DiagnosticCodes.SiemensFrameBeforeTilt,
+                    "Another tilt stands before this tilt in the chain, and CYCLE800 with a new swivel plane deletes "
+                    + "the earlier swivel and the programmed frames; no rule for an additive swivel is drafted "
+                    + "(Bedienhandbuch Fräsen 2013, p.483; D333).");
+                return false;
+            }
+
             if (entry.Kind != TransformKind.Shift)
             {
                 write.Error(DiagnosticCodes.SiemensFrameBeforeTilt,
@@ -596,6 +611,16 @@ internal static partial class SiemensFrames
             }
         }
 
+        // MD20360 bit 14 may make the values of the cycle masks diameters, which is not verified; the radius is
+        // written and the X of the reference point is a WARNING under DIAMETER=ON (D125, D333).
+        if (sums["X"] != 0m && write.After.Frame.Diameter)
+        {
+            write.Warning(DiagnosticCodes.SiemensTiltShiftUnderDiameter,
+                "The shift of X before the tilt is written into _X0 of CYCLE800 as a frame value under DIAMETER=ON; "
+                + "whether the cycle takes it as a radius or, with MD20360 bit 14, as a diameter is not verified "
+                + "(Funktionshandbuch Grundfunktionen 2012, p.901-903; D125, D333).");
+        }
+
         foreach (KeyValuePair<string, decimal> sum in sums)
         {
             string placeholder = sum.Key.ToLowerInvariant();
@@ -616,6 +641,56 @@ internal static partial class SiemensFrames
         }
 
         return true;
+    }
+
+    // D146: TRACYL works in the plane of the developed surface, G19 with Y around the circumference and Z along the
+    // cylinder (840D sl/828D Arbeitsvorbereitung 2013, connector p.352: N40 TRACYL(40), N50 G19); TRAFOOF returns
+    // to the plane of the program, which the WORKPLANE group writes again.
+    private static void WriteCylinderPlane(SiemensBlock write, bool off)
+    {
+        string plane = !off
+            ? "G19"
+            : write.After.Frame.Workplane switch
+            {
+                Workplane.ZX => "G18",
+                Workplane.YZ => "G19",
+                _ => "G17",
+            };
+        write.Write(plane);
+        write.Target.Set(PlaneGroup, plane);
+    }
+
+    /// <summary>
+    /// The words a block under CYLINDER=n cannot carry on TRACYL (D146): an ARC, whose direction in the cylinder plane
+    /// (NCX Z then C) against G19 (Y then Z) waits on W3-5; a Y word, which TRACYL takes for the circumference; and a
+    /// rotary word other than the rotary axis of the workpiece holder, which is no length on this cylinder. Each is
+    /// the ERROR CMP536.
+    /// </summary>
+    public static void ReportCylinder(SiemensBlock write)
+    {
+        if (write.After.Frame.Cylinder is null)
+        {
+            return;
+        }
+
+        if (write.Block.Verb?.Key == "ARC")
+        {
+            write.Error(DiagnosticCodes.SiemensCylinderNotWritable,
+                "An ARC under CYLINDER: its direction in the cylinder plane (Z, then C) against the G19 of TRACYL (Y, "
+                + "then Z) is not settled, so it is not written (Arbeitsvorbereitung 2013, p.352; D146).");
+        }
+
+        foreach (SiemensAxisWord axis in SiemensAxes.Of(write.Block))
+        {
+            if (axis.Axis == "Y" || (SiemensAxes.IsRotary(write, axis.Axis)
+                && !SiemensAxes.IsCylinderLength(write, axis.Axis)))
+            {
+                write.Error(DiagnosticCodes.SiemensCylinderNotWritable,
+                    $"{axis.Word.ToCanonical()} under CYLINDER: TRACYL takes Y for the circumference, the length of "
+                    + "the C word on the rotary axis of the workpiece holder, so another rotary word or a Y word "
+                    + "has no place (Arbeitsvorbereitung 2013, p.352-353; D146).");
+            }
+        }
     }
 
     // A transformation on and off by its template (machine-config 5; controller-mapping 1, TCPM, POLAR).
@@ -663,6 +738,7 @@ internal static partial class SiemensFrames
         if (write.Render(off ? transform?.CylinderOff : transform?.CylinderOn, what, values) is string text)
         {
             write.Write(text);
+            WriteCylinderPlane(write, off);
         }
     }
 
