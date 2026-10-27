@@ -163,8 +163,9 @@ internal static class FrameWords
                 + "nothing moves (D55, D101).",
         },
 
-        // STOCK is the eleventh verb (language 5 rule 1): the blank for the control's graphic, given by its bounding box,
-        // the bare absolute X Y Z of one corner and MAX:X MAX:Y MAX:Z of the opposite one (D351). It moves nothing.
+        // STOCK is the eleventh verb (language 5 rule 1): the blank for the control's graphic, given by its bounding
+        // box, the bare absolute X Y Z of one corner and MAX:X MAX:Y MAX:Z of the opposite one (D351). It moves
+        // nothing.
         new WordDefinition
         {
             Key = "STOCK",
@@ -177,8 +178,8 @@ internal static class FrameWords
             CanonicalRank = CanonicalRanks.Verb,
             Section = "4.2",
             Description = "The blank for the control's graphic by its bounding box, X Y Z one corner and MAX:X MAX:Y "
-                + "MAX:Z the opposite one; STOCK=CYLINDER is the cylinder inscribed in it about the tool axis. Once per "
-                + "program, after the first ORIGIN and before the first motion (D351).",
+                + "MAX:Z the opposite one; STOCK=CYLINDER is the cylinder inscribed in it about the tool axis. Once "
+                + "per program, after the first ORIGIN and before the first motion (D351).",
         },
 
         // The address of MAX is the axis of the opposite corner of STOCK, X, Y or Z, at the end of bucket 5 (D351).

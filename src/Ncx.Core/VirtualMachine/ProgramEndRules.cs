@@ -40,8 +40,9 @@ internal static class ProgramEndRules
         }
 
         // Cylinder, polar, tcpm, rotary path and feed, path mode, tolerance, round limit: PROGRAM=END sets OFF and the
-        // defaults, the path mode its start value from [dynamics] path_mode (virtual machine 4, D349, D350, D363); POLAR and CYLINDER going OFF leave their axes unknown in the workpiece frame (3.4), TCPM going
-        // OFF the tool vector and the surface normal (D81).
+        // defaults, the path mode its start value from [dynamics] path_mode (virtual machine 4, D349, D350, D363);
+        // POLAR and CYLINDER going OFF leave their axes unknown in the workpiece frame (3.4), TCPM going OFF the tool
+        // vector and the surface normal (D81).
         state.Frame.Cylinder = null;
         state.Frame.Polar = false;
         state.Frame.Tcpm = false;

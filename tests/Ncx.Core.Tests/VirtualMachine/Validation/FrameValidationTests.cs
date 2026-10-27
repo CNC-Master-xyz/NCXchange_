@@ -3,8 +3,9 @@ using Ncx.Core.Model;
 namespace Ncx.Core.Tests.VirtualMachine.Validation;
 
 /// <summary>
-/// The frame rules of virtual machine 5, one test per rule with the smallest input: SETPOS, the path tolerance and ROT
-/// against the kinematics of the machine (language 4.1, 4.2; D82, D85, D101).
+/// The frame rules of virtual machine 5, one test per rule with the smallest input: SETPOS, the path tolerance and the
+/// rounding allowance, ROT against the machine and with TILT_AXIS, and STOCK (language 4.1, 4.2; D82, D85, D101,
+/// D191, D351, D363).
 /// </summary>
 public sealed class FrameValidationTests
 {
@@ -65,23 +66,36 @@ public sealed class FrameValidationTests
         RuleAssert.Only(vm, DiagnosticCodes.SetposAxisUnknown);
     }
 
-    // VM 5, language 4.2, D82: ROT on a target without table kinematics is a WARNING; the mill-turn has no rotary axis
-    // on a table.
+    // VM 5, D191: ROT on a machine file without any rotary axis is a WARNING, since no free rotary axis can arise.
     [Fact]
-    public void Rot_OnAMachineWithoutATable_Warns()
+    public void Rot_OnAMachineWithoutARotaryAxis_Warns()
     {
         string text = VmHarness.File("TILT B=45 ROT=COORD", "PROGRAM=END");
 
-        RuleAssert.Only(VmHarness.Run(text, VmMachines.MillTurn()), DiagnosticCodes.RotWithoutTableKinematics);
+        RuleAssert.Only(VmHarness.Run(text, ValidationMachines.ThreeAxisMill()),
+            DiagnosticCodes.RotWithoutTableKinematics);
     }
 
-    // Language 4.2, D82: on table kinematics ROT chooses how the table reaches the plane.
+    // D191: whether ROT takes effect does not depend on the owner of the rotary axis, table, work spindle or head, so
+    // the mill-turn with its C axes on the work spindles and the table mill are both accepted.
     [Fact]
-    public void Rot_OnAMachineWithARotaryTable_IsAccepted()
+    public void Rot_OnAMachineWithARotaryAxisOfAnyOwner_IsAccepted()
     {
         string text = VmHarness.File("TILT B=45 ROT=COORD", "PROGRAM=END");
 
+        VmHarness.Run(text, VmMachines.MillTurn()).AssertNoDiagnostics();
         VmHarness.Run(text, ValidationMachines.MillWithRotaryTable()).AssertNoDiagnostics();
+    }
+
+    // VM 5, D191: ROT written with TILT_AXIS is a WARNING on any target, with or without a machine file, because the
+    // control ignores the transformation type there (PLANE AXIAL).
+    [Fact]
+    public void Rot_WithTiltAxis_Warns()
+    {
+        string text = VmHarness.File("TILT_AXIS B=45 ROT=TABLE", "PROGRAM=END");
+
+        RuleAssert.Only(VmHarness.Run(text, ValidationMachines.MillWithRotaryTable()), DiagnosticCodes.RotWithTiltAxis);
+        RuleAssert.Only(VmHarness.Run(text, VmMachines.Default()), DiagnosticCodes.RotWithTiltAxis);
     }
 
     // D77, D103: the built-in default machine is no target, so ROT is not checked without a machine file.

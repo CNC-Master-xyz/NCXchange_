@@ -25,8 +25,8 @@ public static partial class DiagnosticCodes
     public const string SetposWithoutAxis = "VM421";
 
     /// <summary>
-    /// VM422, a WARNING: ROT on a target without table kinematics, a machine file without a rotary axis on a table
-    /// (language 4.2, virtual machine 5, D82).
+    /// VM422, a WARNING: ROT on a machine file without any rotary axis, whatever its owner, so that no free rotary axis
+    /// can arise (language 4.2, virtual machine 5, D82, D191). The name keeps the code's first reading.
     /// </summary>
     public const string RotWithoutTableKinematics = "VM422";
 
@@ -47,6 +47,12 @@ public static partial class DiagnosticCodes
     /// (language 4.2, virtual machine 5, D351).
     /// </summary>
     public const string StockMisplaced = "VM425";
+
+    /// <summary>
+    /// VM426, a WARNING: ROT written with TILT_AXIS, which the control ignores on any target (language 4.2, virtual
+    /// machine 5, D191, D388).
+    /// </summary>
+    public const string RotWithTiltAxis = "VM426";
 
     /// <summary>
     /// VM440, a WARNING: F in a RAPID block (virtual machine 5).

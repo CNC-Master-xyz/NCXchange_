@@ -78,10 +78,11 @@ SETPOS, the path tolerance, the tilted plane and the blank (language 4.1, 4.2; V
 | `VM051` | ERROR | A TILT_AXIS axis word on an axis the machine does not declare rotary. | language 4.2; VM 3.4, 5; D117 |
 | `VM420` | ERROR | TOLERANCE:ROTARY or TOLERANCE_MODE without an active TOLERANCE, ROUND_LIMIT:ROTARY without an active ROUND_LIMIT. | language 4.1; VM 5; D85, D363 |
 | `VM421` | ERROR | SETPOS without an axis word. | language 4.2; VM 5 |
-| `VM422` | WARNING | ROT on a target without table kinematics: the machine file has no rotary axis on a table. Not checked without a machine file. | language 4.2; VM 5; D82 |
+| `VM422` | WARNING | ROT on a machine file without any rotary axis, whatever the owner: no free rotary axis can arise. Not checked without a machine file. | language 4.2; VM 5; D82, D191 |
 | `VM423` | ERROR | STOCK without all six coordinate words of its form, X Y Z and MAX:X MAX:Y MAX:Z. | language 4.2; VM 5; D351 |
 | `VM424` | ERROR | STOCK with a side of zero or negative extent, or STOCK=CYLINDER whose two sides across the tool axis of the WORKPLANE differ, so that its footprint is not a circle. | language 4.2; VM 5; D351 |
 | `VM425` | ERROR | A second STOCK in one program, a STOCK before the first ORIGIN or one after the first motion verb. | language 4.2; VM 5; D351 |
+| `VM426` | WARNING | ROT written with TILT_AXIS, on any target and without a machine file too: the control ignores the transformation type there. | language 4.2; VM 5; D191 |
 
 ## Motion
 

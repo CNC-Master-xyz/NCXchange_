@@ -103,4 +103,22 @@ internal static class ValidationMachines
             ],
         };
     }
+
+    /// <summary>
+    /// A three-axis mill with a table and no rotary axis at all, as the three mills of machines/ are (D191).
+    /// </summary>
+    public static MachineConfig ThreeAxisMill()
+    {
+        MachineConfig machine = MillWithRotaryTable();
+        var axes = new List<AxisDef>();
+        foreach (AxisDef axis in machine.Axes)
+        {
+            if (axis.Kind == AxisKind.Linear)
+            {
+                axes.Add(axis);
+            }
+        }
+
+        return machine with { Axes = axes };
+    }
 }

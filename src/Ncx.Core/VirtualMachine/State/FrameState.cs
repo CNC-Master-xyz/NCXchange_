@@ -4,8 +4,8 @@ namespace Ncx.Core.VirtualMachine.State;
 
 /// <summary>
 /// The frame rows of virtual machine 2.1: units, workplane, origin, the transform chain, the setpos shifts, the
-/// kinematic transformations, the rotary settings, the path mode, the tolerance settings and the rounding allowance, the workpiece holder and the frame of the block.
-/// Mutable; only the virtual machine changes it (code-guidelines 7).
+/// kinematic transformations, the rotary settings, the path mode, the tolerance settings and the rounding allowance,
+/// the workpiece holder and the frame of the block. Mutable; only the virtual machine changes it (code-guidelines 7).
 /// </summary>
 internal sealed class FrameState
 {

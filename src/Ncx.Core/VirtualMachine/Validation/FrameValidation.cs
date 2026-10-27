@@ -7,7 +7,8 @@ namespace Ncx.Core.VirtualMachine.Validation;
 
 /// <summary>
 /// The frame of virtual machine 5 (language 4.1, 4.2; virtual machine 2.1, 3.4): SETPOS, the path tolerance, the
-/// positioning options of a tilt and the blank of STOCK. MOVE and ROT without TILT or TILT_AXIS are the parser's (PAR016, language 5 rule 5).
+/// positioning options of a tilt and the blank of STOCK. MOVE and ROT without TILT or TILT_AXIS are the parser's
+/// (PAR016, language 5 rule 5).
 /// </summary>
 internal static class FrameValidation
 {
@@ -17,8 +18,8 @@ internal static class FrameValidation
     public static ValidationFamily Family { get; } = new()
     {
         Name = "Frame",
-        Summary = "SETPOS, the path tolerance, the tilted plane and the blank (language 4.1, 4.2; VM 2.1, 3.4, 5). MOVE "
-            + "and ROT without TILT or TILT_AXIS are PAR016 of the structure.",
+        Summary = "SETPOS, the path tolerance, the tilted plane and the blank (language 4.1, 4.2; VM 2.1, 3.4, 5). "
+            + "MOVE and ROT without TILT or TILT_AXIS are PAR016 of the structure.",
         Rules =
         [
             ValidationRule.Error(DiagnosticCodes.SetposAxisUnknown,
@@ -33,8 +34,8 @@ internal static class FrameValidation
             ValidationRule.Error(DiagnosticCodes.SetposWithoutAxis, "SETPOS without an axis word.",
                 "language 4.2; VM 5"),
             ValidationRule.Warning(DiagnosticCodes.RotWithoutTableKinematics,
-                "ROT on a target without table kinematics: the machine file has no rotary axis on a table. Not checked "
-                + "without a machine file.", "language 4.2; VM 5; D82"),
+                "ROT on a machine file without any rotary axis, whatever the owner: no free rotary axis can arise. Not "
+                + "checked without a machine file.", "language 4.2; VM 5; D82, D191"),
             ValidationRule.Error(DiagnosticCodes.StockWithoutItsCorners,
                 "STOCK without all six coordinate words of its form, X Y Z and MAX:X MAX:Y MAX:Z.",
                 "language 4.2; VM 5; D351"),
@@ -44,6 +45,9 @@ internal static class FrameValidation
             ValidationRule.Error(DiagnosticCodes.StockMisplaced,
                 "A second STOCK in one program, a STOCK before the first ORIGIN or one after the first motion verb.",
                 "language 4.2; VM 5; D351"),
+            ValidationRule.Warning(DiagnosticCodes.RotWithTiltAxis,
+                "ROT written with TILT_AXIS, on any target and without a machine file too: the control ignores the "
+                + "transformation type there.", "language 4.2; VM 5; D191"),
         ],
     };
 
@@ -120,34 +124,48 @@ internal static class FrameValidation
     }
 
     /// <summary>
-    /// ROT chooses, on table kinematics, whether the table turns or only the coordinate system; a target that has no
-    /// such option ignores it with a WARNING (language 4.2, virtual machine 5, D82). The built-in default machine of
-    /// D103 is no target, because nothing is compiled for it (D77), so without a machine file ROT is not checked.
+    /// ROT chooses whether the table turns or only the coordinate system, and takes effect only through a free rotary
+    /// axis, one parallel to the tool axis in the swivel situation, whatever owns it (D191). With a machine file, a
+    /// machine without any rotary [[axis]] can never have one, which is the WARNING VM422; whether a given tilt frees
+    /// an axis depends on the spatial angles and the kinematics and is the kinematics module's (D24). Without a machine
+    /// file the machine side is not checked: the built-in default machine of D103 is no target (D77). ROT written with
+    /// TILT_AXIS is the WARNING VM426 on any target, with or without a machine file, because the control ignores the
+    /// transformation type there, and then VM422 is not raised besides it. The family side, Fanuc and Siemens without
+    /// ROT, stays with the compilers (controller-mapping 1).
+    /// Heidenhain_TNC640_Programmierung-Klartext_892903-18_NC-SW-34059x-10_DE_2019, connector p. 435-436 (a free
+    /// rotary axis decides, table or head does not matter; no effect with PLANE AXIAL).
     /// </summary>
-    // TODO(question): virtual machine 5 warns for "ROT on a target without table kinematics" without saying what table
-    // kinematics is in a machine file, nor whether it is checked without one; here it is a rotary [[axis]] whose owner
-    // is a [[resource]] of type table (machine-config 4), and a run without a machine file does not check it, until
-    // D191 is answered.
     public static void CheckRot(Block block, MachineConfig machine, Diagnostics diagnostics)
     {
-        if (block.Find("ROT") is not Word rot || machine.Machine.Controller is null || HasRotaryTable(machine))
+        if (block.Find("ROT") is not Word rot)
+        {
+            return;
+        }
+
+        if (block.Verb?.Key == "TILT_AXIS")
+        {
+            diagnostics.Warning(block, DiagnosticCodes.RotWithTiltAxis,
+                $"{rot.ToCanonical()} with TILT_AXIS is ignored: the transformation type has no effect on a plane "
+                + "given by the rotary axis positions (language 4.2, virtual machine 5, D191).");
+            return;
+        }
+
+        if (machine.Machine.Controller is null || HasRotaryAxis(machine))
         {
             return;
         }
 
         diagnostics.Warning(block, DiagnosticCodes.RotWithoutTableKinematics,
-            $"{rot.ToCanonical()} chooses how a rotary table reaches the plane, and the machine has no rotary axis on "
-            + "a table: the option is ignored (language 4.2, virtual machine 5, D82).");
+            $"{rot.ToCanonical()} chooses how a free rotary axis reaches the plane, and the machine has no rotary axis "
+            + "at all: the option is ignored (language 4.2, virtual machine 5, D191).");
     }
 
-    // A rotary axis of the machine owned by a table (machine-config 4: [[axis]] owner, [[resource]] type).
-    private static bool HasRotaryTable(MachineConfig machine)
+    // A rotary axis of the machine, whatever its owner: table, work spindle or head (machine-config 4, D191).
+    private static bool HasRotaryAxis(MachineConfig machine)
     {
         foreach (AxisDef axis in machine.Axes)
         {
-            if (axis.Kind == AxisKind.Rotary
-                && axis.Owner is string owner
-                && machine.FindResource(owner)?.Type == ResourceType.Table)
+            if (axis.Kind == AxisKind.Rotary)
             {
                 return true;
             }
@@ -159,8 +177,8 @@ internal static class FrameValidation
     /// <summary>
     /// STOCK gives the blank by its bounding box, X Y Z one corner and MAX:X MAX:Y MAX:Z the opposite one, and stands
     /// once per program, after the first ORIGIN and before the first motion verb (language 4.2, virtual machine 5,
-    /// D351). A coordinate from an expression, which STATIC mode does not evaluate, is not compared (virtual machine 1).
-    /// Called after the verb of every block, so the ORIGIN of the STOCK block counts and its motion does not.
+    /// D351). A coordinate from an expression, which STATIC mode does not evaluate, is not compared (virtual machine
+    /// 1). Called after the verb of every block, so the ORIGIN of the STOCK block counts and its motion does not.
     /// </summary>
     public static void CheckStock(BlockContext context, StockPlacement placement)
     {

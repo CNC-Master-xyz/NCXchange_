@@ -5,9 +5,9 @@ using Ncx.Core.VirtualMachine.State;
 namespace Ncx.Core.VirtualMachine.Handlers;
 
 /// <summary>
-/// The frame words of language 4.2 and the units, path mode, path tolerance and rounding allowance of 4.1: the rows of virtual machine 2.1. The frame
-/// verbs SHIFT, TILT, TILT_AXIS and SETPOS with their axis words are step 4, not state words (virtual machine 3); their
-/// RESET forms are state words and handled here.
+/// The frame words of language 4.2 and the units, path mode, path tolerance and rounding allowance of 4.1: the rows of
+/// virtual machine 2.1. The frame verbs SHIFT, TILT, TILT_AXIS and SETPOS with their axis words are step 4, not state
+/// words (virtual machine 3); their RESET forms are state words and handled here.
 /// </summary>
 internal static class FrameHandlers
 {
