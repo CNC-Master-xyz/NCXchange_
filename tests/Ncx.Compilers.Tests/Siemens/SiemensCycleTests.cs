@@ -1,3 +1,4 @@
+using Ncx.Core.Machine;
 using static Ncx.Compilers.Tests.Siemens.SiemensCompile;
 
 namespace Ncx.Compilers.Tests.Siemens;
@@ -183,12 +184,12 @@ public sealed class SiemensCycleTests
             "CYCLE=DRILL SURFACE=0 CLEARANCE=2 DEPTH=-12 CYCLE_RETRACT=SAFE CYCLE_F=80", "CYCLE_CALL X=10"), Mill())));
     }
 
-    // Machine-config 6, fixed: CYCLE83 with VARI=1 is PECK, the fixed value at its position; without PECK the cycle
-    // takes its own infeeds (controller-mapping 5, PECK).
+    // Machine-config 6, fixed: CYCLE83 with VARI=1 is PECK, the fixed value at its position; D356: without PECK the
+    // whole depth in one infeed, FDPR = DEPTH - SURFACE, FDEP empty.
     [Fact]
-    public void Peck_WithoutPeckDepth_IsCycle83WithVariOne()
+    public void Peck_WithoutPeckDepth_IsCycle83WithVariOneAndTheWholeDepth()
     {
-        Assert.Equal(Lines("F100", "MCALL CYCLE83(5,0,5,-40,,,,,,,,1)", "G0 X10"),
+        Assert.Equal(Lines("F100", "MCALL CYCLE83(5,0,5,-40,,,40,,,,,1)", "G0 X10"),
             Before("MCALL", MillBody("CYCLE=PECK SURFACE=0 CLEARANCE=5 DEPTH=-40 CYCLE_F=100", "CYCLE_CALL X=10",
                 "CYCLE=OFF")));
     }
@@ -200,6 +201,118 @@ public sealed class SiemensCycleTests
         Assert.Equal(Lines("F100", "MCALL CYCLE83(5,0,5,-40,,,5,,,,,1)", "G0 X10"),
             Before("MCALL", MillBody("CYCLE=PECK SURFACE=0 CLEARANCE=5 DEPTH=-40 PECK=5 CYCLE_F=100",
                 "CYCLE_CALL X=10", "CYCLE=OFF")));
+    }
+
+    // D356: PECK = 0 is the whole depth as well, counted from CLEARANCE where the block gives no SURFACE.
+    [Fact]
+    public void Peck_ZeroWithoutSurface_IsTheDepthFromClearance()
+    {
+        Assert.Equal(Lines("MCALL CYCLE83(5,,5,-40,,,45,,,,,1)", "G0 X10"),
+            Before("MCALL", MillBody("CYCLE=PECK CLEARANCE=5 DEPTH=-40 PECK=0", "CYCLE_CALL X=10", "CYCLE=OFF")));
+    }
+
+    // D358: CHIP_BREAK, CYCLE83 with VARI=0, writes _VRT (position 15) from [cycles] chip_break_lift, 1 mm on the
+    // mill; D181: the dwell at the final depth is _DTD, position 16.
+    [Fact]
+    public void ChipBreak_WritesTheLiftOfTheMachineAndTheFinalDwell()
+    {
+        Assert.Equal(Lines("F100", "MCALL CYCLE83(5,0,5,-40,,,5,,,,,0,,,1,0.5)", "G0 X10"),
+            Before("MCALL", MillBody("CYCLE=CHIP_BREAK SURFACE=0 CLEARANCE=5 DEPTH=-40 PECK=5 CYCLE_DWELL=0.5 "
+                + "CYCLE_F=100", "CYCLE_CALL X=10", "CYCLE=OFF")));
+    }
+
+    // D358: _DIS1 (position 17) comes from [cycles] peck_clearance where the machine sets it.
+    [Fact]
+    public void Peck_WithPeckClearanceOfTheMachine_WritesDis1()
+    {
+        MachineConfig machine = Replaced(MillFile, "chip_break_lift = 1.0",
+            "chip_break_lift = 1.0\npeck_clearance = 0.6");
+
+        Assert.Equal(Lines("MCALL CYCLE83(5,0,5,-40,,,5,,,,,1,,,,,0.6)", "G0 X10"),
+            Before("MCALL", Body(Run(Program(MillHeader, "CYCLE=PECK SURFACE=0 CLEARANCE=5 DEPTH=-40 PECK=5",
+                "CYCLE_CALL X=10", "CYCLE=OFF"), machine))));
+    }
+
+    // D362, D181: TAP and TAP_COMPENSATING tap with the feed of PITCH, so a CYCLE_F is the WARNING CMP574, once at
+    // the CYCLE block, and is not written.
+    [Theory]
+    [InlineData("TAP", "CYCLE84")]
+    [InlineData("TAP_COMPENSATING", "CYCLE840")]
+    public void Tap_WithACycleFeed_IsAWarningAndTheFeedIsNotWritten(string name, string native)
+    {
+        CompileResult result = Run(Program(MillHeader, $"CYCLE={name} SURFACE=0 CLEARANCE=2 DEPTH=-15 PITCH=1.5 "
+            + "CYCLE_F=300", "CYCLE_CALL X=10", "CYCLE_CALL X=20", "CYCLE=OFF"), Mill());
+
+        Assert.Equal([DiagnosticCodes.SiemensCycleWordDerived], CompilerCodes(result));
+        Assert.DoesNotContain("F300", Body(result), StringComparison.Ordinal);
+        Assert.Contains("MCALL " + native + "(2,0,2,-15,", Body(result), StringComparison.Ordinal);
+    }
+
+    // D362: CYCLE_DWELL=0 on a cycle without a dwell is the control's behaviour and is dropped silently; a dwell
+    // other than 0 is lost, the ERROR CMP571, once at the CYCLE block.
+    [Fact]
+    public void Slot_WithADwell_IsDroppedAtZeroAndAnErrorOtherwise()
+    {
+        Assert.DoesNotContain(DiagnosticCodes.SiemensCycleWordNotWritable, CompilerCodes(Run(Program(MillHeader,
+            "CYCLE=SLOT SURFACE=0 CLEARANCE=2 DEPTH=-5 CYCLE_DWELL=0", "CYCLE_CALL X=10 Y=10", "CYCLE=OFF"), Mill())));
+        Assert.Equal([DiagnosticCodes.SiemensCycleWordNotWritable, DiagnosticCodes.SiemensCycleRequiredPositionEmpty],
+            CompilerCodes(Run(Program(MillHeader, "CYCLE=SLOT SURFACE=0 CLEARANCE=2 DEPTH=-5 CYCLE_DWELL=1",
+                "CYCLE_CALL X=10 Y=10", "CYCLE_CALL X=20", "CYCLE=OFF"), Mill())));
+    }
+
+    // D379: SLOT is SLOT1 at the call position: NUM 1, RAD and INDA empty, _CPA/_CPO the position, the _DMODE
+    // thousands digit 1 and the _AMODE ones digit 2; a direct call at every position after the motion to it. LENG,
+    // WID and FFP1 carry no NCX word and stay empty, the WARNING CMP576.
+    [Fact]
+    public void Slot_IsSlot1AtEveryCallPosition()
+    {
+        CompileResult result = Run(Program(MillHeader, "CYCLE=SLOT SURFACE=0 CLEARANCE=2 DEPTH=-5 SAFE=10 "
+            + "CYCLE_RETRACT=SAFE PECK=2 CYCLE_F=100", "CYCLE_CALL X=20 Y=10", "CYCLE_CALL X=40", "CYCLE=OFF"), Mill());
+
+        Assert.Equal(Lines("G0 X20 Y10", "SLOT1(10,0,2,-5,,1,,,20,10,,,,100,,2,,,,,,,,,,,,,,1000,2)", "X40",
+                "SLOT1(10,0,2,-5,,1,,,40,10,,,,100,,2,,,,,,,,,,,,,,1000,2)"),
+            Body(result));
+        Assert.Equal([DiagnosticCodes.SiemensCycleRequiredPositionEmpty], CompilerCodes(result));
+    }
+
+    // D380: DEEP_HOLE is CYCLE830 with an absolute _DP and the _AMODE ones digit 1, S_FB the drilling feed at
+    // position 18; _SDAC and _SV1, the spindle of the cycle, stay empty (CMP576).
+    [Fact]
+    public void DeepHole_IsCycle830WithTheAbsoluteDepthMode()
+    {
+        CompileResult result = Run(Program(MillHeader, "CYCLE=DEEP_HOLE SURFACE=0 CLEARANCE=2 DEPTH=-60 SAFE=10 "
+            + "CYCLE_RETRACT=SAFE CYCLE_F=150", "CYCLE_CALL", "CYCLE=OFF"), Mill());
+
+        Assert.Equal(Lines("CYCLE830(10,0,2,-60,,,,,,,,,,,,,,150,,,,,,,,,,,,,,,,,,,,1)"), Body(result));
+        Assert.Equal([DiagnosticCodes.SiemensCycleRequiredPositionEmpty], CompilerCodes(result));
+    }
+
+    // D279: a native cycle whose signature the catalog does not know is an ERROR, not written positionally.
+    [Fact]
+    public void NativeCycle_WithoutASignature_IsAnError()
+    {
+        Assert.Equal([DiagnosticCodes.SiemensNativeCycleSignatureUnknown], CompilerCodes(Run(Program(MillHeader,
+            "CYCLE:SIEMENS=CYCLE952 VARI=1", "CYCLE_CALL", "CYCLE=OFF"), Mill())));
+    }
+
+    // D387 (N11): a CYCLE block again with another CYCLE_F inside the modal range is the F on the position block,
+    // which the control takes as the feed of this call and of the path after it.
+    [Fact]
+    public void CycleFeed_ChangedInsideTheModalRange_StandsOnThePositionBlock()
+    {
+        Assert.Equal(Lines("F100", "MCALL CYCLE81(10,0,2,-5)", "G0 X10 Y10", "X20 F200", "X30", "MCALL", "G1 X40"),
+            MillBody("CYCLE=DRILL SURFACE=0 CLEARANCE=2 DEPTH=-5 SAFE=10 CYCLE_RETRACT=SAFE CYCLE_F=100",
+                "CYCLE_CALL X=10 Y=10", "CYCLE=DRILL SURFACE=0 CLEARANCE=2 DEPTH=-5 SAFE=10 CYCLE_RETRACT=SAFE "
+                + "CYCLE_F=200", "CYCLE_CALL X=20", "CYCLE_CALL X=30", "CYCLE=OFF", "LINE X=40 F=200"));
+    }
+
+    // D224: CYCLE=OFF after a direct call ends nothing the control has active, and the compiler writes nothing for it.
+    [Fact]
+    public void CycleOff_AfterADirectCall_WritesNothing()
+    {
+        Assert.Equal(Lines("G0 X10 Y10", "F120", "CYCLE81(5,0,5,-20)", "G0 Z50"),
+            MillBody("RAPID X=10 Y=10", "CYCLE=DRILL SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_F=120", "CYCLE_CALL",
+                "CYCLE=OFF", "RAPID Z=50"));
     }
 
     // Controller-mapping 5, AXIS: _AXN 1, 2, 3 is the first, second and third geometry axis of the plane; the tool axis
