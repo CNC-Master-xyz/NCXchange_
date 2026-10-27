@@ -76,8 +76,9 @@ public static partial class DiagnosticCodes
 
     /// <summary>
     /// CMP017: an ARC with a tool vector TX TY TZ compiled for a controller without a vector arc, Heidenhain (LN has no
-    /// arc form) and, until a Siemens vector arc is checked, Siemens; an ERROR at compile time like RAW of another
-    /// controller (D185).
+    /// arc form) and, until a Siemens vector arc is checked, Siemens, an ERROR at compile time like RAW of another
+    /// controller; on Fanuc a vector arc by its centre, as I J K of G43.5 are the vector and only the R form is left
+    /// (D185).
     /// </summary>
     public const string VectorArcNotWritable = "CMP017";
 
