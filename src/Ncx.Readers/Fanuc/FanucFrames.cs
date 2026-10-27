@@ -346,6 +346,8 @@ internal static class FanucFrames
     // G54 to G59 zero like X and Z and not added to the active G52, and G52 U0 W0 cancels like X0 Z0 (Nakamura 31i-A
     // p.51-52; D117). (c): under G68, G51.1, a 3D G68 or G68.2 the G52 stays RAW (Prohibition), so the chain holds at
     // most the SHIFT of the earlier G52 here.
+    // D125: on a lathe the work shift X is a diameter, as every X word under DIAMETER=ON, SHIFT X included (language
+    // 4.2), so the reader writes the value as the source gives it.
     private static void ReadShift(FanucBlock block)
     {
         if (!block.TakeCode("G52"))

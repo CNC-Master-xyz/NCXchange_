@@ -30,6 +30,17 @@ public sealed class FanucFrameTests
             Body("G52 U2.75 W1.25\nG52 U1. W1.", Lathe()));
     }
 
+    // D125: on a lathe with X in diameters the G52 X is a diameter, and so is SHIFT X under DIAMETER=ON: the reader
+    // writes it as given, neither halved nor doubled, and the program checks.
+    [Fact]
+    public void Shift_G52XOnADiameterLathe_IsTheDiameterAsWritten()
+    {
+        string text = Text("%\nO0001\nG0 X40. Z5.\nG52 X10. Z0\nG0 X20.\nG52 U0 W0\nM30\n%\n", Lathe());
+
+        Assert.Equal(Lines("RAPID X=40 Z=5", "SHIFT X=10 Z=0", "RAPID X=20", "SHIFT=RESET"), BodyOf(text));
+        Assert.False(Check(text, Lathe()).HasErrors, Check(text, Lathe()).ToText());
+    }
+
     // G53 is FRAME=MACHINE on its block (controllers fanuc.md 9 rule 3).
     [Fact]
     public void G53_IsFrameMachineOnItsBlock()
