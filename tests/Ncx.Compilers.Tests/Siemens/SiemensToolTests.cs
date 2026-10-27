@@ -1,3 +1,4 @@
+using Ncx.Core.Machine;
 using static Ncx.Compilers.Tests.Siemens.SiemensCompile;
 
 namespace Ncx.Compilers.Tests.Siemens;
@@ -98,6 +99,43 @@ public sealed class SiemensToolTests
     {
         Assert.Equal(Lines("SETMS(2)", "G96 S2=200 LIMS[2]=3000", "SETMS", "S1500 M3"),
             MillTurnBody("CSS:SUB=ON VC:SUB=200 RPM_MAX:SUB=3000", "SPINDLE:MAIN=CW RPM:MAIN=1500"));
+    }
+
+    // D294, machine-config 5: a spindle's number is the address extension its templates write, else the digits of its
+    // resource id, so a SUB spindle S2 whose templates write the plain S and M3 is selected with SETMS(2).
+    [Fact]
+    public void SpindleNumber_WithoutAnExtensionInItsTemplates_IsTheDigitsOfItsResourceId()
+    {
+        CompileResult result = Run(Program(MillTurnHeader, "CSS:SUB=ON VC:SUB=200 RPM_MAX:SUB=3000"),
+            PlainSubSpindle(text => text));
+
+        Assert.Empty(CompilerCodes(result));
+        Assert.Equal(Lines("SETMS(2)", "G96 S200 LIMS=3000"), Body(result));
+    }
+
+    // D294: a spindle with neither an extension in its templates nor digits in its resource id has no number, and
+    // SETMS for it is the ERROR CMP511, once per text that acts on the master spindle (controllers siemens.md 5, 12
+    // rule 3).
+    [Fact]
+    public void SpindleNumber_WithNeitherAnExtensionNorDigitsInItsId_IsTheErrorCmp511()
+    {
+        CompileResult result = Run(Program(MillTurnHeader, "CSS:SUB=ON VC:SUB=200 RPM_MAX:SUB=3000"),
+            PlainSubSpindle(text => text.Replace("\"S2\"", "\"SUBSPINDLE\"", StringComparison.Ordinal)));
+
+        Assert.Equal(["CMP511"], CompilerCodes(result).Distinct());
+    }
+
+    // millturn1.toml with the templates of [spindle.SUB] in the plain words of the master spindle, no extension.
+    private static MachineConfig PlainSubSpindle(Func<string, string> change)
+    {
+        return Variant(MillTurnFile, text =>
+        {
+            int start = text.IndexOf("\n[spindle.SUB]", StringComparison.Ordinal);
+            int end = text.IndexOf("\n[spindle.TOOL]", StringComparison.Ordinal);
+            string plain = "\n[spindle.SUB]\nCW = \"M3\"\nCCW = \"M4\"\nOFF = \"M5\"\nRPM = \"S{rpm}\"\n"
+                + "VC = \"G96 S{value}\"\nCSS_OFF = \"G97\"\nRPM_MAX = \"LIMS={value}\"\n";
+            return change(text[..start] + plain + text[end..]);
+        });
     }
 
     // Language 4.11: under CSS RPM is ignored and not written; when CSS goes off the spindle turns at RPM again, G97

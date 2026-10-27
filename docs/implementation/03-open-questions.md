@@ -373,7 +373,7 @@ The tasks of wave 3 (P3-03, P3-04, P3-06, P3-07, P4-02 with its review fixes, P4
 | 144 | P5-02 | Which pair does the compiler write for UNITS, G70/G71 or G700/G710? | D292 (with 115) | `src/Ncx.Compilers/Siemens/SiemensMotion.cs:38` |
 | 145 | P5-02 | Which feed mode do G97, G971 and G972 leave, on the compiler side? | settled 2026-10-01 (D342) (with 122) | `src/Ncx.Compilers/Siemens/SiemensMotion.cs:148` |
 | 146 | P5-02 | Does a SINUMERIK program repeat G0 to G3 on every motion block? | D299; it also settles question 75 (D282), and the two are answered together | `src/Ncx.Compilers/Siemens/SiemensMotion.cs:215` |
-| 147 | P5-02 | Which number has the master spindle of SETMS(n), on the compiler side? | D294 (with 120) | `src/Ncx.Compilers/Siemens/SiemensSpindles.cs:63` |
+| 147 | P5-02 | Which number has the master spindle of SETMS(n), on the compiler side? | settled 2026-10-27 (D294) | `src/Ncx.Compilers/Siemens/SiemensSpindles.cs:63` |
 | 148 | P5-02 | Which pair of spindles does [spindle_sync] couple? (the marker cites D154) | repeats D154 (with 114): the [spindle_sync] pair is the default spindle leading and the other work spindle following; the compiler reports another pair as an ERROR (SiemensSpindlePairNotWritable) until D154's pair key exists | `src/Ncx.Compilers/Siemens/SiemensSpindles.cs:172` |
 | 149 | P5-02 | May the compiler write G961 for the G96 of a template, where the block leaves the feed per minute? | settled 2026-10-01 (D300): main already follows it | `src/Ncx.Compilers/Siemens/SiemensSpindles.cs:298` |
 | 150 | P5-02 | How are OFFSET:LEN and OFFSET:RAD written with the one D register of the control? | settled 2026-10-01 (D301) | `src/Ncx.Compilers/Siemens/SiemensTools.cs:72` |
