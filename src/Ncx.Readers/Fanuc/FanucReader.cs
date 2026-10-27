@@ -322,6 +322,9 @@ public sealed partial class FanucReader : ReaderBase
 
         StartProgram(fanuc);
 
+        // D155: a program starts with no function of the tables on (virtual machine 2).
+        fanuc.FunctionHolding = [];
+
         // Writers emit a complete header; configuration defaults apply to source readers only (D34).
         DraftBlock header = FanucHeader.Compose(fanuc, begin, Machine);
         Builder.Begin(begin.Line);

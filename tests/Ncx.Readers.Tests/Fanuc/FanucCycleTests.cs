@@ -838,4 +838,13 @@ public sealed class FanucCycleTests
                 "CYCLE=OFF"),
             Body("G0 X0 Y0 Z10.\nG76 G99 Z-5. R2. Q0.5 F100\nX10.\nG80"));
     }
+
+    // D155: a code that several states write gives those that the source state does not rule out: M9, the OFF of the
+    // coolant and of a function, switches off only what is on, and a state that holds already is not written again.
+    [Fact]
+    public void FunctionCode_OfSeveralStates_WritesOnlyTheOffOfWhatIsOn()
+    {
+        Assert.Equal(Lines("FUNC:AIR=ON", "FUNC:AIR=OFF"),
+            Body("M51\nM9", MillWith("[func.AIR]\nON = \"M51\"\nOFF = \"M9\"")));
+    }
 }

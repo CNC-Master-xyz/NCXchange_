@@ -136,18 +136,23 @@ internal static class FanucBuilder
             return;
         }
 
-        if (FanucFunctions.Of(block, word, out SourceWord? parameter) is FanucFunction function)
+        // D155: every state of the code that the source state does not rule out and that does not hold already.
+        if (FanucFunctions.Of(block, word, out _) is not null)
         {
+            List<FanucFunction> functions = FanucFunctions.AllOf(block, word, out SourceWord? parameter);
             if (parameter is not null)
             {
                 block.MarkRead(parameter);
             }
 
-            block.Draft.AddState(function.Key, function.Addr, OrientationOf(block, function) ?? function.Value);
-            if (function.SpindleRole is not null)
+            foreach (FanucFunction function in functions)
             {
-                block.State.LastSpindle = function.SpindleRole;
-                block.Fanuc.Unknowns.Spindle = false;
+                block.Draft.AddState(function.Key, function.Addr, OrientationOf(block, function) ?? function.Value);
+                if (function.SpindleRole is not null)
+                {
+                    block.State.LastSpindle = function.SpindleRole;
+                    block.Fanuc.Unknowns.Spindle = false;
+                }
             }
 
             return;

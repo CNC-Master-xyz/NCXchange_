@@ -1,3 +1,4 @@
+using Ncx.Config.Templates;
 using Ncx.Core.Machine;
 using Ncx.Core.Model;
 
@@ -42,6 +43,58 @@ internal static class FanucFunctions
 
         state ??= block.Templates.FindFunctionByCode(native);
         return state is null ? null : WordOf(block, state);
+    }
+
+    /// <summary>
+    /// The words of an M code that several states of the tables write, chosen with what holds (D155): the states the
+    /// source state rules out - a table of another channel, the OFF of a resource that is not on - and those that hold
+    /// already are dropped, and the first state in file order stands where nothing remains (FunctionChoice). Records
+    /// what holds after them. Empty when no table names the code.
+    /// </summary>
+    /// <param name="block">The block being read.</param>
+    /// <param name="code">The M word.</param>
+    /// <param name="parameter">The P word that belongs to the M code; null when none does.</param>
+    public static List<FanucFunction> AllOf(FanucBlock block, SourceWord code, out SourceWord? parameter)
+    {
+        parameter = null;
+        var functions = new List<FanucFunction>();
+        if (NativeCode.Of(code) is not string native)
+        {
+            return functions;
+        }
+
+        IReadOnlyList<FunctionMatch> matches = [];
+        if (block.Find("P") is SourceWord pWord && pWord.Number is not null)
+        {
+            matches = block.Templates.FindFunctionsByCode(native + " P" + pWord.Text);
+            parameter = matches.Count > 0 ? pWord : null;
+        }
+
+        if (matches.Count == 0)
+        {
+            matches = block.Templates.FindFunctionsByCode(native);
+        }
+
+        var context = new FunctionContext
+        {
+            Channel = block.Fanuc.Channel is long channel ? (int)channel : null,
+            Holding = block.Fanuc.FunctionHolding,
+        };
+        foreach (FunctionMatch match in FunctionChoice.Choose(matches, context, block.Line, native,
+            block.Diagnostics))
+        {
+            if (match.Table is not null && WordOf(block, match.Key) is FanucFunction function)
+            {
+                functions.Add(function);
+                block.Fanuc.FunctionHolding?.Remove(match.Word);
+                if (match.State != "OFF")
+                {
+                    block.Fanuc.FunctionHolding?.Add(match.Word, match.State);
+                }
+            }
+        }
+
+        return functions;
     }
 
     /// <summary>

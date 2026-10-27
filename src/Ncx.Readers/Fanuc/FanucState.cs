@@ -116,6 +116,13 @@ internal sealed class FanucState
     public HashSet<int> BeforeLineNotOnEveryPath { get; } = [];
 
     /// <summary>
+    /// The state of each function-table word the reader wrote, "COOLANT:STANDARD" = "ON", so that a code of several
+    /// states writes only those that do not hold already and no OFF of a resource that is not on (D155); null where the
+    /// reader does not know what holds, after a block it does not follow.
+    /// </summary>
+    public Dictionary<string, string>? FunctionHolding { get; set; } = [];
+
+    /// <summary>
     /// The lines of the drilling cycle blocks with a group-01 code, which the reader keeps RAW and after which it
     /// writes CYCLE=OFF, since the control cancels the cycle as G80 does (D386; FanucCycles.Read).
     /// </summary>
@@ -433,6 +440,7 @@ internal sealed class FanucState
     public void ForgetWritten()
     {
         _written.Clear();
+        FunctionHolding = null;
     }
 
     /// <summary>
