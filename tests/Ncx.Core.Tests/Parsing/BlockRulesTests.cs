@@ -300,6 +300,46 @@ public sealed class BlockRulesTests
         ParseText.CleanBlock(text);
     }
 
+    // D116: NAME needs PROGRAM=BEGIN, SUB=BEGIN or START_CHANNEL; NUMBER and CHANNEL need PROGRAM=BEGIN; the cycle
+    // parameters need CYCLE. The partner is value-aware: PROGRAM=END is no partner of NAME.
+    [Theory]
+    [InlineData("NAME=\"SHAFT\"")]
+    [InlineData("PROGRAM=END NAME=\"SHAFT\"")]
+    [InlineData("SUB=END NAME=100")]
+    [InlineData("NUMBER=1")]
+    [InlineData("SUB=BEGIN NAME=100 NUMBER=1")]
+    [InlineData("CHANNEL=2")]
+    [InlineData("START_CHANNEL=2 CHANNEL=2")]
+    [InlineData("AXIS=X")]
+    [InlineData("SURFACE=0")]
+    [InlineData("CLEARANCE=2")]
+    [InlineData("DEPTH=-15")]
+    [InlineData("SAFE=10")]
+    [InlineData("CYCLE_RETRACT=SAFE")]
+    [InlineData("PECK=2")]
+    [InlineData("CYCLE_F=300")]
+    [InlineData("CYCLE_DWELL=0.5")]
+    [InlineData("PITCH=1.5")]
+    [InlineData("CONTOUR=100")]
+    [InlineData("CYCLE_CALL X=10 Y=10 DEPTH=-5")]
+    public void D116_WordWithoutItsPartner_IsError(string text)
+    {
+        BlockWithError(text, DiagnosticCodes.PartnerWordMissing);
+    }
+
+    // D116: with their partner the header words and the cycle parameters are accepted.
+    [Theory]
+    [InlineData("PROGRAM=BEGIN NAME=\"SHAFT\" NUMBER=1 CHANNEL=2")]
+    [InlineData("SUB=BEGIN NAME=100")]
+    [InlineData("START_CHANNEL=2 NAME=\"SHAFT_CH2\"")]
+    [InlineData("CYCLE=DRILL AXIS=Z SURFACE=0 CLEARANCE=2 DEPTH=-15 SAFE=10 CYCLE_RETRACT=SAFE CYCLE_F=300")]
+    [InlineData("CYCLE=PECK SURFACE=0 CLEARANCE=2 DEPTH=-15 PECK=2 CYCLE_F=300 CYCLE_DWELL=0.5")]
+    [InlineData("CYCLE=TAP SURFACE=0 CLEARANCE=2 DEPTH=-15 PITCH=1.5")]
+    public void D116_WordWithItsPartner_IsAccepted(string text)
+    {
+        ParseText.CleanBlock(text);
+    }
+
     // Parses one line and asserts that the rule's ERROR is among what the parser reported, once.
     private static Block? BlockWithError(string text, string code)
     {

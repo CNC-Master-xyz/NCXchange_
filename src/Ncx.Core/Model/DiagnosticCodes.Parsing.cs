@@ -84,8 +84,9 @@ public static partial class DiagnosticCodes
     public const string DuplicateKey = "PAR015";
 
     /// <summary>
-    /// PAR016: IF, ARG, TIMES, WITH, FRAME, MOVE, ROT, POINT or PHASE without its verb or partner word in the block
-    /// (language 5 rule 5).
+    /// PAR016: IF, ARG, TIMES, WITH, FRAME, MOVE, ROT, POINT or PHASE without its verb or partner word in the block;
+    /// NAME without PROGRAM=BEGIN, SUB=BEGIN or START_CHANNEL; NUMBER or CHANNEL without PROGRAM=BEGIN; a cycle
+    /// parameter without CYCLE (language 5 rule 5, D116).
     /// </summary>
     public const string PartnerWordMissing = "PAR016";
 

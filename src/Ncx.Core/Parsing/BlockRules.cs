@@ -20,17 +20,22 @@ internal static class BlockRules
     // The verbs that carry an axis name: the motion verbs, HOME and the verbs of the frame table (language 5 rule 2).
     private const string VerbsWithAxisNames = "RAPID, LINE, ARC, HOME, CYCLE_CALL, SHIFT, TILT, TILT_AXIS or SETPOS";
 
+    // The partner of the header words NAME, NUMBER and CHANNEL (language 4.1, D116).
+    private const string ProgramBegin = "PROGRAM=BEGIN";
+
+    // The partner of the cycle parameters, in any form: CYCLE=DRILL, CYCLE:HEIDENHAIN=200 (language 4.7, D116).
+    private const string CycleKey = "CYCLE";
+
     // The verbs of the frame table, which carry their own axis words, the axis names of their rows, and no arc or
     // vector word (language 5 rule 2; 4.2).
     private static readonly string[] s_frameVerbs = ["SHIFT", "TILT", "TILT_AXIS", "SETPOS"];
 
     // Rule 5: the block words and the verbs or partner words of which one must stand in the same block; FRAME needs a
-    // motion verb, the verbs of language 2 rule 2 and RETRACT (language 5 rule 5; 4.2, 4.3, 4.5, 4.8, 4.9; D83).
-    // TODO(question): the Scope column of language 4 names a partner for more words than rule 5 lists: NAME with
-    // PROGRAM=BEGIN, SUB=BEGIN or START_CHANNEL, NUMBER with PROGRAM=BEGIN, CHANNEL as a header word, the cycle
-    // parameters with CYCLE, TOLERANCE:ROTARY only with TOLERANCE (language 4.1, 4.7). Neither rule 5 nor the
-    // validation list of virtual machine 5 makes their absence an ERROR of the parser, so only the words of rule 5 are
-    // checked here until D116 is answered; the header words are read from the PROGRAM=BEGIN block only.
+    // motion verb, the verbs of language 2 rule 2 and RETRACT (language 5 rule 5; 4.2, 4.3, 4.5, 4.8, 4.9; D83). D116
+    // adds the header words and the cycle parameters: NAME needs PROGRAM=BEGIN, SUB=BEGIN or START_CHANNEL, NUMBER
+    // and CHANNEL need PROGRAM=BEGIN, the cycle parameters need CYCLE. A partner written KEY=VALUE counts only with
+    // that value, so PROGRAM=END is no partner of NAME. TOLERANCE:ROTARY has no partner here; its rule is the modal
+    // ERROR of virtual machine 5 (P1-04).
     private static readonly Dictionary<string, string[]> s_partners = new()
     {
         ["IF"] = ["JUMP", "CALL"],
@@ -46,6 +51,20 @@ internal static class BlockRules
         ["ROT"] = ["TILT", "TILT_AXIS"],
         ["POINT"] = [HomeKey],
         ["PHASE"] = ["SPINDLE_SYNC"],
+        ["NAME"] = [ProgramBegin, "SUB=BEGIN", "START_CHANNEL"],
+        ["NUMBER"] = [ProgramBegin],
+        ["CHANNEL"] = [ProgramBegin],
+        ["AXIS"] = [CycleKey],
+        ["SURFACE"] = [CycleKey],
+        ["CLEARANCE"] = [CycleKey],
+        ["DEPTH"] = [CycleKey],
+        ["SAFE"] = [CycleKey],
+        ["CYCLE_RETRACT"] = [CycleKey],
+        ["PECK"] = [CycleKey],
+        ["CYCLE_F"] = [CycleKey],
+        ["CYCLE_DWELL"] = [CycleKey],
+        ["PITCH"] = [CycleKey],
+        ["CONTOUR"] = [CycleKey],
     };
 
     /// <summary>
@@ -263,9 +282,14 @@ internal static class BlockRules
 
     private static bool HasAny(Block block, string[] keys)
     {
+        // A partner KEY counts with any value and address, a partner KEY=VALUE with that value only (D116).
         foreach (string key in keys)
         {
-            if (block.Has(key))
+            int equals = key.IndexOf('=', StringComparison.Ordinal);
+            bool present = equals < 0
+                ? block.Has(key)
+                : block.Has(key.Substring(0, equals), null, key.Substring(equals + 1));
+            if (present)
             {
                 return true;
             }

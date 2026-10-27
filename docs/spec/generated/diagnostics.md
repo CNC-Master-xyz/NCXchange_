@@ -31,7 +31,7 @@ The file frame, the programs and subprograms, and the words of a block (language
 | `PAR013` | ERROR | A word in a HOME block that is not a bare axis name. | language 4.3, 5 rule 2 |
 | `PAR014` | ERROR | An axis word without a value outside a HOME block. | language 4.3, 5 rule 2; D93 |
 | `PAR015` | ERROR | Duplicate key: a key twice in one block with one address. | language 5 rule 4; VM 5 |
-| `PAR016` | ERROR | IF, ARG, TIMES, WITH, FRAME, MOVE, ROT, POINT or PHASE without its verb or partner word in the block. | language 5 rule 5; VM 5 |
+| `PAR016` | ERROR | IF, ARG, TIMES, WITH, FRAME, MOVE, ROT, POINT or PHASE without its verb or partner word in the block; NAME, NUMBER or CHANNEL without its program or section block; a cycle parameter without CYCLE. | language 5 rule 5; VM 5; D116 |
 | `PAR020` | ERROR | Missing or misplaced FILE=BEGIN: it is the first block of the file and stands nowhere else. | language 4.1; VM 5; D92 |
 | `PAR021` | ERROR | FILE=BEGIN without NCX, the format version. | language 4.1; VM 5 |
 | `PAR022` | ERROR | NCX names a format version other than 1. | language 4.1 |
