@@ -62,8 +62,8 @@ public static partial class DiagnosticCodes
     public const string FanucModalValueNotHeld = "CMP309";
 
     /// <summary>
-    /// CMP312: a comment text with ( or ), whose first ) would end the Fanuc comment and leave the rest of the line to
-    /// run as code; refused until D389 (R1-14) is answered.
+    /// CMP312, a WARNING: a comment text with ( or ), whose first ) would end the Fanuc comment and leave the rest of
+    /// the line to run as code, is written with [ and ] (D389, R1-14).
     /// </summary>
     public const string FanucBracketInComment = "CMP312";
 

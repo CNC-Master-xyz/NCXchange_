@@ -71,28 +71,27 @@ internal static class FanucProgramFrame
             if (write.Block.Find(key)?.Value is StringValue text)
             {
                 write.Written(key);
-                if (WithoutBrackets(write, text.Content))
-                {
-                    write.Writer("(" + write.CommentText(text.Content) + ")");
-                }
+                write.Writer("(" + write.CommentText(WithSquareBrackets(write, text.Content)) + ")");
             }
         }
     }
 
-    // D389: the first ) ends a Fanuc comment and the rest of the line runs as code, and no decision says whether a
-    // compiler replaces ( and ) or refuses them (R1-14); the conservative answer until D389 is answered is an ERROR,
-    // never a broken line.
-    private static bool WithoutBrackets(FanucBlock write, string text)
+    // D389: the first ) ends a Fanuc comment and the rest of the line runs as code, so ( is written as [ and ) as ],
+    // with a WARNING per comment that names the replacement (decisions.md D389, R1-14).
+    // TODO: D389 asks for the 30i-B manual to be checked for an alarm on [ ] inside a comment before release, and for
+    // the page to be noted here and in controllers/fanuc.md 10 rule 5; the manual library was not reachable.
+    private static string WithSquareBrackets(FanucBlock write, string text)
     {
         if (!text.Contains('(', StringComparison.Ordinal) && !text.Contains(')', StringComparison.Ordinal))
         {
-            return true;
+            return text;
         }
 
-        write.Error(DiagnosticCodes.FanucBracketInComment,
-            $"The comment text \"{text}\" holds ( or ), and the first ) would end the Fanuc comment and leave the rest "
-            + "of the line to run as code (controllers fanuc.md 10 rule 5; D389).");
-        return false;
+        string written = text.Replace('(', '[').Replace(')', ']');
+        write.Warning(DiagnosticCodes.FanucBracketInComment,
+            $"The comment text \"{text}\" is written \"{written}\": the first ) would end the Fanuc comment and leave "
+            + "the rest of the line to run as code (controllers fanuc.md 10 rule 5; D389).");
+        return written;
     }
 
     /// <summary>
@@ -131,7 +130,7 @@ internal static class FanucProgramFrame
 
         string? name = write.Step.Section?.Name;
         string o = ProgramNumber(write, programNumber.ToString(CultureInfo.InvariantCulture));
-        write.Write(name is null || !WithoutBrackets(write, name) ? o : o + " (" + write.CommentText(name) + ")");
+        write.Write(name is null ? o : o + " (" + write.CommentText(WithSquareBrackets(write, name)) + ")");
         WriteHeader(write);
     }
 
