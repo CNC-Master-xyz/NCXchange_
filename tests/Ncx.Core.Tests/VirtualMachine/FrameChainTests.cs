@@ -90,8 +90,8 @@ public sealed class FrameChainTests
     }
 
     // D123: ORIGIN=n selecting another datum is a frame change of VM 3.4. Without a datum table (D35) X=10 in datum 1
-    // is not known in datum 2, so the incremental word after it is the VM 3.1 ERROR; the axis known in the MACHINE frame
-    // stays known there.
+    // is not known in datum 2, so the incremental word after it is the VM 3.1 ERROR; the axis known in the MACHINE
+    // frame stays known there.
     [Fact]
     public void D123_OriginOfAnotherDatum_MarksWorkpieceAxesUnknownAndKeepsTheMachineFrame()
     {

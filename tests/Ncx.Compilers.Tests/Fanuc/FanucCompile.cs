@@ -324,15 +324,29 @@ internal static partial class FanucCompile
     /// The lines of the compiled program between its start block and its end on the mill of the sources: every line
     /// after G80 G90 G94 G98 up to M30.
     /// </summary>
-    public static string Body(string ncxBlocks)
+    /// <param name="ncxBlocks">The blocks, one per line.</param>
+    /// <param name="extra">Further tables of the machine file, as for <see cref="Mill"/>.</param>
+    public static string Body(string ncxBlocks, string extra = "")
     {
-        string text = TextOf(Run(Program(ncxBlocks.Split('\n')), Mill()));
+        string text = TextOf(Run(Program(ncxBlocks.Split('\n')), Mill(extra: extra)));
         const string Start = "%\nO0001 (T)\nG0 G40\nG80 G90 G94 G98\n";
         const string End = "M30\n%\n";
         Assert.StartsWith(Start, text, StringComparison.Ordinal);
         Assert.EndsWith(End, text, StringComparison.Ordinal);
         return text.Substring(Start.Length, text.Length - Start.Length - End.Length);
     }
+
+    /// <summary>
+    /// A rotary axis C on the table TABLE1 of the mill, about which CYLINDER=n turns (D146).
+    /// </summary>
+    public const string TableRotaryAxis = """
+        [[axis]]
+        id = "C1"
+        ncx = "C"
+        letter = "C"
+        kind = "rotary"
+        owner = "TABLE1"
+        """;
 
     /// <summary>
     /// The CMP diagnostics of a compile, the compiler's own.

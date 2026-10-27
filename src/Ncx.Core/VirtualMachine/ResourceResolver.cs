@@ -307,8 +307,8 @@ internal sealed class ResourceResolver
         return _machine.FindResource(holder)?.Type == ResourceType.WorkSpindle ? "Z" : rotary.Parallel ?? "Z";
     }
 
-    // The rotary axis of a workpiece holder: the axis its [[resource]] names, or a rotary axis whose owner is the holder,
-    // a table among them (machine-config 4, D146).
+    // The rotary axis of a workpiece holder: the axis its [[resource]] names, or a rotary axis whose owner is the
+    // holder, a table among them (machine-config 4, D146).
     private AxisDef? WorkpieceRotaryAxis(string holder)
     {
         if (_machine.FindResource(holder)?.Axis is string axisId

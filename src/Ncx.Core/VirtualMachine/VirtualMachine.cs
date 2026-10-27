@@ -314,11 +314,13 @@ public sealed partial class VirtualMachine
     }
 
     // The axis words of a verb that carries axis words resolve against the machine (rule 3). TILT carries the spatial
-    // angles A, B, C about the axes of the active frame, which are no machine axes (language 4.2).
+    // angles A, B, C about the axes of the active frame, which are no machine axes (language 4.2); STOCK carries the
+    // dimensions of the raw part in X, Y and Z, which are no machine axes either (D351).
     private void ResolveAxisWords(BlockContext context)
     {
         Block block = context.Block;
-        if (block.Verb is not Word verb || verb.Definition is not { TakesAxisWords: true } || verb.Key == "TILT")
+        if (block.Verb is not Word verb || verb.Definition is not { TakesAxisWords: true }
+            || verb.Key is "TILT" or "STOCK")
         {
             return;
         }
