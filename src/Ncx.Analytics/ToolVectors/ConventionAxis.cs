@@ -2,7 +2,8 @@ namespace Ncx.Analytics.ToolVectors;
 
 /// <summary>
 /// A rotary axis of [[axis]] as the tool-vector convention applies it (implementation 14, P4-03): named A, B or C, it
-/// turns the tool vector about the machine X, Y or Z axis; a head axis turns the tool, a table axis the workpiece.
+/// turns the tool vector about the machine X, Y or Z axis; a head axis turns the tool, a table axis the workpiece, the
+/// axis of a tool spindle nothing (D325).
 /// </summary>
 internal sealed record ConventionAxis
 {
@@ -33,25 +34,37 @@ internal sealed record ConventionAxis
     public required bool Table { get; init; }
 
     /// <summary>
+    /// True for the axis of a tool spindle, the spindle's own rotation (the C-axis mode of a tool spindle), which turns
+    /// no tool vector (D325).
+    /// </summary>
+    public bool SpindleRotation { get; init; }
+
+    /// <summary>
     /// True when the axis turns the tool relative to the workpiece while the holder holds it: a head axis always, a
     /// table axis only when that holder owns it, as the axis of another holder turns another part (language 4.10: the
-    /// program machines the part held by the WORKPIECE resource).
+    /// program machines the part held by the WORKPIECE resource), the axis of a tool spindle never (D325).
     /// </summary>
     /// <param name="workpieceHolder">The resource id of the workpiece holder of the block; null when the machine names
     /// none.</param>
     public bool AppliesWhile(string? workpieceHolder)
     {
-        return !Table || Owner == workpieceHolder;
+        return !SpindleRotation && (!Table || Owner == workpieceHolder);
     }
 
     /// <summary>
-    /// What the axis turns, as the report writes it: "the workpiece of TABLE1", "the tool of S1", "the tool, no owner".
+    /// What the axis turns, as the report writes it: "the workpiece of TABLE1", "the tool of H1", "the tool, no owner",
+    /// "nothing, the own rotation of the tool spindle S1".
     /// </summary>
     public string Turns()
     {
         if (Owner is null)
         {
             return "the tool, no owner";
+        }
+
+        if (SpindleRotation)
+        {
+            return "nothing, the own rotation of the tool spindle " + Owner;
         }
 
         return (Table ? "the workpiece of " : "the tool of ") + Owner;

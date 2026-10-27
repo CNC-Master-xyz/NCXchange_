@@ -324,7 +324,7 @@ The tasks of wave 3 (P3-03, P3-04, P3-06, P3-07, P4-02 with its review fixes, P4
 | 95 | P4-02 | In which unit do the rapid, max_feed and acceleration of a rotary axis limit a motion in the polar or the cylinder plane? | D290 | `src/Ncx.Analytics/Runtime/MovingAxes.cs:58` |
 | 96 | P4-03 | Where does a user give the bins of the segment histogram? | settled 2026-10-27 (D324) | `src/Ncx.Analytics/Segments/SegmentAnalytic.cs:47` |
 | 97 | P4-03 | Where does a user give the bins of the tool-vector histogram? | settled 2026-10-27 (D324) | `src/Ncx.Analytics/ToolVectors/ToolVectorAnalytic.cs:53` |
-| 98 | P4-03 | Is a rotary axis without an owner, or owned by a tool holder, a head or a table axis, and what does the C2 of a sub spindle turn? | D325 | `src/Ncx.Analytics/ToolVectors/ToolVectorConvention.cs:26` |
+| 98 | P4-03 | Is a rotary axis without an owner, or owned by a tool holder, a head or a table axis, and what does the C2 of a sub spindle turn? | settled 2026-10-27 (D325) | `src/Ncx.Analytics/ToolVectors/ToolVectorConvention.cs:26` |
 | 99 | P5-01 | What is a Siemens arc whose centre word is left out? (the marker cites wave-2 question #55, D241) | settled 2026-10-01 (D340) | `src/Ncx.Readers/Siemens/SiemensArcs.cs:131` |
 | 100 | P5-01 | What is a VAR parameter of a Siemens call, which writes back to the caller? (the marker cites D149) | settled 2026-10-27 (D149) | `src/Ncx.Readers/Siemens/SiemensCalls.cs:322` |
 | 101 | P5-01 | Does a replacing frame instruction cut the NCX chain before a tilt of CYCLE800? | settled 2026-10-27 (D333) | `src/Ncx.Readers/Siemens/SiemensChain.cs:150` |

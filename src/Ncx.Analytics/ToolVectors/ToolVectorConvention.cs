@@ -6,10 +6,12 @@ namespace Ncx.Analytics.ToolVectors;
 /// <summary>
 /// The tool vector from the rotary axis positions until the kinematics module exists (implementation 14, P4-03; virtual
 /// machine 8, 10): the tool axis is the normal of the WORKPLANE; a rotary axis named A, B or C turns that vector about
-/// the machine X, Y or Z axis in the order the [[axis]] list gives; a head axis (owner is the tool spindle) turns the
-/// tool, a table axis (owner is a work spindle or table) turns the workpiece, which is the same angle change with the
-/// opposite sign for the vector of the tool relative to the workpiece. Enough for the change between the start and the
-/// end of a motion, which is what the analytic reports; it is not a pose (D24 keeps kinematics out of NCX).
+/// the machine X, Y or Z axis in the order the [[axis]] list gives. Its owner says what it turns (D325; machine-config
+/// 4): a tool holder (turret, tool carrier, swivel head) makes it a head axis, which turns the tool; a work spindle or
+/// a table makes it a table axis, which turns the workpiece, the same angle change with the opposite sign for the
+/// vector of the tool relative to the workpiece; a tool spindle makes it the spindle's own rotation, which turns no
+/// tool vector. Enough for the change between the start and the end of a motion, which is what the analytic reports; it
+/// is not a pose (D24 keeps kinematics out of NCX).
 /// </summary>
 internal sealed class ToolVectorConvention
 {
@@ -22,14 +24,10 @@ internal sealed class ToolVectorConvention
     /// </summary>
     public ToolVectorConvention(MachineConfig machine)
     {
-        // The machine's rotary axes as [[axis]] lists them, A, B and C about the machine X, Y and Z (P4-03).
-        // TODO(question): implementation 14 (P4-03) tells a head axis by "owner is the tool spindle" and a table axis
-        // by "owner is a work spindle or table", and applies "the machine's rotary axes" named A, B or C. A rotary axis
-        // without owner (B1 of mori-ntx1000-mapps.toml and dmg-ctx-840d.toml, the tool swivels; A and B of the default
-        // machine, D103), or one owned by a tool holder, is neither, and is taken as a head axis. A machine axis name
-        // with digits (C2, C3 of a sub spindle, D93) turns about the axis of its letter, and a table axis counts only
-        // while its owner holds the workpiece (language 4.10), so that the C2 of a sub spindle turns nothing while the
-        // main spindle holds the part, until that is answered.
+        // The machine's rotary axes as [[axis]] lists them, A, B and C about the machine X, Y and Z (P4-03). D325: the
+        // letter without digits gives the machine axis it turns about (DIN 66217), so the C2 of a sub spindle turns
+        // about Z; a table axis counts only while its owner holds the workpiece (language 4.10); an axis without owner
+        // (the default machine of D103) stays a head axis, and the report header carries a WARNING naming it.
         foreach (AxisDef axis in machine.Axes)
         {
             string? about = axis.NcxName.TrimEnd(s_digits) switch
@@ -45,7 +43,7 @@ internal sealed class ToolVectorConvention
             }
 
             // A table axis belongs to a resource that holds the workpiece, a work spindle or a table (P4-03; D191 reads
-            // table kinematics the same way).
+            // table kinematics the same way); the axis of a tool spindle is its own rotation (D325).
             ResourceType? owner = axis.Owner is string id ? machine.FindResource(id)?.Type : null;
             _axes.Add(new ConventionAxis
             {
@@ -54,6 +52,7 @@ internal sealed class ToolVectorConvention
                 About = about,
                 Owner = axis.Owner,
                 Table = owner is ResourceType.WorkSpindle or ResourceType.Table,
+                SpindleRotation = owner == ResourceType.ToolSpindle,
             });
         }
     }

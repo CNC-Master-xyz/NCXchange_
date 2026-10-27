@@ -24,6 +24,22 @@ public sealed partial class ToolVectorAnalytic
             + "the tool vector the other way, while its owner holds the workpiece.",
             format));
         text.Append(TextTable.Line(
+            "The owner of an axis says what it turns (machine-config 4, D325): a tool holder the tool, a work spindle "
+            + "or a table the workpiece, a tool spindle nothing (its own rotation).",
+            format));
+        foreach (ConventionAxis axis in _convention.Axes)
+        {
+            // D325: an axis without owner stays a head axis, and the header warns of the assumption.
+            if (axis.Owner is null)
+            {
+                text.Append(TextTable.Line(
+                    $"WARNING: the rotary axis {axis.NcxName} ({axis.Id}) names no owner in [[axis]]; it is taken as a "
+                    + "head axis that turns the tool (machine-config 4, D325).",
+                    format));
+            }
+        }
+
+        text.Append(TextTable.Line(
             "A bin of the histogram holds the changes from its lower bound up to, not including, its upper bound.",
             format));
         text.Append('\n').Append(AxesText(format));
