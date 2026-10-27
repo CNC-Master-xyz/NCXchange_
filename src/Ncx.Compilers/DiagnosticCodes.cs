@@ -67,6 +67,14 @@ public static partial class DiagnosticCodes
     public const string NamedToolTemplateMissing = "CMP008";
 
     /// <summary>
+    /// CMP015: the [tolerance] template the compiler writes has no placeholder for a value the program set, {tol},
+    /// {rotary} or {mode}, so the control keeps the value it holds; once per distinct value per program, never for
+    /// TOLERANCE=OFF, and also for a TOLERANCE:ROTARY on a machine without ON_ROTARY. An INFO when held_value is at
+    /// least as tight as the program's TOLERANCE, else a WARNING (machine-config 5, D151, D367).
+    /// </summary>
+    public const string ToleranceValueNotWritten = "CMP015";
+
+    /// <summary>
     /// CMP016, an INFO: the program names a measurement point other than 1 and the machine file has no [tool_points],
     /// so nothing selects it; once per program (machine-config 3, D373).
     /// </summary>

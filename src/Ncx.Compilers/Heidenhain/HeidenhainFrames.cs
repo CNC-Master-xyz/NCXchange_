@@ -192,10 +192,10 @@ internal static class HeidenhainFrames
             values.Set("rotary", rotary);
         }
 
-        bool rotaryTemplate = state.Rotary is not null && table?.OnRotary is not null;
-        string what = rotaryTemplate
-            ? "[tolerance] ON_ROTARY (machine-config 5, D151)"
-            : "[tolerance] ON (machine-config 5, D85)";
-        writing.Template(rotaryTemplate ? table?.OnRotary : table?.On, what, values);
+        writing.Template(ToleranceTemplate.On(table, state), ToleranceTemplate.What(table, state), values);
+        if (ToleranceTemplate.Comment(table, state) is string comment)
+        {
+            writing.Line(HeidenhainProgramFrame.CommentLine(writing.CommentText(comment)));
+        }
     }
 }

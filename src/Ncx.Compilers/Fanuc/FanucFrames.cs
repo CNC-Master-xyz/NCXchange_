@@ -371,7 +371,9 @@ internal static class FanucFrames
     }
 
     // TOLERANCE through [tolerance]: G5.1 Q1 switches AI contour control on, the tolerance itself sits in a parameter
-    // (controllers fanuc.md 4; controller-mapping 1, TOLERANCE; D85).
+    // (controllers fanuc.md 4; controller-mapping 1, TOLERANCE; D85). ON_ROTARY is written instead of ON while
+    // TOLERANCE:ROTARY is set (D151); the report of a value the template cannot carry, CMP015, is the compiler
+    // framework's, and held_comment adds "(TOL 0.005 ...)" beside the switch (D367).
     private static void WriteTolerance(FanucBlock write)
     {
         if (write.Block.Find("TOLERANCE", null) is not Word tolerance)
@@ -389,9 +391,9 @@ internal static class FanucFrames
         write.Written("TOLERANCE_MODE");
         ToleranceTable? table = write.Machine.Tolerance;
         bool off = tolerance.Value.ToCanonical() == "OFF";
-        string? template = off ? table?.Off : table?.On;
-        var values = new TemplateValues();
         ToleranceState state = write.After.Frame.Tolerance;
+        string? template = off ? table?.Off : ToleranceTemplate.On(table, state);
+        var values = new TemplateValues();
         if (state.Value is decimal value)
         {
             write.SetReal(values, "tol", value, template);
@@ -408,9 +410,11 @@ internal static class FanucFrames
             values.Set("mode", modeValue);
         }
 
-        if (write.Render(template, "[tolerance] (machine-config 5, D85)", values) is string text)
+        string what = off ? "[tolerance] OFF (machine-config 5, D85)" : ToleranceTemplate.What(table, state);
+        if (write.Render(template, what, values) is string text)
         {
-            write.Write(text);
+            string? comment = off ? null : ToleranceTemplate.Comment(table, state);
+            write.Write(comment is null ? text : text + " (" + write.CommentText(comment) + ")");
         }
     }
 

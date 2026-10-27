@@ -557,13 +557,11 @@ internal static partial class SiemensFrames
             values.Set("mode", modeValue);
         }
 
-        bool rotaryTemplate = state.Rotary is not null && table?.OnRotary is not null;
-        string what = rotaryTemplate
-            ? "[tolerance] ON_ROTARY (machine-config 5, D151)"
-            : "[tolerance] ON (machine-config 5, D85)";
-        if (write.Render(rotaryTemplate ? table?.OnRotary : table?.On, what, values) is string on)
+        if (write.Render(ToleranceTemplate.On(table, state), ToleranceTemplate.What(table, state), values)
+            is string on)
         {
-            write.Write(on);
+            string? comment = ToleranceTemplate.Comment(table, state);
+            write.Write(comment is null ? on : on + " ; " + write.CommentText(comment));
         }
     }
 
