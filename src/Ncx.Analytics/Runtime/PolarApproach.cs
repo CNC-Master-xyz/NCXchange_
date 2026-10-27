@@ -4,21 +4,26 @@ using Ncx.Core.VirtualMachine.State;
 namespace Ncx.Analytics.Runtime;
 
 /// <summary>
-/// L of D290: the closest approach of the tool centre to the centre of rotation along a block of the polar plane, the
-/// face plane of X and of C as a length, whose centre is X=0 C=0 (virtual machine 3.1, D102). The C limit of the
-/// runtime estimate converts at L.
+/// The C limit of a block of the polar plane (D290): the face plane of X and of C as a length, whose centre of
+/// rotation is X=0 C=0 (virtual machine 3.1, D102). The angular rate a path speed v needs at a point at the distance r
+/// from the centre is v p / r^2, p being the distance of the line from the centre; it is highest where r is smallest,
+/// so the C limit converts at the length r_min^2 / p per radian.
 /// </summary>
+// Gap closed 2026-10-28 (delegated): D290's nearer-end rule refined to the exact bound v <= Cmax r^2 / p, with r the
+// smallest distance of the segment from the centre; a purely radial line (p = 0) needs no C rate and is not clamped by
+// C. An ARC keeps D290's L, the closest approach of the arc to the centre.
 internal static class PolarApproach
 {
     private const string First = "X";
     private const string Second = "C";
 
     /// <summary>
-    /// L in the units of the program: for a LINE the perpendicular distance of the segment from the centre, or the
-    /// nearer end when the foot lies outside it; for an ARC the distance of its circle from the centre where the arc
-    /// passes the point nearest to it, or the nearer end; null when X or C is not known at both ends.
+    /// The length, in the units of the program, that one radian of C moves the tool along the block where C turns
+    /// fastest: r_min^2 / p for a LINE, L for an ARC. 0 for a block through the centre, where the C limit is not
+    /// estimated; positive infinity for a radial line that does not pass the centre, which C does not limit; null when
+    /// X or C is not known at both ends.
     /// </summary>
-    public static double? Of(MotionEvent motion)
+    public static double? LengthPerRadian(MotionEvent motion)
     {
         if (Point(MotionPositions.StartOf(motion, First), MotionPositions.StartOf(motion, Second)) is not double[] start
             || Point(At(motion.To, First), At(motion.To, Second)) is not double[] end)
@@ -37,23 +42,26 @@ internal static class PolarApproach
         double squared = (dx * dx) + (dy * dy);
         if (squared == 0)
         {
-            return nearerEnd;
+            return double.PositiveInfinity;
         }
 
-        // The foot of the perpendicular from the centre, as a fraction of the segment from its start.
+        // The foot of the perpendicular from the centre, as a fraction of the segment from its start; the nearest
+        // point of the segment is the foot, or the nearer end when the foot lies outside it.
         double foot = -((start[0] * dx) + (start[1] * dy)) / squared;
-        if (foot <= 0 || foot >= 1)
+        double nearest = foot <= 0 || foot >= 1
+            ? nearerEnd
+            : Length(start[0] + (foot * dx), start[1] + (foot * dy));
+        if (nearest == 0)
         {
-            return nearerEnd;
+            return 0;
         }
 
-        return Length(start[0] + (foot * dx), start[1] + (foot * dy));
+        double perpendicular = Math.Abs((start[0] * dy) - (start[1] * dx)) / Math.Sqrt(squared);
+        return perpendicular == 0 ? double.PositiveInfinity : nearest * nearest / perpendicular;
     }
 
     // The point of the arc's circle nearest the centre of rotation lies on the ray from the arc centre toward it; the
-    // arc passes it when its angle from the start, in the arc's direction, is within the sweep. The direction is the
-    // one that turns the start radius by the sweep onto the end radius; a sweep that a half or a whole turn makes
-    // ambiguous gives null, and the nearer end is taken.
+    // arc passes it when its angle from the start, in the arc's direction, is within the sweep; else the nearer end.
     private static double? ArcApproach(MotionEvent motion, double[] start, double[] end, double sweepDegrees)
     {
         if (Point(At(motion.Center!, First), At(motion.Center!, Second)) is not double[] center)
@@ -69,7 +77,7 @@ internal static class PolarApproach
         }
 
         double sweep = sweepDegrees * Math.PI / 180;
-        int sense = ArcSense.Of(start, end, center, sweep);
+        int sense = ArcSense.Of(motion, [First, Second], start, end, center, sweep);
         if (sense == 0)
         {
             return null;

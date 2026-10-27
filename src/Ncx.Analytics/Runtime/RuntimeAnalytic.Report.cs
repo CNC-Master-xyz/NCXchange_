@@ -62,6 +62,15 @@ public sealed partial class RuntimeAnalytic
                 format));
         }
 
+        if (_estimator.CylinderRadiusUnknown > 0)
+        {
+            text.Append(TextTable.Line(
+                "C clamp at an unknown cylinder radius not estimated: "
+                + $"{ReportText.Count(_estimator.CylinderRadiusUnknown)} motions of C in the cylinder plane while the "
+                + "radius of CYLINDER was unknown or 0 took the limits of the linear axes alone (D290).",
+                format));
+        }
+
         foreach (string key in _estimator.DefaultedCycleKeys)
         {
             text.Append(TextTable.Line(

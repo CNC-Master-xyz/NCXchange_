@@ -15,10 +15,11 @@ namespace Ncx.Analytics.Runtime;
 // TOOL_BEGIN/END, STOP, program and file events, a motion not timed, a direction reversal, CYCLE_DWELL, a cycle call
 // not timed, every SYNC, and every block without path motion that the control executes (COOLANT, FUNC, MFUNC,
 // PATH_MODE, TOLERANCE and the other machine-function and state blocks); comments, variable computations, LABEL, JUMP
-// and CALL are transparent corners. The end of a RAPID is a rest point on a Fanuc-family machine and a corner
-// otherwise, [dynamics] rapid_exact_stop overriding that. Under EXACT_STOP every block rests (D350). A block without
-// path motion is seen through the events it raises: one that raises none, a state word repeating its value or a SYNC
-// of a run of one channel, stays invisible and is taken as a corner (gap closed 2026-10-27, delegated).
+// and CALL are transparent corners. The end of a RAPID, and of HOME and RETRACT, which move at the rapid rate (D287),
+// is a rest point on a Fanuc-family machine and a corner otherwise, [dynamics] rapid_exact_stop overriding that. Under
+// EXACT_STOP every block rests (D350). A block without path motion is seen through the events it raises: one that
+// raises none, a state word repeating its value or a SYNC of a run of one channel, stays invisible and is taken as a
+// corner (gap closed 2026-10-27, delegated).
 internal sealed class RuntimeEstimator
 {
     private const double SecondsPerMinute = 60d;
@@ -102,6 +103,12 @@ internal sealed class RuntimeEstimator
     /// The motions of the polar plane through its centre, L = 0, timed with the X limits alone (D290).
     /// </summary>
     public int ThroughCentre { get; private set; }
+
+    /// <summary>
+    /// The motions of C in the cylinder plane while the radius of CYLINDER is unknown or 0, timed without the C limit
+    /// (D290).
+    /// </summary>
+    public int CylinderRadiusUnknown { get; private set; }
 
     /// <summary>
     /// The corners between two timed motions under PATH_MODE=CONTINUOUS (D350).
@@ -194,6 +201,7 @@ internal sealed class RuntimeEstimator
         MovingAxes axes = MovingAxes.Of(motion, Dynamics);
         RotaryMoves += axes.TurnsRotary ? InRange(motion) : 0;
         ThroughCentre += axes.ThroughCentre ? InRange(motion) : 0;
+        CylinderRadiusUnknown += axes.CylinderRadiusUnknown ? InRange(motion) : 0;
         double? speed = SpeedOf(motion, axes);
         if (millimetres > 0 && speed is null)
         {
@@ -259,11 +267,12 @@ internal sealed class RuntimeEstimator
     // D350: the estimate reads the PATH_MODE state of the motion before the corner: EXACT_STOP brakes to zero in every
     // block, CONTINUOUS carries the speed through corners up to the configured corner_speed (virtual machine 8), and
     // never faster than either motion travels, nor faster than the motion before the corner can reach by its end. D286:
-    // the end of a RAPID on a machine whose rapids stop, and a direction reversal, are rest points.
+    // the end of a RAPID on a machine whose rapids stop, and a direction reversal, are rest points; HOME and RETRACT
+    // move at the rapid rate (D287) and rest at their end like a RAPID.
     private double CornerSpeed(PendingMotion before, MotionEvent next, double nextSpeed)
     {
         if (before.Motion.After.Frame.PathMode != PathMode.Continuous
-            || (before.Motion.Verb == Verb.Rapid && Dynamics.RapidRests)
+            || (before.Motion.Verb is Verb.Rapid or Verb.Home or Verb.Retract && Dynamics.RapidRests)
             || PathDirection.Reverses(before.Motion, next, Dynamics))
         {
             return 0;

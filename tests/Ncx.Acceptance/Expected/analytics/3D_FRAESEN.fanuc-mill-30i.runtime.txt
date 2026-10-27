@@ -1,14 +1,14 @@
 Runtime estimate: 3D_FRAESEN.ncx, the whole file, on fanuc-mill-30i.toml, INTERPRETED run
 An estimate from the values of the machine file, not a measured cycle time (virtual machine 8, D64).
 Motions: trapezoidal profile (virtual machine 8, D64), path_mode continuous (the start value of PATH_MODE, D350), corner_speed 2000 mm/min, block_time 0.001 s.
-Rest points under CONTINUOUS (D286): DWELL, a spindle start or stop, TOOL_BEGIN and TOOL_END, STOP, program and file events, a motion not timed, a direction reversal, CYCLE_DWELL, a cycle call not timed, every SYNC and every block without path motion except comments, variable computations, LABEL, JUMP and CALL; the end of a RAPID is a rest point (Fanuc family, G00 in-position check).
+Rest points under CONTINUOUS (D286): DWELL, a spindle start or stop, TOOL_BEGIN and TOOL_END, STOP, program and file events, a motion not timed, a direction reversal, CYCLE_DWELL, a cycle call not timed, every SYNC and every block without path motion except comments, variable computations, LABEL, JUMP and CALL; the end of a RAPID, HOME or RETRACT is a rest point (Fanuc family, G00 in-position check).
 
 axis  rapid (mm/min)  max_feed (mm/min)  acceleration (mm/s^2)
 X     36000           20000              4000
 Y     36000           20000              4000
 Z     30000           20000              3500
 
-Rotary axes: deg/min and deg/s^2 (machine-config 4); they limit and accelerate a motion only in the polar or cylinder plane, where their word is a length (virtual machine 3.1, D102): under CYLINDER=r at r, 1 deg = pi r / 180 mm, under POLAR=ON at L, the closest approach of the block to the centre of rotation; a RAPID there takes the rapid of the linear axes (D290).
+Rotary axes: deg/min and deg/s^2 (machine-config 4); they limit and accelerate a motion only in the polar or cylinder plane, where their word is a length (virtual machine 3.1, D102): under CYLINDER=r at r, 1 deg = pi r / 180 mm, rapid included; under POLAR=ON at r^2 / p per radian, r the nearest distance of the block from the centre of rotation and p that of its line, a RAPID taking the rapid of X (D290).
 axis  rapid (deg/min)  max_feed (deg/min)  acceleration (deg/s^2)
 
 spindle  accel_time (s)  rpm_max

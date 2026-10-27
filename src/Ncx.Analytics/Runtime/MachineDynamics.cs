@@ -41,8 +41,9 @@ internal sealed class MachineDynamics
     public PathMode StartPathMode => _machine.Dynamics?.PathMode ?? PathMode.ExactStop;
 
     /// <summary>
-    /// True when the end of a RAPID is a rest point of the path: [dynamics] rapid_exact_stop, else the family default,
-    /// a rest point on a Fanuc-family machine (G00 in-position check) and a corner otherwise (D286).
+    /// True when the end of a RAPID, and of HOME and RETRACT, which move at the rapid rate, is a rest point of the
+    /// path: [dynamics] rapid_exact_stop, else the family default, a rest point on a Fanuc-family machine (G00
+    /// in-position check) and a corner otherwise (D286).
     /// </summary>
     public bool RapidRests => _machine.Dynamics?.RapidExactStop ?? _machine.Machine.Controller == Controller.Fanuc;
 
@@ -131,7 +132,7 @@ internal sealed class MachineDynamics
         return "Rest points under CONTINUOUS (D286): DWELL, a spindle start or stop, TOOL_BEGIN and TOOL_END, STOP, "
             + "program and file events, a motion not timed, a direction reversal, CYCLE_DWELL, a cycle call not timed, "
             + "every SYNC and every block without path motion except comments, variable computations, LABEL, JUMP "
-            + $"and CALL; the end of a RAPID is {rapid}.";
+            + $"and CALL; the end of a RAPID, HOME or RETRACT is {rapid}.";
     }
 
     /// <summary>
@@ -151,8 +152,8 @@ internal sealed class MachineDynamics
     {
         return "Rotary axes: deg/min and deg/s^2 (machine-config 4); they limit and accelerate a motion only in the "
             + "polar or cylinder plane, where their word is a length (virtual machine 3.1, D102): under CYLINDER=r at "
-            + "r, 1 deg = pi r / 180 mm, under POLAR=ON at L, the closest approach of the block to the centre of "
-            + "rotation; a RAPID there takes the rapid of the linear axes (D290).";
+            + "r, 1 deg = pi r / 180 mm, rapid included; under POLAR=ON at r^2 / p per radian, r the nearest distance "
+            + "of the block from the centre of rotation and p that of its line, a RAPID taking the rapid of X (D290).";
     }
 
     /// <summary>

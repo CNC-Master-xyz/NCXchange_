@@ -18,7 +18,7 @@ internal static class PathDirection
     /// <summary>
     /// True when the motion after a corner leaves it in the direction opposite to the one the motion before it
     /// arrived in; false where it does not, and where a direction is not known (an axis unknown at an end, an arc of
-    /// a half or whole turn whose sense its geometry leaves open).
+    /// a half or whole turn whose plane and geometry both leave its sense open).
     /// </summary>
     public static bool Reverses(MotionEvent before, MotionEvent after, MachineDynamics dynamics)
     {
@@ -88,7 +88,7 @@ internal static class PathDirection
         }
 
         double sweep = (double)sweepDegrees * Math.PI / 180;
-        int sense = ArcSense.Of(start, end, centre, sweep);
+        int sense = ArcSense.Of(motion, axes, start, end, centre, sweep);
         if (sense == 0)
         {
             return null;

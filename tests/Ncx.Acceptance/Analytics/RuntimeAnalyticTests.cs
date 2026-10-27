@@ -462,11 +462,12 @@ public sealed class RuntimeAnalyticTests
         Assert.Contains("Estimated time: 1.1 s (0:00:01), the longest channel.", report, StringComparison.Ordinal);
     }
 
-    // D290: in the polar plane the C word is a length (VM 3.1, D102), and the deg/min and deg/s^2 of C convert at L,
-    // the closest approach of the block to the centre of rotation: LINE C=10 from X=10 C=0 passes the centre at 10 mm
-    // (the foot of the perpendicular is its start), so max_feed 1200 deg/min of C is 1200 * 10 * pi / 180 mm/min and
-    // its 100 deg/s^2 are 100 * 10 * pi / 180 mm/s^2, below the 6000 mm/min and 1000 mm/s^2 of X, which limit the
-    // block as well. The report names those values of C in the table of the rotary axes and says how it reads them.
+    // D290: in the polar plane the C word is a length (VM 3.1, D102), and the deg/min and deg/s^2 of C convert at
+    // r^2 / p per radian (gap closed 2026-10-28): LINE C=10 from X=10 C=0 lies at p = 10 from the centre and is nearest
+    // it at its start, r = 10 (the foot of the perpendicular), so max_feed 1200 deg/min of C is 1200 * 10 * pi / 180
+    // mm/min and its 100 deg/s^2 are 100 * 10 * pi / 180 mm/s^2, below the 6000 mm/min and 1000 mm/s^2 of X, which
+    // limit the block as well. The report names those values of C in the table of the rotary axes and says how it
+    // reads them.
     [Fact]
     public void Report_MotionInThePolarPlane_NamesTheValuesOfTheRotaryAxisItUsed()
     {
@@ -480,8 +481,9 @@ public sealed class RuntimeAnalyticTests
         Assert.Equal(FromRestToRest(10, 1200 * atL / 60, 100 * atL), runtime.TotalSeconds, Precision);
         Assert.Contains("\nRotary axes: deg/min and deg/s^2 (machine-config 4); they limit and accelerate a motion "
             + "only in the polar or cylinder plane, where their word is a length (virtual machine 3.1, D102): under "
-            + "CYLINDER=r at r, 1 deg = pi r / 180 mm, under POLAR=ON at L, the closest approach of the block to the "
-            + "centre of rotation; a RAPID there takes the rapid of the linear axes (D290).\n"
+            + "CYLINDER=r at r, 1 deg = pi r / 180 mm, rapid included; under POLAR=ON at r^2 / p per radian, r the "
+            + "nearest distance of the block from the centre of rotation and p that of its line, a RAPID taking the "
+            + "rapid of X (D290).\n"
             + "axis  rapid (deg/min)  max_feed (deg/min)  acceleration (deg/s^2)\n"
             + "C     3600             1200                100\n", report, StringComparison.Ordinal);
         Assert.Contains("Not in the estimate: the travel of rotary axes outside the polar and cylinder plane (0 "
@@ -504,6 +506,71 @@ public sealed class RuntimeAnalyticTests
         Assert.Equal(FromRestToRest(20, 100, 1000), runtime.TotalSeconds, Precision);
         Assert.Contains("C clamp near centre not estimated: 1 motions through the centre of the polar plane took the "
             + "limits of X alone (D290).", report, StringComparison.Ordinal);
+    }
+
+    // D290: a LINE of Z alone under POLAR=ON moves neither X nor C of the face plane, so near the centre it is timed on
+    // Z alone, 100 mm at 6000 mm/min with 1000 mm/s^2, and counts no motion through the centre.
+    [Fact]
+    public void PolarPlane_LineOfZAloneNearTheCentre_IsTimedOnZAlone()
+    {
+        MachineConfig lathe = AnalyticMachines.PolarLathe();
+        var runtime = new RuntimeAnalytic(AnalyticRuns.Options(lathe));
+        string report = AnalyticRuns.Run(
+            Program(["SPINDLE_MODE:MAIN=AXIS", "RAPID Z=2", "POLAR=ON", "LINE X=0.1 C=0 F=6000"], "LINE Z=-98"),
+            lathe, runtime);
+
+        Assert.Equal(FromRestToRest(100, 100, 1000), runtime.TotalSeconds, Precision);
+        Assert.DoesNotContain("C clamp near centre", report, StringComparison.Ordinal);
+    }
+
+    // D290 with the exact bound (gap closed 2026-10-28): C turns at v p / r^2, fastest where the segment is nearest
+    // the centre. LINE C=20 from X=10 C=10 lies at p = 10 from the centre and is nearest it at its start, r^2 = 200, so
+    // C limits it at 1200 deg/min times 200 / 10 mm per radian; a radial LINE X=20 from X=10 (p = 0) needs no C rate
+    // and moves at the 6000 mm/min of X.
+    [Theory]
+    [InlineData("LINE X=10 C=10 F=6000", "LINE C=20", false)]
+    [InlineData("LINE X=10 C=0 F=6000", "LINE X=20", true)]
+    public void PolarPlane_Line_IsLimitedByTheCRateItNeeds(string before, string line, bool radial)
+    {
+        MachineConfig lathe = AnalyticMachines.PolarLathe();
+        RuntimeAnalytic runtime = Run(lathe, ["SPINDLE_MODE:MAIN=AXIS", "RAPID Z=2", "POLAR=ON", before], line);
+
+        double perDegree = 20 * Math.PI / 180;
+        double expected = radial
+            ? FromRestToRest(10, 100, 1000)
+            : FromRestToRest(10, 1200 * perDegree / 60, 100 * perDegree);
+        Assert.Equal(expected, runtime.TotalSeconds, Precision);
+    }
+
+    // D290: a RAPID of C alone in the cylinder plane takes the rapid of C converted at r, 3600 deg/min at radius 30.
+    [Fact]
+    public void CylinderPlane_RapidOfCAlone_TakesTheRapidOfCAtTheRadius()
+    {
+        MachineConfig lathe = AnalyticMachines.PolarLathe();
+        RuntimeAnalytic runtime = Run(lathe,
+            ["SPINDLE_MODE:MAIN=AXIS", "RAPID X=30 Z=-10", "CYLINDER=30", "LINE Z=-10 C=0 F=6000"],
+            "RAPID C=10");
+
+        double atR = 30 * Math.PI / 180;
+        Assert.Equal(FromRestToRest(10, 3600 * atR / 60, 100 * atR), runtime.TotalSeconds, Precision);
+    }
+
+    // D290: under CYLINDER=0 the C limit is not estimated: LINE C=10 moves at F, 6000 mm/min, and the report counts it
+    // apart from the motions through the centre of the polar plane.
+    [Fact]
+    public void CylinderPlane_RadiusZero_IsCountedApartFromThePolarCentre()
+    {
+        MachineConfig lathe = AnalyticMachines.PolarLathe();
+        var runtime = new RuntimeAnalytic(AnalyticRuns.Options(lathe));
+        string report = AnalyticRuns.Run(
+            Program(["SPINDLE_MODE:MAIN=AXIS", "RAPID X=30 Z=-10", "CYLINDER=0", "LINE Z=-10 C=0 F=6000"],
+                "LINE C=10"),
+            lathe, runtime);
+
+        Assert.Equal(0.1, runtime.TotalSeconds, Precision);
+        Assert.Contains("C clamp at an unknown cylinder radius not estimated: 1 motions of C in the cylinder plane",
+            report, StringComparison.Ordinal);
+        Assert.DoesNotContain("C clamp near centre", report, StringComparison.Ordinal);
     }
 
     // D290: under CYLINDER=r the rotary values convert at r: on the circumference of radius 30, LINE C=10 at F=6000
@@ -644,6 +711,36 @@ public sealed class RuntimeAnalyticTests
         Assert.Equal(seconds, runtime.TotalSeconds, Precision);
     }
 
+    // D286 with D287: HOME and RETRACT move at the rapid rate, and on a Fanuc-family machine they rest at their end
+    // like a RAPID: RETRACT=50 (0.6 s) and LINE X=100 after it take as long under CONTINUOUS as under exact stop.
+    [Fact]
+    public void RestPoints_EndOfARetractOnFanuc_IsARestPoint()
+    {
+        string[] blocks = ["RETRACT=50", "LINE X=100 F=6000"];
+        double continuous = Run(AnalyticMachines.Mill(AnalyticMachines.Continuous(3000m)), blocks).TotalSeconds;
+        double exactStop = Run(AnalyticMachines.Mill(AnalyticMachines.ExactStop), blocks).TotalSeconds;
+
+        Assert.Equal(0.6 + 1.1, continuous, Precision);
+        Assert.Equal(exactStop, continuous, Precision);
+    }
+
+    // D286 with VM 3.2: a half circle has a sense its geometry leaves open, and its CW or CCW gives it. ARC=CCW from
+    // X=10 Y=0 to X=-10 Y=0 about the origin ends travelling in -Y; a LINE on to Y=-10 continues, one back to Y=10
+    // reverses and rests.
+    [Theory]
+    [InlineData("LINE Y=-10", false)]
+    [InlineData("LINE Y=10", true)]
+    public void RestPoints_LineAfterAHalfCircle_FollowsItsDirection(string line, bool rests)
+    {
+        string[] setUp = ["RAPID X=10 Y=0 Z=0"];
+        string[] blocks = ["ARC=CCW X=-10 Y=0 CENTER:X=0 CENTER:Y=0 F=6000", line];
+        double continuous = Run(AnalyticMachines.Mill(AnalyticMachines.Continuous(3000m)), setUp, blocks)
+            .TotalSeconds;
+        double exactStop = Run(AnalyticMachines.Mill(AnalyticMachines.ExactStop), setUp, blocks).TotalSeconds;
+
+        Assert.Equal(rests, Math.Abs(continuous - exactStop) < 1e-9);
+    }
+
     // D286: the report names the rest points and what the end of a RAPID is on the machine.
     [Fact]
     public void Report_Profile_NamesTheRestPoints()
@@ -655,7 +752,8 @@ public sealed class RuntimeAnalyticTests
         Assert.Contains("Rest points under CONTINUOUS (D286): DWELL, a spindle start or stop, TOOL_BEGIN and TOOL_END, "
             + "STOP, program and file events, a motion not timed, a direction reversal, CYCLE_DWELL, a cycle call not "
             + "timed, every SYNC and every block without path motion except comments, variable computations, LABEL, "
-            + "JUMP and CALL; the end of a RAPID is a rest point (Fanuc family, G00 in-position check).", report,
+            + "JUMP and CALL; the end of a RAPID, HOME or RETRACT is a rest point (Fanuc family, G00 in-position "
+            + "check).", report,
             StringComparison.Ordinal);
     }
 
