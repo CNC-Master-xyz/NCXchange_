@@ -28,6 +28,22 @@ public sealed class SiemensToolTests
         Assert.Equal(Lines("PRELOAD=1", "TOOL=1", "PRELOAD=0", "TOOL=0"), CheckedBody("T1\nM6\nT0\nM6"));
     }
 
+    // D297: a lone T0 on a mill that changes with M6 is PRELOAD=0 where another T follows before the end; it is
+    // TOOL=0 only where the main program ends after it with no M6 or other T in between.
+    [Fact]
+    public void T0_FollowedByAnotherT_IsPreload0()
+    {
+        Assert.Equal(Lines("PRELOAD=1", "TOOL=1", "PRELOAD=0", "PRELOAD=2"), Body("T1\nM6\nT0\nT2"));
+    }
+
+    // D132: TOOL=k consumes any preload, of k or of another tool, so an M6 after T5 M6 does not change to the T3 of
+    // the line before; the control's T5 overwrote that selection (siemens 5; virtual machine 3.5).
+    [Fact]
+    public void ToolOfAnotherTool_ConsumesThePreload()
+    {
+        Assert.Equal(Lines("PRELOAD=3", "TOOL=5", "TOOL"), Body("T3\nT5 M6\nM6"));
+    }
+
     // The T=0 the Hermle writes before M30 unloads the spindle without an M6: TOOL=0 (controller-mapping 3, TOOL=0).
     [Fact]
     public void TEquals0_BeforeTheEnd_IsTool0()

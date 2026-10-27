@@ -128,9 +128,8 @@ internal static class SiemensTools
     // that the M6 after it, the two-line form of every change in the corpus, changes to it, TOOL=0 (controller-mapping
     // 3, TOOL=4 and TOOL=0). Where the program ends after it without an M6 or another T, T0 is the unload itself,
     // TOOL=0, as controller-mapping 3 reads the T=0 the Hermle writes before M30.
-    // TODO(question): the documents read T0 M6 and the Hermle's T=0 before M30 as TOOL=0 (controller-mapping 3) and T
-    // alone on a mill that changes with M6 as the preload (controllers siemens.md 5), but do not say what a T0 alone
-    // does that another T or the return of a subprogram follows; it is PRELOAD=0 there.
+    // A T0 alone that another T, an M6 or the return of a subprogram follows is PRELOAD=0; a RET is not an end
+    // (D297).
     private static void Preload(SiemensBlock block, string? holder, ToolRef tool)
     {
         if (tool.Number == 0 && EndsBeforeAChange(block))
@@ -183,9 +182,8 @@ internal static class SiemensTools
             && SiemensNumbers.WholeNumber(word.Address[1..]) is not null && word.Text.Length > 0);
     }
 
-    // TOOL=n puts n into the spindle; a preload of n is consumed (virtual machine 3.5).
-    // TODO(question): D132, whether TOOL=n consumes a preload of another tool; as the virtual machine keeps it, the
-    // reader does.
+    // TOOL=n puts n into the spindle and consumes any preload, of n or of another tool, as the virtual machine does
+    // (virtual machine 3.5, row TOOL=n; D132): on the control the T of the change overwrites the earlier selection.
     private static void Write(SiemensBlock block, string key, string? holder, ToolRef? tool)
     {
         if (tool is not ToolRef selected)
@@ -195,11 +193,9 @@ internal static class SiemensTools
 
         block.Draft.AddState(key, holder, ValueOf(selected));
         SiemensFacts facts = block.Facts;
-        if (facts.PreloadedTool is ToolRef preloaded && preloaded == selected)
-        {
-            facts.PreloadedTool = null;
-            block.State.Preloaded = null;
-        }
+        facts.PreloadedTool = null;
+        facts.Unknown.Remove(SiemensFacts.Preload);
+        block.State.Preloaded = null;
     }
 
     // D1 to D8 select the cutting edge of the active tool with its length and radius, one register, OFFSET=n; D0
