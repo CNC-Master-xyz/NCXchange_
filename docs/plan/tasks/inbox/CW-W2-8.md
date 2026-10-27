@@ -42,4 +42,12 @@ The fifteen reader decisions of W2-8 on main: D125 (r), D132 (r), D149 (marker),
     - D292: RDR507 `SiemensFeedInTheBasicSystem` is the WARNING of a converted feed; a converted literal keeps six decimals (D121); callers that differ in group 13 convert nothing.
     - D291: no RDR508; the decision keeps the existing RAW WARNING for `GROUP_BEGIN` with `_MODE` bit 1, so RDR508 stays reserved and unused.
     - D333: the reference-point shifts of CYCLE800 carry the instruction `CYCLE800` in the chain, so `TRANS` leaves them standing and `CYCLE800()` removes them; a zero or empty reference point writes no SHIFT.
-  - Left over: a feed that stays modal across a `G70`/`G71` switch without a new `F` is not re-converted (D292); the `F` that `SiemensCycles.cs` reads on a position block (W2-7's file) does not yet call `SiemensMotion.FeedInNcxUnits`. The `_X0`/`_X1` shifts of CYCLE800 are not doubled under `DIAMON`.
+  - Review fixes (orchestrator, 2026-10-27):
+    - D382: a minus after `*`, `/` or `MOD` signs an operand of a longer product (`R1*-8 DIV 2` is `(R1*-8) DIV 2`), so the block stays RAW; a unary minus counts only at the start of an operand. RDR506's text names the exact-quotient case; manual-audit row 2 reads "settled 2026-10-27 by D382 (kept RAW where the quotient is not exact; the rounding itself is still undocumented)".
+    - D132: `SiemensFacts.ChangedTool` holds the tool of the last change; an `M6` alone with nothing preloaded writes `TOOL=<that tool>`, or no TOOL where the reader knows none; the bare TOOL stays for an unknown preload only. The test now runs check.
+    - D292: a switch of group 13 that changes UNITS converts the modal feed by 25.4 into the new unit, clears the written feed so the next LINE or ARC writes F, with RDR507; where the source may have set a feed the reader does not know (`SiemensFacts.FeedProgrammed`), it warns with RDR507. A block with its own F converts nothing. `SiemensMotion.Converted` is shared with `FeedInNcxUnits`.
+    - D125, D240, D333: doubling applies only on an X axis whose `programming` is diameter or switchable (`SiemensFrames.XInRadius`); a doubled `$AA_IM[X]` carries the new WARNING RDR510 `SiemensMachinePositionDoubled`; a CYCLE800 with a non-zero `_X0` or `_X1` under DIAMON stays RAW (MD20360 bit 14).
+    - D155: the FunctionContext carries the channel of a one-channel machine and, for a code with an extension `Mn=`, the role of spindle n.
+    - P501B keeps `G75 FP=1` and expects it RAW with RDR509.
+  - Gap closed 2026-10-27 (delegated): D240's WARNING is RDR510 `SiemensMachinePositionDoubled`, the next free code of RDR510-519.
+  - Left over: the `F` that `SiemensCycles.cs` reads on a position block (W2-7's file) does not yet call `SiemensMotion.FeedInNcxUnits`.

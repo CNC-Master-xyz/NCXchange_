@@ -107,13 +107,20 @@ internal static class SiemensTools
 
     // M6 alone changes to the tool T selected before, TOOL=n from the source-side state; where the reader does not
     // know it, a caller's T in a subprogram, the bare TOOL changes to the tool the virtual machine holds preloaded
-    // (controller-mapping 3, TOOL; virtual machine 3.5).
+    // (controller-mapping 3, TOOL; virtual machine 3.5). Where nothing is preloaded, since a change consumed it, the
+    // control's T is still the tool of that change, TOOL=n again; where the reader knows no such tool either, the M6
+    // writes no TOOL, since a bare TOOL without a preload is an ERROR (D132).
     private static void ChangeToPreload(SiemensBlock block, string? holder)
     {
         SiemensFacts facts = block.Facts;
-        if (!facts.IsUnknown(SiemensFacts.Preload) && facts.PreloadedTool is ToolRef preloaded)
+        if (!facts.IsUnknown(SiemensFacts.Preload))
         {
-            Write(block, "TOOL", holder, preloaded);
+            ToolRef? tool = facts.PreloadedTool ?? facts.ChangedTool;
+            if (tool is ToolRef known)
+            {
+                Write(block, "TOOL", holder, known);
+            }
+
             return;
         }
 
@@ -196,6 +203,10 @@ internal static class SiemensTools
         facts.PreloadedTool = null;
         facts.Unknown.Remove(SiemensFacts.Preload);
         block.State.Preloaded = null;
+        if (key == "TOOL")
+        {
+            facts.ChangedTool = selected;
+        }
     }
 
     // D1 to D8 select the cutting edge of the active tool with its length and radius, one register, OFFSET=n; D0

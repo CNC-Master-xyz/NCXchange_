@@ -73,7 +73,7 @@ internal static class SiemensFunctions
             return;
         }
 
-        if (ReadTable(block, code))
+        if (ReadTable(block, code, null))
         {
             return;
         }
@@ -90,7 +90,7 @@ internal static class SiemensFunctions
     private static void ReadExtended(SiemensBlock block, SourceWord word)
     {
         string text = word.Address + "=" + word.Text;
-        if (ReadTable(block, text))
+        if (ReadTable(block, text, SiemensSpindles.NumberOfAddress(word.Address, 'M')))
         {
             block.MarkRead(word);
             return;
@@ -102,11 +102,20 @@ internal static class SiemensFunctions
     // The states of the machine that write the code, as FunctionChoice keeps them (D155): every state that writes it,
     // the [workpiece] selection first, the first in file order where two resources would be switched on (RDR020). The
     // Siemens reader keeps no source state of the tables, so no state is dropped as holding already; the codes of the
-    // spindles of the control, M3 to M5 and M19, are SiemensSpindles'. False when no state gives a word.
-    private static bool ReadTable(SiemensBlock block, string code)
+    // spindles of the control, M3 to M5 and M19, are SiemensSpindles'. The source state rules out the tables of
+    // another channel, where the machine has one channel, and the spindle tables of other spindles, where the code
+    // addresses spindle n by its extension, M2=3. False when no state gives a word.
+    private static bool ReadTable(SiemensBlock block, string code, int? spindle)
     {
+        IReadOnlyList<int> channels = block.Machine.Machine.Channels;
+        string? role = spindle is int number ? SiemensSpindles.RoleOf(block, number) : null;
+        var context = new FunctionContext
+        {
+            Channel = channels.Count == 1 ? channels[0] : null,
+            AddressedSpindles = role is null ? null : [role],
+        };
         IReadOnlyList<FunctionMatch> chosen = FunctionChoice.Choose(block.Templates.FindFunctionsByCode(code),
-            new FunctionContext(), block.Line, code, block.Diagnostics);
+            context, block.Line, code, block.Diagnostics);
         var words = new List<Word>();
         foreach (FunctionMatch match in chosen)
         {

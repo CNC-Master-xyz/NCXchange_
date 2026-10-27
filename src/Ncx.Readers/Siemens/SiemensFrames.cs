@@ -1,4 +1,5 @@
 using System.Globalization;
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 
 namespace Ncx.Readers.Siemens;
@@ -188,9 +189,22 @@ internal static class SiemensFrames
     // says the control keeps them as diameters, X is taken as written (D125, D388).
     private static Value ShiftValue(SiemensBlock block, string axis, Value value)
     {
-        bool radius = axis == "X" && block.Facts.DiameterMode is "DIAMON" or "DIAM90"
-            && block.Machine.ResolveAxis("X") is not { FramesInDiameter: true };
-        return radius ? SiemensMotion.Doubled(block, value) : value;
+        return axis == "X" && XInRadius(block) ? SiemensMotion.Doubled(block, value) : value;
+    }
+
+    /// <summary>
+    /// True where the control keeps the frame offsets and the machine position of X as radii while NCX reads X as a
+    /// diameter: under DIAMON or DIAM90, on an X axis whose programming is diameter or switchable and which does not
+    /// set frames_in_diameter (D125, D240, D388).
+    /// </summary>
+    /// <param name="block">The block being read.</param>
+    public static bool XInRadius(SiemensBlock block)
+    {
+        return block.Facts.DiameterMode is "DIAMON" or "DIAM90" && block.Machine.ResolveAxis("X") is
+        {
+            Programming: Programming.Diameter or Programming.Switchable,
+            FramesInDiameter: false,
+        };
     }
 
     // ROT RPL=30 and ROT Z30 under G17 turn about the tool axis, ROTATE=30; ROT X180 turns about another axis, the

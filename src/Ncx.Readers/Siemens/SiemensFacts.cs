@@ -140,6 +140,12 @@ internal sealed class SiemensFacts
     public Value? WrittenFeed { get; set; }
 
     /// <summary>
+    /// True once the source may have set a feed of the control: an F was read, kept in a RAW block, or the caller is
+    /// not known; so a ControlFeed of null means a feed the reader does not know rather than none (D292).
+    /// </summary>
+    public bool FeedProgrammed { get; set; }
+
+    /// <summary>
     /// The pole of the polar coordinates in the plane; null while none is defined.
     /// </summary>
     public SiemensPoint? PolePoint { get; set; }
@@ -158,6 +164,12 @@ internal sealed class SiemensFacts
     /// The tool T selected before its M6; null while none is (controllers siemens.md 5).
     /// </summary>
     public ToolRef? PreloadedTool { get; set; }
+
+    /// <summary>
+    /// The tool the last change put into the spindle, the T the control holds after T5 M6, which an M6 alone after it
+    /// changes to again; null where the reader does not know it (D132).
+    /// </summary>
+    public ToolRef? ChangedTool { get; set; }
 
     /// <summary>
     /// True while ORIMKS is active: a tool vector means the machine axes (controller-mapping 2).
@@ -223,10 +235,12 @@ internal sealed class SiemensFacts
             TransformOn = TransformOn,
             ControlFeed = ControlFeed,
             WrittenFeed = WrittenFeed,
+            FeedProgrammed = FeedProgrammed,
             PolePoint = PolePoint,
             RoundingRadius = RoundingRadius,
             ModalCornerFeed = ModalCornerFeed,
             PreloadedTool = PreloadedTool,
+            ChangedTool = ChangedTool,
             MachineOrientation = MachineOrientation,
             ToleranceOn = ToleranceOn,
         };
@@ -258,10 +272,12 @@ internal sealed class SiemensFacts
         TransformOn = other.TransformOn;
         ControlFeed = other.ControlFeed;
         WrittenFeed = other.WrittenFeed;
+        FeedProgrammed = other.FeedProgrammed;
         PolePoint = other.PolePoint;
         RoundingRadius = other.RoundingRadius;
         ModalCornerFeed = other.ModalCornerFeed;
         PreloadedTool = other.PreloadedTool;
+        ChangedTool = other.ChangedTool;
         MachineOrientation = other.MachineOrientation;
         ToleranceOn = other.ToleranceOn;
         Unknown.Clear();
@@ -313,6 +329,12 @@ internal sealed class SiemensFacts
                 agreed.WrittenFeed = null;
             }
 
+            agreed.FeedProgrammed |= call.FeedProgrammed;
+            if (call.ChangedTool != agreed.ChangedTool)
+            {
+                agreed.ChangedTool = null;
+            }
+
             // Callers that differ in group 13 leave the unit of the feeds open; the reader then converts none (D292).
             if (call.UnitsCode != agreed.UnitsCode)
             {
@@ -328,7 +350,7 @@ internal sealed class SiemensFacts
     /// </summary>
     public static SiemensFacts AllUnknown()
     {
-        var facts = new SiemensFacts();
+        var facts = new SiemensFacts { FeedProgrammed = true };
         foreach (string fact in s_facts)
         {
             facts.MakeUnknown(fact);
@@ -360,6 +382,7 @@ internal sealed class SiemensFacts
                 break;
             case Preload:
                 PreloadedTool = null;
+                ChangedTool = null;
                 break;
             case Spindles:
                 Rpm.Clear();

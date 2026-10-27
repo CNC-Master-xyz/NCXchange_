@@ -38,11 +38,12 @@ public sealed class SiemensToolTests
     }
 
     // D132: TOOL=k consumes any preload, of k or of another tool, so an M6 after T5 M6 does not change to the T3 of
-    // the line before; the control's T5 overwrote that selection (siemens 5; virtual machine 3.5).
+    // the line before; the control's T5 overwrote that selection and stays its T, so the M6 is TOOL=5 again (siemens
+    // 5; virtual machine 3.5).
     [Fact]
     public void ToolOfAnotherTool_ConsumesThePreload()
     {
-        Assert.Equal(Lines("PRELOAD=3", "TOOL=5", "TOOL"), Body("T3\nT5 M6\nM6"));
+        Assert.Equal(Lines("PRELOAD=3", "TOOL=5", "TOOL=5"), CheckedBody("T3\nT5 M6\nM6"));
     }
 
     // The T=0 the Hermle writes before M30 unloads the spindle without an M6: TOOL=0 (controller-mapping 3, TOOL=0).
@@ -147,6 +148,19 @@ public sealed class SiemensToolTests
             Lines("WORKPIECE=SUB", "SPINDLE_SYNC=MAIN,SUB", "SPINDLE_SYNC=OFF", "SPINDLE_SYNC=MAIN,SUB PHASE=0"),
             BodyOf(NcxWriter.Write(program)));
         Assert.Equal([DiagnosticCodes.FunctionAngleSetByTheMachine], Codes(program));
+    }
+
+    // D155: a code with an extension addresses its spindle, so the state of another spindle's table that writes the
+    // same code is ruled out, without the RDR020 of two resources switched on.
+    [Fact]
+    public void ExtendedCode_RulesOutTheTablesOfOtherSpindles()
+    {
+        MachineConfig machine = MillTurnWith("[spindle_mode.SUB]\n", "[spindle_mode.TOOL]\nAXIS = \"M2=28\"\n\n"
+            + "[spindle_mode.SUB]\n", "AXIS = \"M2=70\"", "AXIS = \"M2=28\"");
+        NcxProgram program = FramedProgram("M2=28", machine);
+
+        Assert.Equal(Lines("SPINDLE_MODE:SUB=AXIS"), BodyOf(NcxWriter.Write(program)));
+        Assert.Empty(Codes(program));
     }
 
     // SPOS= and M19 orient a spindle, M2=70 switches spindle 2 to axis mode (controller-mapping 4, ORIENT and

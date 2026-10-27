@@ -24,8 +24,8 @@ internal static class SiemensTilt
     private const int Mode = 3;
     private const int BeforeRotation = 4;
     private const int FirstAngle = 7;
-    private const int AfterRotation = 10;
     private const int SecondAngle = 8;
+    private const int AfterRotation = 10;
     private const int Direction = 13;
     private const int RetractDistance = 14;
 
@@ -117,6 +117,15 @@ internal static class SiemensTilt
             return;
         }
 
+        // Under DIAMON whether the cycle takes _X0 and _X1 as radii or diameters depends on MD20360 bit 14, which no
+        // machine key carries, so a non-zero X of a reference point keeps the block RAW (D125, D333).
+        if (SiemensFrames.XInRadius(block) && (before.Has("X", null) || after.Has("X", null)))
+        {
+            block.Draft.KeepAsRaw("CYCLE800 with an X reference point under DIAMON, whose unit, radius or diameter, "
+                + "depends on MD20360 bit 14 (D125, D333)");
+            return;
+        }
+
         int decimals = SiemensNumbers.LeastDecimals;
         for (int index = 0; index < 3; index++)
         {
@@ -157,7 +166,8 @@ internal static class SiemensTilt
             return;
         }
 
-        foreach (SiemensDraftBlock part in new[] { before, entry, after })
+        SiemensDraftBlock[] parts = [before, entry, after];
+        foreach (SiemensDraftBlock part in parts)
         {
             if (part.Verb is not null && (part.Verb != "SHIFT" || part.Words.Count > 0))
             {

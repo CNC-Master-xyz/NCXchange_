@@ -180,6 +180,29 @@ public sealed class SiemensMotionTests
             Codes(program));
     }
 
+    // D292: the control keeps the physical feed across a switch of group 13, while an NCX F is a number in the active
+    // UNITS, so the reader converts the modal feed into the new unit and writes it on the next feed motion, with
+    // RDR507 (Funktionshandbuch Grundfunktionen 2012 p.342; NC-Programmierung SW4.92 p.165).
+    [Fact]
+    public void ModalFeedAcrossAUnitsSwitch_IsConvertedAndWrittenAgain()
+    {
+        NcxProgram program = FramedProgram("G1 X1 F254\nG700\nG1 X2\nG710 G0 X3\nG1 X4");
+
+        Assert.Equal(Lines("LINE X=1 F=254", "UNITS=INCH", "LINE X=2 F=10", "RAPID X=3 UNITS=MM", "LINE X=4 F=254"),
+            BodyOf(NcxWriter.Write(program)));
+        Assert.Equal([DiagnosticCodes.SiemensFeedInTheBasicSystem, DiagnosticCodes.SiemensFeedInTheBasicSystem],
+            Codes(program));
+    }
+
+    // D292: where the reader does not know the feed of the control, a RAW block with an F before the switch, it warns.
+    [Fact]
+    public void UnitsSwitch_WithAnUnknownFeed_IsAWarning()
+    {
+        NcxProgram program = FramedProgram("G1 X1 F=FOO\nG700");
+
+        Assert.Contains(DiagnosticCodes.SiemensFeedInTheBasicSystem, Codes(program));
+    }
+
     // G70, G71, G700 and G710 are UNITS (controller-mapping 1, UNITS).
     [Fact]
     public void G70G71G700G710_AreUnits()

@@ -217,13 +217,17 @@ public sealed class SiemensFlowTests
 
     // D346 with the manual audit of 2026-10-26 and D382: how DIV rounds a negative operand, towards zero or towards
     // minus infinity, is not documented, so a negative literal keeps the block RAW with the WARNING RDR506 (D5)
-    // unless both operands are integer-valued and the quotient is exact.
+    // unless both operands are integer-valued and the quotient is exact. A minus after *, / or MOD signs an operand of
+    // a longer product, R1*-8 DIV 2 is (R1*-8) DIV 2, so it stays RAW too.
     [Theory]
     [InlineData("R1=-7 DIV 2")]
     [InlineData("R1=7 DIV -2")]
     [InlineData("R1=-7.5 DIV 2.5")]
     [InlineData("R1=-8 DIV 0")]
     [InlineData("R1=MAXVAL(1,-7 DIV 2)")]
+    [InlineData("R2=R1*-8 DIV 2")]
+    [InlineData("R2=R1/-8 DIV 2")]
+    [InlineData("R2=R1 MOD -8 DIV 2")]
     public void Div_WithANegativeLiteral_StaysRawWithTheWarning(string source)
     {
         NcxProgram program = FramedProgram(source);

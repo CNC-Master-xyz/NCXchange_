@@ -179,9 +179,9 @@ internal static partial class SiemensExpression
     private static string DivisionRounding(SiemensBlock block, string text)
     {
         var warning = new SiemensWarning(DiagnosticCodes.SiemensDivisionRoundingUnknown,
-            $"{text.Trim()} divides with DIV an operand that is not a number literal of 0 or more, and how the control "
-            + "rounds DIV for a negative operand, towards zero or towards minus infinity, is not documented; the block "
-            + "is kept as RAW (D346, D5).");
+            $"{text.Trim()} divides with DIV an operand that is no number literal, or a negative literal whose "
+            + "quotient is not exact, and how the control rounds DIV for a negative operand, towards zero or towards "
+            + "minus infinity, is not documented; the block is kept as RAW (D346, D382, D5).");
         if (!block.Draft.ReadingWarnings.Contains(warning))
         {
             block.Draft.ReadingWarnings.Add(warning);
@@ -209,8 +209,18 @@ internal static partial class SiemensExpression
         {
             string rest = before.Substring(0, before.Length - 1).TrimEnd();
             string last = rest.Length == 0 ? "" : rest.Substring(rest.LastIndexOf(' ') + 1);
-            negative = !(last.Length > 0 && Array.IndexOf(s_belowProduct, last) < 0
-                && last is not ("*" or "/" or "MOD") && !last.EndsWith('(') && !last.EndsWith(','));
+
+            // A minus after * / or MOD is the sign of the operand of that product, whose chain runs on to the left:
+            // R1*-8 DIV 2 is (R1*-8) DIV 2 on the control, whose dividend is no literal, so the block stays RAW.
+            if (last is "*" or "/" or "MOD")
+            {
+                return false;
+            }
+
+            // A unary minus stands at the start of an operand: at the start, after (, a comma or an operator of
+            // lower precedence than the product; after a value it is the binary minus.
+            negative = last.Length == 0 || Array.IndexOf(s_belowProduct, last) >= 0 || last.EndsWith('(')
+                || last.EndsWith(',');
         }
 
         int minus = DivisorMinus(text, afterDiv);
@@ -430,9 +440,7 @@ internal static partial class SiemensExpression
     // Funktionshandbuch Grundfunktionen 2012 p.901-903, cnc-manuals).
     private static bool MachinePositionInRadius(SiemensBlock block, string native)
     {
-        return string.Equals(native, "$AA_IM[X]", StringComparison.OrdinalIgnoreCase)
-            && block.Facts.DiameterMode is "DIAMON" or "DIAM90"
-            && block.Machine.ResolveAxis("X") is not { FramesInDiameter: true };
+        return string.Equals(native, "$AA_IM[X]", StringComparison.OrdinalIgnoreCase) && SiemensFrames.XInRadius(block);
     }
 
     // R1 and R[1] are $R1; an indirect R[R1] is RAW (controller-mapping 6, VAR); a system variable is the SYS_ name
@@ -447,7 +455,24 @@ internal static partial class SiemensExpression
             {
                 if (string.Equals(entry.Value.Replace(" ", ""), native, StringComparison.OrdinalIgnoreCase))
                 {
-                    return MachinePositionInRadius(block, native) ? "(2 * $" + entry.Key + ")" : "$" + entry.Key;
+                    if (!MachinePositionInRadius(block, native))
+                    {
+                        return "$" + entry.Key;
+                    }
+
+                    // D240: the factor rests on the default of MD20360 until it is measured on a machine, so the
+                    // reader names it.
+                    var doubled = new SiemensWarning(DiagnosticCodes.SiemensMachinePositionDoubled,
+                        $"{native} reads a radius on the control by default (MD20360 bits 6/7 off) while NCX reads X "
+                        + $"as a diameter under DIAMETER=ON; the reader writes 2 * ${entry.Key}, a factor not yet "
+                        + "measured on a machine; set frames_in_diameter on the X axis where the control gives "
+                        + "diameters (D240).");
+                    if (!block.Draft.Warnings.Contains(doubled))
+                    {
+                        block.Draft.Warnings.Add(doubled);
+                    }
+
+                    return "(2 * $" + entry.Key + ")";
                 }
             }
 

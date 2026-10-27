@@ -17,6 +17,10 @@ internal static class SiemensMotion
     // which a builder may change with MD20150 $MC_GCODE_RESET_VALUES (controllers siemens.md 2; D340).
     private const string DefaultMotionCode = "G1";
 
+    // 25.4 mm to the inch, and the decimals a converted feed keeps (D121, D292).
+    private const decimal MillimetresPerInch = 25.4m;
+    private const int FeedDecimals = 6;
+
     // The address words of a motion block that NCX has no word for, kept as RAW words (controllers siemens.md 3, 6;
     // controller-mapping 2 and 9): the feed per tooth, the velocity limits, the override, the accelerations, the
     // smoothing distances, the tolerances of an axis, the contour allowance, the transition circle, the cutting speed
@@ -499,6 +503,7 @@ internal static class SiemensMotion
             return null;
         }
 
+        block.Facts.FeedProgrammed = true;
         Value? value = SiemensExpression.ValueOf(block, word.Text, out string? problem);
         if (value is null)
         {
@@ -533,29 +538,32 @@ internal static class SiemensMotion
             return feed;
         }
 
-        bool toInch = units == "INCH";
-        Value converted;
-        if (SiemensNumbers.NumberOf(feed) is decimal number)
-        {
-            converted = SiemensNumbers.Of(Math.Round(toInch ? number / MillimetresPerInch : number * MillimetresPerInch,
-                FeedDecimals, MidpointRounding.AwayFromZero));
-        }
-        else
-        {
-            string text = feed is ExprValue expression ? expression.Text : feed.ToCanonical();
-            converted = SiemensExpression.Parse(block, "(" + text + (toInch ? ") / 25.4" : ") * 25.4"), out _)
-                ?? feed;
-        }
-
+        Value converted = Converted(block, feed, units == "INCH");
         block.Draft.Warnings.Add(new SiemensWarning(DiagnosticCodes.SiemensFeedInTheBasicSystem,
             $"{word.Address}={word.Text} stands under {code}, which leaves the feed in the basic system {basic} of the "
             + $"machine; the reader converts it into {units}: {converted.ToCanonical()} (D292)."));
         return converted;
     }
 
-    // 25.4 mm to the inch, and the decimals a converted feed keeps (D121).
-    private const decimal MillimetresPerInch = 25.4m;
-    private const int FeedDecimals = 6;
+    /// <summary>
+    /// A feed converted between mm and inch by 25.4: a number to six decimals (D121), an expression divided or
+    /// multiplied (D292).
+    /// </summary>
+    /// <param name="block">The block being read.</param>
+    /// <param name="feed">The feed in the other unit.</param>
+    /// <param name="toInch">True to convert mm into inch, false inch into mm.</param>
+    public static Value Converted(SiemensBlock block, Value feed, bool toInch)
+    {
+        if (SiemensNumbers.NumberOf(feed) is decimal number)
+        {
+            return SiemensNumbers.Of(Math.Round(toInch ? number / MillimetresPerInch : number * MillimetresPerInch,
+                FeedDecimals, MidpointRounding.AwayFromZero));
+        }
+
+        string factor = MillimetresPerInch.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        string text = feed is ExprValue expression ? expression.Text : feed.ToCanonical();
+        return SiemensExpression.Parse(block, $"({text}) {(toInch ? "/" : "*")} {factor}", out _) ?? feed;
+    }
 
     // A line ends in its own direction, which a CT after it continues (controllers siemens.md 3).
     private static void Tangent(SiemensBlock block, SiemensPlane plane, Dictionary<string, decimal> start)

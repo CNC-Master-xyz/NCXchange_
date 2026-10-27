@@ -229,11 +229,44 @@ internal static class SiemensGroups
     // switch only the geometry and leave the feeds in the basic system of MD10240, so where the pair differs from
     // base_units the reader converts the feeds under it (SiemensMotion.FeedInNcxUnits); G700 and G710 switch the feeds
     // too (NC-Programmierung SW4.92 p.164-166, cnc-manuals).
+    // The control keeps the physical feed across a switch of group 13 (Funktionshandbuch Grundfunktionen 2012 p.342;
+    // NC-Programmierung SW4.92 p.165), while an NCX F is a number in the active UNITS: where the switch changes UNITS,
+    // the reader converts the modal feed into the new unit and writes it on the next feed motion, with RDR507, and
+    // warns where it does not know the feed (D292).
     private static void ReadUnits(SiemensBlock block, SourceWord word, string command)
     {
         block.MarkRead(word);
-        block.Facts.UnitsCode = command;
-        AddModal(block, "UNITS", command is "G70" or "G700" ? "INCH" : "MM");
+        SiemensFacts facts = block.Facts;
+        string units = command is "G70" or "G700" ? "INCH" : "MM";
+        facts.Written.TryGetValue("UNITS", out string? before);
+        facts.UnitsCode = command;
+        AddModal(block, "UNITS", units);
+        // A block that programs its own F replaces the modal feed.
+        if (before is null || before == units || block.Find("F") is not null)
+        {
+            return;
+        }
+
+        if (facts.ControlFeed is not Value feed)
+        {
+            if (!facts.FeedProgrammed)
+            {
+                return;
+            }
+
+            block.Draft.Warnings.Add(new SiemensWarning(DiagnosticCodes.SiemensFeedInTheBasicSystem,
+                $"{command} switches UNITS to {units}, and the reader does not know the feed of the control here, "
+                + "which the control keeps across the switch; a feed motion without F after it moves at that feed "
+                + "(D292)."));
+            return;
+        }
+
+        Value converted = SiemensMotion.Converted(block, feed, units == "INCH");
+        facts.ControlFeed = converted;
+        facts.WrittenFeed = null;
+        block.Draft.Warnings.Add(new SiemensWarning(DiagnosticCodes.SiemensFeedInTheBasicSystem,
+            $"{command} switches UNITS to {units}, and the control keeps the feed {feed.ToCanonical()} across the "
+            + $"switch; the reader writes it as {converted.ToCanonical()} on the next feed motion (D292)."));
     }
 
     // G94 is feed per minute, G95 per revolution of the master spindle (controller-mapping 2, FEED_MODE); G93, inverse

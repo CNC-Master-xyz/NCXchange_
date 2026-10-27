@@ -69,8 +69,27 @@ public sealed class SiemensFrameTests
         Assert.Equal(Lines("DIAMETER=ON", "SHIFT X=10 Z=5"), CheckedBody("DIAMON\nTRANS X10 Z5", machine));
     }
 
+    // D125: only an X axis whose programming is diameter or switchable has radius frames to double; the mill's X is
+    // taken as written under DIAMON.
+    [Fact]
+    public void TransX_OnARadiusAxis_IsTakenAsWritten()
+    {
+        Assert.Equal(Lines("DIAMETER=ON", "SHIFT X=10"), Body("DIAMON\nTRANS X10"));
+    }
+
+    // D125, D333: under DIAMON the unit of _X0 and _X1 of CYCLE800 depends on MD20360 bit 14, which no machine key
+    // carries, so a CYCLE800 with a non-zero X reference point stays RAW.
+    [Fact]
+    public void CYCLE800_WithAnXReferencePointUnderDiamon_StaysRaw()
+    {
+        const string Swivel = "CYCLE800(0,\"TABLE\",0,27,1,0,0,0,45,0,0,0,0,-1,100,1)";
+
+        Assert.Equal(Lines("DIAMETER=ON", Raw(Swivel)), Body("DIAMON\n" + Swivel, MillTurn()));
+    }
+
     // D240: $AA_IW[X] reads a diameter under DIAMON and maps one to one; $AA_IM[X] reads a radius (MD20360 bits 6/7
-    // off), so the reader doubles it under DIAMON, and takes it as written under DIAMOF or with frames_in_diameter.
+    // off), so the reader doubles it under DIAMON with the WARNING RDR510, the factor not yet measured, and takes it
+    // as written under DIAMOF or with frames_in_diameter.
     [Fact]
     public void AaImX_UnderDiamon_IsDoubled()
     {
@@ -80,9 +99,12 @@ public sealed class SiemensFrameTests
         MachineConfig inDiameter = MillTurnWith("call_depth = 8\n", variables, "programming = \"switchable\"",
             "programming = \"switchable\"\nframes_in_diameter = true");
 
+        NcxProgram program = FramedProgram("DIAMON\nR1=$AA_IM[X]\nR2=$AA_IW[X]\nDIAMOF\nR3=$AA_IM[X]", machine);
+
         Assert.Equal(Lines("DIAMETER=ON", "VAR:R1={(2 * $SYS_MPOS_X)}", "VAR:R2={$SYS_POS_X}", "DIAMETER=OFF",
                 "VAR:R3={$SYS_MPOS_X}"),
-            Body("DIAMON\nR1=$AA_IM[X]\nR2=$AA_IW[X]\nDIAMOF\nR3=$AA_IM[X]", machine));
+            BodyOf(NcxWriter.Write(program)));
+        Assert.Equal([DiagnosticCodes.SiemensMachinePositionDoubled], Codes(program));
         Assert.Equal(Lines("DIAMETER=ON", "VAR:R1={$SYS_MPOS_X}"), Body("DIAMON\nR1=$AA_IM[X]", inDiameter));
     }
 

@@ -463,6 +463,7 @@ public sealed class SiemensReader : ReaderBase
                 if (reading.Source.Words.Any(word => word.Address == "F"))
                 {
                     facts.ControlFeed = null;
+                    facts.FeedProgrammed = true;
                 }
             }
 
