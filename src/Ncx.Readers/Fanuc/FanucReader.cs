@@ -324,13 +324,11 @@ public sealed partial class FanucReader : ReaderBase
         {
             // A subprogram runs with the state of its caller at the CALL (virtual machine 3.9), a contour section with
             // the state at its cycle, whose contour follows it in the source (controllers fanuc.md 6; language 4.7.1).
-            // TODO(question): virtual machine 3.9 walks a subprogram at every CALL with the state of that caller, while
-            // a reader reads it once; the documents do not say how a reader reads a block of a subprogram whose meaning
-            // depends on its caller (the verb of X10., G90 or G91, an active G81, the spindle of a bare S, the chain a
-            // G52 or G69 acts on) where the callers leave different states or a call stands after the subprogram. The
-            // reader takes what every call of the file agrees on, fact by fact (FanucCallerState); a fact the calls do
-            // not agree on, or that a call the reader has not read yet leaves open, is unknown, and a block that
-            // depends on it stays RAW; a bare M6 is a bare TOOL. This holds until D225 is answered.
+            // D225: a subprogram starts from the facts every call agrees on, fact by fact, TIMES passes included
+            // (FanucCallerState); a fact is unknown when the calls disagree, when a call is not reached yet or when
+            // nothing calls the subprogram, and a block that depends on an unknown fact stays RAW with its WARNING
+            // (D5), a bare M6 a bare TOOL. After the call the caller continues with the facts the subprogram may change
+            // marked unknown.
             fanuc.Calls.EntryOf(SectionName(fanuc, begin), ConsultedGroups()).Restore(State, fanuc);
             Derive(fanuc);
             return;

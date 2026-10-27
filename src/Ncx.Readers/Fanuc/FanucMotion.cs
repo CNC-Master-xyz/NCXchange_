@@ -616,9 +616,8 @@ internal static class FanucMotion
     // A Fanuc F stays for the blocks after it, the F of a cycle block too, while CYCLE_F never touches the F of NCX
     // (controllers fanuc.md 2, 6; D29): a feed motion after such a block gets the F of the control, so that it moves
     // as the source does (language 2 rule 4, explicit where controllers are implicit).
-    // TODO(question): the documents do not say where the F of a Fanuc cycle block, which is also the modal F of the
-    // control, stands in NCX besides CYCLE_F; the reader writes it on the next LINE or ARC that moves with it until
-    // D218 is answered.
+    // D218: the F of a G8x block is the control's modal feed and stays in force after G80; the reader writes it on the
+    // first later feed motion whose NCX F differs, never in the CYCLE block (D29; controller-mapping 5, CYCLE_F).
     private static void AddModalFeed(FanucBlock block, DraftBlock main, string verb)
     {
         Value? feed = block.Fanuc.ControlFeed;

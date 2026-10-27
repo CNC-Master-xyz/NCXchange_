@@ -173,10 +173,10 @@ internal static class FanucMacro
             return null;
         }
 
-        // TODO(question): D249: controller-mapping 6 reads M98 P51002 as program 1002 five times, while fanuc 1 gives
-        // the O numbers eight digits on the 30i; the older form of M98 and M200 is read whenever P has more than four
-        // digits and no L. G65 and M198 have no older form (fanuc 1 and 7, controller-mapping 6). This holds until D249
-        // is answered.
+        // D249: in the 30i program format M98 P with more than four digits and no L carries the count in front of the
+        // last four digits, P51002 = O1002 five times; M98 P L names the program in P and the count in L. The same
+        // holds for M200 of the builder nakamura; G65 and M198 have no older form (fanuc 1 and 7, controller-mapping
+        // 6). The Series 15 program format (0001#1), where P51002 calls O1002 once, is not supported (fanuc 1).
         if (!long.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out long whole))
         {
             return null;
