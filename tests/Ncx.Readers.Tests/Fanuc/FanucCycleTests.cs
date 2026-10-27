@@ -618,7 +618,7 @@ public sealed class FanucCycleTests
         Assert.Equal(
             Lines(
                 "RAPID X=60 Z=-20 C=0",
-                "CYCLE=DRILL AXIS=X CLEARANCE=54 DEPTH=30 CYCLE_RETRACT=CLEARANCE CYCLE_F=0.05",
+                "CYCLE=DRILL AXIS=X SURFACE=0 CLEARANCE=54 DEPTH=30 CYCLE_RETRACT=CLEARANCE CYCLE_F=0.05",
                 "CYCLE_CALL",
                 "CYCLE_CALL C=120",
                 "CYCLE=OFF"),

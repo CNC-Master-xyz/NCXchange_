@@ -1082,16 +1082,18 @@ internal static class FanucCycles
         }
 
         // D158: SURFACE is R minus [cycles] surface_clearance, SURFACE=0 where the machine file leaves the key out (as
-        // language 6 writes the drilling of G81); none on a cycle along X, whose 0 is the axis of the part, and none
-        // where R is no number the reader knows.
+        // language 6 writes the drilling of G81), on every drilling axis; on an X axis programmed in diameters the
+        // millimetres of the key are a radius, so the diameter SURFACE lies twice the key below CLEARANCE. None where R
+        // is no number the reader knows.
         decimal? gap = block.Machine.Cycles?.SurfaceClearance;
-        if (cycle.Axis != "X" && gap is null)
+        bool diameter = cycle.Axis == "X" && block.Machine.ResolveAxis("X")?.Programming == Programming.Diameter;
+        if (gap is null)
         {
             definition.Add("SURFACE", s_zero);
         }
-        else if (cycle.Axis != "X" && FanucNumbers.NumberOf(cycle.Clearance) is decimal level)
+        else if (FanucNumbers.NumberOf(cycle.Clearance) is decimal level)
         {
-            definition.Add("SURFACE", FanucNumbers.Of(level - gap!.Value));
+            definition.Add("SURFACE", FanucNumbers.Of(level - (diameter ? 2m * gap.Value : gap.Value)));
         }
 
         definition.Add("CLEARANCE", cycle.Clearance).Add("DEPTH", cycle.Depth);
