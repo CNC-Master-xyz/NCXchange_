@@ -59,6 +59,12 @@ public abstract partial class CompilerBase
                 continue;
             }
 
+            // D278: a section written inline has no walk of its own in the output.
+            if (IsInlined(section))
+            {
+                continue;
+            }
+
             if (block.Has("PROGRAM", null, "BEGIN"))
             {
                 BeginProgram(step, section);

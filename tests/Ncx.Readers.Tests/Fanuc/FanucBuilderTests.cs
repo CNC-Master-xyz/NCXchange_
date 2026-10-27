@@ -120,7 +120,8 @@ public sealed class FanucBuilderTests
         Assert.Equal([DiagnosticCodes.FunctionAngleSetByTheMachine], Codes(program));
     }
 
-    // D155: a code several states write gives every one of them, M9 the OFF of each coolant channel; a table bound to
+    // D155: a code several states write gives every one of them that the source state does not rule out, M9 the OFF
+    // of each coolant channel that is on; with none on, the first state in file order stands. A table bound to
     // another channel is ruled out (D56).
     [Fact]
     public void M9_OfTwoCoolantChannels_SwitchesBothOff()
@@ -129,7 +130,8 @@ public sealed class FanucBuilderTests
             "STANDARD = { ON = \"M8\", OFF = \"M9\" }\nMIST = { ON = \"M7\", OFF = \"M9\" }",
             StringComparison.Ordinal));
 
-        Assert.Equal(Lines("COOLANT=OFF COOLANT:MIST=OFF"), Body("M9", mill));
+        Assert.Equal(Lines("COOLANT=ON", "COOLANT:MIST=ON", "COOLANT=OFF COOLANT:MIST=OFF"), Body("M8\nM7\nM9", mill));
+        Assert.Equal(Lines("COOLANT=OFF"), Body("M9", mill));
     }
 
     // Probing (G31), push checks (G38) and every G code the reader does not map stay RAW (controller-mapping 9).

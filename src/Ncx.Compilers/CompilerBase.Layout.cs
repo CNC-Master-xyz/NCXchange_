@@ -156,7 +156,7 @@ public abstract partial class CompilerBase
     {
         foreach (Section sub in subs)
         {
-            if (_subs.TryGetValue(sub, out SubText? text))
+            if (_subs.TryGetValue(sub, out SubText? text) && !IsInlined(sub))
             {
                 output.Add(text.Lines);
             }

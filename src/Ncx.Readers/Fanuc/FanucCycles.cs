@@ -41,8 +41,14 @@ internal static class FanucCycles
 
     private static readonly string[] s_motion = ["G0", "G1", "G2", "G3"];
 
+    // D177: the mill drilling codes whose format has no dwell P (B-64484EN-2 p.56, 61-84).
+    private static readonly string[] s_millWithoutDwell = ["G73", "G81", "G83", "G85", "G86"];
+
     // The word of the thread lead F of a simple turning cycle (D175).
     private const string PitchWord = "PITCH";
+
+    // The catalog word of the taper R of a simple turning cycle (D114, D175).
+    private const string TaperWord = "TAPER";
     private static readonly IntegerValue s_zero = new(0, "0");
 
     /// <summary>
@@ -146,6 +152,13 @@ internal static class FanucCycles
 
             block.Fanuc.Unknowns.Cycle = false;
             unknownEnds = code is null;
+        }
+
+        // D386: a group-01 code in a drilling cycle block cancels the cycle; the block is no cycle.
+        if (code is not null && GroupOneCodeOf(block) is string motion && !IsTurningCode(block, code))
+        {
+            CancelledByGroupOne(block, code, motion);
+            return;
         }
 
         bool cancels = block.TakeCode("G80");
@@ -321,10 +334,8 @@ internal static class FanucCycles
     // once at the current position; language 4.7). A modal cycle still active is written again before its next call,
     // since the one-shot CYCLE replaced it in NCX (language 4.7); where the tool stands afterwards the reader does not
     // follow.
-    // TODO(question): a one-shot entry runs once where it stands (machine-config 6), while the virtual machine keeps a
-    // CYCLE until CYCLE=OFF, the next CYCLE, TOOL (with a WARNING) or PROGRAM=END (virtual machine 2.6, 4); the
-    // documents do not say whether a reader closes a one-shot cycle with CYCLE=OFF, so it writes none, as the direct
-    // Siemens call of controller-mapping 5 reads, until D224 is answered.
+    // D224: a one-shot entry runs once where it stands (machine-config 6), while the virtual machine keeps a CYCLE
+    // until CYCLE=OFF, so the reader closes it with CYCLE=OFF after its call.
     private static void ReadContourCycle(FanucBlock block, CycleEntry entry, string contour)
     {
         block.Take(entry.Contour[0]);
@@ -346,7 +357,11 @@ internal static class FanucCycles
         }
 
         block.Draft.After.Add(new DraftBlock().WithVerb("CYCLE_CALL"));
-        block.Fanuc.Record("CYCLE", entry.Name);
+
+        // D224: the reader writes CYCLE=OFF directly after the CYCLE_CALL of a one-shot entry, and a compiler writes
+        // nothing for it.
+        block.Draft.After.Add(new DraftBlock().Add("CYCLE", new IdentValue("OFF")));
+        block.Fanuc.Record("CYCLE", "OFF");
         if (block.Fanuc.Cycle is FanucCycle active)
         {
             active.Written = null;
@@ -515,6 +530,57 @@ internal static class FanucCycles
         return active is null || !CodesOf(block).Contains(active);
     }
 
+    // The group-01 code G0 to G3 of a block (controllers fanuc.md 3); null for none.
+    private static string? GroupOneCodeOf(FanucBlock block)
+    {
+        foreach (string motion in s_motion)
+        {
+            if (block.HasCode(motion))
+            {
+                return motion;
+            }
+        }
+
+        return null;
+    }
+
+    // Whether a cycle code is a simple turning cycle of the lathe, G90, G92, G94 of system A, which D386 does not name.
+    private static bool IsTurningCode(FanucBlock block, SourceWord code)
+    {
+        return TurningOf(block.System).Contains(NativeCode.Of(code)!);
+    }
+
+    // D386: a block with a group-01 code (G0..G3) and a drilling canned-cycle code (G73, G74, G76, G81-G89, mill and
+    // lathe) is not a cycle: the control executes the group-01 code and the cycle is cancelled as by G80. The block
+    // stays RAW with the WARNING RDR121, since the control's handling of R, Q, P and K in a G0 block is not
+    // documented, and the reader writes no RAPID guess. Afterwards the motion is the block's group-01 code, no cycle
+    // is active (CYCLE=OFF after the RAW block where one was written), and R and Z are cleared, so the following X/Y
+    // blocks are plain moves.
+    private static void CancelledByGroupOne(FanucBlock block, SourceWord code, string motion)
+    {
+        string native = NativeCode.Of(code)!;
+        block.Draft.KeepAsRaw($"{motion} and {native} in one block: the group-01 code cancels the cycle (D386)");
+        block.Diagnostics.Warning(block.Line, DiagnosticCodes.FanucGroupOneCancelsTheCycle,
+            $"a group-01 code in the {native} block cancels {native}; the control moves with the block's axis words, "
+            + "the hole-bottom Z included (B-64484EN-2 p.105, D386). The block is kept as RAW and no cycle is read.");
+        block.Fanuc.Cycle = null;
+        if (block.Fanuc.TakeChange("CYCLE", "OFF"))
+        {
+            block.Fanuc.CycleOffAfterRaw.Add(block.Line);
+        }
+
+        var groups = new Dictionary<int, string>(block.State.ModalGroups)
+        {
+            [FanucModalGroups.Motion] = motion,
+        };
+        if (!block.IsLathe)
+        {
+            groups[FanucModalGroups.Cycle] = "G80";
+        }
+
+        block.State.SetModalGroups(groups);
+    }
+
     // CYCLE=OFF cancels (controller-mapping 5), written where an NCX cycle is active.
     private static void End(FanucBlock block)
     {
@@ -563,15 +629,33 @@ internal static class FanucCycles
         }
 
         string axis = block.IsLathe ? (code is "G87" or "G88" or "G89" ? "X" : "Z") : ToolAxis(block);
+        if (!block.IsLathe && axis != "Z")
+        {
+            // D157: outside G17 the drilling axis of the control depends on parameter 5101#0 FXY.
+            block.Draft.Warnings.Add((DiagnosticCodes.FanucDrillingAxisByParameter,
+                $"{code} outside G17 drills along {axis}, the axis the reader derives from the plane; the control "
+                + "drills along Z where parameter 5101#0 FXY is 0 and by the plane where it is 1 (controller-mapping "
+                + "5, AXIS; D157)."));
+        }
+
         CycleEntry? matched = block.IsLathe
             ? LatheEntry(block, catalog, code, axis, previous)
-            : ModalEntry(catalog, code);
+            : ModalEntry(catalog, code) ?? DwellNativeEntry(catalog, code);
         bool before = matched is not null && !string.IsNullOrEmpty(matched.Before)
             && WithItsBeforeLine(block, matched, code, previous);
         string? problem = matched is null || string.IsNullOrEmpty(matched.Before) || before
             ? null
             : WithoutItsBeforeLine(block, matched);
-        if (problem is not null)
+        if (problem is not null && LineSurelyAbsent(block)
+            && catalog.FindNativeByBeforeLine(code, lineReaches: false) is CycleEntry withoutLine
+            && catalog.Find(withoutLine.Name, axis) is not null)
+        {
+            // D359: a G84 the line reaches in none of D256's three ways is the floating tap, the entry of its native
+            // with no before key, TAP_COMPENSATING (an amendment of D160, machine-config 6).
+            matched = withoutLine;
+            problem = null;
+        }
+        else if (problem is not null)
         {
             matched = null;
         }
@@ -643,29 +727,31 @@ internal static class FanucCycles
 
     // Why a cycle block whose code the catalog maps is not read as the entry's cycle, although the entry carries a
     // "before" line, the native line of the machining itself (machine-config 6; controllers fanuc.md 6; D256).
-    // Where the reader sees the block that runs before the cycle block and the line stands in neither of the places
+    // Where the reader sees the block that runs before the cycle block and the line stands in none of the places
     // D256 names, the source programmed the other machining, which Fanuc states apart as a fact of the control: a
     // G84 with M29 S in front of it taps rigidly, and "G84(G88) cycle that don't use the M29 code will be activated
-    // with normal tapping", tapping with a compensating chuck (D256, the ANSWER and its evidence). The catalog of the
-    // family has no entry for that other machining, so the blocks of the cycle stay RAW with the reason (D5,
-    // controller-mapping 9): the Fanuc text round-trips as the source wrote it, and no compiler writes the entry's
-    // "before" line in front of it.
-    // TODO(question): which NCX cycle the other machining is has no answer yet; D256 names TAP_COMPENSATING "once the
-    // Fanuc catalog has that entry (D162)", and D162 is open, so until it is answered the reader names no cycle and
-    // keeps the blocks as RAW rather than reading a machining the source did not program (wave-3 question #193).
-    // TODO(question): where a block that runs before the cycle block, back to the place of the line, is none the
-    // reader sees - a cycle block that begins a section a block of the file calls, or one a jump enters, or a call
-    // between the line and the cycle block - the reader can say neither that the line stands in front of it nor that
-    // the source programmed the other machining, since a call may stand between the two. It keeps the blocks of the
-    // cycle as RAW with that reason, the least it can defend, until the answer says what such a cycle reads as
-    // (wave-3 question #195).
+    // with normal tapping", tapping with a compensating chuck. D359 names it TAP_COMPENSATING, the entry of the same
+    // native with no before key, which Start then reads (LineSurelyAbsent). Where the reader cannot tell - a block
+    // it does not see past, a line block kept RAW, a cancel or a spindle code at the line, or a flow that reaches the
+    // block with the line on one path and without it on another (D360) - the blocks stay RAW with the reason (D5).
     private static string? WithoutItsBeforeLine(FanucBlock block, CycleEntry entry)
     {
         if (block.Fanuc.BeforeLineWithACancel.Contains(block.Line))
         {
+            // D384: the reason names the facts the manuals give.
             return $"the line \"{entry.Before}\" of the cycle {entry.Name} stands in front of {entry.Native} in a "
                 + "block with a code that cancels the rigid tapping mode, G80, a cycle code or a group-01 code, and "
-                + "the manual does not say whether the line holds there (machine-config 6, D256); its blocks stay RAW";
+                + "the manual does not say whether the line holds there: the manuals state the group-01 cancel only "
+                + "after tapping (B-64303EN-1 p.927), and the one builder example of a move in the M29 block has no G "
+                + "code (Mori NTX1000SZM p.281-282) (machine-config 6, D256, D384); its blocks stay RAW";
+        }
+
+        if (block.Fanuc.BeforeLineSpindle.TryGetValue(block.Line, out string? spindle))
+        {
+            // D385: the spindle code between the line and the cycle block.
+            return $"{spindle} stands between the line \"{entry.Before}\" of the cycle {entry.Name} and "
+                + $"{entry.Native}, and a spindle command between M29 and G84 is handled by the machine's PMC and may "
+                + "raise an alarm or drop the rigid mode (machine-config 6, D256, D385); its blocks stay RAW";
         }
 
         if (block.Fanuc.BeforeLinesOf.TryGetValue(block.Line, out List<int>? lines)
@@ -674,6 +760,22 @@ internal static class FanucCycles
             return $"the line \"{entry.Before}\" of the cycle {entry.Name} in front of {entry.Native} stands in a "
                 + $"block the reader keeps as RAW, line {raw}, which carries it to the control as it stands, so it is "
                 + "not read into the cycle (machine-config 6, D256, D5); its blocks stay RAW";
+        }
+
+        if (block.Fanuc.BeforeLineAlarm.TryGetValue(block.Line, out int alarm))
+        {
+            // D256, D359: an S command or an axis movement between M29 and G84 is alarm PS0203.
+            return $"the line \"{entry.Before}\" of the cycle {entry.Name} on line {alarm} is followed by an S "
+                + $"command or an axis movement before {entry.Native}, which the control rejects with alarm PS0203 "
+                + "(B-64484EN-2 p.104, p.108; machine-config 6, D256); its blocks stay RAW";
+        }
+
+        if (block.Fanuc.BeforeLineNotOnEveryPath.Contains(block.Line))
+        {
+            // D360: one path reaches the cycle block without the line.
+            return $"one path reaches {entry.Native} with the line \"{entry.Before}\" of the cycle {entry.Name} and "
+                + "one path reaches it without the line, so the mode is not in force on every path (machine-config 6, "
+                + "D256, D360); its blocks stay RAW";
         }
 
         if (!SeesWhatRunsBefore(block))
@@ -688,6 +790,18 @@ internal static class FanucCycles
             + "the catalog but another machining, which NCX cannot name (machine-config 6, D256); its blocks stay RAW";
     }
 
+    // Whether the reader sees that the "before" line reaches the cycle block in none of D256's ways, so that the block
+    // is the machining without the line (D359): it sees what runs before it, and no RAW line block, cancel or
+    // spindle code stands at the place of the line.
+    private static bool LineSurelyAbsent(FanucBlock block)
+    {
+        FanucState fanuc = block.Fanuc;
+        return SeesWhatRunsBefore(block) && !fanuc.BeforeLineWithACancel.Contains(block.Line)
+            && !fanuc.BeforeLineSpindle.ContainsKey(block.Line) && !fanuc.BeforeLineAlarm.ContainsKey(block.Line)
+            && !(fanuc.BeforeLinesOf.TryGetValue(block.Line, out List<int>? lines)
+                && lines.Exists(fanuc.BeforeLineRaw.Contains));
+    }
+
     // Whether the reader sees the blocks that run before a cycle block back to the place of its "before" line: the
     // blocks in front of it in the file run before it, unless a jump enters the cycle block, or the walk back of
     // FanucReader.MarkBeforeLines ended at a block it does not see past - the head of a section a block of the file
@@ -695,13 +809,9 @@ internal static class FanucCycles
     // first block of the file, which the reader sees as well.
     private static bool SeesWhatRunsBefore(FanucBlock block)
     {
-        FanucState fanuc = block.Fanuc;
-        if (block.Source.Find("N") is SourceWord label && fanuc.JumpTargets.Contains(FanucState.LabelOf(label)))
-        {
-            return false;
-        }
-
-        return !fanuc.BeforeLineUnseen.Contains(block.Line);
+        // D360: a jump into the cycle block is decided from the flow (FanucBeforeLineWalk), which leaves the block in
+        // BeforeLineUnseen where it cannot decide.
+        return !block.Fanuc.BeforeLineUnseen.Contains(block.Line);
     }
 
     // The entry of a native cycle that stays active after its block, as the drilling cycles and the simple turning
@@ -712,6 +822,20 @@ internal static class FanucCycles
         foreach (CycleEntry entry in catalog.Entries)
         {
             if (entry.Native == native && entry.Modal)
+            {
+                return entry;
+            }
+        }
+
+        return null;
+    }
+
+    // D177: a mill code no entry writes as its own may be the dwell_native of one, G89 of REAM (G85 with a dwell P).
+    private static CycleEntry? DwellNativeEntry(CycleCatalog catalog, string native)
+    {
+        foreach (CycleEntry entry in catalog.Entries)
+        {
+            if (entry.DwellNative == native && entry.Native != native && entry.Modal)
             {
                 return entry;
             }
@@ -809,9 +933,10 @@ internal static class FanucCycles
     // R before the depth: under G91 R is the distance from the initial level and Z the distance from the R level; Q is
     // the peck, P the dwell in milliseconds, F the feed of the cycle and also the modal F of the control, K the number
     // of repeats (controllers fanuc.md 6; controller-mapping 5; D29).
-    // TODO(question): on a lathe the documents do not say whether R of a drilling cycle is a level or the distance from
-    // the initial level; system A has no G91, and R is read as the level, as on a mill under G90, until D248 is
-    // answered.
+    // D248: on a lathe G83..G89 R is the signed incremental distance from the initial level, always a radius, so
+    // CLEARANCE is the initial level + R, + 2R on an X axis programmed in diameters; where the initial level is not
+    // known the block stays RAW. The depth word follows its address in system A (Z/X absolute, W/U incremental from
+    // R) and G90/G91 in systems B and C. On a mill under G91 R counts from the initial level and Z from R.
     private static void ReadDrilling(FanucBlock block, FanucCycle cycle, bool defines)
     {
         // Under G90 or G91 of a caller the reader does not know (FanucCallerState), R, the depth and the positions of
@@ -824,7 +949,11 @@ internal static class FanucCycles
         }
 
         SourceWord? clearance = block.Take("R");
-        if (clearance is not null)
+        if (clearance is not null && block.IsLathe)
+        {
+            cycle.Clearance = LatheLevel(block, clearance, cycle);
+        }
+        else if (clearance is not null)
         {
             cycle.Clearance = Level(block, clearance, cycle.InitialLevel, block.Incremental);
         }
@@ -842,10 +971,18 @@ internal static class FanucCycles
             cycle.Peck = FanucMacro.ValueOf(block, peck);
         }
 
+        // D159: P of a cycle is the dwell in units of [machine] dwell_increment, seconds per unit, 0.001 by default.
         SourceWord? dwell = block.Take("P");
-        if (dwell?.Number is decimal milliseconds && dwell.Expression is null)
+        if (dwell is not null && !block.IsLathe && s_millWithoutDwell.Contains(cycle.Code))
         {
-            cycle.Dwell = FanucNumbers.Of(milliseconds / 1000m);
+            // D177: the code takes no dwell, so the control ignores P, and the reader drops it with a WARNING.
+            block.Draft.Warnings.Add((DiagnosticCodes.FanucCycleDwellIgnored,
+                $"P{dwell.Text} of {cycle.Code}: {cycle.Code} takes no dwell P on a machining centre (B-64484EN-2 "
+                + "p.56, 61-84), so the dwell is dropped (controllers fanuc.md 6; D177)."));
+        }
+        else if (dwell?.Number is decimal units && dwell.Expression is null)
+        {
+            cycle.Dwell = FanucNumbers.Of(units * block.Machine.Machine.DwellIncrement);
         }
         else if (dwell is not null)
         {
@@ -891,6 +1028,21 @@ internal static class FanucCycles
         }
     }
 
+    // D248: the R level of a lathe drilling cycle, the initial level plus R, twice R on a diameter X axis.
+    private static Value? LatheLevel(FanucBlock block, SourceWord word, FanucCycle cycle)
+    {
+        if (cycle.InitialLevel is not decimal initial || word.Number is not decimal distance
+            || word.Expression is not null)
+        {
+            block.Draft.KeepAsRaw($"R{word.Text} of {cycle.Code} counts from the initial level, where the drilling "
+                + "axis stood before the cycle, which the reader does not know here (D248)");
+            return null;
+        }
+
+        bool diameter = cycle.Axis == "X" && block.Machine.ResolveAxis("X")?.Programming == Programming.Diameter;
+        return FanucNumbers.Of(initial + (diameter ? 2m * distance : distance));
+    }
+
     // An absolute level as written, or under G91 the distance from a known level (controllers fanuc.md 6).
     private static Value? Level(FanucBlock block, SourceWord word, decimal? from, bool incremental)
     {
@@ -929,12 +1081,20 @@ internal static class FanucCycles
             definition.Add("AXIS", new IdentValue(cycle.Axis));
         }
 
-        // TODO(question): SURFACE is R minus the clearance of the machine file or 0 (controller-mapping 5), and no key
-        // of the machine file carries that clearance (wave-1 question #14); the reader writes SURFACE=0, as language 6
-        // writes the drilling of G81, and none on a cycle along X, whose 0 is the axis of the part.
-        if (cycle.Axis != "X")
+        // D158: SURFACE is R minus [cycles] surface_clearance, SURFACE=0 where the machine file leaves the key out (as
+        // language 6 writes the drilling of G81). Gap closed 2026-10-27 (delegated): D158's 0 is the Z face; on an X
+        // axis 0 is the axis of the part, past DEPTH, so a cycle along X writes no SURFACE without the key, and with
+        // it CLEARANCE less twice the key on an X programmed in diameters, whose millimetres are a radius. None where
+        // R is no number the reader knows.
+        decimal? gap = block.Machine.Cycles?.SurfaceClearance;
+        bool diameter = cycle.Axis == "X" && block.Machine.ResolveAxis("X")?.Programming == Programming.Diameter;
+        if (gap is null && cycle.Axis != "X")
         {
             definition.Add("SURFACE", s_zero);
+        }
+        else if (gap is decimal key && FanucNumbers.NumberOf(cycle.Clearance) is decimal level)
+        {
+            definition.Add("SURFACE", FanucNumbers.Of(level - (diameter ? 2m * key : key)));
         }
 
         definition.Add("CLEARANCE", cycle.Clearance).Add("DEPTH", cycle.Depth);
@@ -1109,15 +1269,17 @@ internal static class FanucCycles
             return;
         }
 
-        // D175 gives the taper R of G90, G92 and G94 the catalog word TAPER, which cycles/fanuc.toml maps.
-        // TODO(question): the parser takes no parameter name of a catalog entry yet
-        // (WordCatalog.IsNativeParameterAllowed), so a block with R would read into text that check rejects with
-        // PAR010; the reader keeps such a block RAW until D114 is answered, which loses nothing (D5).
-        if (block.Find("R") is not null)
+        // D114, D175: the taper R of G90, G92 and G94 is the catalog word TAPER, a parameter name of the entry, which
+        // the parser takes in a block whose CYCLE is a catalog name (language 4.7.1, the third provisional form).
+        string? taperAddress = entry.Params.GetValueOrDefault(TaperWord);
+        if (taperAddress is not null && block.Take(taperAddress) is SourceWord taper)
         {
-            block.Draft.KeepAsRaw($"R, the taper of {cycle.Code}, is the catalog word TAPER of D175, which the "
-                + "parser does not take yet (D114)");
-            return;
+            if (FanucMacro.ValueOf(block, taper) is not Value value)
+            {
+                return;
+            }
+
+            cycle.Taper = value;
         }
 
         SourceWord? feed = block.Take("F");
@@ -1158,6 +1320,11 @@ internal static class FanucCycles
         if (entry.Params.ContainsKey(PitchWord) && cycle.Pitch is Value cyclePitch)
         {
             definition.Add(PitchWord, cyclePitch);
+        }
+
+        if (taperAddress is not null && cycle.Taper is Value cycleTaper)
+        {
+            definition.Add(TaperWord, cycleTaper);
         }
 
         Write(block, cycle, definition);

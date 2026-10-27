@@ -176,9 +176,9 @@ internal static class FanucMotion
         };
     }
 
-    // G4 P dwells P milliseconds, G4 X and G4 U seconds (controllers fanuc.md 4; controller-mapping 1, DWELL).
-    // TODO(question): controller-mapping 1 gives the unit of P "ms or s per TOML" and no key of the machine
-    // configuration carries it (wave-1 question #14); P is taken in milliseconds, as fanuc 4 writes it.
+    // D159: G4 X or U with a decimal point is seconds; P, and X or U without a decimal point, count in units of
+    // [machine] dwell_increment, seconds per unit, 0.001 by default (controllers fanuc.md 4; controller-mapping 1,
+    // DWELL; machine-config 1). Parameter 3405#1 DWL, a dwell in revolutions under G95, is not modelled.
     private static void ReadDwell(FanucBlock block)
     {
         if (!block.TakeCode("G4"))
@@ -186,15 +186,14 @@ internal static class FanucMotion
             return;
         }
 
-        SourceWord? milliseconds = block.Take("P");
-        SourceWord? seconds = milliseconds is null ? block.Take("X") ?? block.Take("U") : null;
-        if (milliseconds?.Number is decimal duration && milliseconds.Expression is null)
+        SourceWord? word = block.Take("P") ?? block.Take("X") ?? block.Take("U");
+        decimal increment = block.Machine.Machine.DwellIncrement;
+        if (word?.Number is decimal duration && word.Expression is null)
         {
-            block.Draft.Main.Add("DWELL", FanucNumbers.Of(duration / 1000m));
-        }
-        else if (seconds?.Expression is null && seconds?.ToNcxNumber() is Value time)
-        {
-            block.Draft.Main.Add("DWELL", time);
+            bool seconds = word.Address != "P" && word.Text.Contains('.', StringComparison.Ordinal);
+            block.Draft.Main.Add("DWELL", seconds && word.ToNcxNumber() is Value time
+                ? time
+                : FanucNumbers.Of(duration * increment));
         }
         else
         {

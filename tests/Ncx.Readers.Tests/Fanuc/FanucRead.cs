@@ -254,6 +254,26 @@ internal static class FanucRead
     }
 
     /// <summary>
+    /// The test mill with further keys of its [cycles] table, "surface_clearance = 1.5" (machine-config 6).
+    /// </summary>
+    /// <param name="keys">The keys to add to [cycles].</param>
+    public static MachineConfig MillWithCycles(string keys)
+    {
+        return Load(MillToml.Replace("catalog = \"fanuc.toml\"", "catalog = \"fanuc.toml\"\n" + keys,
+            StringComparison.Ordinal), "mill.toml");
+    }
+
+    /// <summary>
+    /// The test lathe with further keys of its [cycles] table, "surface_clearance = 2" (machine-config 6).
+    /// </summary>
+    /// <param name="keys">The keys to add to [cycles].</param>
+    public static MachineConfig LatheWithCycles(string keys)
+    {
+        return Load(LatheToml.Replace("catalog = \"fanuc-lathe.toml\"", "catalog = \"fanuc-lathe.toml\"\n" + keys,
+            StringComparison.Ordinal), "lathe.toml");
+    }
+
+    /// <summary>
     /// The test lathe with the Fanuc cycle catalog.
     /// </summary>
     public static MachineConfig Lathe()

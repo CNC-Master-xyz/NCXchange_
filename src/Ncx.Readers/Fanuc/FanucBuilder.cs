@@ -213,6 +213,14 @@ internal static class FanucBuilder
         {
             FunctionMatch match = functions[index];
             FanucFunction function = words[index];
+
+            // D155: what holds after the block, for the next code of several states.
+            block.Fanuc.FunctionHolding?.Remove(match.Word);
+            if (match.State != "OFF")
+            {
+                block.Fanuc.FunctionHolding?.Add(match.Word, match.State);
+            }
+
             bool orient = function.Key == "ORIENT";
             block.Draft.AddState(function.Key, function.Addr, orient ? AngleOf(block, word, match) : function.Value);
             if (match.State == "PHASE")

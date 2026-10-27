@@ -213,9 +213,10 @@ public static partial class DiagnosticCodes
     public const string FanucSafeRetractOnSystemA = "CMP383";
 
     /// <summary>
-    /// CMP384: a multiple repetitive cycle of a lathe with its CONTOUR, whose contour blocks the compiler does not
-    /// write inside the program yet (controllers fanuc.md 6, D65).
+    /// CMP384, retired 2026-10-27 (D278): a multiple repetitive cycle of a lathe with its CONTOUR is written with its
+    /// contour inline now; the errors of that contour are CMP389 to CMP392. The number is not reused.
     /// </summary>
+    [Obsolete("Retired by D278: G70 to G73 write their contour inline; CMP389 to CMP392 report what cannot be.")]
     public const string FanucContourCycleNotWritten = "CMP384";
 
     /// <summary>
@@ -231,6 +232,67 @@ public static partial class DiagnosticCodes
     /// language 2 rule 8).
     /// </summary>
     public const string FanucTapFeedNotKnown = "CMP386";
+
+    /// <summary>
+    /// CMP387, an INFO: the Fanuc control counts the peck Q from its own R plane, while NCX counts PECK from SURFACE;
+    /// the compiler writes Q = PECK and names the shift once, at the block that defines the cycle, where SURFACE and
+    /// CLEARANCE differ (D355).
+    /// </summary>
+    public const string FanucPeckCountsFromR = "CMP387";
+
+    /// <summary>
+    /// CMP388, a WARNING: a CYCLE_DWELL other than 0 on a cycle whose Fanuc code takes no dwell P and that has no
+    /// dwell form, PECK (G83), CHIP_BREAK (G73) and BORE (G86) on a machining centre, or DRILL where the catalog has
+    /// no DRILL_DWELL; the dwell is dropped (D177).
+    /// </summary>
+    public const string FanucCycleDwellDropped = "CMP388";
+
+    /// <summary>
+    /// CMP389: the first block of the contour of G71 or G72 moves both plane axes, the type II pocketing cycle, on a
+    /// machine whose [cycles] declares no contour_type_ii (D278, D388 item 11).
+    /// </summary>
+    public const string FanucContourTypeIINotDeclared = "CMP389";
+
+    /// <summary>
+    /// CMP390: the first block of the contour of G71 does not move X (of G72 Z), which the control rejects with alarm
+    /// PS0325 (D278).
+    /// </summary>
+    public const string FanucContourFirstBlockWithoutInfeed = "CMP390";
+
+    /// <summary>
+    /// CMP391: a contour section of G70 to G73 holds a block other than G04, G00 to G03 motion, or a LABEL or JUMP
+    /// whose target is inside the range: a CALL, a cycle, a macro call (D278).
+    /// </summary>
+    public const string FanucContourBlockNotAllowed = "CMP391";
+
+    /// <summary>
+    /// CMP392: the first block of a contour of G70 to G73 is no RAPID or LINE, while the first block writes G00 or G01
+    /// (D278).
+    /// </summary>
+    public const string FanucContourFirstBlockNotLinear = "CMP392";
+
+    /// <summary>
+    /// CMP393: PECK on a Fanuc cycle code that takes no Q: G76, G87, G88 and G89, and G74 and G84 where the machine
+    /// declares no peck rigid tapping ([cycles] peck_rigid_tapping; D279, D388 item 11).
+    /// </summary>
+    public const string FanucPeckWithoutQ = "CMP393";
+
+    /// <summary>
+    /// CMP394: a G73 or G83 cycle without PECK; Q is modal data the native cycles share, so the control would peck
+    /// with a Q another cycle left (D279).
+    /// </summary>
+    public const string FanucPeckNotGiven = "CMP394";
+
+    /// <summary>
+    /// CMP395: a native Fanuc cycle parameter whose key is not one letter A..Z, Q215=1 on CYCLE:FANUC (D279).
+    /// </summary>
+    public const string FanucNativeParameterNotALetter = "CMP395";
+
+    /// <summary>
+    /// CMP396: a drilling cycle of a lathe where the drilling-axis position before the cycle, the initial level R
+    /// counts from, is not known, so R cannot be written (D248).
+    /// </summary>
+    public const string FanucLatheRWithoutInitialLevel = "CMP396";
 
     /// <summary>
     /// CMP400: a variable that neither the V names of custom macro B nor [variables] map nor [system_variables] name a

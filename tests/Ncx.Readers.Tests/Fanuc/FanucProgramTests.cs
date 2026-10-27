@@ -105,12 +105,13 @@ public sealed class FanucProgramTests
         Assert.Equal(Lines("STOP=PROGRAM", "STOP=OPTIONAL"), Body("M0\nM01"));
     }
 
-    // G4 P dwells P milliseconds, G4 X and G4 U seconds on lathes (controller-mapping 1, DWELL).
+    // D159: G4 X and G4 U with a decimal point are seconds; P, and X or U without one, count in units of
+    // [machine] dwell_increment, 0.001 s by default (controller-mapping 1, DWELL).
     [Fact]
     public void Dwell_G4PAndG4XAndG4U_AreDwellInSeconds()
     {
         Assert.Equal(Lines("DWELL=0.5"), Body("G4 P500"));
-        Assert.Equal(Lines("DWELL=2", "DWELL=0.2"), Body("G4 X2\nG4 U0.2", Lathe()));
+        Assert.Equal(Lines("DWELL=2", "DWELL=0.2", "DWELL=0.002"), Body("G4 X2.\nG4 U0.2\nG4 X2", Lathe()));
     }
 
     // A lathe whose X is programmed in diameters reads with DIAMETER=ON (controller-mapping 1, DIAMETER; D60).

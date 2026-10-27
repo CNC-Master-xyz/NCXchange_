@@ -47,9 +47,9 @@ internal static class FanucFunctions
 
     /// <summary>
     /// The states of the machine an M code writes, the [workpiece] selection first: every state that writes it, less
-    /// those of a table bound to another channel (D56), or the first in file order, with RDR020 where two resources of
-    /// one word would be switched on (D155; FunctionChoice). The reader keeps no state of the function tables, so no
-    /// state is dropped as holding already.
+    /// those of a table bound to another channel (D56), the OFF of a resource that is not on and a state that holds
+    /// already, as FanucState.FunctionHolding records them, or the first in file order, with RDR020 where two resources
+    /// of one word would be switched on (D155; FunctionChoice).
     /// </summary>
     /// <param name="block">The block being read.</param>
     /// <param name="code">The M word.</param>
@@ -79,7 +79,11 @@ internal static class FanucFunctions
             text = native;
         }
 
-        var context = new FunctionContext { Channel = block.Fanuc.Channel is long channel ? (int)channel : null };
+        var context = new FunctionContext
+        {
+            Channel = block.Fanuc.Channel is long channel ? (int)channel : null,
+            Holding = block.Fanuc.FunctionHolding,
+        };
         return FunctionChoice.Choose(matches, context, block.Line, text, block.Diagnostics);
     }
 

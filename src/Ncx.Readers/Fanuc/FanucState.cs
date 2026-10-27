@@ -96,6 +96,39 @@ internal sealed class FanucState
     public HashSet<int> BeforeLineWithACancel { get; } = [];
 
     /// <summary>
+    /// The spindle code, M3, M4, M5 or M19, that stands between the "before" line and the cycle block, by the line of
+    /// that cycle block: the machine's PMC handles it, so the walk ends unseen (D385; FanucReader.MarkBeforeLines).
+    /// Each is in BeforeLineUnseen as well.
+    /// </summary>
+    public Dictionary<int, string> BeforeLineSpindle { get; } = [];
+
+    /// <summary>
+    /// The line of the "before" line further back than an S or axis block between it and the cycle block, by the line
+    /// of that cycle block: the control raises PS0203 there (B-64484EN-2 p.104, p.108), so the blocks stay RAW. Each is
+    /// in BeforeLineUnseen as well.
+    /// </summary>
+    public Dictionary<int, int> BeforeLineAlarm { get; } = [];
+
+    /// <summary>
+    /// The lines of the cycle blocks that one path of the flow reaches with the "before" line and another without
+    /// it, so that the blocks stay RAW (D360; FanucBeforeLineWalk). Each is in BeforeLineUnseen as well.
+    /// </summary>
+    public HashSet<int> BeforeLineNotOnEveryPath { get; } = [];
+
+    /// <summary>
+    /// The state of each function-table word the reader wrote, "COOLANT:STANDARD" = "ON", so that a code of several
+    /// states writes only those that do not hold already and no OFF of a resource that is not on (D155); null where the
+    /// reader does not know what holds, after a block it does not follow.
+    /// </summary>
+    public Dictionary<string, string>? FunctionHolding { get; set; } = [];
+
+    /// <summary>
+    /// The lines of the drilling cycle blocks with a group-01 code, which the reader keeps RAW and after which it
+    /// writes CYCLE=OFF, since the control cancels the cycle as G80 does (D386; FanucCycles.Read).
+    /// </summary>
+    public HashSet<int> CycleOffAfterRaw { get; } = [];
+
+    /// <summary>
     /// The lines of the blocks that matched the "before" line of a cycle but ended RAW, so that the line reaches the
     /// control as RAW text and does not count for the cycle (D256, D5; FanucReader.ReadBlock).
     /// </summary>
@@ -407,6 +440,7 @@ internal sealed class FanucState
     public void ForgetWritten()
     {
         _written.Clear();
+        FunctionHolding = null;
     }
 
     /// <summary>

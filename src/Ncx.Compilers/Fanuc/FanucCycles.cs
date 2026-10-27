@@ -20,6 +20,9 @@ internal static class FanucCycles
     /// </summary>
     public const string Definition = "CYCLE:DEF";
 
+    // The key of the initial level of the run of a lathe drilling cycle in the target state (D248).
+    private const string InitialLevel = "CYCLE:INITIAL";
+
     // The words of a CYCLE block (language 4.7).
     private static readonly string[] s_cycleWords =
     [
@@ -107,9 +110,10 @@ internal static class FanucCycles
             // against the G87 entry under AXIS=X (machine-config 6, for_axis).
             CycleEntry? defined = name == "OFF"
                 ? null
-                : write.Machine.CycleCatalog.Find(name, write.After.Cycle.Axis);
+                : CatalogOf(write).Find(name, write.After.Cycle.Axis);
             CheckCarried(write, defined);
-            if (name == "OFF" && write.Target.ActiveOf(FanucCodes.Cycle) != "G80")
+            // D224: a CYCLE=OFF that ends a one-shot cycle writes nothing.
+            if (name == "OFF" && write.Target.ActiveOf(FanucCodes.Cycle) != "G80" && !EndsAOneShotCycle(write))
             {
                 write.Main.Code(FanucCodes.RankOf(FanucCodes.Cycle), "G80");
                 Ended(write);
@@ -130,12 +134,22 @@ internal static class FanucCycles
     // is CMP380 at its call.
     // D157: the words a rule carries follow from the params of every entry (CycleEntry.RuleWords), an entry of a name
     // of its own included.
-    // TODO(question): D175: the lead of G92 and G76 is the word PITCH, written through the address the entry
-    // maps; the taper R of G90, G92 and G94 is the catalog word TAPER, which no program can carry until D114 lets the
-    // parser take a parameter name of a catalog entry.
+    // D175: the lead of G92 and G76 is the word PITCH, written through the address the entry maps. D114: the taper R
+    // of G90, G92 and G94 is the catalog word TAPER, a parameter name of the entry, carried through its address.
     private static void CheckCarried(FanucBlock write, CycleEntry? entry)
     {
         write.Written("CYCLE");
+        if (entry is not null)
+        {
+            foreach (string parameter in CatalogParameters(entry))
+            {
+                if (write.Block.Find(parameter) is Word catalogWord)
+                {
+                    write.Written(catalogWord);
+                }
+            }
+        }
+
         foreach (string key in s_cycleWords)
         {
             if (key == "CYCLE" || write.Block.Find(key) is not Word word)
@@ -146,8 +160,31 @@ internal static class FanucCycles
             write.Written(word);
             // D362: a CYCLE_DWELL of 0 is the behaviour the control has anyway and is dropped silently; G81, G83, G73
             // and G86 have no P (D177).
+            if (entry is not null && key == "CYCLE_DWELL" && !IsZero(word.Value) && entry.CycleDwell is null
+                && DwellEntry(write, entry) is null)
+            {
+                // D177: PECK, CHIP_BREAK and BORE have no dwell form on a machining centre; the dwell is dropped.
+                write.Warning(DiagnosticCodes.FanucCycleDwellDropped,
+                    $"{word.ToCanonical()} of CYCLE={entry.Name}: {entry.Native} takes no dwell P on this machine, so "
+                    + "the dwell is dropped (controllers fanuc.md 6; D177).");
+                continue;
+            }
+
+            if (entry is not null && key == "PECK" && entry.NativeOf("PECK") is null && !IsZero(word.Value)
+                && !TakesPeckRigidTapping(write, entry))
+            {
+                // D279: PECK maps to Q only on G73/G83, and on G74/G84 where the machine declares peck rigid tapping.
+                write.Error(DiagnosticCodes.FanucPeckWithoutQ,
+                    $"{word.ToCanonical()} of CYCLE={entry.Name}: {entry.Native} takes no peck Q on this machine; G74 "
+                    + "and G84 take one only where [cycles] peck_rigid_tapping declares peck rigid tapping, G76, "
+                    + "G87, G88 and G89 never (controllers fanuc.md 6; D279).");
+                continue;
+            }
+
+            // D362: PECK=0 on a cycle without that motion is the behaviour the control has anyway, dropped silently.
             bool carried = entry is null
-                || (key == "CYCLE_DWELL" && IsZero(word.Value))
+                || (key == "CYCLE_DWELL" && (IsZero(word.Value) || entry.CycleDwell is null))
+                || (key == "PECK" && (IsZero(word.Value) || TakesPeckRigidTapping(write, entry)))
                 || (entry.Words.Contains(key)
                     && (key != "PITCH" || entry.CycleF is not null || entry.NativeOf(key) is not null));
             if (!carried)
@@ -158,6 +195,91 @@ internal static class FanucCycles
                     + "(machine-config 6; controller-mapping 5; language 2 rule 8).");
             }
         }
+
+        if (entry is not null && entry.NativeOf("PECK") == "Q")
+        {
+            CheckPeck(write, entry);
+        }
+    }
+
+    // D279: Q is modal data the native cycles share, so a G73 or G83 is never written relying on an inherited Q.
+    // D355: the control counts Q from its own R plane and NCX counts PECK from SURFACE, so Q = PECK unchanged and the
+    // shift stands once, at the block that defines the cycle, as an INFO; none where the gap is zero or the block
+    // gives no SURFACE.
+    private static void CheckPeck(FanucBlock write, CycleEntry entry)
+    {
+        if (write.Block.Find("PECK") is null)
+        {
+            write.Error(DiagnosticCodes.FanucPeckNotGiven,
+                $"CYCLE={entry.Name} gives no PECK, and {entry.Native} would peck with the Q another cycle left, since "
+                + "Q is modal data the Fanuc cycles share (controllers fanuc.md 6; D279).");
+            return;
+        }
+
+        if (write.Block.Find("SURFACE") is Word surface && write.Block.Find("CLEARANCE") is Word clearance
+            && FanucFunctions.NumberOf(surface.Value) is decimal top && FanucFunctions.NumberOf(clearance.Value)
+                is decimal plane && top != plane)
+        {
+            write.Diagnostics.Info(write.Block, DiagnosticCodes.FanucPeckCountsFromR,
+                $"{entry.Native} counts the peck Q from its R plane, CLEARANCE={clearance.Value.ToCanonical()}, while "
+                + $"NCX counts PECK from SURFACE={surface.Value.ToCanonical()}: every peck ends "
+                + $"{Math.Abs(plane - top).ToString(CultureInfo.InvariantCulture)} away from where NCX puts it, and "
+                + "the hole bottom DEPTH does not move (language 4.7, PECK; D355).");
+        }
+    }
+
+    // D279, D388 item 11: peck rigid tapping, Q on G74 and G84, where [cycles] peck_rigid_tapping declares it.
+    private static bool TakesPeckRigidTapping(FanucBlock write, CycleEntry entry)
+    {
+        return entry.Native is "G74" or "G84" && write.Machine.Cycles?.PeckRigidTapping == true;
+    }
+
+    // D177: the entry that writes a DRILL with a dwell other than 0, the DRILL_DWELL of the catalog where it maps
+    // CYCLE_DWELL; null for every other entry.
+    private static CycleEntry? DwellEntry(FanucBlock write, CycleEntry entry)
+    {
+        return entry.Name == "DRILL" && CatalogOf(write).Find("DRILL_DWELL", write.After.Cycle.Axis) is
+        { CycleDwell: not null } dwell
+            ? dwell
+            : null;
+    }
+
+    // Whether the cycle carries a CYCLE_DWELL other than 0 (D177); an expression counts as a dwell.
+    private static bool HasADwell(CycleSnapshot cycle)
+    {
+        return Parameter(cycle, "CYCLE_DWELL") is Value dwell && !IsZero(dwell);
+    }
+
+    // D224: whether the cycle of NCX that CYCLE=OFF ends is a one-shot entry, G70 to G76.
+    private static bool EndsAOneShotCycle(FanucBlock write)
+    {
+        CycleSnapshot before = write.Before.Cycle;
+        return before.Name is string name && CatalogOf(write).Find(name, before.Axis) is { Modal: false };
+    }
+
+    // D361, D377: the catalog of the channel compiled, the [[cycle]] tables of the machine file that name it over the
+    // channel-less entries (CycleCatalog.ForChannel), so that the rigid-tapping line WriteBefore writes is the line of
+    // that channel; a Fanuc-family machine that names no rigid-tapping code keeps the catalog's M29 S{rpm}, the Fanuc
+    // standard (parameter 5210 = 0). A cycle available = false on the channel is CMP004 of the compiler framework.
+    private static CycleCatalog CatalogOf(FanucBlock write)
+    {
+        CycleCatalog catalog = write.Machine.CycleCatalog;
+        return catalog.ChannelEntries.Count == 0 ? catalog : catalog.ForChannel(write.After.ChannelId);
+    }
+
+    // D114: the params of an entry whose key is no word of a CYCLE block of language 4.7, TAPER of the turning cycles.
+    private static List<string> CatalogParameters(CycleEntry entry)
+    {
+        var parameters = new List<string>();
+        foreach (string key in entry.Params.Keys)
+        {
+            if (!s_cycleWords.Contains(key))
+            {
+                parameters.Add(key);
+            }
+        }
+
+        return parameters;
     }
 
     // Whether a word's value is the number 0 (D362).
@@ -241,14 +363,26 @@ internal static class FanucCycles
         // D160: the compiler looks an entry up by its name together with the drilling axis, so that a lathe takes
         // the G87 entry under AXIS=X and the G83 entry under AXIS=Z (machine-config 6, for_axis).
         CycleEntry? entry = cycle.Controller is null
-            ? write.Machine.CycleCatalog.Find(name, cycle.Axis)
+            ? CatalogOf(write).Find(name, cycle.Axis)
             : null;
         // D144: n of CYCLE:FANUC=n is the native cycle as the family's catalog writes it (G71, "G83.5"), so the
         // block carries it as written; every native parameter follows as its address with its value in source order.
+        if (entry is not null && HasADwell(cycle) && entry.CycleDwell is null && DwellEntry(write, entry) is { } dwell)
+        {
+            // D177: a DRILL with a dwell other than 0 is written as G82, the DRILL_DWELL of the catalog.
+            entry = dwell;
+        }
+
         string? code = cycle.Controller is null ? CodeOf(write, entry, cycle) : name;
         if (code is null)
         {
             return;
+        }
+
+        if (entry?.DwellNative is string dwellNative && HasADwell(cycle) && code == entry.Native)
+        {
+            // D177: a REAM with a dwell other than 0 is its dwell_native, G89 on a machining centre.
+            code = dwellNative;
         }
 
         string definition = DefinitionOf(cycle) ?? name;
@@ -272,6 +406,15 @@ internal static class FanucCycles
             FanucMotion.Change(write, FanucCodes.Distance, "G90");
         }
 
+        if (entry is not null && entry.Contour.Count == 2)
+        {
+            // D278: the contour is written inline after the cycle block; the one-shot cycle leaves no cycle active.
+            FanucMotion.WritePlane(write);
+            FanucContour.Write(write, entry, cycle, code);
+            return;
+        }
+
+        EndAnotherTappingRun(write, entry, code);
         if (entry is not null && !WriteBefore(write, entry, code))
         {
             return;
@@ -289,8 +432,13 @@ internal static class FanucCycles
             return;
         }
 
-        write.Target.Set(FanucCodes.Cycle, code);
-        write.Target.Set(Definition, definition);
+        // D224: a one-shot cycle runs once and leaves no cycle active.
+        if (entry?.Modal != false)
+        {
+            write.Target.Set(FanucCodes.Cycle, code);
+            write.Target.Set(Definition, definition);
+        }
+
         write.MakeUnknown(FanucCodes.Motion);
     }
 
@@ -344,6 +492,26 @@ internal static class FanucCycles
         return true;
     }
 
+    // D359: TAP and TAP_COMPENSATING share G84 and differ by the before line, so a run of the one does not continue
+    // into the other: G80 ends the run first, since the rigid mode the line set holds for the run (D256) and an M29
+    // inside a running tapping cycle alarms PS0204.
+    private static void EndAnotherTappingRun(FanucBlock write, CycleEntry? entry, string code)
+    {
+        if (entry is null || write.Target.ActiveOf(FanucCodes.Cycle) != code
+            || write.Target.ActiveOf(Definition) is not string active
+            || active.StartsWith(entry.Name + " ", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        string activeName = active.Substring(0, active.IndexOf(' ', StringComparison.Ordinal));
+        CycleEntry? previous = CatalogOf(write).Find(activeName, write.After.Cycle.Axis);
+        if (!string.IsNullOrEmpty(entry.Before) || !string.IsNullOrEmpty(previous?.Before))
+        {
+            Cancel(write);
+        }
+    }
+
     // The native code of a catalog entry for the machine (machine-config 6): on a mill the drilling entries along the
     // tool axis; on a lathe the drilling codes by AXIS and the simple turning cycles in the numbers of the G-code
     // system.
@@ -356,16 +524,19 @@ internal static class FanucCycles
             return null;
         }
 
-        // TODO(question): G70 to G76 name their contour by the block numbers P and Q of its first and its last block,
-        // and machine-config 6 has the compiler write "the block numbers of that section"; the reader writes the
-        // section without labels, and no document gives the numbers, nor where a contour that G71 and G70 share
-        // stands in the program; the cycle is CMP384, until that is answered (controllers fanuc.md 6; D65).
-        if (!entry.Modal || entry.Contour.Count > 0)
+        // D278: G70 to G76 are one-shot blocks in the numbers of the machine's G-code system (D174); G70 to G73 with
+        // their contour are FanucContour's.
+        if (!entry.Modal)
         {
-            write.Error(DiagnosticCodes.FanucContourCycleNotWritten,
-                $"CYCLE={entry.Name} runs once with the contour P to Q in the program, which the Fanuc compiler does "
-                + "not write yet (controllers fanuc.md 6; language 4.7.1; D65).");
-            return null;
+            string? oneShot = FanucContour.CodeOf(write, entry.Native);
+            if (oneShot is null)
+            {
+                write.Error(DiagnosticCodes.FanucCycleNotInCatalog,
+                    $"CYCLE={entry.Name} is a one-shot cycle of a Fanuc lathe, and the machine is a mill (controllers "
+                    + "fanuc.md 3, 6).");
+            }
+
+            return oneShot;
         }
 
         bool turning = s_turningOfSystemB.ContainsKey(entry.Native);
@@ -456,24 +627,75 @@ internal static class FanucCycles
             write.Main.Word((FanucAxes.LetterOf(write, cycle.Axis, incremental: false) ?? cycle.Axis) + z);
         }
 
-        // TODO(question): D248: on a lathe the documents do not say whether R is a level or the distance from the
-        // initial level; R is written as the level CLEARANCE, as the reader reads it, until D248 is answered.
-        if (clearance is not null && FanucExpressions.WordValue(write, address, clearance, factor) is string r)
+        // D248: on a lathe R is the signed distance from the initial level, always a radius.
+        if (clearance is not null && write.IsLathe)
+        {
+            if (LatheR(write, cycle, clearance) is not string latheR)
+            {
+                return false;
+            }
+
+            write.Main.Word("R" + latheR);
+        }
+        else if (clearance is not null && FanucExpressions.WordValue(write, address, clearance, factor) is string r)
         {
             write.Main.Word("R" + r);
         }
 
         AddMapped(write, entry, cycle, "PECK", "Q", address, 1m);
+        if (entry.NativeOf("PECK") is null && TakesPeckRigidTapping(write, entry) && Parameter(cycle, "PECK") is Value
+            peck && !IsZero(peck) && FanucExpressions.WordValue(write, address, peck, 1m) is string q)
+        {
+            // D279: peck rigid tapping, Q on G84 where the machine declares it.
+            write.Main.Word("Q" + q);
+        }
+        foreach (string parameter in CatalogParameters(entry))
+        {
+            // D114: a parameter name of the catalog entry, TAPER of G90 as R (D175).
+            AddMapped(write, entry, cycle, parameter, entry.Params[parameter], entry.Params[parameter], 1m);
+        }
 
-        // TODO(question): D177: whether the control dwells with the P of G81, G83, G73, G85 and G86 is open; P stands
-        // where the entry maps CYCLE_DWELL, as the catalog follows controller-mapping 5, until D177 is answered.
-        AddMapped(write, entry, cycle, "CYCLE_DWELL", "P", "P", 1000m);
+        // D177: P stands where the entry maps CYCLE_DWELL, G82, G84, G89 on a machining centre and every lathe entry.
+        // D159: a cycle P is round(seconds / dwell_increment), an integer ([machine] dwell_increment, 0.001 s).
+        AddDwell(write, entry, cycle);
 
         // The definition calls at its position and drills along the tool axis: H stands before F, as the sources
         // write G43 Z2. H1 (language 4.4; the TODO(question) of FanucLine).
         FanucToolWords.AddOffsets(write, movesToolAxis: true);
         AddFeed(write, entry, cycle);
         return true;
+    }
+
+    // D248: R of a lathe drilling cycle, CLEARANCE minus the initial level, halved on an X axis programmed in
+    // diameters, since R is always a radius; the initial level is where the drilling axis stood when the run of the
+    // cycle began, which the target state keeps for a definition later in the run. Null, with CMP396, where the level
+    // or CLEARANCE is not a known number.
+    private static string? LatheR(FanucBlock write, CycleSnapshot cycle, Value clearance)
+    {
+        decimal? initial = null;
+        if (write.Target.ActiveOf(FanucCodes.Cycle) is string active && active != "G80"
+            && write.Target.ActiveOf(InitialLevel) is string kept)
+        {
+            initial = decimal.Parse(kept, CultureInfo.InvariantCulture);
+        }
+        else if (write.Before.Motion.Position.TryGetValue(cycle.Axis, out AxisPosition position) && position.Known)
+        {
+            initial = position.Value;
+        }
+
+        if (initial is not decimal level || FanucFunctions.NumberOf(clearance) is not decimal plane)
+        {
+            write.Error(DiagnosticCodes.FanucLatheRWithoutInitialLevel,
+                $"R of a lathe drilling cycle is the distance of CLEARANCE from the initial level, where {cycle.Axis} "
+                + "stands before the cycle, and that position or CLEARANCE is not known here (controllers fanuc.md 6; "
+                + "D248).");
+            return null;
+        }
+
+        // The virtual machine keeps a diameter axis as a radius, while CLEARANCE is written as the program writes X.
+        write.Target.Set(InitialLevel, level.ToString(CultureInfo.InvariantCulture));
+        bool diameter = cycle.Axis == "X" && write.Machine.ResolveAxis("X")?.Programming == Programming.Diameter;
+        return write.FormatComputed("R", diameter ? (plane / 2m) - level : plane - level);
     }
 
     // G98 returns to the initial level, the drilling-axis position before the cycle, G99 to R (controllers fanuc.md 3,
@@ -544,6 +766,29 @@ internal static class FanucCycles
         if (FanucExpressions.WordValue(write, decimalsAddress, value, factor) is string text)
         {
             write.Main.Word(address + text);
+        }
+    }
+
+    // D159: the P of a cycle block, the dwell in units of dwell_increment, an integer for a number; an expression is
+    // written with its factor (controllers fanuc.md 7).
+    private static void AddDwell(FanucBlock write, CycleEntry entry, CycleSnapshot cycle)
+    {
+        if (Parameter(cycle, "CYCLE_DWELL") is not Value value || entry.NativeOf("CYCLE_DWELL") is null)
+        {
+            return;
+        }
+
+        decimal increment = write.Machine.Machine.DwellIncrement;
+        if (FanucFunctions.NumberOf(value) is decimal seconds)
+        {
+            decimal units = Math.Round(seconds / increment, 0, MidpointRounding.AwayFromZero);
+            write.Main.Word("P" + units.ToString("0", CultureInfo.InvariantCulture));
+            return;
+        }
+
+        if (FanucExpressions.WordValue(write, "P", value, 1m / increment) is string text)
+        {
+            write.Main.Word("P" + text);
         }
     }
 
@@ -682,6 +927,16 @@ internal static class FanucCycles
     {
         foreach (Word parameter in cycle.Parameters)
         {
+            if (parameter.Definition is null
+                && !(parameter.Key.Length == 1 && char.IsAsciiLetterUpper(parameter.Key[0])))
+            {
+                // D279: a native Fanuc parameter key is one letter A..Z.
+                write.Error(DiagnosticCodes.FanucNativeParameterNotALetter,
+                    $"{parameter.ToCanonical()} of CYCLE:FANUC={cycle.Name}: a native Fanuc cycle parameter is one "
+                    + "address letter A..Z (controllers fanuc.md 6; D279).");
+                continue;
+            }
+
             if (parameter.Definition is null
                 && FanucExpressions.WordValue(write, parameter.Key, parameter.Value, 1m) is string value)
             {

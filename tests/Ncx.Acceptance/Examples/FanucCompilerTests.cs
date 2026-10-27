@@ -124,7 +124,10 @@ public sealed class FanucCompilerTests : IDisposable
     private static string Compile(NcxProgram program, MachineConfig machine)
     {
         CompileResult result = new FanucCompiler().Compile(program, machine, new CompileOptions());
-        Assert.True(result.Diagnostics.Items.Count == 0, result.Diagnostics.ToText());
+        // D355: the INFO CMP387 names the shift of the pecks where the reader wrote SURFACE=0 below the R plane
+        // (fanuc-mill-30i.toml sets no surface_clearance, D158); nothing else is reported.
+        Assert.True(result.Diagnostics.Items.All(diagnostic => diagnostic.Severity == Severity.Info),
+            result.Diagnostics.ToText());
         return Assert.Single(result.Files).Text;
     }
 

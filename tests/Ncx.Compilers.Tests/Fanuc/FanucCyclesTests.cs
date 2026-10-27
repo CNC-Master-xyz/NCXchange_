@@ -9,6 +9,9 @@ namespace Ncx.Compilers.Tests.Fanuc;
 /// </summary>
 public sealed class FanucCyclesTests
 {
+    // The cycle catalog of the Fanuc mills, which carries TAP_COMPENSATING (D359) beside the built-in family.
+    private const string MillCatalog = "[cycles]\ncatalog = \"fanuc.toml\"";
+
     // The drilling of BOHREN.fanuc.nc: tool, spindle, the position and the approach before the cycle.
     private const string Approach = "TOOL=1\nSPINDLE=CW RPM=1000\nRAPID X=10 Y=10\nRAPID Z=5";
 
@@ -99,6 +102,58 @@ public sealed class FanucCyclesTests
             StringComparison.Ordinal);
     }
 
+    // D361, D377: the rigid-tapping line is the machine's, and a [[cycle]] table that names the compiled channel
+    // overrides the channel-less entry for that channel.
+    [Fact]
+    public void Tap_WithATableOfTheCompiledChannel_WritesThatChannelsLine()
+    {
+        string body = FanucCompile.Body("TOOL=1\nSPINDLE=CW RPM=500\nRAPID X=10 Y=10\nRAPID Z=5"
+            + "\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL",
+            "[[cycle]]\nname = \"TAP\"\nchannel = 1\nnative = \"G84\"\nmodal = true\nbefore = \"M329 S{rpm}\"");
+
+        Assert.EndsWith("M329 S500\nG84 G99 Z-20. R5. F750.\n", body, StringComparison.Ordinal);
+    }
+
+    // D359: TAP_COMPENSATING, the floating tap, is G84 without the rigid-tapping line.
+    [Fact]
+    public void TapCompensating_IsG84WithoutTheRigidTappingLine()
+    {
+        string body = FanucCompile.Body("TOOL=1\nSPINDLE=CW RPM=500\nRAPID X=10 Y=10\nRAPID Z=5"
+            + "\nCYCLE=TAP_COMPENSATING CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL", MillCatalog);
+
+        Assert.EndsWith("Z5.\nG84 G99 Z-20. R5. F750.\n", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("M29", body, StringComparison.Ordinal);
+    }
+
+    // D359: where the machine's TAP sets before = "", its G84 is always rigid and TAP_COMPENSATING is not in its
+    // catalog: CMP380.
+    [Fact]
+    public void TapCompensating_OnAMachineWhoseG84IsAlwaysRigid_IsTheErrorCmp380()
+    {
+        CompileResult result = FanucCompile.Run(FanucCompile.Program(("TOOL=1\nSPINDLE=CW RPM=500\nRAPID Z=5"
+            + "\nCYCLE=TAP_COMPENSATING CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL").Split('\n')),
+            FanucCompile.Mill(extra: MillCatalog
+                + "\n\n[[cycle]]\nname = \"TAP\"\nnative = \"G84\"\nmodal = true\nbefore = \"\""));
+
+        Assert.Contains(FanucCompile.CompilerDiagnostics(result),
+            diagnostic => diagnostic.Code == DiagnosticCodes.FanucCycleNotInCatalog);
+    }
+
+    // D359, D256: a TAP_COMPENSATING after a TAP run on the same G84 ends the rigid mode with G80 first, and a TAP
+    // after a TAP_COMPENSATING run writes its line only after G80, since an M29 inside a running tapping cycle
+    // alarms PS0204.
+    [Fact]
+    public void TapAndTapCompensating_OnOneG84_EndTheRunWithG80BetweenThem()
+    {
+        string body = FanucCompile.Body("TOOL=1\nSPINDLE=CW RPM=500\nRAPID X=10 Y=10\nRAPID Z=5"
+            + "\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL"
+            + "\nCYCLE=TAP_COMPENSATING CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL X=20"
+            + "\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL X=30", MillCatalog);
+
+        Assert.EndsWith("M29 S500\nG84 G99 Z-20. R5. F750.\nG80\nG84 G99 X20. Z-20. R5.\nG80\nM29 S500\n"
+            + "G84 G99 X30. Z-20. R5.\n", body, StringComparison.Ordinal);
+    }
+
     // Language 4.7 CYCLE_DWELL (seconds), controllers fanuc.md 6 (P in milliseconds) and 7: an expression dwell is P
     // with the expression times 1000.
     [Fact]
@@ -164,7 +219,7 @@ public sealed class FanucCyclesTests
             "PROGRAM=END",
             "FILE=END"), FanucCompile.Lathe()));
 
-        Assert.Contains("\nG84 Z-10. R2. F800.\n", text, StringComparison.Ordinal);
+        Assert.Contains("\nG84 Z-10. R-3. F800.\n", text, StringComparison.Ordinal);
     }
 
     // Controller-mapping 5 TAP, language 2 rule 8: the spindle of the current tool holder is off, so PITCH x S has no
@@ -377,7 +432,31 @@ public sealed class FanucCyclesTests
 
         string text = FanucCompile.TextOf(FanucCompile.Run(program, FanucCompile.Lathe()));
 
-        Assert.Contains("\nG87 X30. R54. F50.\nG80\n", text, StringComparison.Ordinal);
+        // D248: R is the signed distance from the initial level X60 as a radius, (54 - 60) / 2.
+        Assert.Contains("\nG87 X30. R-3. F50.\nG80\n", text, StringComparison.Ordinal);
+    }
+
+    // D248: on a lathe R counts from the initial level, so a drilling cycle where the drilling axis is not known, after
+    // a position from an expression in STATIC mode, is the ERROR CMP396.
+    [Fact]
+    public void Drill_OnALatheFromAnUnknownInitialLevel_IsTheErrorCmp396()
+    {
+        string program = FanucCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+            "FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
+            "VAR:V1=5",
+            "RAPID Z={$V1}",
+            "CYCLE=DRILL AXIS=Z CLEARANCE=2 DEPTH=-30 CYCLE_F=50",
+            "CYCLE_CALL",
+            "CYCLE=OFF",
+            "PROGRAM=END",
+            "FILE=END");
+
+        CompileResult result = FanucCompile.Run(program, FanucCompile.Lathe());
+
+        Assert.Contains(FanucCompile.CompilerDiagnostics(result),
+            diagnostic => diagnostic.Code == DiagnosticCodes.FanucLatheRWithoutInitialLevel);
     }
 
     // Language 4.7.1, controller-mapping 5: the simple turning cycle G90 of system A is modal, one call per block.
@@ -463,5 +542,284 @@ public sealed class FanucCyclesTests
             + $"\nCYCLE={cycle} CLEARANCE=5 DEPTH=-20{peck} CYCLE_F=100 CYCLE_DWELL=0\nCYCLE_CALL");
 
         Assert.EndsWith(written, body, StringComparison.Ordinal);
+    }
+
+    // D114, D175: TAPER, a parameter name of the catalog entry, is the taper R of G90 (fanuc-lathe.toml).
+    [Fact]
+    public void TurnOd_WithTaper_WritesTheTaperAsR()
+    {
+        string program = FanucCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+            "FEED_MODE=PER_REV COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
+            "RAPID X=70 Z=2",
+            "CYCLE=TURN_OD CYCLE_F=0.3 TAPER=-2",
+            "CYCLE_CALL X=60 Z=-70",
+            "CYCLE=OFF",
+            "PROGRAM=END",
+            "FILE=END");
+
+        CompileResult result = FanucCompile.Run(program, FanucCompile.Lathe());
+
+        Assert.Empty(FanucCompile.CompilerDiagnostics(result));
+        Assert.Contains("\nG90 X60. Z-70. R-2. F0.3\n", FanucCompile.TextOf(result), StringComparison.Ordinal);
+    }
+
+    // D177: a DRILL with a dwell other than 0 is written as G82 (DRILL_DWELL), a REAM with one as its dwell_native
+    // G89; P is round(seconds / dwell_increment), 0.001 by default (D159).
+    [Theory]
+    [InlineData("DRILL", "G82 G99 Z-20. R5. P500 F100.\n")]
+    [InlineData("REAM", "G89 G99 Z-20. R5. P500 F100.\n")]
+    public void DrillAndReam_WithADwell_TakeTheirDwellCode(string cycle, string written)
+    {
+        string body = FanucCompile.Body(Approach
+            + $"\nCYCLE={cycle} CLEARANCE=5 DEPTH=-20 CYCLE_F=100 CYCLE_DWELL=0.5\nCYCLE_CALL");
+
+        Assert.EndsWith(written, body, StringComparison.Ordinal);
+    }
+
+    // D177: PECK, CHIP_BREAK and BORE have no P on a machining centre, so a dwell other than 0 is dropped with the
+    // WARNING CMP388.
+    [Theory]
+    [InlineData("PECK", " PECK=2", "G83 G99 Z-20. R5. Q2. F100.\n")]
+    [InlineData("CHIP_BREAK", " PECK=2", "G73 G99 Z-20. R5. Q2. F100.\n")]
+    [InlineData("BORE", "", "G86 G99 Z-20. R5. F100.\n")]
+    public void PeckChipBreakAndBore_WithADwell_DropItWithTheWarningCmp388(string cycle, string peck, string written)
+    {
+        CompileResult result = FanucCompile.Run(FanucCompile.Program((Approach
+            + $"\nCYCLE={cycle} CLEARANCE=5 DEPTH=-20{peck} CYCLE_F=100 CYCLE_DWELL=0.5\nCYCLE_CALL").Split('\n')),
+            FanucCompile.Mill());
+
+        Assert.EndsWith(written + "M30\n%\n", FanucCompile.TextOf(result), StringComparison.Ordinal);
+        Diagnostic warning = Assert.Single(FanucCompile.CompilerDiagnostics(result),
+            diagnostic => diagnostic.Code == DiagnosticCodes.FanucCycleDwellDropped);
+        Assert.Equal(Severity.Warning, warning.Severity);
+    }
+
+    // D355: the control counts Q from its own R plane while NCX counts PECK from SURFACE, so the compiler writes Q =
+    // PECK and reports the shift once, at the block that defines the cycle, as the INFO CMP387.
+    [Fact]
+    public void Peck_WithAGapBetweenSurfaceAndClearance_IsTheInfoCmp387Once()
+    {
+        CompileResult result = FanucCompile.Run(FanucCompile.Program((Approach
+            + "\nCYCLE=PECK SURFACE=0 CLEARANCE=2 DEPTH=-20 PECK=3 CYCLE_F=100\nCYCLE_CALL\nCYCLE_CALL X=30")
+                .Split('\n')),
+            FanucCompile.Mill());
+
+        Diagnostic info = Assert.Single(FanucCompile.CompilerDiagnostics(result),
+            diagnostic => diagnostic.Code == DiagnosticCodes.FanucPeckCountsFromR);
+        Assert.Equal(Severity.Info, info.Severity);
+        Assert.Contains("G83 G99 Z-20. R2. Q3. F100.\n", FanucCompile.TextOf(result), StringComparison.Ordinal);
+    }
+
+    // D355: where SURFACE and CLEARANCE coincide, or the block gives no SURFACE, there is no shift and no INFO.
+    [Theory]
+    [InlineData(" SURFACE=2")]
+    [InlineData("")]
+    public void Peck_WithoutAGap_IsNoInfo(string surface)
+    {
+        CompileResult result = FanucCompile.Run(FanucCompile.Program((Approach
+            + $"\nCYCLE=PECK{surface} CLEARANCE=2 DEPTH=-20 PECK=3 CYCLE_F=100\nCYCLE_CALL").Split('\n')),
+            FanucCompile.Mill());
+
+        Assert.DoesNotContain(FanucCompile.CompilerDiagnostics(result),
+            diagnostic => diagnostic.Code == DiagnosticCodes.FanucPeckCountsFromR);
+    }
+
+    // D362: PECK=0 on a cycle without that motion is the behaviour the control has anyway and is dropped silently.
+    [Fact]
+    public void Drill_WithPeckZero_DropsItSilently()
+    {
+        CompileResult result = FanucCompile.Run(FanucCompile.Program((Approach
+            + "\nCYCLE=DRILL CLEARANCE=2 DEPTH=-20 PECK=0 CYCLE_F=100\nCYCLE_CALL").Split('\n')), FanucCompile.Mill());
+
+        Assert.DoesNotContain(FanucCompile.CompilerDiagnostics(result),
+            diagnostic => diagnostic.Code == DiagnosticCodes.FanucCycleWordNotMapped);
+        Assert.Contains("G81 G99 Z-20. R2. F100.\n", FanucCompile.TextOf(result), StringComparison.Ordinal);
+    }
+
+    // D279: PECK on G84 is Q only where the machine declares peck rigid tapping ([cycles] peck_rigid_tapping, D388);
+    // elsewhere it is the ERROR CMP393.
+    [Fact]
+    public void Tap_WithPeck_IsQOnlyWithPeckRigidTapping()
+    {
+        string blocks = "TOOL=1\nSPINDLE=CW RPM=500\nRAPID X=10 Y=10\nRAPID Z=5"
+            + "\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 PECK=2 CYCLE_F=750\nCYCLE_CALL";
+        CompileResult without = FanucCompile.Run(FanucCompile.Program(blocks.Split('\n')), FanucCompile.Mill());
+        string with = FanucCompile.Body(blocks, "[cycles]\npeck_rigid_tapping = true");
+
+        Assert.Contains(FanucCompile.CompilerDiagnostics(without),
+            diagnostic => diagnostic.Code == DiagnosticCodes.FanucPeckWithoutQ);
+        Assert.EndsWith("M29 S500\nG84 G99 Z-20. R5. Q2. F750.\n", with, StringComparison.Ordinal);
+    }
+
+    // D279: Q is modal data the native cycles share, so a G73 or G83 without PECK would take the Q another cycle
+    // left: the ERROR CMP394.
+    [Fact]
+    public void Peck_WithoutPeck_IsTheErrorCmp394()
+    {
+        CompileResult result = FanucCompile.Run(FanucCompile.Program((Approach
+            + "\nCYCLE=PECK CLEARANCE=2 DEPTH=-20 CYCLE_F=100\nCYCLE_CALL").Split('\n')), FanucCompile.Mill());
+
+        Assert.Contains(FanucCompile.CompilerDiagnostics(result),
+            diagnostic => diagnostic.Code == DiagnosticCodes.FanucPeckNotGiven);
+    }
+
+    // D279: a native Fanuc parameter key is one letter A..Z, so Q215=1 on CYCLE:FANUC is the ERROR CMP395.
+    [Fact]
+    public void NativeCycle_WithAParameterOfMoreThanOneLetter_IsTheErrorCmp395()
+    {
+        CompileResult result = FanucCompile.Run(FanucCompile.Program((Approach
+            + "\nCYCLE:FANUC=G83 Q215=1\nCYCLE_CALL").Split('\n')), FanucCompile.Mill());
+
+        Assert.Contains(FanucCompile.CompilerDiagnostics(result),
+            diagnostic => diagnostic.Code == DiagnosticCodes.FanucNativeParameterNotALetter);
+    }
+
+    // The contour program of the D278 tests: G71 and G70 name one contour section.
+    private static string ContourProgram(string first, string cycles = "")
+    {
+        return FanucCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+            "FEED_MODE=PER_REV COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
+            "RAPID X=40 Z=2",
+            "CYCLE=ROUGH_TURN CONTOUR=C1",
+            "CYCLE_CALL",
+            "CYCLE=OFF",
+            "CYCLE=FINISH CONTOUR=C1",
+            "CYCLE_CALL",
+            "CYCLE=OFF",
+            "RAPID X=100" + cycles,
+            "PROGRAM=END",
+            "SUB=BEGIN NAME=C1",
+            first,
+            "LINE Z=-10 F=0.2",
+            "LINE X=40",
+            "SUB=END",
+            "FILE=END");
+    }
+
+    // D278, D388 item 4: the contour is written inline after the first G71 of the program, numbered after its
+    // greatest label (D277), never as an O program; the later G70 repeats only P and Q; the CYCLE=OFF of a one-shot
+    // cycle writes nothing (D224).
+    [Fact]
+    public void ContourCycles_G71AndG70_WriteTheContourInlineOnce()
+    {
+        CompileResult result = FanucCompile.Run(ContourProgram("RAPID X=20"), FanucCompile.Lathe());
+        string text = FanucCompile.TextOf(result);
+
+        Assert.DoesNotContain(FanucCompile.CompilerDiagnostics(result),
+            diagnostic => diagnostic.Severity == Severity.Error);
+        Assert.Contains("\nG71 P1 Q2\nN1 G0 X20.\nG1 Z-10. F0.2\nN2 X40.\nG99\nG70 P1 Q2\n", text,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("M99", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("G80", text.Substring(text.IndexOf("G71", StringComparison.Ordinal)),
+            StringComparison.Ordinal);
+    }
+
+    // D278: a first block that names Z where Z does not move is type I, X alone; one that moves both is type II, which
+    // only a machine with [cycles] contour_type_ii takes (CMP389).
+    [Fact]
+    public void ContourCycles_FirstBlockOfG71_IsTypeIOrTypeII()
+    {
+        string typeI = FanucCompile.TextOf(FanucCompile.Run(ContourProgram("RAPID X=20 Z=2"), FanucCompile.Lathe()));
+        CompileResult typeII = FanucCompile.Run(ContourProgram("RAPID X=20 Z=1"), FanucCompile.Lathe());
+        string declared = FanucCompile.TextOf(FanucCompile.Run(ContourProgram("RAPID X=20 Z=1"),
+            FanucCompile.Lathe().Replace("catalog = \"fanuc-lathe.toml\"",
+                "catalog = \"fanuc-lathe.toml\"\ncontour_type_ii = true", StringComparison.Ordinal)));
+
+        Assert.Contains("\nN1 G0 X20.\n", typeI, StringComparison.Ordinal);
+        Assert.Contains(FanucCompile.CompilerDiagnostics(typeII),
+            diagnostic => diagnostic.Code == DiagnosticCodes.FanucContourTypeIINotDeclared);
+        Assert.Contains("\nN1 G0 X20. Z1.\n", declared, StringComparison.Ordinal);
+    }
+
+    // D278: a first block of G71 that does not move X is alarm PS0325, CMP390; a first block that is no RAPID or LINE
+    // is CMP392; a block other than motion, G04 or a label inside the range is CMP391.
+    [Theory]
+    [InlineData("RAPID Z=1", "CMP390")]
+    [InlineData("ARC=CW X=20 Z=0 R=2", "CMP392")]
+    [InlineData("RAPID X=20 COOLANT=ON", "CMP391")]
+    public void ContourCycles_ASectionTheContourCannotHold_IsAnError(string first, string code)
+    {
+        CompileResult result = FanucCompile.Run(ContourProgram(first), FanucCompile.Lathe());
+
+        Assert.Contains(FanucCompile.CompilerDiagnostics(result), diagnostic => diagnostic.Code == code);
+    }
+
+    // A lathe program around one contour cycle, with the blocks given before and after it and in the contour.
+    private static string ContourProgramWith(string before, string after, params string[] contour)
+    {
+        var lines = new List<string>
+        {
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+            "FEED_MODE=PER_REV COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
+            "RAPID X=40 Z=2",
+        };
+        lines.AddRange(before.Split('\n', StringSplitOptions.RemoveEmptyEntries));
+        lines.AddRange(["CYCLE=ROUGH_TURN CONTOUR=500", "CYCLE_CALL", "CYCLE=OFF"]);
+        lines.AddRange(after.Split('\n', StringSplitOptions.RemoveEmptyEntries));
+        lines.AddRange(["RAPID X=100", "PROGRAM=END", "SUB=BEGIN NAME=500"]);
+        lines.AddRange(contour);
+        lines.AddRange(["SUB=END", "FILE=END"]);
+        return FanucCompile.Lines([.. lines]);
+    }
+
+    // D278, D277: the contour's own labels take free numbers of the O program, P names the line of the first motion,
+    // never a bare label line, and no N stands twice.
+    [Fact]
+    public void ContourCycles_TheContoursOwnLabels_TakeFreeNumbersOfTheProgram()
+    {
+        CompileResult result = FanucCompile.Run(ContourProgramWith("LABEL=1", "",
+            "LABEL=7", "RAPID X=20", "LINE Z=-10 F=0.2"), FanucCompile.Lathe());
+        string text = FanucCompile.TextOf(result);
+
+        Assert.DoesNotContain(FanucCompile.CompilerDiagnostics(result),
+            diagnostic => diagnostic.Severity == Severity.Error);
+        Assert.Contains("\nG71 P2 Q3\nN2 G0 X20.\nN3 G1 Z-10. F0.2\n", text, StringComparison.Ordinal);
+    }
+
+    // D278: a later G70 under another feed mode runs the range under that mode, so the first contour blocks write
+    // the feed mode, the plane and G90/G91 the contour runs under; and a contour at a jump target writes no G80.
+    [Fact]
+    public void ContourCycles_TheRange_WritesItsFeedModeAndNoCycleCancel()
+    {
+        string text = FanucCompile.TextOf(FanucCompile.Run(ContourProgramWith("LABEL=3",
+            "FEED_MODE=PER_MIN\nRAPID X=40 Z=2\nCYCLE=FINISH CONTOUR=500\nCYCLE_CALL\nCYCLE=OFF\nJUMP=3",
+            "RAPID X=20", "LINE Z=-10 F=0.2", "LINE X=40"), FanucCompile.Lathe()));
+        int start = text.IndexOf("G71", StringComparison.Ordinal);
+        string range = text.Substring(start, text.IndexOf("X40.\n", start, StringComparison.Ordinal) - start);
+
+        // D278 (B-64484EN-1 p.90): the range holds G00 to G03, G04, axis words and F only; the feed mode it runs
+        // under stands in front of the cycle line.
+        Assert.Contains("G1 Z-10. F0.2", range, StringComparison.Ordinal);
+        Assert.DoesNotContain("G99", range, StringComparison.Ordinal);
+        Assert.DoesNotContain("G80", range, StringComparison.Ordinal);
+        Assert.Contains("\nG99\nG70 P", text, StringComparison.Ordinal);
+    }
+
+    // D278, D388 item 4: a contour section that a CALL also names is written as an O program too.
+    [Fact]
+    public void ContourCycles_AContourACallNamesToo_IsWrittenAsAnOProgramAsWell()
+    {
+        string text = FanucCompile.TextOf(FanucCompile.Run(ContourProgramWith("", "RAPID X=40 Z=2\nCALL=500",
+            "RAPID X=20", "LINE Z=-10 F=0.2", "LINE X=40"), FanucCompile.Lathe()));
+
+        Assert.Contains("M98 P0500", text, StringComparison.Ordinal);
+        Assert.Contains("\nO0500\n", text, StringComparison.Ordinal);
+    }
+
+    // D278: the control runs the blocks P to Q of a G70, whose codes and F take effect (B-64484EN-1 p.76, p.281), so a
+    // feed after the G70 writes its feed mode again.
+    [Fact]
+    public void ContourCycles_AFeedAfterTheG70_WritesItsFeedModeAgain()
+    {
+        string text = FanucCompile.TextOf(FanucCompile.Run(ContourProgramWith("",
+            "FEED_MODE=PER_MIN\nRAPID X=40 Z=2\nCYCLE=FINISH CONTOUR=500\nCYCLE_CALL\nCYCLE=OFF\nLINE X=100 F=200",
+            "RAPID X=20", "LINE Z=-10 F=0.2", "LINE X=40"), FanucCompile.Lathe()));
+
+        Assert.Contains("\nG99\nG70 P1 Q2\nG1 G18 G98 X100. F200.\n", text, StringComparison.Ordinal);
     }
 }

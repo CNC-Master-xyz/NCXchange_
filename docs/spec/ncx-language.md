@@ -342,6 +342,8 @@ PROGRAM=END
 
 A section that ends the program (the `N2 M2` case) ends with `JUMP=END`. A block of a program or subprogram that no `LABEL` makes reachable after an unconditional `JUMP`, `RETURN` or `JUMP=END` gets a WARNING; the `SUB=END` of a subprogram is never unreachable (D195).
 
+A contour section that a Fanuc `G70`..`G73` names with `CONTOUR=` is the exception to the rule that every subprogram is written: the Fanuc compiler writes its blocks inline after the first cycle of a program that names it and never as an `O` program, and a second program that names it gets its own copy (D278, D388 item 4).
+
 A program may also loop instead of ending: Fanuc `M99` in a main program jumps back to the first block (bar work runs this way until the bar feeder reports the end), and `/M99` under the block skip switch is the usual way to repeat a section during setup. NCX writes this as a `LABEL` after the header and a `JUMP` to it (with `SKIP` when the source had the slash); a `RETURN` outside a subprogram is not the way to say it (it is a WARNING, treated as `JUMP=END`). A file holds at least one program, so where no section of a source file ends one, the first that no block of the file calls is the program and its loop is read this way; the reader says so in an INFO, because a subprogram in a file of its own reads the same way (D210).
 
 ### 4.14 Multi-channel programs

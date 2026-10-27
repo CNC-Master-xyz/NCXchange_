@@ -105,6 +105,12 @@ internal sealed class FanucBlock
     public ToolPointRegisters? PointRegisters { get; init; }
 
     /// <summary>
+    /// The contour sections of G70 to G73 written inline so far, with their P and Q (D278); null where the compiler
+    /// keeps none, as in a test of one concern.
+    /// </summary>
+    public FanucContours? Contours { get; init; }
+
+    /// <summary>
     /// What the block writes for STOCK, the [stock] template and its numbers; null for another block and for a
     /// STOCK that writes nothing (D351; CompilerBase.StockOf).
     /// </summary>
