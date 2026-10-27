@@ -5,6 +5,16 @@
     an error through .editorconfig (D108). This file imports nothing from above the repository root: worktrees of this
     repository live under .worktrees/ and build with their own copy of it only.
   -->
+
+  <!--
+    The version of the next release, the one place that number stands. The release job stamps it from the tag
+    (-p:Version=${tag#v}), so that a build from v1.0.0-alpha.1 prints 1.0.0-alpha.1 as its version and the package
+    and the self-contained binaries carry the same number; the SDK appends the commit after "+" (D347).
+  -->
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <LangVersion>latest</LangVersion>

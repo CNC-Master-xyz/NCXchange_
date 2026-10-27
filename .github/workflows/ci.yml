@@ -1,7 +1,8 @@
 # Restore, build with warnings as errors, check the formatting and run the tests on every push and pull request,
 # on Linux and on Windows, so that the line-ending handling holds on both (implementation 00-method 3,
 # code-guidelines 9, phase 0 P0-01). The Linux job also fails on any C# line longer than 120 characters, which
-# dotnet format does not check (code-guidelines 3.3, D109).
+# dotnet format does not check (code-guidelines 3.3, D109). A v* tag also publishes the release: the binaries, the
+# .NET tool and a GitHub release, all carrying the version of the tag (implementation 17, P7-03; D347).
 name: CI
 
 on:
@@ -44,3 +45,83 @@ jobs:
       - run: dotnet build NCXchange.sln --no-restore -warnaserror
       - run: dotnet format NCXchange.sln --verify-no-changes --no-restore
       - run: dotnet test NCXchange.sln --no-build
+
+  # The release of a v* tag (implementation 17, P7-03; D347, D371): the version is the tag without its v, stamped
+  # into every build with -p:Version, so that ncx --version, the package and the binaries carry it. The self-contained
+  # single-file binaries carry the shipped machines/ and cycles/ built in and keep them loose beside the binary.
+  publish:
+    name: Publish (${{ matrix.rid }})
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { os: ubuntu-latest, rid: linux-x64, runs: true }
+          - { os: windows-latest, rid: win-x64, runs: true }
+          - { os: macos-latest, rid: osx-arm64, runs: true }
+          - { os: macos-latest, rid: osx-x64, runs: false }
+    runs-on: ${{ matrix.os }}
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Publish the self-contained binary
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          dotnet publish src/Ncx.Cli/Ncx.Cli.csproj -c Release -r ${{ matrix.rid }} --self-contained \
+            -p:PublishSingleFile=true -p:Version="$version" -o "publish/ncx-$version-${{ matrix.rid }}"
+      # The CAM's CI asserts the part of ncx --version before "+", which must be the tag (D347).
+      - name: The binary reports the tag
+        if: matrix.runs
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          reported="$("publish/ncx-$version-${{ matrix.rid }}/Ncx.Cli" --version)"
+          if [ "${reported%%+*}" != "$version" ]; then
+            echo "ncx --version reports $reported, not $version (D347)." >&2
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v5
+        with:
+          name: ncx-${{ matrix.rid }}
+          path: publish/
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - uses: actions/download-artifact@v5
+        with:
+          path: publish/
+          merge-multiple: true
+      # The .NET tool NCXchange.Cli, versioned like the binaries; one archive per binary folder.
+      - name: Pack the tool and archive the binaries
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          dotnet pack src/Ncx.Cli/Ncx.Cli.csproj -c Release -p:Version="$version" -o release/
+          for folder in publish/*/; do
+            name="$(basename "$folder")"
+            (cd publish && zip -qr "../release/$name.zip" "$name")
+          done
+      - name: Create the release of the tag
+        shell: bash
+        run: gh release create "$GITHUB_REF_NAME" release/* --title "$GITHUB_REF_NAME" --generate-notes
