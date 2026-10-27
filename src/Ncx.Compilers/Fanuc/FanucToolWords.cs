@@ -465,7 +465,8 @@ internal static class FanucToolWords
                     template);
             }
 
-            if (write.Render(template, what + " ORIENT (machine-config 5)", values) is string text)
+            if (OrientTemplate.Writes(template, orient, write.Block, write.Diagnostics)
+                && write.Render(template, what + " ORIENT (machine-config 5)", values) is string text)
             {
                 FanucFunctions.Add(write, text);
             }
@@ -714,8 +715,8 @@ internal static class FanucToolWords
 
     // SPINDLE_SYNC from [spindle_sync]: ON for two spindles, PHASE with its angle, OFF (machine-config 5;
     // controller-mapping 4; language 4.5).
-    // TODO(question): D154: the words of the function-table states and the pair of [spindle_sync] are open; the ON,
-    // PHASE and OFF templates are written with {angle} from PHASE, until D154 is answered.
+    // D154: ON couples the default spindle (leader) with the other work spindle, or the pair of [spindle_sync]; the
+    // ON, PHASE and OFF templates are written with {angle} from PHASE.
     private static void WriteSync(FanucBlock write, Word word)
     {
         write.Written(word);

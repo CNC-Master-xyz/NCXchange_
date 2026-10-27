@@ -121,7 +121,12 @@ internal static partial class SiemensSpindles
                 break;
             case "ORIENT":
                 SetNumber(write, values, "angle", word.Value, "C");
-                Add(write, texts, role, table?.States.GetValueOrDefault("ORIENT"), what + " ORIENT", values);
+                string? orient = table?.States.GetValueOrDefault("ORIENT");
+                if (OrientTemplate.Writes(orient, word, write.Block, write.Diagnostics))
+                {
+                    Add(write, texts, role, orient, what + " ORIENT", values);
+                }
+
                 break;
         }
     }
@@ -169,8 +174,8 @@ internal static partial class SiemensSpindles
 
     // SPINDLE_SYNC=MAIN,SUB through [spindle_sync]: ON, PHASE with {angle}, OFF (language 4.5; machine-config 5;
     // controller-mapping 4, SPINDLE_SYNC).
-    // TODO(question): D154: [spindle_sync] names no pair; the template couples the default spindle, leading, with the
-    // other work spindle, as D154 recommends, and a SPINDLE_SYNC of another pair is an ERROR, until D154 is answered.
+    // D154: the template couples the pair of [spindle_sync], else the default spindle, leading, with the other work
+    // spindle (MachineConfig.SpindleSyncRoles), and a SPINDLE_SYNC of another pair is an ERROR.
     private static void AddSync(SiemensBlock write, List<SpindleText> texts)
     {
         if (write.Block.Find("SPINDLE_SYNC") is not Word sync)
@@ -206,19 +211,21 @@ internal static partial class SiemensSpindles
         Add(write, texts, null, table?.States.GetValueOrDefault("ON"), "[spindle_sync] ON", values);
     }
 
-    // The first role is the default spindle and the second another work spindle (D154).
+    // The pair [spindle_sync] couples, the leader first: its pair key, else the default spindle and the other work
+    // spindle (D154).
     private static bool IsDefaultPair(SiemensBlock write, Value pair)
     {
-        if (pair is not ListValue list || list.Items.Count != 2)
+        IReadOnlyList<string> roles = write.Machine.SpindleSyncRoles();
+        if (pair is not ListValue list || list.Items.Count != 2 || roles.Count != 2)
         {
             return false;
         }
 
         MachineConfig machine = write.Machine;
-        ResourceDef? leading = machine.ResolveRole(list.Items[0]);
-        ResourceDef? following = machine.ResolveRole(list.Items[1]);
-        return leading is not null && leading.Id == machine.ResolveDefaultSpindle()?.Id
-            && following is { Type: ResourceType.WorkSpindle } && following.Id != leading.Id;
+        return machine.ResolveRole(list.Items[0])?.Id is string leading
+            && leading == machine.ResolveRole(roles[0])?.Id
+            && machine.ResolveRole(list.Items[1])?.Id is string following
+            && following == machine.ResolveRole(roles[1])?.Id;
     }
 
     // A rendered template with the master spindle it needs: n where it addresses the master spindle, a plain S, M3,

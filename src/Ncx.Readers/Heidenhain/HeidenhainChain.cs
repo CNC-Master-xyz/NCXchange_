@@ -91,10 +91,11 @@ internal sealed class HeidenhainChain
     // reader writes the RESET of the earlier entry and the new entry, and only where the RESET cuts that one entry, the
     // last of the chain, so that it removes nothing else and means the same under both readings of SHIFT=RESET, the
     // shifts or the last shift (wave-1 question #95; language 4.2, virtual machine 2.1).
-    // TODO(question): heidenhain 3 does not say where a new cycle 7, 8, 10 or PLANE stands against the transforms that
-    // were programmed after the one it replaces (a cycle 10 after the cycle 7 that a new cycle 7 replaces), in the
-    // place of the old one or at the end of the chain (language 4.2, D31); the reader keeps such a block RAW until D253
-    // is answered.
+    // D253 (a): cycles 7, 8, 10 and 19 and an absolute PLANE replace the earlier definition of their kind, as cycle 7
+    // does; where the replaced entry is the last of the chain the reader writes its RESET and the new entry, and where
+    // other entries follow it the block stays RAW:HEIDENHAIN with its WARNING, since the in-place and the at-end
+    // readings (the 7-10-7 case) stay unresolved until tested on a machine. Cycles 11 and 26 scale, which NCX has no
+    // word for, so they stay RAW (decisions.md; language 4.2, D31).
 
     /// <summary>
     /// Replaces the entry of a kind with a new one, or removes it: writes the blocks of the change in order.

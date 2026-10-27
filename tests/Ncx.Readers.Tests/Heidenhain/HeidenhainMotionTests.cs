@@ -150,6 +150,15 @@ public sealed class HeidenhainMotionTests
             Body("1 M128\n2 LN X+41.786 Y-57.382 Z+95.488 NX+0 NY+0 NZ+1 TX+0 TY+0.5 TZ+0.866 F2841"));
     }
 
+    // D185: LN with FMAX under M128 is RAPID with the tool vector and the surface normal, the tool direction at the end
+    // point as on LINE.
+    [Fact]
+    public void Ln_WithFmaxUnderM128_IsRapidWithToolVector()
+    {
+        Assert.Equal(Lines("TCPM=ON", "RAPID X=1 Y=2 Z=3 TX=0 TY=0.5 TZ=0.866 NX=0 NY=0 NZ=1"),
+            Body("1 M128\n2 LN X+1 Y+2 Z+3 NX+0 NY+0 NZ+1 TX+0 TY+0.5 TZ+0.866 FMAX"));
+    }
+
     // LN without M128, and LN without its tool vector, stay RAW (D81).
     [Theory]
     [InlineData("1 LN X+1 Y+2 Z+3 TX+0 TY+0 TZ+1 F100")]

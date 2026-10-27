@@ -28,7 +28,9 @@ public static partial class CycleCatalogLoader
     public static void CheckHeldDistances(
         CycleCatalog catalog, IReadOnlyCollection<string> setKeys, int line, Diagnostics diagnostics)
     {
-        foreach (CycleEntry entry in catalog.Entries)
+        // The [[cycle]] tables of one channel are checked with the rest: their defaults are written on that channel
+        // (D361, D377).
+        foreach (CycleEntry entry in catalog.Entries.Concat(catalog.ChannelEntries))
         {
             foreach (string key in setKeys)
             {
@@ -41,8 +43,9 @@ public static partial class CycleCatalogLoader
                 }
             }
 
-            if (catalog.Controller == Controller.Heidenhain && !setKeys.Contains(ChipBreakLiftKey)
-                && entry.Signature.Contains(HeidenhainLift) && !entry.Defaults.ContainsKey(HeidenhainLift))
+            if (catalog.Controller == Controller.Heidenhain && entry.Channel is null
+                && !setKeys.Contains(ChipBreakLiftKey) && entry.Signature.Contains(HeidenhainLift)
+                && !entry.Defaults.ContainsKey(HeidenhainLift))
             {
                 diagnostics.Error(line, DiagnosticCodes.CycleChipBreakLiftMissing,
                     $"Cycle {entry.Native} of the entry {entry.Name} writes {HeidenhainLift}, the chip-break lift the "

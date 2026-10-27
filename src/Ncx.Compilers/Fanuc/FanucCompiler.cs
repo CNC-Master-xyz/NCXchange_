@@ -129,6 +129,7 @@ public sealed class FanucCompiler : CompilerBase
             PointRegisters = PointRegistersOf(after),
             ProgramNumbers = _programNumbers,
             Repeats = _repeats,
+            Stock = StockOf(Step),
         };
         MakeSkippedUnknown(write);
         if (!FanucProgramFrame.Write(write) && !WriteNative(write))
@@ -212,6 +213,7 @@ public sealed class FanucCompiler : CompilerBase
         FanucMotion.Write(write);
         FanucMotion.WriteFeedWord(write);
         FanucFrames.WriteVerbs(write);
+        FanucProgramFrame.WriteStock(write);
         FanucToolWords.AddOffsets(write, movesToolAxis: false);
         FanucFunctions.Write(write);
         write.WriteMain();

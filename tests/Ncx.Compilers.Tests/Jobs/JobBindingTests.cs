@@ -20,7 +20,7 @@ public sealed class JobBindingTests
             JobCompile.Program(1000, "SYNC=110", "DWELL=1", "SPINDLE_SYNC=MAIN,SUB", "SYNC=111"),
             JobCompile.Program(1000, "SYNC=110", "SYNC=111")));
 
-        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nG4 P1000\nM111\nM30\n%\n", texts[0]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nG4 X1.\nM111\nM30\n%\n", texts[0]);
         Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM96\nM111\nM30\n%\n", texts[1]);
     }
 
@@ -59,7 +59,7 @@ public sealed class JobBindingTests
             JobCompile.Program(1000, "SYNC=110", "DWELL=1", "SPINDLE_SYNC=MAIN,SUB", "SYNC=111"),
             JobCompile.Program(1000, "SYNC=110", "SYNC=111")));
 
-        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nG4 P1000\nM100\nM96\nM111\nM30\n%\n", texts[0]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nG4 X1.\nM100\nM96\nM111\nM30\n%\n", texts[0]);
         Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM100\nM96\nM111\nM30\n%\n", texts[1]);
     }
 
@@ -109,7 +109,7 @@ public sealed class JobBindingTests
             new CompileOptions { Rewriters = [rewriter] }));
 
         Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM62\nM30\n%\n", texts[0]);
-        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nG4 P1000\nM30\n%\n", texts[1]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nG4 X1.\nM30\n%\n", texts[1]);
         Assert.Equal(["2"], rewriter.Channels);
     }
 
@@ -169,7 +169,7 @@ public sealed class JobBindingTests
             JobCompile.Program(1000, "SYNC=110", "SPINDLE_SYNC=MAIN,SUB", "DWELL=1", "FUNC:CLAMP=ON", "SYNC=111"),
             JobCompile.Program(1000, "SYNC=110", "SYNC=111")));
 
-        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM100\nM96\nG4 P1000\nM100\nM70\nM111\nM30\n%\n",
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM100\nM96\nG4 X1.\nM100\nM70\nM111\nM30\n%\n",
             texts[0]);
         Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM100\nM96\nM100\nM70\nM111\nM30\n%\n", texts[1]);
     }
@@ -356,7 +356,7 @@ public sealed class JobBindingTests
             JobCompile.Program(1000, "START_CHANNEL=2", "SPINDLE_SYNC=MAIN,SUB"), JobCompile.Program(1000, "DWELL=1")));
 
         Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM300 P2\nM100\nM96\nM30\n%\n", texts[0]);
-        Assert.Equal("%\nO1000 (T)\nG21\nM100\nM96\nG18 G99 G40 G80\nG4 P1000\nM30\n%\n", texts[1]);
+        Assert.Equal("%\nO1000 (T)\nG21\nM100\nM96\nG18 G99 G40 G80\nG4 X1.\nM30\n%\n", texts[1]);
     }
 
     // Machine-config 5, D56: without a mark_range the job compiler has no mark for the SYNC a word bound to every

@@ -173,7 +173,8 @@ public static partial class DiagnosticCodes
 
     /// <summary>
     /// CMP361, a WARNING: a word the Fanuc control has no option for is not written: ROT, ROTARY_PATH and ROTARY_FEED
-    /// without a template (controller-mapping 1, machine-config 5).
+    /// without a template, PATH_MODE with an empty or missing PATH_MODE template (controller-mapping 1, machine-config
+    /// 5, D349).
     /// </summary>
     public const string FanucOptionNotWritten = "CMP361";
 

@@ -17,6 +17,27 @@ public sealed class HeidenhainFrameTests
             Body("1 CYCL DEF 247 INIT. REF.PKT ~\n    Q339=1 ;REF.PUNKTNUMMER"));
     }
 
+    // D253 (d): cycle 247 over shifts and a tilt is ORIGIN, and the tilt, which the control keeps, is written again
+    // with MOVE=STAY.
+    [Fact]
+    public void CyclDef247_OverAShiftAndATilt_IsOriginAndTheTiltAgainWithMoveStay()
+    {
+        Assert.Equal(Lines("SHIFT X=10", "TILT_AXIS A=0 B=45 C=0", "ORIGIN=1", "TILT_AXIS A=0 B=45 C=0 MOVE=STAY"),
+            Body("1 CYCL DEF 7.0 NULLPUNKT\n2 CYCL DEF 7.1 X+10\n3 CYCL DEF 19.0 BEARBEITUNGSEBENE\n"
+                + "4 CYCL DEF 19.1 A+0 B+45 C+0\n5 CYCL DEF 247 INIT. REF.PKT ~\n    Q339=1"));
+    }
+
+    // D253 (d): cycle 247 while a rotation or a mirror is active stays RAW with its WARNING.
+    [Fact]
+    public void CyclDef247_WhileARotationIsActive_IsKeptAsRaw()
+    {
+        NcxProgram program = FramedProgram("1 CYCL DEF 10.0 DREHUNG\n2 CYCL DEF 10.1 ROT+30\n"
+            + "3 CYCL DEF 247 INIT. REF.PKT ~\n    Q339=1");
+
+        Assert.Equal([DiagnosticCodes.KeptAsRaw], Codes(program));
+        Assert.DoesNotContain(program.Blocks, block => block.Find("ORIGIN") is not null);
+    }
+
     // CYCL DEF 7 replaces the previous shift: SHIFT=RESET before the new SHIFT, an omitted axis unchanged
     // (heidenhain 3, 7 rule 6; language 4.2; D31).
     [Fact]
@@ -65,12 +86,22 @@ public sealed class HeidenhainFrameTests
             Body("1 PLANE SPATIAL SPA+0 SPB+45 SPC+0 TURN FMAX TABLE ROT"));
     }
 
+    // D269: a PLANE SPATIAL that names neither TABLE ROT nor COORD ROT is ROT=COORD, the default of the TNC 640,
+    // assumed for the iTNC 530 by family continuity; NCX itself defaults to TABLE (language 4.2).
+    [Fact]
+    public void PlaneSpatial_WithoutRot_IsRotCoord()
+    {
+        Assert.Equal(Lines("TILT A=0 B=45 C=0 MOVE=STAY ROT=COORD"),
+            Body("1 PLANE SPATIAL SPA+0 SPB+45 SPC+0 STAY"));
+    }
+
     // PLANE AXIAL is TILT_AXIS; a new PLANE replaces the earlier one, PLANE RESET STAY removes it (heidenhain 3, 7 rule
     // 6; language 6; D82).
     [Fact]
     public void PlaneAxial_IsTiltAxisAndANewPlaneReplacesIt()
     {
-        Assert.Equal(Lines("TILT_AXIS A=-90 C=180 MOVE=STAY", "TILT_AXIS=RESET", "TILT A=0 B=0 C=0 MOVE=STAY",
+        Assert.Equal(Lines("TILT_AXIS A=-90 C=180 MOVE=STAY", "TILT_AXIS=RESET",
+            "TILT A=0 B=0 C=0 MOVE=STAY ROT=COORD",
             "TILT=RESET"),
             Body("1 PLANE AXIAL A-90 C+180 STAY\n2 PLANE SPATIAL SPA+0 SPB+0 SPC+0 STAY\n3 PLANE RESET STAY"));
     }

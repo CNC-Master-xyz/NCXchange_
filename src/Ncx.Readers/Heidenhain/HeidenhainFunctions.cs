@@ -130,10 +130,19 @@ internal static class HeidenhainFunctions
             return;
         }
 
-        string? state = block.Templates.FindFunctionByCode(code);
-        if (state is not null)
+        // D155: every state that writes the code, less those the source state rules out and those that hold, or the
+        // first in file order, with the [workpiece] selection first and RDR020 where two resources would be switched
+        // on (decisions.md; machine-config 5). Klartext has one channel and addresses no spindle in the M function,
+        // so the context rules nothing out.
+        IReadOnlyList<FunctionMatch> states = FunctionChoice.Choose(block.Templates.FindFunctionsByCode(code),
+            new FunctionContext(), block.Line, code, block.Diagnostics);
+        if (states.Count > 0)
         {
-            ReadTableState(block, code, state);
+            foreach (FunctionMatch state in states)
+            {
+                ReadTableState(block, code, state);
+            }
+
             return;
         }
 
@@ -229,10 +238,17 @@ internal static class HeidenhainFunctions
     // The state of a function table names its word with the state as its value, SPINDLE:TOOL=CW; the word of the
     // language is made from it, the address of the default spindle and of the default coolant channel left out
     // (language 4.6, 4.10; wave-1 questions #62 and #63). A state that NCX writes with a value the M function does not
-    // carry, ORIENT with its angle, RPM with the speed, stays RAW.
-    private static void ReadTableState(HeidenhainBlock block, string code, string state)
+    // carry, RPM with the speed, stays RAW.
+    private static void ReadTableState(HeidenhainBlock block, string code, FunctionMatch match)
     {
+        string state = match.Key;
         string key = KeyOf(state, out string? addr, out string value);
+        if (key == "SPINDLE" && value == "ORIENT")
+        {
+            ReadOrient(block, code, match, addr);
+            return;
+        }
+
         if (!HasWord(state))
         {
             block.Draft.KeepAsRaw($"{code} is {state} of a table of the machine, which NCX writes with a value the M "
@@ -250,6 +266,10 @@ internal static class HeidenhainFunctions
                 // The channel STANDARD is the default channel that a bare COOLANT addresses (language 4.6).
                 AddFunction(block, code, key, addr == "STANDARD" ? null : addr, new IdentValue(value));
                 return;
+            case "WORKPIECE":
+                // D155: a [workpiece] template code gives the WORKPIECE word with the role it selects.
+                AddFunction(block, code, key, null, new IdentValue(value));
+                return;
             default:
                 // SPINDLE_MODE and FUNC.
                 AddFunction(block, code, key, addr, new IdentValue(value));
@@ -257,12 +277,31 @@ internal static class HeidenhainFunctions
         }
     }
 
-    // A state of a function table that NCX writes with the value the M function carries: SPINDLE with CW, CCW or OFF,
-    // SPINDLE_MODE, FUNC and COOLANT (language 4.5, 4.6; machine-config 5).
+    // D154: ORIENT:R={angle} where the template carries an angle; where it has none, M19, the reader writes ORIENT at
+    // 0 with the WARNING RDR021 naming the code, the orientation angle being set by the machine (decisions.md;
+    // controller-mapping 4).
+    private static void ReadOrient(HeidenhainBlock block, string code, FunctionMatch match, string? role)
+    {
+        string? spindle = SpindleAddress(block.Machine, role);
+        if (match.Values.TryGetNumber("angle", out decimal angle))
+        {
+            AddFunction(block, code, "ORIENT", spindle, HeidenhainNumbers.Of(angle));
+            return;
+        }
+
+        block.Draft.Warnings.Add(new HeidenhainWarning(DiagnosticCodes.FunctionAngleSetByTheMachine,
+            $"{code} orients the spindle and carries no angle: the orientation angle is set by the machine; the reader "
+            + "writes ORIENT at 0 (D154; machine-config 5)."));
+        AddFunction(block, code, "ORIENT", spindle, new IntegerValue(0, "0"));
+    }
+
+    // A state of a function table that NCX writes with the value the M function carries: SPINDLE with CW, CCW, OFF or
+    // ORIENT (D154), SPINDLE_MODE, FUNC, COOLANT and the [workpiece] selection (language 4.5, 4.6; machine-config 5).
     private static bool HasWord(string state)
     {
         string key = KeyOf(state, out _, out string value);
-        return key is "SPINDLE_MODE" or "FUNC" or "COOLANT" || (key == "SPINDLE" && s_spindleStates.Contains(value));
+        return key is "SPINDLE_MODE" or "FUNC" or "COOLANT" or "WORKPIECE"
+            || (key == "SPINDLE" && (s_spindleStates.Contains(value) || value == "ORIENT"));
     }
 
     // The key of a state of a function table, SPINDLE of SPINDLE:TOOL=CW, with its address and its value.

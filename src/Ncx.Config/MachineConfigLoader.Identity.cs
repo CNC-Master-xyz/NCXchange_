@@ -26,7 +26,7 @@ public static partial class MachineConfigLoader
         "decimal_separator", "decimals", "trailing_zeros", "block_numbers", "line_ending", "program_end", "sub_end",
         "program_layout", "max_line_length", "comment_charset", "external_call", "header",
         "plane_with_first_motion", "motion_code_after_tool_change", "length_offset_with_tool_axis", "channel_files",
-        "label_max", "motion_code", "m_codes_per_block", "m_codes_combinable", "helix_feed",
+        "label_max", "motion_code", "m_codes_per_block", "m_codes_combinable", "helix_feed", "counter_registers",
     ];
 
     // comment_charset takes these two values; any other is CFG005 (D263).
@@ -165,6 +165,9 @@ public static partial class MachineConfigLoader
 
             // The label range of a Klartext program, LBL 1 to label_max; 65535 is the largest of the TNC 640 (D271).
             LabelMax = table.IntegerInRange("label_max", 1, 65535),
+
+            // The Q parameters the Heidenhain compiler counts a REPEAT in, the first and the last (D213, D388 (12)).
+            CounterRegisters = ReadCounterRegisters(table),
             MotionCode = table.Choice("motion_code", s_motionCodes) switch
             {
                 "change" => MotionCode.Change,
@@ -186,6 +189,29 @@ public static partial class MachineConfigLoader
                 _ => null,
             },
         };
+    }
+
+    // counter_registers = ["QL90", "QL99"]: two names of one kind of Q parameter, Q, QL or QR, the first not after
+    // the last; any other value is CFG005, as the other [format] values out of their range are (D213, D388 (12),
+    // D271).
+    private static IReadOnlyList<string> ReadCounterRegisters(ConfigTable table)
+    {
+        IReadOnlyList<string> names = table.TextList("counter_registers");
+        if (names.Count == 0 && !table.Has("counter_registers"))
+        {
+            return [];
+        }
+
+        if (names.Count == 2 && CounterRange.TryParse(names[0], names[1], out _))
+        {
+            return names;
+        }
+
+        table.Diagnostics.Error(table.LineOf("counter_registers"), DiagnosticCodes.ValueNotAllowed,
+            "[format] counter_registers must be the first and the last name of one kind of Q parameter, Q, QL or QR, "
+            + $"the first not after the last, [\"QL90\", \"QL99\"], not [{string.Join(", ", names)}] "
+            + "(machine-config 2).");
+        return [];
     }
 
     // block_numbers = { enabled = true, start = 10, step = 10 } (machine-config 2).

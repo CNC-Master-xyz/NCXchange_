@@ -95,4 +95,45 @@ public abstract partial class CompilerBase
             $"{what} compiles only to {named}, the {kind} it names, and the machine \"{machine.Machine.Name}\" is "
             + $"{target}: an ERROR at compile time (language 4.1, 4.7.1; controller-mapping 9; D5, D94).");
     }
+
+    // An ARC with a tool vector compiles like RAW of another controller where the controller has no vector arc: an
+    // ERROR at compile time, every one reported before anything is written (D185; language 4.3, TX).
+    private void CheckVectorArcs(NcxProgram program, MachineConfig machine, Diagnostics diagnostics)
+    {
+        if (WritesVectorArcs)
+        {
+            return;
+        }
+
+        foreach (Block block in program.Blocks)
+        {
+            if (block.Verb?.Key == "ARC" && (block.Has("TX") || block.Has("TY") || block.Has("TZ")))
+            {
+                diagnostics.Error(block, DiagnosticCodes.VectorArcNotWritable,
+                    $"An ARC with a tool vector has no form on a {Controller} machine (\"{machine.Machine.Name}\"): "
+                    + "write the arc as LINE blocks with their vectors, or as RAW of the controller (D185).");
+            }
+        }
+    }
+
+    // A cycle the machine marks available = false on the compiled channel, or on the whole machine, is the ERROR
+    // CMP004 at its definition, and nothing is written for it: no before line and no substitute such as a bare G84
+    // (machine-config 6, D361, D377).
+    private static void CheckCyclesAvailable(NcxProgram program, MachineConfig machine, int channel,
+        Diagnostics diagnostics)
+    {
+        foreach (Block block in program.Blocks)
+        {
+            if (block.Find("CYCLE", null)?.Value is not IdentValue name
+                || machine.CycleCatalog.Find(name.Name) is not CycleEntry { Available: false } entry)
+            {
+                continue;
+            }
+
+            diagnostics.Error(block, DiagnosticCodes.CycleNotAvailable,
+                $"The cycle {entry.Name} is not available on channel {channel} of the machine "
+                + $"\"{machine.Machine.Name}\" ([[cycle]] available = false), so nothing is written for it "
+                + "(machine-config 6, D361, D377).");
+        }
+    }
 }

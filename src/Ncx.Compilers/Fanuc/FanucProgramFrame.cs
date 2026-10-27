@@ -13,6 +13,9 @@ namespace Ncx.Compilers.Fanuc;
 /// </summary>
 internal static class FanucProgramFrame
 {
+    // The words of a STOCK block (D351).
+    private static readonly string[] s_stockKeys = ["STOCK", "X", "Y", "Z", "MAX"];
+
     // Oxxxx: four digits, eight on the 30i (controllers fanuc.md 1).
     private const int LeastDigits = 4;
     private const int MostDigits = 8;
@@ -243,5 +246,39 @@ internal static class FanucProgramFrame
         }
 
         return "O" + trimmed.PadLeft(LeastDigits, '0');
+    }
+
+    /// <summary>
+    /// STOCK through [stock] (D351; machine-config 5): the framework has chosen the template and reported what writes
+    /// nothing (CMP012 to CMP014); fanuc-mill-30i.toml has no [stock], the control no blank form.
+    /// </summary>
+    public static void WriteStock(FanucBlock write)
+    {
+        if (write.Block.Verb?.Key != "STOCK")
+        {
+            return;
+        }
+
+        foreach (string key in s_stockKeys)
+        {
+            write.Written(key);
+        }
+
+        if (write.Stock is not StockForm stock)
+        {
+            return;
+        }
+
+        var values = new TemplateValues();
+        values.Set("axis", stock.Axis);
+        foreach (StockNumber number in stock.Numbers)
+        {
+            values.Set(number.Name, write.Format(number.Address, number.Value));
+        }
+
+        if (write.Render(stock.Template, stock.What, values) is string text)
+        {
+            write.Write(text);
+        }
     }
 }

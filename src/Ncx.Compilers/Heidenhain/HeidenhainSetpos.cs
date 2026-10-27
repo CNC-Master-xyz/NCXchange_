@@ -101,12 +101,12 @@ internal static class HeidenhainSetpos
     /// none of the axes whose setpos shift stands acts the same before and after that shift, and the cycle then stands
     /// after the entries left before it.
     /// </summary>
-    // TODO(question): language 4.2 applies SETPOS to the frame active where it stands and lets a RESET remove chain
-    // entries only, and virtual machine 3.4 reads the setpos shift on top of the chain; where the setpos shift of an
-    // axis acts once a ROTATE, MIRROR, TILT or TILT_AXIS that stood before the SETPOS and turns that axis is removed is
-    // not given, nor where the Klartext cycle acts that cancels a transform the cycle 7 of the SETPOS follows (D253).
-    // Such a RESET is reported (CMP114) and nothing is guessed; a place the target state does not know counts as the
-    // end of the chain.
+    // D319: the setpos shift keeps its displacement in space; when a ROTATE or MIRROR with a known value before it is
+    // removed the virtual machine turns the shift into the remaining frame, and after a removed tilt or expression
+    // angle it becomes unknown (decisions.md D319). The compiler keeps CMP114 for such a RESET until D253 settles where
+    // the cycle 7 goes; a place the target state does not know counts as the end of the chain.
+    // TODO(question): D253: where the Klartext cycle acts that cancels a transform the cycle 7 of the SETPOS follows is
+    // open, so the cycle 7 cannot be rewritten for the remaining frame; such a RESET is reported (CMP114).
     public static void CheckRemoved(HeidenhainBlock writing, ChainChange change)
     {
         if (change.Removed.Count == 0)
@@ -226,10 +226,9 @@ internal static class HeidenhainSetpos
 
     // The axes of the absolute axis words of the block, each marked as written; null when the shift of one of them has
     // no Klartext form, which is reported.
-    // TODO(question): the position of an axis known in the MACHINE frame only, after HOME or a machine-frame move, is
-    // not known in the frame of the active preset without a datum table (virtual machine 3.4, D35), and virtual machine
-    // 3.4 and D101 record the setpos shift against the machine position; how such a SETPOS is folded into cycle 7, a
-    // shift against the preset, is not given. It is reported (CMP113) and nothing is guessed.
+    // D320: a SETPOS of an axis whose position is known in the MACHINE frame only, after HOME or a machine-frame move,
+    // is the ERROR CMP113: no cycle 7 or TRANS DATUM takes a machine-frame position, and FN 25 is locked on the
+    // iTNC 530 and absent on the TNC 640; the FN 18 ID270/ID240 route waits for D182 (decisions.md D320; heidenhain 8).
     // D117: SETPOS carries absolute axis words only, which the parser holds (PAR012, decisions.md); an incremental
     // word that still reached here is left unwritten and becomes the ERROR CMP101.
     private static List<string>? NamedAxes(HeidenhainBlock writing)
@@ -255,8 +254,10 @@ internal static class HeidenhainSetpos
             }
             else if (HeidenhainNumbers.NumberOf(word.Word.Value) is null)
             {
-                // Controllers heidenhain.md 6 and the TODO(question) of HeidenhainNumbers: the shift would be the
-                // formula position minus the value, and a coordinate of Klartext takes a number or a Q parameter.
+                // D338 names SETPOS values among the formulas spilled into a QL parameter.
+                // TODO: the spill of a SETPOS formula is not written yet: the cycle 7 of a later SETPOS writes every
+                // standing shift again, and the virtual machine keeps this one unknown, so its QL parameter would have
+                // to stay reserved for as long as the shift stands; until then it is reported (CMP102).
                 writing.Error(DiagnosticCodes.HeidenhainValueWithoutKlartext,
                     $"{word.Word.ToCanonical()}: cycle 7 would take the position of {word.Axis} minus this value, a "
                     + "formula, and Klartext takes a number or a Q parameter there; nothing is written for it "
