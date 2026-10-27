@@ -1,3 +1,4 @@
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 
 namespace Ncx.Core.VirtualMachine.Validation;
@@ -48,15 +49,18 @@ internal static class ChannelValidation
     };
 
     /// <summary>
-    /// Tells whether the run of a file is a single-channel job: every program of the file runs on the same channel
-    /// (language 4.1, CHANNEL; 4.14).
+    /// Tells whether the run of a file without a job manifest is a single-channel job: the machine has one channel
+    /// ([machine] channels names one, or the key is absent) and every program of the file runs on one channel
+    /// (language 4.1, CHANNEL; 4.14; virtual machine 3.7, D196). A file for one path of a multi-channel machine is
+    /// not, so its SYNC does not warn; check --job checks its marks.
     /// </summary>
-    // TODO(question): virtual machine 3.7 warns for "SYNC in a single-channel job" without saying which run is one when
-    // a file is checked without a job manifest (machine-config 8); a file whose programs all run on one channel is a
-    // single-channel job, and a file with programs on several channels is left to the job scheduler, until D196 is
-    // answered.
-    public static bool IsSingleChannelJob(NcxProgram program)
+    public static bool IsSingleChannelJob(NcxProgram program, MachineConfig machine)
     {
+        if (machine.Machine.Channels.Count > 1)
+        {
+            return false;
+        }
+
         var channels = new HashSet<int>();
         foreach (Section section in program.Programs)
         {

@@ -12,7 +12,8 @@ internal sealed class HolderState
     // Tool 0 is the empty spindle: TOOL=0 empties it (language 4.4).
     private static readonly ToolRef s_emptySpindle = new(0);
 
-    // spindleTool starts 0, preloaded none, and the offsets length, radius and combined 0 (virtual machine 2.3).
+    // spindleTool starts 0, preloaded none, and the offsets length, radius and combined 0 (virtual machine 2.3); the
+    // measurement point starts at point 1 with a = 0 and r = 0 (D372).
     public HolderState()
     {
         SpindleTool = s_emptySpindle;
@@ -20,6 +21,7 @@ internal sealed class HolderState
         OffsetLen = 0;
         OffsetRad = 0;
         OffsetCombined = 0;
+        ResetPoint();
     }
 
     /// <summary>
@@ -37,6 +39,38 @@ internal sealed class HolderState
     public int OffsetRad { get; set; }
 
     public int OffsetCombined { get; set; }
+
+    /// <summary>
+    /// toolPoint: the measurement point k of the tool, from 1 (D372).
+    /// </summary>
+    public int ToolPoint { get; set; }
+
+    /// <summary>
+    /// tipOffset: the axial offset a of the point from the tool tip, in the units of its block (D372).
+    /// </summary>
+    public decimal TipOffset { get; set; }
+
+    /// <summary>
+    /// pointRadius: the register radius r of the point (D372).
+    /// </summary>
+    public decimal PointRadius { get; set; }
+
+    /// <summary>
+    /// True when the program named the point of the tool with TOOL_POINT since its TOOL, and no OFFSET word replaced
+    /// the registers since; only then does a compiler write the registers of the [tool_points] mapping (D393).
+    /// </summary>
+    public bool PointNamed { get; set; }
+
+    /// <summary>
+    /// Point 1 with a = 0 and r = 0: the start of a holder and what a TOOL without point words leaves (D372).
+    /// </summary>
+    public void ResetPoint()
+    {
+        ToolPoint = 1;
+        TipOffset = 0m;
+        PointRadius = 0m;
+        PointNamed = false;
+    }
 
     /// <summary>
     /// Where the holder stands in the tool change states of architecture 5.2.
@@ -69,6 +103,10 @@ internal sealed class HolderState
             OffsetLen = OffsetLen,
             OffsetRad = OffsetRad,
             OffsetCombined = OffsetCombined,
+            ToolPoint = ToolPoint,
+            TipOffset = TipOffset,
+            PointRadius = PointRadius,
+            PointNamed = PointNamed,
             ToolChange = ToolChange,
         };
     }

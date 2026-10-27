@@ -137,12 +137,13 @@ public sealed class TemplateSetMachinesTests
     }
 
     // The Heidenhain mill writes the comma (controllers heidenhain.md 1 and 8 rule 2, machine-config 2): the numbers
-    // of its tolerance cycle are written with it, the cycle numbers of the literal text keep their point.
+    // of its tolerance cycle are written with it, the cycle numbers of the literal text keep their point; ON_ROTARY
+    // carries the rotary tolerance (D151).
     [Fact]
     public void Render_HeidenhainTolerance_WritesTheCommaOfItsFormat()
     {
         MachineConfig machine = Load(HeidenhainMill);
-        string? tolerance = machine.Tolerance?.On;
+        string? tolerance = machine.Tolerance?.OnRotary;
         Assert.NotNull(tolerance);
         Template? template = new TemplateSet(machine, new Diagnostics(HeidenhainMill)).For(tolerance);
         Assert.NotNull(template);

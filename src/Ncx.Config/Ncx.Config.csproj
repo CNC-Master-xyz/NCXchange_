@@ -17,4 +17,14 @@
     <InternalsVisibleTo Include="Ncx.Config.Tests" />
   </ItemGroup>
 
+  <!--
+    Every machine file and cycle catalog the repository ships, built into the binary by the globs Ncx.Cli.csproj copies
+    them with: the fourth and last place of the lookup, after the three folders, so that a single-file ncx finds them
+    and a shop's own file of that name still wins (D206, D207, D371). BuiltInFiles reads them.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="../../machines/*.toml" LogicalName="machines/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../../cycles/*.toml" LogicalName="cycles/%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

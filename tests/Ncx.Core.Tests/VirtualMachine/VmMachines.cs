@@ -118,6 +118,77 @@ internal static class VmMachines
         };
     }
 
+    /// <summary>
+    /// A mill with a rotary table T1 that holds the workpiece: the rotary axis A owned by the table turns about X
+    /// (parallel = "X", D146); without the rotary axis when <paramref name="withRotaryAxis"/> is false.
+    /// </summary>
+    public static MachineConfig TableMill(bool withRotaryAxis)
+    {
+        List<AxisDef> axes =
+        [
+            new AxisDef { Id = "X", NcxName = "X", Kind = AxisKind.Linear },
+            new AxisDef { Id = "Y", NcxName = "Y", Kind = AxisKind.Linear },
+            new AxisDef { Id = "Z", NcxName = "Z", Kind = AxisKind.Linear },
+        ];
+        if (withRotaryAxis)
+        {
+            axes.Add(new AxisDef { Id = "A", NcxName = "A", Kind = AxisKind.Rotary, Owner = "T1", Parallel = "X" });
+        }
+
+        return new MachineConfig
+        {
+            Machine = new MachineIdentity
+            {
+                Name = "Table mill",
+                Controller = Controller.Heidenhain,
+                DefaultSpindle = "S1",
+                DefaultHolder = "H1",
+                DefaultWorkpiece = "T1",
+            },
+            Resources =
+            [
+                new ResourceDef { Id = "S1", Type = ResourceType.ToolSpindle },
+                new ResourceDef { Id = "H1", Type = ResourceType.ToolHolder, Spindle = "S1" },
+                new ResourceDef { Id = "T1", Type = ResourceType.Table },
+            ],
+            Axes = axes,
+        };
+    }
+
+    /// <summary>
+    /// A lathe whose X axis is programmed in diameters, with home 300 and limits [-20, 300] written as diameters, the
+    /// way the axis is programmed (D137).
+    /// </summary>
+    public static MachineConfig DiameterLathe()
+    {
+        return new MachineConfig
+        {
+            Machine = new MachineIdentity
+            {
+                Name = "Diameter lathe",
+                Controller = Controller.Fanuc,
+                DefaultSpindle = "S1",
+                DefaultHolder = "H1",
+                DefaultWorkpiece = "S1",
+            },
+            Resources =
+            [
+                new ResourceDef { Id = "S1", Type = ResourceType.WorkSpindle, Axis = "C1" },
+                new ResourceDef { Id = "H1", Type = ResourceType.ToolHolder },
+            ],
+            Axes =
+            [
+                new AxisDef
+                {
+                    Id = "X1", NcxName = "X", Kind = AxisKind.Linear, Programming = Programming.Diameter,
+                    Home = 300m, Home2 = 200m, Min = -20m, Max = 300m,
+                },
+                new AxisDef { Id = "Z1", NcxName = "Z", Kind = AxisKind.Linear, Home = 450m, Max = 500m },
+                new AxisDef { Id = "C1", NcxName = "C", Kind = AxisKind.Rotary, Owner = "S1" },
+            ],
+        };
+    }
+
     private static FunctionTable States(string first, string firstCode, string second, string secondCode)
     {
         return new FunctionTable

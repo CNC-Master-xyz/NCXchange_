@@ -344,9 +344,9 @@ internal static partial class SiemensFrames
     }
 
     // TRANS X Y Z or ATRANS X Y Z, the values of the SHIFT block as written where it appends the entry, else of the
-    // entry (controllers siemens.md 4).
-    // TODO(question): D125: the X of a SHIFT under DIAMETER=ON is a diameter or a radius; the virtual machine keeps it
-    // as written and the compiler writes it with the factor of an X word, until D125 is answered.
+    // entry (controllers siemens.md 4). The entry holds what the virtual machine stores: under DIAMETER=ON its X is the
+    // radius of the diameter the SHIFT wrote (D125), so it is written with the state factor of the axis, as a computed
+    // position is, while a word of the block is written with the factor of an X word.
     private static void WriteShift(SiemensBlock write, TransformEntry entry, bool first, bool appended)
     {
         var words = new List<string>();
@@ -357,7 +357,12 @@ internal static partial class SiemensFrames
             Word? word = fromBlock ? write.Block.Find(axis.Key) : null;
             Value? value = word?.Value
                 ?? (axis.Value is decimal known ? new DecimalValue(known, Invariant(known)) : null);
-            string? text = value is null ? null : SiemensAxes.ValueOf(write, axis.Key, value, letter);
+            string? text = word is not null
+                ? SiemensAxes.ValueOf(write, axis.Key, word.Value, letter)
+                : axis.Value is decimal stored
+                    ? write.FormatComputed(SiemensAxes.DecimalsAddress(write, letter),
+                        stored * SiemensAxes.StateFactor(write, axis.Key))
+                    : null;
             if (text is null)
             {
                 write.Error(DiagnosticCodes.SiemensChainNotWritable,
@@ -512,9 +517,8 @@ internal static partial class SiemensFrames
 
     // TOLERANCE through [tolerance], CYCLE832(tol, mode, otol), OFF as CYCLE832(0,0,1); TOLERANCE:ROTARY and
     // TOLERANCE_MODE write it again while it is on (machine-config 5; controller-mapping 1, TOLERANCE; D85).
-    // TODO(question): D151: the ON template needs {rotary}, which TOLERANCE:ROTARY may leave without a value; the
-    // template is then unusable and the compiler reports it, as machine-config says of a missing placeholder value,
-    // until D151 is answered.
+    // ON_ROTARY is written instead of ON while TOLERANCE:ROTARY is set; a machine without it writes ON (D151). The
+    // report of a value the template cannot carry, CMP015, is the compiler framework's (D367).
     private static void WriteTolerance(SiemensBlock write)
     {
         Block block = write.Block;
@@ -553,7 +557,11 @@ internal static partial class SiemensFrames
             values.Set("mode", modeValue);
         }
 
-        if (write.Render(table?.On, "[tolerance] ON (machine-config 5, D85)", values) is string on)
+        bool rotaryTemplate = state.Rotary is not null && table?.OnRotary is not null;
+        string what = rotaryTemplate
+            ? "[tolerance] ON_ROTARY (machine-config 5, D151)"
+            : "[tolerance] ON (machine-config 5, D85)";
+        if (write.Render(rotaryTemplate ? table?.OnRotary : table?.On, what, values) is string on)
         {
             write.Write(on);
         }

@@ -166,7 +166,19 @@ internal static class FrameHandlers
             return;
         }
 
+        // The cylinder turns about the rotary axis of the workpiece holder; without one CYLINDER is an ERROR. The
+        // cylinder axis is the linear axis parallel to it (D146).
+        if (context.Resources.CylinderAxisOf(context.State) is not string cylinderAxis)
+        {
+            context.Diagnostics.Error(context.Block, DiagnosticCodes.CylinderWithoutRotaryAxis,
+                $"{word.ToCanonical()} needs a rotary axis on the workpiece holder "
+                + $"{context.State.Frame.WorkpieceHolder ?? "(none)"}, about which the cylinder turns (language 4.2, "
+                + "D146).");
+            return;
+        }
+
         // A radius from an expression is UNKNOWN in STATIC mode (virtual machine 1); the transformation is on.
+        frame.CylinderAxis = cylinderAxis;
         frame.Cylinder = context.TryNumber(word, "CYLINDER", out decimal radius) ? radius : frame.Cylinder ?? 0m;
     }
 

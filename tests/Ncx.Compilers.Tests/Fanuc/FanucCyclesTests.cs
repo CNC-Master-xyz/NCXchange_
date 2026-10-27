@@ -451,4 +451,17 @@ public sealed class FanucCyclesTests
 
         Assert.Contains("\nG92 X60. Z-30.\nG80\n", text, StringComparison.Ordinal);
     }
+
+    // D177, D362: G81 and G83 have no P, and a CYCLE_DWELL of 0, which the readers write for Q211=0 and DTB=0, is the
+    // behaviour the control has anyway: dropped silently, not CMP385.
+    [Theory]
+    [InlineData("DRILL", "", "G81 G99 Z-20. R5. F100.\n")]
+    [InlineData("PECK", " PECK=2", "G83 G99 Z-20. R5. Q2. F100.\n")]
+    public void DrillAndPeck_WithCycleDwellZero_DropTheDwell(string cycle, string peck, string written)
+    {
+        string body = FanucCompile.Body(Approach
+            + $"\nCYCLE={cycle} CLEARANCE=5 DEPTH=-20{peck} CYCLE_F=100 CYCLE_DWELL=0\nCYCLE_CALL");
+
+        Assert.EndsWith(written, body, StringComparison.Ordinal);
+    }
 }

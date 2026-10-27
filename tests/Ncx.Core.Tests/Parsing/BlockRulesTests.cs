@@ -378,6 +378,32 @@ public sealed class BlockRulesTests
         ParseText.CleanBlock(text);
     }
 
+    // TOOL_POINT, TIP_OFFSET and POINT_RADIUS are valid in a TOOL block or in a block of their own (language 4.4,
+    // D372); a block of their own carries nothing else but SKIP and a COMMENT (D392).
+    [Theory]
+    [InlineData("TOOL=5 TOOL_POINT=2 TIP_OFFSET=2 POINT_RADIUS=8")]
+    [InlineData("TOOL=5 RPM=6000 SPINDLE=CW TOOL_POINT=2")]
+    [InlineData("TOOL:TURRET1=5 TOOL_POINT:TURRET1=2")]
+    [InlineData("TOOL_POINT=2 TIP_OFFSET=2 POINT_RADIUS=8")]
+    [InlineData("TIP_OFFSET={$Q1 * 2}")]
+    [InlineData("SKIP TOOL_POINT=2 COMMENT=\"POINT 2\"")]
+    public void D372_PointWordsInAToolBlockOrABlockOfTheirOwn_AreAccepted(string text)
+    {
+        ParseText.CleanBlock(text);
+    }
+
+    // Beside any other word than TOOL they are an ERROR, the block being neither a TOOL block nor a block of their
+    // own (language 4.4, D372, D392).
+    [Theory]
+    [InlineData("RAPID Z=50 TOOL_POINT=2")]
+    [InlineData("TIP_OFFSET=2 RPM=6000")]
+    [InlineData("PRELOAD=6 POINT_RADIUS=8")]
+    [InlineData("TOOL_POINT=2 OFFSET:LEN=12")]
+    public void D372_PointWordBesideAnotherWordWithoutTool_IsError(string text)
+    {
+        BlockWithError(text, DiagnosticCodes.PointWordOutsideToolBlock);
+    }
+
     // Parses one line and asserts that the rule's ERROR is among what the parser reported, once.
     private static Block? BlockWithError(string text, string code)
     {

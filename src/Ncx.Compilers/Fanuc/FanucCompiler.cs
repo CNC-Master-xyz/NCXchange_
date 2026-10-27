@@ -111,6 +111,7 @@ public sealed class FanucCompiler : CompilerBase
             Labels = LabelsOf(Step.Section),
             Writer = Line,
             CommentText = CommentText,
+            PointRegisters = PointRegistersOf(after),
         };
         MakeSkippedUnknown(write);
         if (!FanucProgramFrame.Write(write) && !WriteNative(write))

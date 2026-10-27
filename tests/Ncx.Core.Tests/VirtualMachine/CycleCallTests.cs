@@ -188,8 +188,8 @@ public sealed class CycleCallTests
         Assert.Equal([DiagnosticCodes.CycleAxisNotLinear], vm.Codes());
     }
 
-    // VM 3.3, language 4.7, D37: PECK, the deep hole cycle, feeds in pecks of PECK and returns to CLEARANCE between
-    // them.
+    // VM 3.3, language 4.7, D190, D355: PECK without SURFACE counts its steps from CLEARANCE and returns to CLEARANCE
+    // between them; the default machine has no family, so the re-entry ends at the depth reached (D357).
     [Fact]
     public void CycleCall_PeckCycle_FeedsInPecksWithAFullRetract()
     {
@@ -205,7 +205,37 @@ public sealed class CycleCallTests
             Describe(vm.Vm.LastCycleMotions));
     }
 
-    // VM 3.3, language 4.7, D37: CHIP_BREAK feeds in pecks without leaving the hole.
+    // D355, D357: the steps of PECK count from SURFACE, and the re-entry rapids to peck_clearance above the depth
+    // reached (Fanuc parameter 5115).
+    [Fact]
+    public void CycleCall_PeckFromSurface_StepsFromSurfaceAndReentersAtPeckClearance()
+    {
+        VmHarness vm = Expanding(Controller.Fanuc, new CyclesConfig { PeckClearance = 1m }).Execute(
+            "RAPID X=0 Y=0 Z=10", "CYCLE=PECK SURFACE=0 CLEARANCE=2 DEPTH=-10 PECK=4 CYCLE_F=100", "CYCLE_CALL");
+
+        vm.AssertNoDiagnostics();
+        Assert.Equal(
+            [
+                "RAPID Z=2", "LINE Z=-4 F=100", "RAPID Z=2", "RAPID Z=-3", "LINE Z=-8 F=100", "RAPID Z=2",
+                "RAPID Z=-7", "LINE Z=-10 F=100", "RAPID Z=2",
+            ],
+            Describe(vm.Vm.LastCycleMotions));
+    }
+
+    // D190: a known PECK above 0 splits the feed on any cycle of the family, DRILL among them.
+    [Fact]
+    public void CycleCall_DrillWithPeck_FeedsInPecks()
+    {
+        VmHarness vm = Expanding().Execute(
+            "RAPID X=0 Y=0 Z=10", "CYCLE=DRILL SURFACE=0 CLEARANCE=2 DEPTH=-6 PECK=4 CYCLE_F=100", "CYCLE_CALL");
+
+        Assert.Equal(
+            ["RAPID Z=2", "LINE Z=-4 F=100", "RAPID Z=2", "RAPID Z=-4", "LINE Z=-6 F=100", "RAPID Z=2"],
+            Describe(vm.Vm.LastCycleMotions));
+    }
+
+    // VM 3.3, language 4.7, D190, D357: CHIP_BREAK feeds in pecks without leaving the hole; with no family and no key
+    // the lift is 0 and no lift motion is raised.
     [Fact]
     public void CycleCall_ChipBreakCycle_FeedsInPecksWithoutLeavingTheHole()
     {
@@ -214,6 +244,100 @@ public sealed class CycleCallTests
 
         Assert.Equal(
             ["RAPID X=0", "RAPID Z=2", "LINE Z=-3 F=100", "LINE Z=-8 F=100", "LINE Z=-10 F=100", "RAPID Z=2"],
+            Describe(vm.Vm.LastCycleMotions));
+    }
+
+    // D190, D357: CHIP_BREAK lifts by chip_break_lift after each step and feeds on.
+    [Fact]
+    public void CycleCall_ChipBreakWithLift_LiftsAndFeedsOn()
+    {
+        VmHarness vm = Expanding(Controller.Fanuc, new CyclesConfig { ChipBreakLift = 0.5m }).Execute(
+            "RAPID X=0 Y=0 Z=10", "CYCLE=CHIP_BREAK SURFACE=0 CLEARANCE=2 DEPTH=-10 PECK=4 CYCLE_F=100", "CYCLE_CALL");
+
+        Assert.Equal(
+            [
+                "RAPID Z=2", "LINE Z=-4 F=100", "RAPID Z=-3.5", "LINE Z=-8 F=100", "RAPID Z=-7.5", "LINE Z=-10 F=100",
+                "RAPID Z=2",
+            ],
+            Describe(vm.Vm.LastCycleMotions));
+    }
+
+    // D357: without the key, Siemens lifts by the manual's 1 mm of _VRT.
+    [Fact]
+    public void CycleCall_ChipBreakOnSiemensWithoutKey_LiftsOneMillimetre()
+    {
+        VmHarness vm = Expanding(Controller.Siemens, new CyclesConfig()).Execute(
+            "RAPID X=0 Y=0 Z=10", "CYCLE=CHIP_BREAK SURFACE=0 CLEARANCE=2 DEPTH=-6 PECK=4 CYCLE_F=100", "CYCLE_CALL");
+
+        Assert.Equal(
+            ["RAPID Z=2", "LINE Z=-4 F=100", "RAPID Z=-3", "LINE Z=-6 F=100", "RAPID Z=2"],
+            Describe(vm.Vm.LastCycleMotions));
+    }
+
+    // D190, D357: a CHIP_BREAK lift and a PECK re-entry larger than the gap left end at CLEARANCE.
+    [Fact]
+    public void CycleCall_LiftAndReentryLargerThanTheGap_StopAtClearance()
+    {
+        VmHarness chip = Expanding(Controller.Fanuc, new CyclesConfig { ChipBreakLift = 5m }).Execute(
+            "RAPID X=0 Y=0 Z=10", "CYCLE=CHIP_BREAK SURFACE=0 CLEARANCE=2 DEPTH=-3 PECK=1 CYCLE_F=100", "CYCLE_CALL");
+        VmHarness peck = Expanding(Controller.Fanuc, new CyclesConfig { PeckClearance = 10m }).Execute(
+            "RAPID X=0 Y=0 Z=10", "CYCLE=PECK SURFACE=0 CLEARANCE=2 DEPTH=-2 PECK=1 CYCLE_F=100", "CYCLE_CALL");
+
+        Assert.Equal(
+            [
+                "RAPID Z=2", "LINE Z=-1 F=100", "RAPID Z=2", "LINE Z=-2 F=100", "RAPID Z=2", "LINE Z=-3 F=100",
+                "RAPID Z=2",
+            ],
+            Describe(chip.Vm.LastCycleMotions));
+        Assert.Equal(
+            ["RAPID Z=2", "LINE Z=-1 F=100", "RAPID Z=2", "RAPID Z=2", "LINE Z=-2 F=100", "RAPID Z=2"],
+            Describe(peck.Vm.LastCycleMotions));
+    }
+
+    // D357: on Siemens without peck_clearance the re-entry is the control's automatic _DIS1: 0.6 mm up to a drilling
+    // depth of 30 mm, otherwise the depth / 50, at most 7 mm.
+    [Theory]
+    [InlineData("-20", "10", "-9.4")]
+    [InlineData("-40", "20", "-19.2")]
+    [InlineData("-400", "200", "-193")]
+    public void CycleCall_PeckOnSiemensWithoutKey_ReentersAtTheAutomaticDistance(
+        string depth, string peck, string reentry)
+    {
+        VmHarness vm = Expanding(Controller.Siemens, new CyclesConfig()).Execute(
+            "RAPID X=0 Y=0 Z=10", $"CYCLE=PECK SURFACE=0 CLEARANCE=2 DEPTH={depth} PECK={peck} CYCLE_F=100",
+            "CYCLE_CALL");
+
+        Assert.Equal(
+            [
+                "RAPID Z=2", $"LINE Z=-{peck} F=100", "RAPID Z=2", $"RAPID Z={reentry}", $"LINE Z={depth} F=100",
+                "RAPID Z=2",
+            ],
+            Describe(vm.Vm.LastCycleMotions));
+    }
+
+    // D357: the keys are millimetres whatever the units; under UNITS=INCH the lift is converted.
+    [Fact]
+    public void CycleCall_ChipBreakLiftUnderInch_IsConvertedFromMillimetres()
+    {
+        VmHarness vm = new VmHarness(Machine(Controller.Fanuc, new CyclesConfig { ChipBreakLift = 2.54m }),
+            new VmOptions { ExpandCycles = true }).Execute("UNITS=INCH SPINDLE=CW RPM=1000");
+        vm.Execute("RAPID X=0 Y=0 Z=1", "CYCLE=CHIP_BREAK SURFACE=0 CLEARANCE=0.1 DEPTH=-1 PECK=0.5 CYCLE_F=10",
+            "CYCLE_CALL");
+
+        Assert.Equal(
+            ["RAPID Z=0.1", "LINE Z=-0.5 F=10", "RAPID Z=-0.4", "LINE Z=-1 F=10", "RAPID Z=0.1"],
+            Describe(vm.Vm.LastCycleMotions));
+    }
+
+    // D357: on Heidenhain the re-entry is the cycle's Q200, the gap between SURFACE and CLEARANCE.
+    [Fact]
+    public void CycleCall_PeckOnHeidenhain_ReentersAtTheSafetyClearance()
+    {
+        VmHarness vm = Expanding(Controller.Heidenhain, new CyclesConfig()).Execute(
+            "RAPID X=0 Y=0 Z=10", "CYCLE=PECK SURFACE=0 CLEARANCE=2 DEPTH=-6 PECK=4 CYCLE_F=100", "CYCLE_CALL");
+
+        Assert.Equal(
+            ["RAPID Z=2", "LINE Z=-4 F=100", "RAPID Z=2", "RAPID Z=-2", "LINE Z=-6 F=100", "RAPID Z=2"],
             Describe(vm.Vm.LastCycleMotions));
     }
 
@@ -228,6 +352,86 @@ public sealed class CycleCallTests
         vm.AssertNoDiagnostics();
         Assert.Equal(["RAPID Z=2", "LINE Z=-10 F=150", "LINE Z=2 F=150"], Describe(vm.Vm.LastCycleMotions));
         Assert.Equal(Workpiece(5m), vm.Position("X"));
+    }
+
+    // D190 change 2: under CYCLE_RETRACT=SAFE, TAP feeds out only to CLEARANCE and rapids the rest to SAFE, on every
+    // family.
+    [Theory]
+    [InlineData(Controller.Fanuc)]
+    [InlineData(Controller.Siemens)]
+    public void CycleCall_TapUnderSafe_FeedsToClearanceAndRapidsToSafe(Controller controller)
+    {
+        VmHarness vm = Expanding(controller, new CyclesConfig { ReamFeedOut = ReamFeedOut.Safe }).Execute(
+            "RAPID X=5 Y=5 Z=60", "CYCLE=TAP CLEARANCE=2 DEPTH=-10 SAFE=50 CYCLE_RETRACT=SAFE PITCH=1.5 CYCLE_F=150",
+            "CYCLE_CALL");
+
+        Assert.Equal(
+            ["RAPID Z=2", "LINE Z=-10 F=150", "LINE Z=2 F=150", "RAPID Z=50"], Describe(vm.Vm.LastCycleMotions));
+        Assert.Equal(Workpiece(50m), vm.Position("Z"));
+    }
+
+    // D190 change 1: REAM feeds out at CYCLE_F; under CYCLE_RETRACT=CLEARANCE it stops at CLEARANCE.
+    [Fact]
+    public void CycleCall_ReamUnderClearance_FeedsOutToClearance()
+    {
+        VmHarness vm = Expanding().Execute(
+            "RAPID X=0 Y=0 Z=10", "CYCLE=REAM CLEARANCE=2 DEPTH=-10 CYCLE_F=80", "CYCLE_CALL");
+
+        Assert.Equal(["RAPID Z=2", "LINE Z=-10 F=80", "LINE Z=2 F=80"], Describe(vm.Vm.LastCycleMotions));
+    }
+
+    // D378: under CYCLE_RETRACT=SAFE, REAM feeds to the plane of ream_feed_out and rapids the rest; absent, the family
+    // default applies, CLEARANCE on Fanuc and Heidenhain, SAFE on Siemens.
+    [Theory]
+    [InlineData(Controller.Fanuc, null, "LINE Z=2 F=80", "RAPID Z=50")]
+    [InlineData(Controller.Heidenhain, null, "LINE Z=2 F=80", "RAPID Z=50")]
+    [InlineData(Controller.Siemens, null, "LINE Z=50 F=80", null)]
+    [InlineData(Controller.Fanuc, ReamFeedOut.Safe, "LINE Z=50 F=80", null)]
+    [InlineData(Controller.Siemens, ReamFeedOut.Clearance, "LINE Z=2 F=80", "RAPID Z=50")]
+    public void CycleCall_ReamUnderSafe_FeedsToTheReamFeedOutPlane(
+        Controller controller, ReamFeedOut? feedOut, string feedOutMotion, string? rapid)
+    {
+        VmHarness vm = Expanding(controller, new CyclesConfig { ReamFeedOut = feedOut }).Execute(
+            "RAPID X=0 Y=0 Z=60", "CYCLE=REAM CLEARANCE=2 DEPTH=-10 SAFE=50 CYCLE_RETRACT=SAFE CYCLE_F=80",
+            "CYCLE_CALL");
+
+        var expected = new List<string> { "RAPID Z=2", "LINE Z=-10 F=80", feedOutMotion };
+        if (rapid is not null)
+        {
+            expected.Add(rapid);
+        }
+
+        Assert.Equal(expected, Describe(vm.Vm.LastCycleMotions));
+        Assert.Equal(Workpiece(50m), vm.Position("Z"));
+    }
+
+    // D190: BORE retracts at rapid, after the spindle stop, which moves nothing.
+    [Fact]
+    public void CycleCall_Bore_RetractsAtRapid()
+    {
+        VmHarness vm = Expanding().Execute(
+            "RAPID X=0 Y=0 Z=10", "CYCLE=BORE CLEARANCE=2 DEPTH=-10 CYCLE_F=80", "CYCLE_CALL");
+
+        Assert.Equal(["RAPID Z=2", "LINE Z=-10 F=80", "RAPID Z=2"], Describe(vm.Vm.LastCycleMotions));
+    }
+
+    // D188: a CLEARANCE from an expression in STATIC mode counts toward the WARNING "unresolved expression" and is no
+    // ERROR; the motions to it and the drilling axis afterwards are unknown.
+    [Fact]
+    public void CycleCall_ClearanceFromAnExpression_CountsAsUnresolvedAndLeavesTheAxisUnknown()
+    {
+        string text = VmHarness.File(
+            "UNITS=MM SPINDLE=CW RPM=1000", "RAPID X=0 Y=0 Z=50", "CYCLE=DRILL CLEARANCE={$Q1} DEPTH=-10 CYCLE_F=100",
+            "CYCLE_CALL X=10", "PROGRAM=END");
+
+        Assert.Equal([DiagnosticCodes.UnresolvedExpressions], VmHarness.Run(text, VmMachines.Default()).Codes());
+
+        VmHarness vm = Expanding().Execute(
+            "RAPID X=0 Y=0 Z=50", "CYCLE=DRILL CLEARANCE={$Q1} DEPTH=-10 CYCLE_F=100", "CYCLE_CALL X=10");
+
+        vm.AssertNoDiagnostics();
+        Assert.Equal(["RAPID X=10", "RAPID Z=?", "LINE Z=-10 F=100", "RAPID Z=?"], Describe(vm.Vm.LastCycleMotions));
+        Assert.Equal(AxisPosition.Unknown, vm.Position("Z"));
     }
 
     // VM 1, 3.3: a DEPTH from an expression is not evaluated in STATIC mode; the depth is unknown, the call is no
@@ -342,6 +546,19 @@ public sealed class CycleCallTests
     {
         return new VmHarness(VmMachines.Default(), new VmOptions { ExpandCycles = true })
             .Execute("UNITS=MM SPINDLE=CW RPM=1000");
+    }
+
+    // The default machine as a machine of one family with its [cycles] keys (D357, D378).
+    private static VmHarness Expanding(Controller controller, CyclesConfig cycles)
+    {
+        return new VmHarness(Machine(controller, cycles), new VmOptions { ExpandCycles = true })
+            .Execute("UNITS=MM SPINDLE=CW RPM=1000");
+    }
+
+    private static MachineConfig Machine(Controller controller, CyclesConfig cycles)
+    {
+        MachineConfig machine = VmMachines.Default();
+        return machine with { Machine = machine.Machine with { Controller = controller }, Cycles = cycles };
     }
 
     private static AxisPosition Workpiece(decimal value)

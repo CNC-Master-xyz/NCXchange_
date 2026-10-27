@@ -178,6 +178,7 @@ public sealed class HeidenhainCompiler : CompilerBase
             WriteToolChange = (values, suffix) => WriteToolChange(values, suffix),
             WritePreload = () => WritePreload(),
             CommentText = CommentText,
+            PointRegisters = PointRegistersOf(Step.After),
         };
     }
 }

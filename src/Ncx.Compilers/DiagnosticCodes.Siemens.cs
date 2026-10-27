@@ -54,6 +54,12 @@ public static partial class DiagnosticCodes
     public const string SiemensRawMFunction = "CMP513";
 
     /// <summary>
+    /// CMP514: a measurement point that the edge form cannot map: under edge_numbering = "flat" a point without a
+    /// [[tool_point]] row (machine-config 3, D373).
+    /// </summary>
+    public const string SiemensToolPointNotMapped = "CMP514";
+
+    /// <summary>
     /// CMP530: ORIGIN names a datum beyond G599, the last settable frame of the control (controllers siemens.md 4;
     /// controller-mapping 1, ORIGIN).
     /// </summary>

@@ -15,13 +15,14 @@ public static partial class MachineConfigLoader
     // The tables of machine-config 1 to 9 in the order of the specification, [raw] with F23.
     private static readonly string[] s_rootTables =
     [
-        "machine", "format", "tool_change", "home", "setpos", "roles", "resource", "axis", "positions", "dynamics",
+        "machine", "format", "tool_change", "tool_points", "tool_point", "home", "setpos", "roles", "resource", "axis",
+        "positions", "dynamics",
         "diameter", "spindle", "spindle_mode", "spindle_sync", "workpiece", "sync", "coolant", "func", "func_meta",
-        "transform", "retract", "tolerance", "raw", "cycles", "cycle", "variables", "system_variables", "node",
+        "transform", "retract", "tolerance", "stock", "raw", "cycles", "cycle", "variables", "system_variables", "node",
     ];
 
     // The tables the file writes [[name]], one per entry.
-    private static readonly string[] s_rootTableArrays = ["resource", "axis", "cycle", "node"];
+    private static readonly string[] s_rootTableArrays = ["tool_point", "resource", "axis", "cycle", "node"];
 
     /// <summary>
     /// Loads the machine file at a path. A file that cannot be read is an I/O error, thrown for the composition root,
@@ -54,12 +55,15 @@ public static partial class MachineConfigLoader
         // Every table of machine-config 1 to 9 is known; any other is a WARNING that names the nearest one, because
         // the schema is a sketch until the compiler exists (P2-01).
         ConfigTable root = document.Root("machine-config");
-        root.WarnUnknownTables(s_rootTables, s_rootTableArrays);
+        // ncx_schema is the one root key that is no table: the version of the schema the file is written in (D348).
+        root.WarnUnknownTables([SchemaVersion.Key, .. s_rootTables], s_rootTableArrays);
+        SchemaVersion.Check(root, "machine file");
 
         // [machine] names the machine and its controller (machine-config 1).
-        // TODO(question): machine-config names no required key. The loader requires [machine] with name and
-        // controller, id and type of every [[resource]], id, ncx and kind of every [[axis]] and id of every [[node]],
-        // the keys without which a record cannot be built or referenced; every other key is optional (D138).
+        // The required keys are [machine] name and controller, id and type of every [[resource]], id, ncx and kind of
+        // every [[axis]] and id of every [[node]], the keys without which a record cannot be built or referenced;
+        // every other key is optional with its documented effect, and compiler needs are checked by the compiler
+        // (D138, machine-config 1).
         if (!root.Has("machine"))
         {
             diagnostics.Error(1, DiagnosticCodes.MissingKey,
@@ -69,6 +73,7 @@ public static partial class MachineConfigLoader
         ConfigTable? machineTable = root.Table("machine", section: "machine-config 1");
         List<AxisDef> axes = ReadAxes(root);
         MachineIdentity identity = ReadMachine(machineTable);
+        ConfigTable? coolantTable = root.Table("coolant", section: "machine-config 5");
 
         // [[cycle]]: the catalog entries of the machine file override the cycle catalog of its controller family per
         // machine; the catalog file that [cycles] names goes beneath them once it is loaded (machine-config 6,
@@ -82,6 +87,7 @@ public static partial class MachineConfigLoader
             ToolTable = machineTable?.Text("tool_table"),
             Format = ReadFormat(root.Table("format", section: "machine-config 2")),
             ToolChange = ReadToolChange(root.Table("tool_change", section: "machine-config 3")),
+            ToolPoints = ReadToolPoints(root),
             Home = ReadHome(root.Table("home", section: "machine-config 3")),
             Setpos = ReadSetpos(root.Table("setpos", section: "machine-config 3")),
             Roles = ReadRoles(root.Table("roles", section: "machine-config 4")),
@@ -96,14 +102,16 @@ public static partial class MachineConfigLoader
                 root.Table("spindle_mode", section: "machine-config 5"), "spindle_mode", s_spindleModeStates,
                 spindleLimits: false),
             SpindleSync = ReadSpindleSync(root.Table("spindle_sync", section: "machine-config 5")),
+            SpindleSyncPair = ReadSpindleSyncPair(root.Table("spindle_sync", section: "machine-config 5")),
             Workpiece = ReadWorkpiece(root.Table("workpiece", section: "machine-config 5")),
             Sync = ReadSync(root.Table("sync", section: "machine-config 5")),
-            Coolant = ReadNamedTables(root.Table("coolant", section: "machine-config 5"), s_coolantStates),
+            Coolant = ReadNamedTables(coolantTable, s_coolantStates),
             Functions = ReadNamedTables(root.Table("func", section: "machine-config 5"), null),
             FuncMeta = ReadFuncMeta(root.Table("func_meta", section: "machine-config 5")),
             Transform = ReadTransform(root.Table("transform", section: "machine-config 5")),
             Retract = ReadRetract(root.Table("retract", section: "machine-config 5")),
             Tolerance = ReadTolerance(root.Table("tolerance", section: "machine-config 5")),
+            Stock = ReadStock(root.Table("stock", section: "machine-config 5")),
             Raw = ReadRaw(root.Table("raw", section: "machine-config 5")),
             Cycles = ReadCycles(root.Table("cycles", section: "machine-config 6")),
             CycleEntries = cycleEntries,
@@ -114,6 +122,24 @@ public static partial class MachineConfigLoader
         };
 
         CheckDefaults(machine, machineTable?.Line ?? 1, diagnostics);
+        CheckStandardCoolant(machine, coolantTable, diagnostics);
+        CheckSpindleSyncPair(machine, root.Table("spindle_sync", section: "machine-config 5"), diagnostics);
         return TomlDocument.ErrorCount(diagnostics) > errorsBefore ? null : machine;
+    }
+
+    // [coolant] STANDARD is required: the VM always accepts the channel STANDARD that a bare COOLANT addresses, so
+    // the compiler must always have its template; a file without it is the ERROR CFG004 on the line of [coolant], or
+    // on line 1 without the table (D130, virtual machine 2.5 and 3.8).
+    private static void CheckStandardCoolant(MachineConfig machine, ConfigTable? coolant, Diagnostics diagnostics)
+    {
+        if (machine.Coolant.ContainsKey("STANDARD"))
+        {
+            return;
+        }
+
+        string where = coolant is null ? "The machine file has no [coolant] table" : "[coolant] has no STANDARD";
+        diagnostics.Error(coolant?.Line ?? 1, DiagnosticCodes.MissingKey,
+            $"{where}; the coolant channel STANDARD, which a bare COOLANT addresses, is required "
+            + "(machine-config 5, D130).");
     }
 }

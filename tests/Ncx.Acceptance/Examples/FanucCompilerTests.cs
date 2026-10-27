@@ -61,9 +61,8 @@ public sealed class FanucCompilerTests : IDisposable
 
     // P3-06 done when: 2.5D_FRAESEN.ncx compiles to a program equivalent to 2.5D_FRAESEN.fanuc.nc. The example gives
     // the Fanuc reading two blocks otherwise (its note 4: RAPID Z=0 FRAME=MACHINE where the Fanuc source writes G91 G28
-    // Z0), which compile to G53; D217 recommends the round trip above as the Fanuc check, and every other line equals.
-    // TODO(question): D217: what the two readings of 2.5D_FRAESEN must share is open; the two machine-frame moves of
-    // note 4 are the listed difference, until D217 is answered.
+    // Z0), which compile to G53; P3-06 checks the Fanuc output by the round trip above (D217), and here every other
+    // line equals, the two machine-frame moves of note 4 being the listed difference.
     [Fact]
     public void Compile_25DFraesenExample_EqualsTheSourceExceptTheMovesOfNote4()
     {

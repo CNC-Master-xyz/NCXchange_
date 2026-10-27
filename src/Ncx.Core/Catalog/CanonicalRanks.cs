@@ -2,8 +2,10 @@ namespace Ncx.Core.Catalog;
 
 /// <summary>
 /// The rank table of D90, the canonical order of language 5 rule 6 bucket by bucket: a word of lower rank stands first.
-/// The ranks go in steps of ten, so that a later word fits between two others without renumbering (phase 0, P0-03);
-/// the table generated from the catalog, docs/spec/generated/word-catalog.md, shows them next to the words.
+/// The ranks of D90 go in steps of ten, so that a later word fits between two others without renumbering (phase 0,
+/// P0-03); a later word takes a rank between two steps, and the steps stay as they are (D372: TOOL_POINT 435,
+/// TIP_OFFSET 465, POINT_RADIUS 467). The table generated from the catalog, docs/spec/generated/word-catalog.md, shows
+/// them next to the words.
 /// </summary>
 internal static class CanonicalRanks
 {
@@ -67,12 +69,16 @@ internal static class CanonicalRanks
     public const int F = 400;
     public const int FeedMode = 410;
 
-    // Bucket 9: the tool words.
+    // Bucket 9: the tool words; the point of the tool after TOOL, because the point decides which registers the
+    // offset words would name, and its tip offset and register radius after the registers (D372).
     public const int Preload = 420;
     public const int Tool = 430;
+    public const int ToolPoint = 435;
     public const int Offset = 440;
     public const int OffsetLen = 450;
     public const int OffsetRad = 460;
+    public const int TipOffset = 465;
+    public const int PointRadius = 467;
     public const int Comp = 470;
 
     // Bucket 10: the spindle words.

@@ -35,9 +35,11 @@ internal sealed class StateChanges
     // vector and the surface normal (2.2), which trace shows as well; the variables have VAR_CHANGE, and the program,
     // flow and channel rows (2.1, 2.7, 2.8) their events of their own; the block items (verb, FRAME, SKIP) end with
     // their block and never differ between Before and After.
-    // TODO(question): virtual machine 7 names "any modal change" and 6 "every changed state variable" without a list;
-    // STATE_CHANGE covers the variables above, without the program rows, lastHolder and the flow and channel rows,
-    // until D197 is answered.
+    // D197: STATE_CHANGE covers every VM 2 variable a word sets that outlives its block: the frame rows of 2.1, feed,
+    // mode, compensation, the position per axis, tool vector and normal of 2.2, tool, preload and offsets per holder,
+    // the spindle rows per spindle, coolant channels and functions, and the cycle; the variables go to VAR_CHANGE, and
+    // the program, flow and channel rows and lastHolder are out. Names are the state keys of VM 3.10 with the resource
+    // id as address, positions by axis.
     public static List<StateChangeEvent> Between(Block block, ChannelSnapshot before, ChannelSnapshot after)
     {
         var changes = new StateChanges(block, before, after);
@@ -119,6 +121,33 @@ internal sealed class StateChanges
         Compare("COMP", EventText.Ident(before.Comp), EventText.Ident(after.Comp));
         CompareVector(["TX", "TY", "TZ"], before.ToolVector, after.ToolVector);
         CompareVector(["NX", "NY", "NZ"], before.SurfaceNormal, after.SurfaceNormal);
+        CompareTip();
+    }
+
+    // TIP:axis, the tip on the tool axis, derived and never stored (D374); a row only where a tip offset stands
+    // before or after the block, so that a trace written before the point words keeps its rows, and none where the
+    // tool axis is tilted and no tip is derived.
+    private void CompareTip()
+    {
+        decimal offsetBefore = TipRules.ActiveHolder(_before)?.TipOffset ?? 0m;
+        decimal offsetAfter = TipRules.ActiveHolder(_after)?.TipOffset ?? 0m;
+        if (offsetBefore == 0m && offsetAfter == 0m)
+        {
+            return;
+        }
+
+        string axis = TipRules.ToolAxis(_after.Frame.Workplane);
+        IReadOnlyDictionary<string, AxisPosition>? before = TipRules.Tip(_before, _before.Motion.Position);
+        IReadOnlyDictionary<string, AxisPosition>? after = TipRules.Tip(_after, _after.Motion.Position);
+        if (after is null || !after.TryGetValue(axis, out AxisPosition tip))
+        {
+            return;
+        }
+
+        AxisPosition old = before is not null && before.TryGetValue(axis, out AxisPosition known)
+            ? known
+            : AxisPosition.Unknown;
+        Compare("TIP:" + axis, EventText.Position(old), EventText.Position(tip));
     }
 
     // The tool rows of virtual machine 2.3 per holder; a holder created on the spot during the block (D103) starts
@@ -135,6 +164,11 @@ internal sealed class StateChanges
             Compare("OFFSET:LEN:" + id, Integer(before?.OffsetLen ?? 0), Integer(after.OffsetLen));
             Compare("OFFSET:RAD:" + id, Integer(before?.OffsetRad ?? 0), Integer(after.OffsetRad));
             Compare("OFFSET:" + id, Integer(before?.OffsetCombined ?? 0), Integer(after.OffsetCombined));
+
+            // The measurement point of the holder, named like the offsets (D372).
+            Compare("TOOL_POINT:" + id, Integer(before?.ToolPoint ?? 1), Integer(after.ToolPoint));
+            CompareHolderNumber("TIP_OFFSET", id, before?.TipOffset ?? 0m, after.TipOffset);
+            CompareHolderNumber("POINT_RADIUS", id, before?.PointRadius ?? 0m, after.PointRadius);
         }
     }
 
@@ -182,6 +216,13 @@ internal sealed class StateChanges
     private void CompareNumber(string key, string spindle, decimal? before, decimal? after)
     {
         string stateKey = key + ":" + spindle;
+        Compare(stateKey, EventText.Number(before, _before, stateKey), EventText.Number(after, _after, stateKey));
+    }
+
+    // A number of a holder, empty when UNKNOWN under its state key, TIP_OFFSET:H1 (virtual machine 1).
+    private void CompareHolderNumber(string key, string holder, decimal before, decimal after)
+    {
+        string stateKey = key + ":" + holder;
         Compare(stateKey, EventText.Number(before, _before, stateKey), EventText.Number(after, _after, stateKey));
     }
 

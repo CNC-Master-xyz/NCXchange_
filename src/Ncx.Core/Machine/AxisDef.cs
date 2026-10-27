@@ -77,6 +77,21 @@ public sealed record AxisDef
     public Programming? Programming { get; init; }
 
     /// <summary>
+    /// parallel: the linear axis X, Y or Z a rotary axis turns about, the cylinder axis of CYLINDER=n while its owner
+    /// holds the workpiece; null when left out, read as Z. The rotary axis of a work spindle always turns about Z
+    /// (machine-config 4, D146).
+    /// </summary>
+    public string? Parallel { get; init; }
+
+    /// <summary>
+    /// frames_in_diameter: true when the control keeps frame offsets and actual-value variables of this diameter axis
+    /// as diameters (Siemens MD20360 $MC_TOOL_PARAMETER_DEF_MASK bits 3 and 6, Funktionshandbuch Grundfunktionen 2012
+    /// p. 902-903); false, the default, when they are radii, as on a Siemens facing axis (p. 901-902). Readers and
+    /// compilers read it for TRANS X and $AA_IM (machine-config 4, D125, D216, D240, D388).
+    /// </summary>
+    public bool FramesInDiameter { get; init; }
+
+    /// <summary>
     /// home: reference point 1 in machine coordinates, for HOME (D100); null for an axis without a reference point.
     /// </summary>
     public decimal? Home { get; init; }
@@ -85,6 +100,20 @@ public sealed record AxisDef
     /// home2: reference point 2 in machine coordinates, for HOME under POINT=2 (D100); null when left out.
     /// </summary>
     public decimal? Home2 { get; init; }
+
+    /// <summary>
+    /// The value of home, home2 or limits as the virtual machine stores it, a radius (D28): the file writes the X
+    /// values of an axis the way it is programmed, diameters for programming = "diameter" or "switchable", so the VM
+    /// halves them once where it takes them; radii for "radius" or no programming are taken as written (machine-config
+    /// 4, D137). [positions] is not converted: {position:NAME} becomes an X word, which the VM halves under
+    /// DIAMETER=ON like every X word.
+    /// </summary>
+    /// <param name="value">home, home2 or one of the limits as the file writes it; null when left out.</param>
+    public decimal? AsStoredRadius(decimal? value)
+    {
+        bool diameters = Programming is Machine.Programming.Diameter or Machine.Programming.Switchable;
+        return value is decimal written && diameters ? written / 2m : value;
+    }
 
     /// <summary>
     /// clamp: the clamping templates of a rotary axis, ON = "M10", OFF = "M11"; empty when left out.

@@ -98,10 +98,60 @@ public sealed class CycleEntryTests
             Native = "G71",
             Params = new Dictionary<string, string> { ["CYCLE_F"] = "F" },
             Contour = ["P", "Q"],
-            RuleWords = ["AXIS"],
         };
 
-        Assert.Equal(["CYCLE_F", "AXIS", "CONTOUR"], roughTurn.Words);
+        Assert.Equal(["CYCLE_F", "CONTOUR"], roughTurn.Words);
+    }
+
+    // D157: the rule words follow from the params of every entry, a catalog cycle of its own name included: a
+    // Heidenhain entry that maps SAFE = "Q204" carries CYCLE_RETRACT, and AXIS stands beside DEPTH.
+    [Fact]
+    public void RuleWords_HeidenhainCatalogCycleMappingQ204_CarryCycleRetractAndAxis()
+    {
+        var pocket = new CycleEntry
+        {
+            Name = "RECT_POCKET",
+            Native = "251",
+            Params = new Dictionary<string, string> { ["DEPTH"] = "Q201", ["SAFE"] = "Q204" },
+            Family = Controller.Heidenhain,
+        };
+
+        Assert.Equal(["CYCLE_RETRACT", "AXIS"], pocket.RuleWords);
+    }
+
+    // D157: a Siemens entry that maps SAFE = "RTP" carries CYCLE_RETRACT; one that maps _AXN carries AXIS through it
+    // and not as a rule word.
+    [Fact]
+    public void RuleWords_SiemensEntryMappingAxn_CarryCycleRetractOnly()
+    {
+        var tap = new CycleEntry
+        {
+            Name = "TAP",
+            Native = "CYCLE84",
+            Params = new Dictionary<string, string> { ["DEPTH"] = "DP", ["SAFE"] = "RTP", ["AXIS"] = "_AXN" },
+            Family = Controller.Siemens,
+        };
+
+        Assert.Equal(["CYCLE_RETRACT"], tap.RuleWords);
+    }
+
+    // D157, D359: a Fanuc entry whose native is the tapping code carries PITCH, F / S or F by the feed mode; an entry
+    // that maps no R carries no plane rule.
+    [Theory]
+    [InlineData("G84", "SURFACE SAFE CYCLE_RETRACT AXIS PITCH")]
+    [InlineData("G88", "SURFACE SAFE CYCLE_RETRACT AXIS PITCH")]
+    [InlineData("G81", "SURFACE SAFE CYCLE_RETRACT AXIS")]
+    public void RuleWords_FanucEntryMappingR_CarryThePlaneRulesAndThePitchOfTheTappingCode(string native, string words)
+    {
+        var entry = new CycleEntry
+        {
+            Name = "TAP",
+            Native = native,
+            Params = new Dictionary<string, string> { ["DEPTH"] = "Z", ["CLEARANCE"] = "R" },
+            Family = Controller.Fanuc,
+        };
+
+        Assert.Equal(words.Split(' '), entry.RuleWords);
     }
 
     // A word that a rule carries and params maps as well is one word of the entry.
@@ -112,11 +162,11 @@ public sealed class CycleEntryTests
         {
             Name = "DRILL",
             Native = "G81",
-            Params = new Dictionary<string, string> { ["DEPTH"] = "Z" },
-            RuleWords = ["DEPTH", "SAFE"],
+            Params = new Dictionary<string, string> { ["DEPTH"] = "Z", ["CLEARANCE"] = "R", ["SAFE"] = "R" },
+            Family = Controller.Fanuc,
         };
 
-        Assert.Equal(["DEPTH", "SAFE"], drill.Words);
+        Assert.Equal(["DEPTH", "CLEARANCE", "SAFE", "SURFACE", "CYCLE_RETRACT", "AXIS"], drill.Words);
     }
 
     // The native name that carries a word, or nothing for a word the entry does not map (machine-config 6).
@@ -249,7 +299,7 @@ public sealed class CycleEntryTests
                 ["CYCLE_DWELL"] = "P",
                 ["CYCLE_F"] = "F",
             },
-            RuleWords = ["SURFACE", "SAFE", "CYCLE_RETRACT", "AXIS"],
+            Family = Controller.Fanuc,
         };
     }
 }

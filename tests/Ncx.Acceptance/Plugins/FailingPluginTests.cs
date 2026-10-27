@@ -118,7 +118,7 @@ public sealed class FailingPluginTests : IDisposable
             StringComparison.Ordinal);
     }
 
-    // Implementation 17, P7-01, and D205 as recommended: compile reports the block writer that throws, and writes no
+    // Implementation 17, P7-01, and D205: compile reports the block writer that throws, and writes no
     // file after the ERROR, because that file goes to a control.
     [Fact]
     public void Compile_BlockWriterThatThrows_IsReportedAndWritesNoFile()

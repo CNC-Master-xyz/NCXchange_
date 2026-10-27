@@ -76,6 +76,48 @@ public sealed class RestoreStackTests
         StateAssert.Same(saved, harness.Vm.Snapshot());
     }
 
+    // D202: the frame and path keys come back too: WORKPLANE, TCPM, POLAR, CYLINDER, ROTARY_PATH, ROTARY_FEED and
+    // TOLERANCE with TOLERANCE:ROTARY and TOLERANCE_MODE.
+    [Theory]
+    [InlineData("WORKPLANE=ZX", "WORKPLANE", "WORKPLANE=XY")]
+    [InlineData("TCPM=ON", "TCPM", "TCPM=OFF")]
+    [InlineData("POLAR=ON", "POLAR", "POLAR=OFF")]
+    [InlineData("CYLINDER=40", "CYLINDER", "CYLINDER=OFF")]
+    [InlineData("ROTARY_PATH=FULL", "ROTARY_PATH", "ROTARY_PATH=SHORTEST")]
+    [InlineData("ROTARY_FEED=DEG_MIN", "ROTARY_FEED", "ROTARY_FEED=MM_MIN")]
+    [InlineData("TOLERANCE=0.01 TOLERANCE:ROTARY=0.1 TOLERANCE_MODE=ROUGH", "TOLERANCE", "TOLERANCE=OFF")]
+    [InlineData("TOLERANCE=0.01", "TOLERANCE", "TOLERANCE=0.02 TOLERANCE:ROTARY=0.2")]
+    [InlineData("TOLERANCE=OFF", "TOLERANCE", "TOLERANCE=0.02")]
+    public void D202_FrameKeys_PutTheVariableBack(string set, string stateKey, string change)
+    {
+        var harness = new VmHarness(VmMachines.MillTurn());
+        harness.Execute(set);
+        ChannelSnapshot saved = harness.Vm.Snapshot();
+        harness.Vm.Execute(Generated("@SAVE=" + stateKey));
+        harness.Execute(change);
+
+        harness.Vm.Execute(Generated("@RESTORE=" + stateKey));
+
+        harness.AssertNoDiagnostics();
+        StateAssert.Same(saved, harness.Vm.Snapshot());
+    }
+
+    // D202: ORIGIN and UNITS stay out on purpose, and so do the chain words, the tool and the variables.
+    [Theory]
+    [InlineData("@SAVE=ORIGIN")]
+    [InlineData("@SAVE=UNITS")]
+    [InlineData("@SAVE=SETPOS")]
+    [InlineData("@SAVE=PRELOAD")]
+    [InlineData("@SAVE=OFFSET")]
+    public void D202_KeysLeftOut_AreAnError(string text)
+    {
+        var harness = new VmHarness(VmMachines.MillTurn());
+
+        harness.Vm.Execute(Generated(text));
+
+        RuleAssert.Only(harness, DiagnosticCodes.StateKeyNotKept);
+    }
+
     // A value that was none, a feed never set or a function without a state, is none again: no word sets none
     // (virtual machine 2.2, 2.5, 3.10).
     [Theory]

@@ -1,4 +1,5 @@
 using Ncx.Core.Geometry;
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.State;
 
@@ -59,11 +60,13 @@ internal static class RetractRules
         // Bare, to the machine limit of that axis: the limits from the configuration, unknown when there are none. The
         // limits are machine coordinates (D100), so the axis is known in the MACHINE frame afterwards and unknown in
         // the workpiece frame, as after a machine-frame move (D35). Away from the workpiece is the upper limit: the
-        // tool axis points out of the workpiece toward the tool (D57).
+        // tool axis points out of the workpiece toward the tool (D57). On an axis programmed in diameters the limit is
+        // a diameter and is halved into the radius the VM stores (D137).
         Word retract = block.Verb ?? throw new InvalidOperationException("RetractRules executes RETRACT blocks only.");
         if (retract.Value is NoValue)
         {
-            state.Motion.Position[toolAxis] = context.Machine.ResolveAxis(toolAxis)?.Max is decimal limit
+            AxisDef? definition = context.Machine.ResolveAxis(toolAxis);
+            state.Motion.Position[toolAxis] = definition?.AsStoredRadius(definition.Max) is decimal limit
                 ? new AxisPosition(limit, PositionFrame.Machine, Known: true)
                 : AxisPosition.Unknown;
             return;

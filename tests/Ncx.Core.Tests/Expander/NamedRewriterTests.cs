@@ -38,7 +38,7 @@ public sealed class NamedRewriterTests
             ExpanderMachines.Mill(), named);
 
         Diagnostic error = Assert.Single(expanded.Diagnostics.Items);
-        Assert.StartsWith("MyShopRules \"FOO=1\": ", error.Message, StringComparison.Ordinal);
+        Assert.StartsWith("MyShopRules (around TOOL): \"FOO=1\": ", error.Message, StringComparison.Ordinal);
     }
 
     // A rewriter that answers for another under a name of its own, as the plugin loader puts one in front of every

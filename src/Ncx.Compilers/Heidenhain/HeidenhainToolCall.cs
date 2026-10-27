@@ -1,3 +1,4 @@
+using System.Globalization;
 using Ncx.Config.Templates;
 using Ncx.Core.Machine;
 using Ncx.Core.Model;
@@ -30,9 +31,64 @@ internal static class HeidenhainToolCall
     {
         TakeOffsets(writing);
         WriteChange(writing);
+        WritePointChange(writing);
         WritePreload(writing);
         WriteSpeeds(writing);
         CheckWorkplane(writing);
+    }
+
+    // The called tool with the index of its named point: TOOL CALL 5.1 for point 2, the plain number for point 1 and
+    // for a tool whose program named no point (D373 improvement 1, D393; iTNC 530 Klartext 2010 p. 165-166).
+    private static void SetIndexedTool(HeidenhainBlock writing, TemplateValues values)
+    {
+        if (writing.PointRegisters?.Index is int index and > 0
+            && writing.After.LastHolder is string holder
+            && writing.After.Holders.TryGetValue(holder, out HolderSnapshot? state)
+            && state.SpindleTool.Number is int number)
+        {
+            values.Set("tool", string.Create(CultureInfo.InvariantCulture, $"{number}.{index}"));
+        }
+    }
+
+    // A point change of the tool in the spindle is an indexed TOOL CALL with the tool axis and the speed the control
+    // has (D373 improvement 1). The call carries a tool number, so the TNC 640 runs its change macro (Klartext
+    // 892903-18 p. 123), and on the iTNC 530 that depends on MP7480.0 and the builder's macro (Technisches Handbuch
+    // p. 1614): the WARNING CMP123, unless point_change = "call" says the builder accepts it. TIP_OFFSET and
+    // POINT_RADIUS are never written, no DL, DR or DR2 (D375).
+    private static void WritePointChange(HeidenhainBlock writing)
+    {
+        writing.TakeAll("TIP_OFFSET");
+        writing.TakeAll("POINT_RADIUS");
+        if (writing.TakeAll("TOOL_POINT").Count == 0 || writing.Block.Has("TOOL")
+            || writing.PointRegisters?.Index is not int
+            || writing.After.LastHolder is not string holder
+            || !writing.After.Holders.TryGetValue(holder, out HolderSnapshot? state)
+            || state.SpindleTool == new ToolRef(0))
+        {
+            return;
+        }
+
+        MachineConfig machine = writing.Machine;
+        string? spindle = SpindleOf(machine, holder);
+        if (SpeedOf(writing, writing.Step, spindle) is not string speed)
+        {
+            return;
+        }
+
+        var values = new TemplateValues();
+        values.Set("tool", state.SpindleTool.ToString());
+        SetIndexedTool(writing, values);
+        values.Set("rpm", speed);
+        values.Set("axis", HeidenhainAxes.LetterOf(writing, HeidenhainAxes.ToolAxis(writing.After.Frame.Workplane)));
+        writing.Template(machine.ToolChange?.Change, "[tool_change] change (machine-config 3, D373)", values);
+        if (machine.ToolPoints is { PointChangeByCall: false })
+        {
+            writing.Warning(DiagnosticCodes.HeidenhainToolPoint,
+                $"Point {state.ToolPoint.ToString(CultureInfo.InvariantCulture)} of tool {state.SpindleTool} is "
+                + "selected by an indexed TOOL CALL of the tool in the spindle, which runs the change macro on the "
+                + "TNC 640 and on the iTNC 530 depending on MP7480.0 and the builder's macro; point_change = \"call\" "
+                + "says the builder accepts it (machine-config 3, D373).");
+        }
     }
 
     // TOOL CALL n axis S: the tool, the tool axis of the working plane and the speed in one call (heidenhain 8 rule 3,
@@ -74,6 +130,7 @@ internal static class HeidenhainToolCall
         var values = new TemplateValues();
         values.Set("rpm", speed);
         values.Set("axis", axis);
+        SetIndexedTool(writing, values);
         writing.WriteToolChange(values, FoldedFeed(writing));
         TakeSpeeds(writing, spindle);
         writing.Take("WORKPLANE");

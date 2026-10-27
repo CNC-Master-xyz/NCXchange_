@@ -73,6 +73,12 @@ internal sealed partial class SiemensBlock
     public required Func<string, string> CommentText { get; init; }
 
     /// <summary>
+    /// The edge of the named measurement point of the holder after the block, from [tool_points]; null where the
+    /// program named no point since the TOOL or the mapping gives none (D373, D393; CompilerBase.PointRegistersOf).
+    /// </summary>
+    public ToolPointRegisters? PointRegisters { get; init; }
+
+    /// <summary>
     /// The line of the block being composed: the modal codes, the motion, the functions (controllers siemens.md 1).
     /// </summary>
     public SiemensLine Main { get; } = new();

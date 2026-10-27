@@ -67,6 +67,12 @@ internal static class BlockRules
         ["CONTOUR"] = [CycleKey],
     };
 
+    // The words of the measurement point, valid in a TOOL block or in a block of their own (language 4.4, D372).
+    private static readonly string[] s_pointWords = ["TOOL_POINT", "TIP_OFFSET", "POINT_RADIUS"];
+
+    // What a block of the point words may carry beside them: the block skip and a comment, which run nothing (D392).
+    private static readonly string[] s_besidePointWords = ["SKIP", "COMMENT"];
+
     /// <summary>
     /// The verb of the words of a block. A block has at most one verb; a second is an ERROR, and the first stays the
     /// verb (language 5 rule 1). The =RESET form of SHIFT, TILT and TILT_AXIS is no verb (language 4.2, D90).
@@ -108,6 +114,7 @@ internal static class BlockRules
         CheckAxisWords(block, diagnostics);
         CheckKeysOnce(block, diagnostics);
         CheckPartners(block, diagnostics);
+        CheckPointWords(block, diagnostics);
     }
 
     // Axis words require a verb that carries them: a motion verb carries every axis word, RETRACT none. SHIFT, TILT,
@@ -278,6 +285,36 @@ internal static class BlockRules
             diagnostics.Error(block, DiagnosticCodes.PartnerWordMissing,
                 $"{word.Key} needs {JoinChoices(partners)} in the same block (language 5 rule 5).");
         }
+    }
+
+    // TOOL_POINT, TIP_OFFSET and POINT_RADIUS are valid in a TOOL block or in a block of their own (language 4.4,
+    // D372). A block of their own carries nothing but the point words, SKIP and a COMMENT (decisions.md D392), because
+    // a point change takes effect with the next tool-axis motion and a block that moves or switches something else
+    // would hide where it starts.
+    private static void CheckPointWords(Block block, Diagnostics diagnostics)
+    {
+        Word? pointWord = null;
+        Word? otherWord = null;
+        foreach (Word word in block.Words)
+        {
+            if (s_pointWords.Contains(word.Key))
+            {
+                pointWord ??= word;
+            }
+            else if (!s_besidePointWords.Contains(word.Key))
+            {
+                otherWord ??= word;
+            }
+        }
+
+        if (pointWord is null || otherWord is null || block.Has("TOOL"))
+        {
+            return;
+        }
+
+        diagnostics.Error(block, DiagnosticCodes.PointWordOutsideToolBlock,
+            $"{pointWord.ToCanonical()} stands beside {otherWord.ToCanonical()}; the point words are valid in a TOOL "
+            + "block or in a block of their own (language 4.4, D372).");
     }
 
     private static bool HasAny(Block block, string[] keys)

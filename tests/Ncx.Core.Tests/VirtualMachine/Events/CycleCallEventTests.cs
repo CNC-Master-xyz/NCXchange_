@@ -49,7 +49,7 @@ public sealed class CycleCallEventTests
         Assert.Equal(
             [
                 "CYCLE_CALL(4): cycle DRILL, at X=10 Y=10 Z=5, parameters CLEARANCE=5 DEPTH=-10 CYCLE_F=100",
-                "MOTION(4): RAPID X 0 -> 10, Y 0 -> 10; comp OFF, frame WORKPIECE, length 14.142",
+                "MOTION(4): RAPID X 0 -> 10, Y 0 -> 10; comp OFF, frame WORKPIECE, length 14.142136",
                 "MOTION(4): RAPID Z 50 -> 5; comp OFF, frame WORKPIECE, length 45",
                 "MOTION(4): LINE Z 5 -> -10; feed 100 PER_MIN, comp OFF, frame WORKPIECE, length 15",
                 "MOTION(4): RAPID Z -10 -> 5; comp OFF, frame WORKPIECE, length 15",
