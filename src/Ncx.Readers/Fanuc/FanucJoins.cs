@@ -114,6 +114,89 @@ internal static class FanucJoins
         fanuc.Chain.Forget();
     }
 
+    /// <summary>
+    /// The chain at the start of a program that M99 loops back to (controller-mapping 6): the second pass starts with
+    /// the chain the first leaves, so the empty chain of the start holds only where the program ends with every
+    /// rotation, tilted plane, mirror, 3D conversion and G52 shift cancelled again and calls nothing; forgotten
+    /// otherwise (virtual machine 3.6; D225).
+    /// </summary>
+    /// <param name="fanuc">The facts of the file.</param>
+    /// <param name="begin">The first block of the program.</param>
+    /// <param name="machine">The machine.</param>
+    public static void AtProgramLoop(FanucState fanuc, SourceBlock begin, MachineConfig machine)
+    {
+        var on = new HashSet<string>(StringComparer.Ordinal);
+        var mirrored = new HashSet<string>(StringComparer.Ordinal);
+        foreach (SourceBlock block in fanuc.SectionOf(begin))
+        {
+            if (FanucMacro.CallsOf(block, machine).Count > 0)
+            {
+                fanuc.Chain.Forget();
+                return;
+            }
+
+            List<string> axes = AxisLetters(block);
+            foreach (SourceWord word in block.Words)
+            {
+                switch (word.Address == "G" ? NativeCode.Of(word) : null)
+                {
+                    case "G68" or "G68.1" or "G68.2" or "G68.3" or "G68.4":
+                        on.Add("rotation");
+                        break;
+                    case "G69":
+                        on.Remove("rotation");
+                        break;
+                    case "G51.1":
+                        mirrored.UnionWith(axes);
+                        break;
+                    case "G50.1":
+                        mirrored.ExceptWith(axes);
+                        break;
+                    case "G52" when AllZero(block):
+                        on.Remove("shift");
+                        break;
+                    case "G52" or "G92":
+                        on.Add("shift");
+                        break;
+                }
+            }
+        }
+
+        if (on.Count > 0 || mirrored.Count > 0)
+        {
+            fanuc.Chain.Forget();
+        }
+    }
+
+    // The letters of the axis words of a block, X Y Z U V W A B C.
+    private static List<string> AxisLetters(SourceBlock block)
+    {
+        var letters = new List<string>();
+        foreach (SourceWord word in block.Words)
+        {
+            if (word.Address.Length == 1 && "XYZUVWABC".Contains(word.Address[0]))
+            {
+                letters.Add(word.Address);
+            }
+        }
+
+        return letters;
+    }
+
+    // Whether every axis word of a block is 0, G52 X0 Y0 that cancels the local system (D244).
+    private static bool AllZero(SourceBlock block)
+    {
+        foreach (SourceWord word in block.Words)
+        {
+            if (word.Address.Length == 1 && "XYZUVWABC".Contains(word.Address[0]) && word.Number != 0m)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     // Whether a block of the range, both ends included, changes the chain or calls a program that may.
     private static bool ChangesFrames(List<SourceBlock> section, int from, int to, MachineConfig machine)
     {

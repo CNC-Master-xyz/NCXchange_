@@ -385,6 +385,19 @@ public sealed class FanucFrameTests
             Body("#1=1\nIF [#1 EQ 1] GOTO 10\n#2=2\nN10 G68 X0 Y0 R30."));
     }
 
+    // D225: a program M99 loops back to its start begins the second pass with the chain the first leaves, so where it
+    // ends with a rotation on, the chain at the start is unknown and its G69 stays RAW; one that cancels it keeps it.
+    [Fact]
+    public void Chain_AtTheStartOfAProgramM99Loops_IsForgottenWhereThePassEndsRotated()
+    {
+        string rotated = Text("%\nO0001\nG0 X0 Y0\nG69\nG68 X0 Y0 R30.\nG1 X6. F100\nM99\n%\n");
+        string cancelled = Text("%\nO0001\nG0 X0 Y0\nG69\nG68 X0 Y0 R30.\nG1 X6. F100\nG69\nM99\n%\n");
+
+        Assert.Contains("\nRAW:FANUC=\"G69\"\nRAW:FANUC=\"G68 X0 Y0 R30.\"\n", rotated, StringComparison.Ordinal);
+        Assert.Contains("\nROTATE=30\n", cancelled, StringComparison.Ordinal);
+        Assert.DoesNotContain("RAW", cancelled, StringComparison.Ordinal);
+    }
+
     // D244 (a): G52 holds in all of G54..G59, so after the ORIGIN the reader writes the G52 shift again; G52 X0 then
     // cancels it.
     [Fact]

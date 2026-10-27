@@ -355,6 +355,7 @@ public sealed partial class FanucReader : ReaderBase
         if (Loops(fanuc, begin))
         {
             fanuc.ForgetWritten();
+            FanucJoins.AtProgramLoop(fanuc, begin, Machine);
         }
     }
 
