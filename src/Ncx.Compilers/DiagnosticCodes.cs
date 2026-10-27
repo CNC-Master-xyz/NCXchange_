@@ -49,6 +49,12 @@ public static partial class DiagnosticCodes
     public const string ProgramNameTaken = "CMP005";
 
     /// <summary>
+    /// CMP006, a WARNING: {next} of a tool change finds no other tool to prepare, and the tool changed in is written
+    /// (machine-config 3, D267).
+    /// </summary>
+    public const string NoOtherToolToPrepare = "CMP006";
+
+    /// <summary>
     /// CMP016, an INFO: the program names a measurement point other than 1 and the machine file has no [tool_points],
     /// so nothing selects it; once per program (machine-config 3, D373).
     /// </summary>

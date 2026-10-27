@@ -137,10 +137,8 @@ public abstract partial class CompilerBase
     }
 
     // PRELOAD=n writes the preload template; on a machine without one PRELOAD is dropped with a WARNING
-    // (machine-config 3).
-    // TODO(question): D150: machine-config defines {tool} as the tool in the spindle after the block and {next} as
-    // the preloaded next tool, while its preload templates write {tool} and those of the Nakamura {next}; both carry
-    // the tool the block preloads, as D150 recommends, until it is answered.
+    // (machine-config 3). D150: in the preload template {tool} and {next} both mean the n of PRELOAD=n (machine-config
+    // introduction); {next} is the preferred spelling in new files.
     private void WritePreloadOf(ToolRef tool, TemplateValues? values)
     {
         if (Machine.ToolChange?.Preload is not string text)
@@ -210,9 +208,10 @@ public abstract partial class CompilerBase
     // {next} of a change command (machine-config 3, D52): a PRELOAD that follows the TOOL block before the next motion,
     // in the same program, is folded into the command and not written again; with auto_preload, in a program without
     // PRELOAD words, the next tool of the program from the STATIC look-ahead; otherwise the preloaded next tool
-    // (machine-config introduction).
-    // TODO(question): with auto_preload the last change of a program has no next tool, and no document gives its
-    // {next}; it is 0, the PRELOAD=0 that clears a pending preload (language 4.4), until that is answered.
+    // (machine-config introduction). D267 (a): at the last change {next} takes the program's first tool, the builder's
+    // own example (G340 T0303. A01.); a change with no preload pending outside auto_preload fills {next} the same way,
+    // the next tool changed in, else the first tool. Where that is the tool being changed in, the number is written all
+    // the same with the WARNING CMP006; never 0. Only where the look-ahead knows no tool at all {next} stays empty.
     private ToolRef? NextOf(BlockStep step, string holder, HolderSnapshot after)
     {
         if (LookAhead.FollowingPreload(step, holder) is BlockStep following
@@ -222,12 +221,21 @@ public abstract partial class CompilerBase
             return folded;
         }
 
-        if (Machine.ToolChange is { AutoPreload: true } && !LookAhead.ProgramHasPreload(step))
+        bool auto = Machine.ToolChange is { AutoPreload: true } && !LookAhead.ProgramHasPreload(step);
+        if (!auto && after.Preloaded is ToolRef preloaded)
         {
-            return LookAhead.NextTool(step, holder) ?? s_emptySpindle;
+            return preloaded;
         }
 
-        return after.Preloaded;
+        ToolRef? next = LookAhead.NextTool(step, holder) ?? LookAhead.FirstTool(step, holder);
+        if (next is ToolRef same && same == after.SpindleTool)
+        {
+            Diagnostics.Warning(step.Block, DiagnosticCodes.NoOtherToolToPrepare,
+                $"{{next}} of the tool change to {same} has no other tool to prepare: the program changes in no other "
+                + "tool, so the change prepares the tool it changes in (machine-config 3, D267).");
+        }
+
+        return next;
     }
 
     // {kind}: the kind of the tool from the tool table, mapped per machine by kind_map; without the table, or for a
