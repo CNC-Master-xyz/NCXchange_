@@ -3,11 +3,9 @@ using Ncx.Core.Model;
 
 namespace Ncx.Compilers;
 
-// TODO(question): machine-config 2 names one comment_charset, ASCII, whose umlauts are transliterated before writing.
-// No document says what a machine file without comment_charset, or with another value, writes, nor what becomes of a
-// character outside ASCII that is no umlaut (Ø, °, é). Without ASCII the comment is written as it is; under ASCII
-// the umlauts become ae, oe, ue and ss, and any other character outside ASCII becomes ? with a WARNING that names
-// it, until that is answered.
+// D263: comment_charset takes "ASCII" or "UTF-8" and defaults to "ASCII" on every family, any other value being the
+// CFG ERROR of the loader. Under UTF-8 the comment is written as it is; under ASCII the umlauts become ae, oe, ue and
+// ss, and any other character outside ASCII becomes ? with the WARNING CMP022 that names it.
 
 /// <summary>
 /// comment_charset of [format]: the characters a comment is written in, the umlauts transliterated before writing
@@ -43,7 +41,8 @@ public static class CommentCharset
     /// Änderung as Aenderung (machine-config 2).
     /// </summary>
     /// <param name="text">The comment as the program writes it.</param>
-    /// <param name="charset">comment_charset of the machine; null when the file leaves it out.</param>
+    /// <param name="charset">comment_charset of the machine, its family value "ASCII" when the file leaves it out
+    /// (D263).</param>
     /// <param name="block">The block of the comment, which a WARNING cites (D98).</param>
     /// <param name="diagnostics">Where the WARNING about a character without transliteration goes.</param>
     public static string Transliterate(string text, string? charset, Block block, Diagnostics diagnostics)

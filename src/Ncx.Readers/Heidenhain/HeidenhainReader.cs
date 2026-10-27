@@ -141,6 +141,7 @@ public sealed partial class HeidenhainReader : ReaderBase
             && line.Groups[2].Success
             ? line.Groups[2].Value.ToUpperInvariant()
             : Machine.Machine.UnitsDefault?.ToUpperInvariant();
+        state.Inch = units == "INCH";
         NcxBuilder builder = Builder.Begin(begin.Line)
             .Word("FEED_MODE", null, new IdentValue("PER_MIN"))
             .Word("COMP", null, new IdentValue("OFF"));

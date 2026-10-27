@@ -415,6 +415,29 @@ public sealed class CycleCatalogLoaderTests
         Assert.Contains("Q256", warning.Message, StringComparison.Ordinal);
     }
 
+    // D358 with D361: the defaults of a [[cycle]] table of one channel are checked as well.
+    [Fact]
+    public void CheckHeldDistances_DefaultOfAChannelTable_Warns()
+    {
+        CycleCatalog catalog = LoadClean("""
+            [[cycle]]
+            name = "CHIP_BREAK"
+            native = 203
+            defaults = { Q256 = 0.6 }
+            """, Controller.Heidenhain);
+        CycleEntry entry = catalog.Find("CHIP_BREAK")!;
+        var channelOnly = new CycleCatalog
+        {
+            Controller = Controller.Heidenhain,
+            ChannelEntries = [entry with { Channel = 2 }],
+        };
+        var diagnostics = new Diagnostics("machine.toml");
+
+        CycleCatalogLoader.CheckHeldDistances(channelOnly, ["chip_break_lift"], 12, diagnostics);
+
+        Assert.Equal(DiagnosticCodes.CycleDefaultBesideMachineKey, Assert.Single(diagnostics.Items).Code);
+    }
+
     // D164, D358: a Heidenhain catalog that writes Q256 needs [cycles] chip_break_lift; without it the loader reports
     // an ERROR for each entry that writes it rather than guess a lift.
     [Fact]

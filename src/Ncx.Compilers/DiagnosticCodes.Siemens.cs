@@ -78,8 +78,9 @@ public static partial class DiagnosticCodes
     public const string SiemensTiltNotWritable = "CMP532";
 
     /// <summary>
-    /// CMP533, a WARNING: an option the control or the machine has no form for is not written, ROT of a tilt or a
-    /// rotary option without its template (controller-mapping 1, MOVE and ROT; machine-config 5; D82, D86).
+    /// CMP533, a WARNING: an option the control or the machine has no form for is not written, ROT of a tilt, a
+    /// rotary option without its template, or PATH_MODE with an empty or missing PATH_MODE template (controller-mapping
+    /// 1, MOVE and ROT; machine-config 5; D82, D86, D349).
     /// </summary>
     public const string SiemensOptionNotWritten = "CMP533";
 

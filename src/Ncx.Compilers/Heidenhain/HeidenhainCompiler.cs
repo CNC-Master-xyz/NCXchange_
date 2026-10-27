@@ -21,6 +21,12 @@ public sealed class HeidenhainCompiler : CompilerBase
     // where the walk begins (virtual machine 1, 3.9, D99).
     private TargetState? _lastTarget;
 
+    // The LBL numbers and the counter loops of the compile, found once from every step of the run (D213, D271, D272).
+    private LookAhead? _numberedFor;
+    private HeidenhainLabelNumbers? _labelNumbers;
+    private HeidenhainRepeats? _repeats;
+    private HeidenhainSpills? _spills;
+
     /// <summary>
     /// Heidenhain, the controller of the machine files whose programs this compiler writes (machine-config 1).
     /// </summary>
@@ -30,6 +36,12 @@ public sealed class HeidenhainCompiler : CompilerBase
     /// The extension of a Klartext file, .h (controllers heidenhain.md, introduction).
     /// </summary>
     protected override string FileExtension => ".h";
+
+    /// <summary>
+    /// An ARC with a tool vector is the ERROR CMP017: LN, the only Klartext block with a tool vector, has no arc form
+    /// (D185).
+    /// </summary>
+    protected override bool WritesVectorArcs => false;
 
     /// <summary>
     /// Klartext numbers its blocks without a letter in front, 0 BEGIN PGM (controllers heidenhain.md 1, 8 rule 1).
@@ -54,8 +66,7 @@ public sealed class HeidenhainCompiler : CompilerBase
     }
 
     /// <summary>
-    /// BEGIN PGM name MM (heidenhain 8 rule 1); the labels of the program and of the LBL sections of its file are
-    /// checked here, where the whole program is ahead (controllers heidenhain.md 1; language 4.9, 4.13).
+    /// BEGIN PGM name MM (heidenhain 8 rule 1).
     /// </summary>
     protected override void WriteHeader(Section program, ChannelSnapshot state)
     {
@@ -63,7 +74,6 @@ public sealed class HeidenhainCompiler : CompilerBase
         HeidenhainBlock writing = NewBlock();
         HeidenhainProgramFrame.WriteBegin(writing, program, state);
         HeidenhainFunctions.EnterProgram(writing);
-        HeidenhainLabels.Check(writing);
     }
 
     /// <summary>
@@ -97,6 +107,7 @@ public sealed class HeidenhainCompiler : CompilerBase
         HeidenhainChain.Write(writing);
         HeidenhainToolCall.Write(writing);
         HeidenhainFrames.WriteModes(writing);
+        HeidenhainProgramFrame.WriteStock(writing);
         HeidenhainFunctions.Write(writing);
         HeidenhainFlow.WriteVariables(writing);
         HeidenhainCycles.WriteDefinition(writing);
@@ -164,6 +175,15 @@ public sealed class HeidenhainCompiler : CompilerBase
     // The block being written with what its concerns write it with.
     private HeidenhainBlock NewBlock()
     {
+        // The labels are numbered once per compile, where every step of the run is known (D271).
+        if (!ReferenceEquals(_numberedFor, LookAhead))
+        {
+            _numberedFor = LookAhead;
+            _labelNumbers = HeidenhainLabelNumbers.Of(LookAhead, Machine.Format?.LabelMax ?? 999, Diagnostics);
+            _repeats = HeidenhainRepeats.Of(LookAhead, CounterRange.Of(Machine.Format), Diagnostics);
+            _spills = HeidenhainSpills.Of(LookAhead, CounterRange.Of(Machine.Format));
+        }
+
         return new HeidenhainBlock
         {
             Step = Step,
@@ -174,11 +194,16 @@ public sealed class HeidenhainCompiler : CompilerBase
             LookAhead = LookAhead,
             Templates = Templates,
             Labels = _labels,
+            LabelNumbers = _labelNumbers!,
+            Repeats = _repeats!,
+            Spills = _spills!,
             WriteLine = Line,
             WriteToolChange = (values, suffix) => WriteToolChange(values, suffix),
             WritePreload = () => WritePreload(),
             CommentText = CommentText,
+            ProgramName = ProgramFileName,
             PointRegisters = PointRegistersOf(Step.After),
+            Stock = StockOf(Step),
         };
     }
 }

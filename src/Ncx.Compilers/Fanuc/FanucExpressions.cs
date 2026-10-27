@@ -41,7 +41,7 @@ internal static class FanucExpressions
                 }
 
                 // The factor stands as a constant of the expression: * 2 or / 2 between radius and diameter (D60),
-                // * 1000 from the seconds of DWELL and CYCLE_DWELL to the milliseconds of P (language 4.1, 4.7;
+                // * 1000 from the seconds of CYCLE_DWELL to the milliseconds of a cycle P (language 4.7;
                 // controllers fanuc.md 4, 6; D159); an operation is its operand in brackets (controllers fanuc.md 7).
                 if (factor != 1m)
                 {
@@ -199,9 +199,30 @@ internal static class FanucExpressions
             return NotWritable(write, binary.ToCanonical());
         }
 
+        // D169: == and != compare two strings in NCX, and custom macro B holds numbers only.
+        if (HoldsString(write, binary.Left) || HoldsString(write, binary.Right))
+        {
+            write.Error(DiagnosticCodes.FanucStringComparison,
+                $"{binary.ToCanonical()} compares a string, and custom macro B has numbers only (D169; controllers "
+                + "fanuc.md 7).");
+            return null;
+        }
+
         string? left = Operand(write, binary.Left);
         string? right = Operand(write, binary.Right);
         return left is null || right is null ? null : left + " " + symbol + " " + right;
+    }
+
+    // A variable that holds a string before the block (language 4.9; virtual machine 2.7).
+    private static bool HoldsString(FanucBlock write, ExprNode node)
+    {
+        while (node is ParenthesesNode parentheses)
+        {
+            node = parentheses.Inner;
+        }
+
+        return node is VariableNode { Index: null } variable
+            && write.Before.Vars.GetValueOrDefault(variable.Name)?.Value is StringValue;
     }
 
     private static string? Operand(FanucBlock write, ExprNode node)
