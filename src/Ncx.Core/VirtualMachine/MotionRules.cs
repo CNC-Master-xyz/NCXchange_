@@ -173,12 +173,18 @@ internal static class MotionRules
         decimal? target = ValueOf(word, state);
         if (IsIncremental(word))
         {
-            // TODO(question): virtual machine 3.1 adds IX to "the current value" and D101 lets SETPOS accept an axis
-            // known in some frame; whether IX may add to a value known in another frame than the one the block programs
-            // in (after HOME the axis is known in the MACHINE frame only, D35) is not said. The current value is taken
-            // in the frame of the block, and a value unknown there is the ERROR, until D183 is answered.
+            // IX adds to the current value in the frame of the block. Known only in the other of the workpiece and
+            // the MACHINE frame, and the two differ on this axis by shifts alone, IX adds there: the increment is a
+            // distance either way, and the axis stays known in that frame only (virtual machine 3.1, D35, D183).
             if (CoordinateIn(state, axis, frame) is not decimal current)
             {
+                if (target is decimal increment && AddsInItsOwnFrame(context, axis, frame))
+                {
+                    AxisPosition stored = state.Motion.Position[axis];
+                    state.Motion.Position[axis] = stored with { Value = stored.Value + increment };
+                    return;
+                }
+
                 context.CallerRuleDiagnostics.Error(context.Block, DiagnosticCodes.IncrementalFromUnknownPosition,
                     $"{word.ToCanonical()} adds to the current value of {axis}, and it is not known in the "
                     + $"{FrameName(frame)} frame (virtual machine 3.1).");
@@ -215,8 +221,7 @@ internal static class MotionRules
             return PositionFrame.Polar;
         }
 
-        if (frame.Cylinder is not null
-            && (axisName == Plane.Cylinder.FirstAxis || axisName == Plane.Cylinder.SecondAxis))
+        if (frame.Cylinder is not null && (axisName == frame.CylinderAxis || axisName == Plane.Cylinder.SecondAxis))
         {
             return PositionFrame.Cylinder;
         }
@@ -318,16 +323,18 @@ internal static class MotionRules
         return name.StartsWith('I') ? name.Substring(1) : name;
     }
 
-    /// <summary>
-    /// The decimals a coordinate computed in double keeps when it goes back into the position store (phase 1 risks,
-    /// D62): 3 in millimetres and 4 in inches, the resolution of the common controls.
-    /// </summary>
-    /// <remarks>
-    /// No document says how many decimals "the units' decimals" are (wave-1 question #46); these are the workaround.
-    /// </remarks>
-    public static int PositionDecimals(Units units)
+    // An increment in the workpiece frame on an axis known in the MACHINE frame only, or one in the MACHINE frame on an
+    // axis known in the workpiece frame only, when the two frames differ on the axis by shifts alone (D183).
+    private static bool AddsInItsOwnFrame(BlockContext context, string axis, PositionFrame frame)
     {
-        return units == Units.Inch ? 4 : 3;
+        if (!context.State.Motion.Position.TryGetValue(axis, out AxisPosition position) || !position.Known)
+        {
+            return false;
+        }
+
+        bool otherFrame = (frame, position.Frame) is (PositionFrame.Workpiece, PositionFrame.Machine)
+            or (PositionFrame.Machine, PositionFrame.Workpiece);
+        return otherFrame && FrameRules.DiffersByShiftsAlone(context, axis);
     }
 
     // The name of a frame in a message.

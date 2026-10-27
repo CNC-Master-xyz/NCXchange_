@@ -50,7 +50,9 @@ public static partial class CycleCatalogLoader
         // A catalog file holds [[cycle]] entries only; any other table is a WARNING that names [[cycle]], as an
         // unknown table of the machine file is (machine-config 6, P2-01).
         ConfigTable root = document.Root("machine-config 6");
-        root.WarnUnknownTables(s_catalogTables, s_catalogTables);
+        // ncx_schema, the schema version of the file, is the one root key besides it (D348).
+        root.WarnUnknownTables([SchemaVersion.Key, .. s_catalogTables], s_catalogTables);
+        SchemaVersion.Check(root, "cycle catalog");
 
         // The catalog file of a controller family overrides the built-in drilling family of that family entry by
         // entry and adds the catalog cycles (machine-config 6, language 4.7.1).

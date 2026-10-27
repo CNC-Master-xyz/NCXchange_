@@ -36,6 +36,8 @@
 #   the cycle takes its value zero (840D sl Zyklen 01/2008 p.18), so the older 840D reads the same leading parameters. `defaults` records that value where the
 #   reader needs it to tell two entries apart: an omitted VARI of CYCLE83 is 0, chip breaking (D164, D181).
 
+ncx_schema = 1                     # the version of the machine-configuration schema, not of NCXchange (machine-config 6, D348)
+
 # ---------------------------------------------------------------------------------------------------------------------------------------------------
 # Drilling family (controller-mapping 5: DRILL CYCLE81, DRILL_DWELL CYCLE82, PECK and CHIP_BREAK CYCLE83, TAP CYCLE84, REAM CYCLE85, BORE CYCLE86)
 

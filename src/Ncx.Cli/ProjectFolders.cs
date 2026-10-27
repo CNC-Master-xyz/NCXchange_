@@ -5,8 +5,9 @@ namespace Ncx.Cli;
 /// <summary>
 /// Where ncx looks for a machine file and a cycle catalog: a machine file at the path given or by its name in the
 /// machine folder that ncx.toml names, then in machines/ of the working directory, then in machines/ of the tool's own
-/// folder, which holds the shipped files; a catalog in the cycle folders alone, in the same order (implementation 12,
-/// P2-04; machine-config 6, 10; architecture 10).
+/// folder, which holds the shipped files, and last in the copy built into ncx; a catalog in the cycle folders alone, in
+/// the same order, the built-in copy last (implementation 12, P2-04; machine-config 6, 10; architecture 10; D206,
+/// D207, D371).
 /// </summary>
 internal sealed class ProjectFolders
 {
@@ -27,9 +28,10 @@ internal sealed class ProjectFolders
         WorkingDirectory = Path.GetFullPath(workingDirectory);
 
         // --machine <name> is resolved in machines/ of the folder of ncx.toml, then of the working directory, then of
-        // the tool's own folder (implementation 12, P2-04). ncx.toml lies in the working directory and names its
-        // machine and cycle folders (architecture 10); the folders it leaves out are those of the project layout
-        // (machine-config 10). A catalog is looked for in the cycle folders in the same order.
+        // the tool's own folder (implementation 12, P2-04), and last in the built-in copy, which no folder lists
+        // (D371). ncx.toml lies in the working directory and names its machine and cycle folders (architecture 10);
+        // the folders it leaves out are those of the project layout (machine-config 10). A catalog is looked for in the
+        // cycle folders in the same order.
         if (settings is not null)
         {
             AddFolder(_machineFolders, Path.Combine(WorkingDirectory, settings.Machines));
@@ -59,40 +61,45 @@ internal sealed class ProjectFolders
 
     /// <summary>
     /// The machine file that --machine or the machine key of ncx.toml names: a file at that path, or a machine of that
-    /// name in the machine folders (implementation 12, P2-04).
+    /// name in the machine folders, or the built-in machine file of that name (implementation 12, P2-04; D206, D371).
     /// </summary>
     /// <param name="value">The value as written: "nakamura-ntjx", "nakamura-ntjx.toml", "shop/dmu50.toml".</param>
-    /// <returns>The file; null when the value is a name that no machine folder holds.</returns>
+    /// <returns>The file; null when the value is a name that no machine folder holds and ncx does not ship.</returns>
     public FoundFile? FindMachine(string value)
     {
         // A file at the path given is that file, a relative path counted from the working directory, and a value with
         // a folder in it is always a path, which P1-07 read as the only form of --machine (architecture 10). Any other
-        // value is a name, looked up in the machine folders (implementation 12, P2-04).
-        // TODO(question): the phase file resolves --machine "in machines/ ... or by path" without saying which wins
-        // when there is a file at the path given and a machine of that name as well; the file at the path wins, which
-        // keeps every --machine that P1-07 read as a path, until D206 is answered.
+        // value is a name, looked up in the machine folders (implementation 12, P2-04). The file at the path wins over
+        // a machine of that name, so that --machine fanuc-mill-30i.toml in a folder that holds its own copy takes that
+        // copy (D206).
         string atPath = Path.Combine(WorkingDirectory, value);
         if (File.Exists(atPath) || IsPath(value))
         {
             return new FoundFile { FullPath = atPath, Name = value };
         }
 
-        return FindInFolders(value, _machineFolders);
+        // A tool table of a machine folder is no machine file, by name neither in a folder nor built in (D10, D371).
+        if (BuiltInFiles.IsToolTable(WithExtension(value)))
+        {
+            return null;
+        }
+
+        return FindInFolders(value, _machineFolders, BuiltInFiles.MachinesFolder, BuiltInFiles.Machine);
     }
 
     /// <summary>
-    /// The catalog file that [cycles] catalog of a machine names, looked for in the cycle folders alone
-    /// (machine-config 6, 10).
+    /// The catalog file that [cycles] catalog of a machine names, looked for in the cycle folders alone and last in the
+    /// built-in catalogs (machine-config 6, 10; D207, D371).
     /// </summary>
     /// <param name="value">The value as the machine file writes it: "fanuc.toml".</param>
-    /// <returns>The file; null when no cycle folder holds it.</returns>
+    /// <returns>The file; null when no cycle folder holds it and ncx does not ship it.</returns>
     public FoundFile? FindCatalog(string value)
     {
         // The catalog is a file of a cycle folder (machine-config 6, 10), and the path rules of --machine are none of
         // its rules: a file of that name in the working directory, the machine file itself among them, is never the
-        // catalog, and a value with a folder in it is a path from each cycle folder in turn (the TODO(question) D207 of
-        // RunMachine.WithCatalog).
-        return FindInFolders(value, _cycleFolders);
+        // catalog, and a value with a folder in it is a path from each cycle folder in turn; a full path, or one that
+        // climbs out with "..", names no file (D207).
+        return FindInFolders(value, _cycleFolders, BuiltInFiles.CyclesFolder, BuiltInFiles.Catalog);
     }
 
     /// <summary>
@@ -119,8 +126,10 @@ internal sealed class ProjectFolders
 
     // A name is looked up in the folders in order, and the first folder that holds the file wins (implementation 12,
     // P2-04). The file lies in the folder: a value that leaves it, a full path or one that climbs out with "..", names
-    // no file of that folder.
-    private FoundFile? FindInFolders(string value, IReadOnlyList<string> folders)
+    // no file of that folder. The built-in copy of that name is the fourth and last place, so a shop's own file wins
+    // (D371).
+    private FoundFile? FindInFolders(string value, IReadOnlyList<string> folders, string builtInFolder,
+        Func<string, string?> builtIn)
     {
         foreach (string folder in folders)
         {
@@ -130,6 +139,13 @@ internal sealed class ProjectFolders
                 string fullPath = Path.GetFullPath(candidate);
                 return new FoundFile { FullPath = fullPath, Name = NameOf(fullPath) };
             }
+        }
+
+        string fileName = WithExtension(value);
+        if (builtIn(fileName) is string text)
+        {
+            string name = BuiltInFiles.NameOf(builtInFolder, fileName);
+            return new FoundFile { FullPath = name, Name = name, Text = text };
         }
 
         return null;

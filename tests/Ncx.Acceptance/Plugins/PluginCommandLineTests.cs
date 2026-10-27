@@ -28,7 +28,7 @@ public sealed class PluginCommandLineTests
         (int exitCode, _, string error) = Run("plugin");
 
         Assert.Equal(2, exitCode);
-        Assert.StartsWith("ncx(1): ERROR CLI001: ", error, StringComparison.Ordinal);
+        Assert.StartsWith("ncx: ERROR CLI001: ", error, StringComparison.Ordinal);
     }
 
     // D97: ncx plugin new without the name of the plugin is a usage error, exit code 2.
@@ -38,7 +38,7 @@ public sealed class PluginCommandLineTests
         (int exitCode, _, string error) = Run("plugin", "new");
 
         Assert.Equal(2, exitCode);
-        Assert.StartsWith("ncx(1): ERROR CLI001: ", error, StringComparison.Ordinal);
+        Assert.StartsWith("ncx: ERROR CLI001: ", error, StringComparison.Ordinal);
     }
 
     private static (int ExitCode, string Output, string Error) Run(params string[] args)

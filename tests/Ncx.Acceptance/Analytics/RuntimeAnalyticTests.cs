@@ -132,7 +132,8 @@ public sealed class RuntimeAnalyticTests
     // VM 8 with VM 3.2: an ARC turns about its center on both plane axes, so a full circle (start = end) moves X and Y
     // although neither ends elsewhere. F=12000 is limited to the max_feed of 6000 mm/min (100 mm/s), and the block
     // accelerates with the 500 mm/s^2 of Y: from X=10 Y=0 about X=0 Y=0, 2 pi 10 mm, which the MOTION gives rounded to
-    // 62.832 mm (D62); 0.2 s and 10 mm to reach 100 mm/s, as much to stop, the rest at 100 mm/s: 62.832 / 100 + 0.2 s.
+    // 62.831853 mm (D121); 0.2 s and 10 mm to reach 100 mm/s, as much to stop, the rest at 100 mm/s: 62.831853 / 100
+    // + 0.2 s.
     [Fact]
     public void MovingAxes_FullCircleAboveTheMaxFeed_MovesAtTheMaxFeedWithTheAccelerationOfY()
     {
@@ -140,12 +141,12 @@ public sealed class RuntimeAnalyticTests
             ["RAPID X=10 Y=0 Z=0"],
             "ARC=CCW X=10 Y=0 CENTER:X=0 CENTER:Y=0 F=12000");
 
-        Assert.Equal((62.832 / 100) + 0.2, runtime.TotalSeconds, Precision);
+        Assert.Equal((62.831853 / 100) + 0.2, runtime.TotalSeconds, Precision);
     }
 
     // VM 8 with VM 3.2: a half circle from X=10 Y=0 to X=-10 Y=0 about X=0 Y=0 ends on the Y it started from, and Y
     // moves along it all the same: the block accelerates with the 500 mm/s^2 of Y, not the 1000 mm/s^2 of X. pi 10 mm,
-    // rounded to 31.416 mm (D62), at 100 mm/s: 31.416 / 100 + 0.2 s.
+    // rounded to 31.415927 mm (D121), at 100 mm/s: 31.415927 / 100 + 0.2 s.
     [Fact]
     public void MovingAxes_HalfCircleEndingOnTheYItStartedFrom_AcceleratesWithTheAccelerationOfY()
     {
@@ -153,7 +154,7 @@ public sealed class RuntimeAnalyticTests
             ["RAPID X=10 Y=0 Z=0"],
             "ARC=CCW X=-10 Y=0 CENTER:X=0 CENTER:Y=0 F=6000");
 
-        Assert.Equal((31.416 / 100) + 0.2, runtime.TotalSeconds, Precision);
+        Assert.Equal((31.415927 / 100) + 0.2, runtime.TotalSeconds, Precision);
     }
 
     // VM 8: RAPID and HOME use the rapid rate with the same profile: 100 mm at the rapid of 6000 mm/min, 1.1 s,

@@ -35,7 +35,9 @@ public sealed partial class NakamuraJobCompileTests
     private const int LastMark = 199;
     private static readonly string[] s_spindleSync = ["M96", "M97", "M92"];
 
-    // M9, P6-02 done when: the Nakamura pair compiles back with its wait codes in the same order.
+    // M9, P6-02 done when: the Nakamura pair compiles back with its wait codes in the same order. The start_mark of
+    // nakamura-ntjx.toml is the NTJX mark M198, which the WY sources do not pass, so the job compiler writes it after
+    // the header and the codes of the source follow in their order (D314, D388 9).
     [Theory]
     [InlineData(0, "NAKAMURA_WY250L_O1000.path1.nc")]
     [InlineData(1, "NAKAMURA_WY250L_O1000.path2.nc")]
@@ -46,8 +48,10 @@ public sealed partial class NakamuraJobCompileTests
 
         List<string> compiled = WaitCodes(Blocks(result.Files[channel].Text, machine));
 
-        Assert.Equal(WaitCodes(Blocks(Fixture.ReadText("sources/" + source), machine)), compiled);
-        Assert.Equal(["M199", "M110", "M112", "M106", "M190", "M191", "M192", "M193", "M194", "M195"], compiled);
+        List<string> fromSource = WaitCodes(Blocks(Fixture.ReadText("sources/" + source), machine));
+        Assert.Equal(["M198", .. fromSource], compiled);
+        Assert.Equal(
+            ["M198", "M199", "M110", "M112", "M106", "M190", "M191", "M192", "M193", "M194", "M195"], compiled);
     }
 
     // M9, P6-02 done when: the spindle synchronization words stand in the path that owns them, path 2 (virtual machine

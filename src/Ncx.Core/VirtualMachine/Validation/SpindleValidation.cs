@@ -33,8 +33,9 @@ internal static class SpindleValidation
                 "SPINDLE_SYNC with more or fewer than two spindle roles.", "language 4.5; VM 3.8 rule 5"),
             ValidationRule.Warning(DiagnosticCodes.SpindleOffBeforeLine,
                 "Spindle OFF before a LINE, an ARC or a CYCLE_CALL of the built-in drilling family other than TAP: "
-                + "the spindle of the current tool holder, the default spindle when the holder has none.",
-                "VM 2.3, 5; D194") with { SuppressedInUncalledSub = true },
+                + "the spindle of the current tool holder, the default spindle when the holder has none, while the "
+                + "spindle of the workpiece holder does not run either.",
+                "VM 2.3, 5; D129, D194") with { SuppressedInUncalledSub = true },
             ValidationRule.Warning(DiagnosticCodes.RpmAboveMax, "RPM above the spindle's rpm_max.",
                 "VM 5; machine-config 5; D64"),
             ValidationRule.Warning(DiagnosticCodes.RpmBelowMin, "RPM below the spindle's rpm_min.",
@@ -52,8 +53,9 @@ internal static class SpindleValidation
     /// not know their sequence (D94) and a measuring cycle runs with the spindle stopped. The current tool holder is
     /// the holder of the last TOOL (virtual machine 2.3), and the state words of the block take effect before its
     /// motion (language 5 rule 3). The rule depends on the caller's state and is suppressed inside a subprogram that
-    /// no program of the file calls (3.9, D99). Which spindle is the default one on the built-in default machine is
-    /// D129.
+    /// no program of the file calls (3.9, D99). The WARNING fires only when neither the spindle of the current tool
+    /// holder nor the spindle of the current workpiece holder runs, since turning against a running work spindle with
+    /// a stationary tool is a normal cut; the default spindle of the built-in default machine is TOOL (D129).
     /// </summary>
     public static void CheckSpindleBeforeLine(BlockContext context)
     {
@@ -69,7 +71,8 @@ internal static class SpindleValidation
         string? spindleId = holderSpindle ?? machine.ResolveDefaultSpindle()?.Id;
         if (spindleId is null
             || !state.Spindles.TryGetValue(spindleId, out SpindleState? spindle)
-            || spindle.Direction != SpindleDirection.Off)
+            || spindle.Direction != SpindleDirection.Off
+            || WorkpieceSpindleRuns(state))
         {
             return;
         }
@@ -82,6 +85,15 @@ internal static class SpindleValidation
             : $"{verb} cuts while the default spindle {ResourceName(machine, spindleId)} is OFF; the current tool "
                 + $"holder{holderName} has no spindle of its own (virtual machine 5).";
         context.CallerRuleDiagnostics.Warning(context.Block, DiagnosticCodes.SpindleOffBeforeLine, message);
+    }
+
+    // Turning against a running work spindle with a stationary tool is a normal cut: the rule passes while the spindle
+    // of the current workpiece holder runs (D129).
+    private static bool WorkpieceSpindleRuns(ChannelState state)
+    {
+        return state.Frame.WorkpieceHolder is string holder
+            && state.Spindles.TryGetValue(holder, out SpindleState? workSpindle)
+            && workSpindle.Direction != SpindleDirection.Off;
     }
 
     // The verbs the rule covers (D194): LINE and ARC cut with the spindle, and a CYCLE_CALL of the built-in drilling

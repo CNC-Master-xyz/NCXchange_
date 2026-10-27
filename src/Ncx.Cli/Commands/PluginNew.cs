@@ -16,6 +16,9 @@ internal static class PluginNew
     private const string TemplatesFolder = "templates";
     private const string TemplateName = "ncx-plugin";
 
+    // A diagnostic about a whole file, or a folder, names its line 1 (D110).
+    private const int FileLine = 1;
+
     // The name of the plugin of the template, which becomes the name of the new one (code-guidelines 11).
     private const string TemplatePlugin = "MyShopRules";
 
@@ -48,7 +51,7 @@ internal static class PluginNew
         string folder = Path.Combine(settings.WorkingDirectory, name);
         if (!IsPluginName(name))
         {
-            diagnostics.Error(Program.CommandLine, DiagnosticCodes.PluginNameInvalid,
+            diagnostics.CommandLineError(DiagnosticCodes.PluginNameInvalid,
                 $"\"{name}\" is no name of a plugin: letters, digits and underscores, parts joined by dots, none "
                 + "beginning with a digit, since the name becomes the folder, the namespace and the DLL of the plugin "
                 + "(code-guidelines 11).");
@@ -59,7 +62,7 @@ internal static class PluginNew
             {
                 Severity = Severity.Error,
                 File = template,
-                Line = Program.CommandLine,
+                Line = FileLine,
                 Code = DiagnosticCodes.PluginTemplateMissing,
                 Message = "The plugin template is not in the folder of ncx, so there is nothing to copy "
                     + "(code-guidelines 11).",
@@ -67,7 +70,7 @@ internal static class PluginNew
         }
         else if (Directory.Exists(folder) || File.Exists(folder))
         {
-            diagnostics.Error(Program.CommandLine, DiagnosticCodes.PluginFolderExists,
+            diagnostics.CommandLineError(DiagnosticCodes.PluginFolderExists,
                 $"The working directory holds {name} already, and ncx plugin new makes a new folder and changes none; "
                 + "choose another name (architecture 10).");
         }
@@ -109,7 +112,7 @@ internal static class PluginNew
                 {
                     Severity = Severity.Error,
                     File = written,
-                    Line = Program.CommandLine,
+                    Line = FileLine,
                     Code = DiagnosticCodes.OutputUnwritable,
                     Message = $"The file of the plugin cannot be written: {exception.Message.TrimEnd('.')} "
                         + "(architecture 10).",

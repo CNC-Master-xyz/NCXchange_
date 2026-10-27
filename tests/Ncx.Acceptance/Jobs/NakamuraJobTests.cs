@@ -75,7 +75,7 @@ public sealed class NakamuraJobTests
         var runner = new JobRunner(job, machine, options, mode, jobDiagnostics);
         foreach (ChannelProgram channel in job.Channels)
         {
-            runner.Add(channel, Converted(channel.File, machine));
+            runner.Add(channel, Converted(channel.File, machine), StartValues(channel.File));
         }
 
         return runner.Run();
@@ -91,6 +91,21 @@ public sealed class NakamuraJobTests
         NcxProgram program = Parser.Parse(NcxWriter.Write(read), file, new ParserOptions());
         Assert.False(program.Diagnostics.HasErrors, program.Diagnostics.ToText());
         return Expander.Expand(program, machine, []);
+    }
+
+    // The start values of a path from its vars file, path 2 only: $SYS_WEAR_Z[99] and $SYS_MPOS_B, which D250 maps
+    // (machine-config 8).
+    private static IReadOnlyDictionary<string, Value>? StartValues(string file)
+    {
+        if (!file.EndsWith(".path2.ncx", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var diagnostics = new Diagnostics(JobFixture.NakamuraPath2Vars);
+        VarsFile? vars = VarsFile.LoadText(JobFixture.ReadText(JobFixture.NakamuraPath2Vars), diagnostics);
+        Assert.True(vars is not null, diagnostics.ToText());
+        return vars.Variables;
     }
 
     // nakamura-ntjx.toml, which names no cycle catalog (machine-config 6).

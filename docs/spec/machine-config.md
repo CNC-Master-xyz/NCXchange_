@@ -2,13 +2,15 @@
 
 Status: Version 1.0 of the specification set, 2026-09-12 (draft 8 in the drafting history of `../decisions/decisions.md`). Sketch level: the schema is finalized when the compiler exists. Companion to `ncx-language.md` and `ncx-virtual-machine.md`.
 
-Templates are strings with `{placeholders}`: `{tool}` (the tool in the spindle after the block, from the VM, so a bare `TOOL` writes the preloaded number, D91), `{name}` (tool name string), `{offset}`, `{next}` (the preloaded next tool), `{kind}` (tool kind from the tool table: rotary or turning, mapped per machine), `{rpm}`, `{axis}` (tool axis letter; in the `[setpos]` and `ROTARY_FEED` templates the axis the call is written for, one call per axis), `{axes}` (the axis list of a `HOME` or `SETPOS` block in the machine's address form), `{angle}`, `{b}` (index angle of the tool carrier from the next positioning block), `{c}` (tool spindle orientation from the next `ORIENT:TOOL`), `{mark}`, `{channels}`, `{paths}`, `{r}` (the reference radius of `CYLINDER=n`, the only source of `{r}`; not the arc key `R`, D96), `{d}` (twice `{r}`: the working diameter that Siemens `TRACYL` takes), `{value}`, `{index}`; for the tilt, retract and tolerance templates `{a}`, `{b}`, `{c}` (the angles of the `TILT` or `TILT_AXIS` block), `{x}`, `{y}`, `{z}`, `{move}` and `{dir}` (from the `MOVE` option), `{distance}`, `{tol}`, `{rotary}`, `{mode}`; in expansion rules `{position:NAME}` (the axis words of a `[positions]` entry, D100). A format suffix pads numbers: `{tool:02}` writes `04`, `{tool:02}.` writes `04.` (the decimal point of the NT NURSE macros is literal text). Reading is the other way round and takes the digits of one address as one number that the placeholders split from the right, as the control does: a padded placeholder that begins a run of digits reads one or more digits, a padded placeholder that follows digits (a literal digit or another placeholder) reads exactly its width. So `T{tool:02}{offset:02}` reads `T0101` and the unpadded `T101` alike as tool 1 with offset 1, and `T12301` as tool 123 with offset 1, while `#11{index:03}` still needs its three digits. Rendering pads and never truncates: a number wider than its width is written in full where it begins the run, and where it follows digits it is an ERROR on the block, because the text would read back as other numbers (D153). A missing placeholder value leaves the template unusable and the compiler reports it.
+Templates are strings with `{placeholders}`: `{tool}` (the tool in the spindle after the block, from the VM, so a bare `TOOL` writes the preloaded number, D91), `{name}` (tool name string), `{offset}`, `{next}` (the preloaded next tool; in the `preload` template both `{tool}` and `{next}` mean the n of `PRELOAD=n`, and `{next}` is the preferred spelling, D150), `{kind}` (tool kind from the tool table: rotary or turning, mapped per machine), `{rpm}`, `{axis}` (tool axis letter; in the `[setpos]` and `ROTARY_FEED` templates the axis the call is written for, one call per axis), `{axes}` (the axis list of a `HOME` or `SETPOS` block in the machine's address form), `{angle}`, `{b}` (index angle of the tool carrier from the next positioning block), `{c}` (tool spindle orientation from the next `ORIENT:TOOL`), `{mark}`, `{channels}`, `{paths}`, `{r}` (the reference radius of `CYLINDER=n`, the only source of `{r}`; not the arc key `R`, D96), `{d}` (twice `{r}`: the working diameter that Siemens `TRACYL` takes), `{value}`, `{index}`; for the tilt, retract and tolerance templates `{a}`, `{b}`, `{c}` (the angles of the `TILT` or `TILT_AXIS` block), `{x}`, `{y}`, `{z}`, `{move}` and `{dir}` (from the `MOVE` option), `{distance}`, `{tol}`, `{rotary}`, `{mode}`; in expansion rules `{position:NAME}` (the axis words of a `[positions]` entry, D100). A format suffix pads numbers: `{tool:02}` writes `04`, `{tool:02}.` writes `04.` (the decimal point of the NT NURSE macros is literal text). Reading is the other way round and takes the digits of one address as one number that the placeholders split from the right, as the control does: a padded placeholder that begins a run of digits reads one or more digits, a padded placeholder that follows digits (a literal digit or another placeholder) reads exactly its width. So `T{tool:02}{offset:02}` reads `T0101` and the unpadded `T101` alike as tool 1 with offset 1, and `T12301` as tool 123 with offset 1, while `#11{index:03}` still needs its three digits. Rendering pads and never truncates: a number wider than its width is written in full where it begins the run, and where it follows digits it is an ERROR on the block, because the text would read back as other numbers (D153). A missing placeholder value leaves the template unusable and the compiler reports it.
 
 Everything that differs between two machines lives here and nowhere else. A user copies the file of a similar machine and edits it. One machine, one file. The file is TOML; a large kinematic tree may be split into a second TOML file referenced from the first, so the user still edits one configuration language.
 
 ## 1. Identity and dialect
 
 ```toml
+ncx_schema = 1                     # optional, the first key: the version of this schema the file is written in (D348)
+
 [machine]
 name = "DMU 50"
 controller = "heidenhain"          # fanuc | heidenhain | siemens
@@ -16,12 +18,17 @@ dialect = "iTNC530"                # 30i | 31i-T | 0i-TF | iTNC530 | TNC640 | 84
 builder = "dmg"                    # machine builder id, used by RAW:DMG and by the builder function tables
 gcode_system = "A"                 # Fanuc lathes only: A (G98/G99 feed, U/W incremental, G90 = turning cycle), B (G94/G95, G90/G91, cycles G77/G78/G79) or C (as B, with G70/G71 for inch and mm and cycles G20/G21/G24; D174)
 s_binds_to_spindle_word = true     # Fanuc: one S word, owned by the spindle of the M code in the same block; RPM:role is written into that role's SPINDLE block
-limits = "warn"                    # warn | clamp: what the expander does with RPM, F and targets beyond the machine limits (D64)
+limits = "warn"                    # warn | clamp: what the expander does with RPM, F and targets beyond the machine limits (D64); clamp rewrites F against the linear axes its block names and only the absolute axis words of RAPID and LINE under FRAME=MACHINE (D192, D203)
 channels = [1]
 units_default = "MM"
 default_spindle = "S1"
 default_holder = "H1"
 default_workpiece = "TABLE1"
+arc_tolerance = 0.01               # optional, mm like rapid and max_feed, converted for an INCH program: |start - center| against |end - center| (D36); absent means 0.01 mm and 0.0005 in (D139)
+arc_radius_tolerance = 0.005       # optional, mm, converted for an INCH program: the radius difference of a written arc beyond which the compiler reports CMP030; absent means one output step of the centre's address (D364)
+dwell_increment = 0.001            # optional, Fanuc: seconds per unit of G4 P, of G4 X/U without a decimal point and of a cycle P; default 0.001 (D159)
+base_units = "mm"                  # optional, Siemens: "mm" | "inch", the basic system of MD10240; default units_default (D292)
+extended_units = false             # optional, Siemens: MD10260 = 1, G700/G710 available; default false (D292)
 tool_table = "dmu50.tools.toml"   # optional (D10): tool kind, length, radius per tool number; when missing, {kind} takes the default and the compiler writes a warning block at the head of the program naming the expected file and the tools it lacks, so nobody runs the program by accident
 ```
 
@@ -34,9 +41,25 @@ number = 4                         # the tool number TOOL=4 calls; or name = "DR
 kind = "ROTARY"                    # a key of [tool_change] kind_map (section 3, D52)
 length = 120.5
 radius = 4
+
+[[tool.point]]                     # optional, one per measurement point of the tool (D376)
+k = 2                              # the point, from 1, as TOOL_POINT names it (language 4.4, D372)
+tip_offset = 2                     # a: the axial offset of the point from the tip, not negative
+radius = 8                         # r: the register radius of the point, not negative, 0 by default
+wear = 0                           # what the control adds to r, 0 by default; the virtual machine adds it to the radius it reports (D374)
 ```
 
+Every numeric key of the tool table, `length`, `radius`, `tip_offset` and `wear`, is in the machine's `units_default` (D370, D376). A tool without `[[tool.point]]` rows is point 1 with a = 0 and r = 0. The compiler compares the program's `TIP_OFFSET` and `POINT_RADIUS` of the active point with its row and reports the WARNING CMP032 where either differs by more than one output step of the tool-axis address (10 to the minus `decimals` of that address, section 2); it is silent where the table has no row for that tool and point, and it never corrects a coordinate (D376).
+
 Without the table, or for a tool it does not describe, `{kind}` takes the default kind `ROTARY`, and the compiler writes the warning block of D10 at the head of that program only, after its header: comment lines of the controller, under `comment_charset` (section 2), that name D10, the expected file and the tools without data with the kind written. The block stops nothing, and a machine whose templates need no tool data gets no warning (D265).
+
+A machine file requires `[machine] name` and `controller`, `id` and `type` of every `[[resource]]`, `id`, `ncx` and `kind` of every `[[axis]]`, `id` of every `[[node]]`, and the coolant channel `[coolant] STANDARD` (section 5, D130); a missing one is the ERROR CFG004. Every other key is optional with its documented effect, and what a compiler needs beyond them is checked by the compiler (D138).
+
+`ncx_schema` is the format version of the machine-configuration schema, with the meaning `NCX=1` has in language 4.1: not the release of `ncx` and not the content of the file. A machine file and a cycle catalog may carry it as their first key; a file without it is version 1, and a version this build does not read is the ERROR CFG009 that names the file and the version. The number changes only when the schema breaks, so it stays 1 through release 1.0, and the shipped files carry it (D348).
+
+`dwell_increment` is the unit of the Fanuc dwell that the control takes from its increment system, or 1 ms under parameter 1015#7 DWT. The reader reads `G4 X` or `U` with a decimal point as seconds and multiplies `P`, and `X` or `U` without a decimal point, by the increment; the compiler always writes `G4 X` with a decimal point in seconds and a cycle `P` as round(seconds / dwell_increment). NCX assumes parameter 3405#1 DWL = 0: a dwell is in seconds, never in revolutions under G95 (D159; Fanuc 30i-B operator's manual B-64484EN p.188, parameter manual B-64490EN-05 p.59 and p.195).
+
+`base_units` and `extended_units` describe the Siemens group 13 pair; `units_default` stays the reset value of the group (MD20150). Where `UNITS` equals the basic system the compiler writes G71/G70; where it differs it writes G710/G700 under `extended_units = true`, otherwise G70/G71 with every feed converted into the basic system and an INFO naming the conversion. The reader takes G700/G710 as written and converts the feeds under a G70/G71 that differs from the basic system, with a WARNING (D292; SINUMERIK 840D sl function manual basic functions p.346 for MD10240, programming manual SW4.94 p.158 for MD10260).
 
 `controller` selects the reader and compiler; `dialect` selects their variant tables. `default_*` resolve NCX words without a role address. `check`, `trace`, `annotate` and `analyze` run without a machine file against a built-in default machine (`ncx-virtual-machine.md`, section 3.8, D103); `convert` and `compile` need one (D77).
 
@@ -45,7 +68,7 @@ Without the table, or for a tool it does not describe, `{kind}` takes the defaul
 ```toml
 [format]
 decimal_separator = "."            # "," for Heidenhain
-decimals = { X = 3, Y = 3, Z = 3, A = 3, C = 3, F = 1, S = 0 }
+decimals = { X = 3, Y = 3, Z = 3, A = 3, C = 3, ANGLE = 3, F = 1, S = 0 }   # ANGLE: the arc sweep (D366)
 trailing_zeros = false
 block_numbers = { enabled = true, start = 10, step = 10 }   # Heidenhain: consecutive from 0
 line_ending = "CRLF"
@@ -53,13 +76,27 @@ program_end = "M30"                # M30 | M2 (Siemens also M17), written for PR
 sub_end = "M99"                    # written for SUB=END and RETURN; Heidenhain "LBL 0", Siemens "RET"
 program_layout = "one_file"        # one_file: all programs and subprograms of an NCX file into one output file (Fanuc O programs, Siemens %_N_ units)
                                    # file_per_program: one output file per program, subprograms copied after the M30 of every caller (Heidenhain)
-max_line_length = 0                # 0 = unlimited
-comment_charset = "ASCII"          # umlauts are transliterated before writing
+max_line_length = 0                # 0 = unlimited; Siemens family value 512 (D263)
+comment_charset = "ASCII"          # "ASCII" | "UTF-8", any other value is the ERROR CFG005; under ASCII umlauts are transliterated before writing (D263)
+label_max = 999                    # optional: the largest label number; the Heidenhain compiler numbers labels from 1 to it (D271)
+motion_code = "arcs"               # optional, every compiler: "change" | "arcs" | "every_block", when the verb G0..G3, L, C is written (D299)
+m_codes_per_block = 1              # optional, Fanuc: 1 to 5 M codes per block; 3 needs parameter 3404#7 M3B, 5 needs 11630#5 M5B (D339)
+# m_codes_combinable = ["M10", "M11"]   # optional, Fanuc: only these may be the second and later M code of a block (D339)
+helix_feed = "arc"                 # optional: "path" | "arc", whether F is measured along the whole path of a helix or along the arc in the plane (D354)
+# header = "G0 G40\nG80 G90 G94 G98"   # optional, Fanuc: the start block, a template like program_end split at \n (D276)
+# plane_with_first_motion = false       # optional, Fanuc: G17 stands in the first motion block after it changes (D276)
+# motion_code_after_tool_change = false # optional, Fanuc: the first motion after a tool change writes its motion code (D276)
+# length_offset_with_tool_axis = false  # optional, Fanuc: G43 H stands in the first block that moves the tool axis (D276)
+# channel_files = "path_suffix"         # optional: "path_suffix" | "channel_suffix" | "program_name", the files of a job's channels (D310)
 # external_call = "M198"          # optional, Fanuc: the code that calls a program outside the file, parameter 6030 on the control; the compiler writes it
                                   # in place of M98 for a CALL of an external program and the reader reads it as CALL. Without the key the compiler writes
                                   # M98 and the reader reads no external call; a machine that calls with M198 names it, and a machine whose [sync]
                                   # mark_range covers the code must not, because the code is a wait mark there (D322)
 ```
+
+A key left out takes the value of the controller family (D263): line endings LF; no block numbers, and start 10 step 10 when they are enabled, except Heidenhain, which numbers from 0 in steps of 1; `max_line_length` 0, except Siemens 512; `comment_charset` "ASCII" on every family. An overlong line is the WARNING CMP021, and a non-ASCII character without a transliteration becomes `?` with CMP022. `label_max` defaults to 999, the iTNC 530 from NC-SW 340 49x (254 for 340422, 65535 for the TNC 640, D271). `motion_code` defaults to the form each compiler writes: Fanuc "arcs" (G0 and G1 on change, G2 and G3 on every arc), Siemens and Heidenhain "every_block" (D299). `m_codes_per_block` defaults to 1, which every control accepts; whatever the keys say, the compiler writes M00, M01, M02, M30, M98, M99, M198, the `[sync]` wait codes and the configured macro calls each in a block of its own, and puts a spindle code in one block with another M code only when `m_codes_combinable` lists that code; codes beyond the limit move to the following lines (D339). `helix_feed` defaults to "arc" on Fanuc (parameter 1403#5 HTG = 0) and to "path" on Heidenhain and Siemens; under "arc" the compiler scales the `F` of a helix by the plane length over the path length and the reader scales it back (D354). An address that `decimals` leaves out takes a default per family, angle addresses four decimals on Heidenhain and three on Siemens and Fanuc, a linear address the decimals of `X` (D366).
+
+`header`, `plane_with_first_motion`, `motion_code_after_tool_change` and `length_offset_with_tool_axis` are the habits of the Fanuc sources, which only the Fanuc compiler reads: `header` is a template like `program_end` whose G codes are the control state after it, and each flag defaults to false (D276). `channel_files` names the files of a job's channels: "path_suffix" writes O<NUMBER, at least four digits> for the first channel and O<NUMBER>.P-n for channel n without extension, the stem for a program without NUMBER; "channel_suffix" writes <job>_C<n>.<ext>; "program_name" writes NAME.<ext>. Without the key each channel keeps the name of its family, and two channels that would write one file get _C<n> with a WARNING (D310).
 
 ## 3. Tool change
 
@@ -72,6 +109,7 @@ unload = "T0 M6"                   # written for TOOL=0
 auto_preload = true                # insert PRELOAD of the next tool after each TOOL when the program has none
 preload_position = "after_change"  # after_change | before_first_motion
 offsets_with_change = false        # true on Heidenhain: OFFSET words are implicit in TOOL CALL and not written
+length_offset_by_macro = false     # Fanuc: true when the builder's change macro applies the length offset; otherwise the first tool-axis motion after a TOOL without OFFSET:LEN, OFFSET or a named point's register is the WARNING CMP342, and no G43 H is written by default (D389)
 tool_name_allowed = false          # TOOL="NAME" accepted (Heidenhain, Siemens) or mapped to numbers
 kind_map = { ROTARY = "0.", TURNING = "1." }   # the value of {kind} per tool kind of the tool table (D52); Mori Seiki as here, DMG { ROTARY = 1, TURNING = 2 }; a tool without data takes ROTARY (D265)
 ```
@@ -92,6 +130,34 @@ Templates found in the manuals:
 `[tool_change]` describes the change of `default_holder`. A machine with a second tool holder needs no table of its own: a `T` word of the source belongs to the tool holder whose `channel` is the channel of the program, else to `default_holder` (virtual machine 3.8 rule 2). A `T` word of `default_holder` is read through these templates first, so the Mori Seiki `T9001` is `PRELOAD=9001` through its `preload`; a `T` word none of them matches, and every `T` word of another holder, is the turret form `T{tool:02}{offset:02}` of `fanuc.md` 5, whose `TOOL` carries that holder's role, and the compiler writes a change on such a holder in that form (D219).
 
 When `change` contains `{next}`, a `PRELOAD` word that follows the `TOOL` block (before the next motion) is folded into the change command; with `auto_preload` the compiler fills `{next}` from the STATIC look-ahead. `{b}` and `{c}` are filled the same way from the next positioning block and the next `ORIENT:TOOL`; `{kind}` comes from the tool table (D52). A template may span lines with `\n`.
+
+`[tool_points]` maps a tool and its measurement point (`TOOL_POINT`, language 4.4) to the control's registers (D373). The program names the point; the machine file says what selects it, and NCX derives nothing from a tool number that the file does not state.
+
+```toml
+[tool_points]
+form = "registers"                 # indexed_tool (Klartext) | edge (Siemens) | registers (Fanuc); any other value is an ERROR
+# indexed_tool: point k is the index k-1 of the called tool, TOOL CALL 5.1 for point 2; at most nine indices, so k <= 10 (CMP123 beyond).
+#   An indexed call carries a tool number, so the TNC 640 runs its change macro (Klartext 892903-18 p. 123), and on the iTNC 530 it depends on
+#   MP7480.0 and the builder's macro; a point change of the tool in the spindle is the WARNING CMP123 unless:
+point_change = "call"              # indexed_tool: the builder's macro accepts an indexed call of the tool in the spindle
+# edge: point k is D k of the active tool, or the edge of a [[tool_point]] row, which wins.
+edge_numbering = "flat"            # edge: D numbers without relation to T (MD18102 = 1), so every point needs a row (CMP514 without one)
+# registers: H and D from a [[tool_point]] row; else the shop's step rule; else tool management for point 1; else CMP341.
+offset_memory = "C"                # registers: A | B | C; under A or B H and D share one pool and the loader refuses one number as a length and a radius (CFG010)
+managed = false                    # registers: true writes H99 and D99, the registers of the tool at the spindle, for point 1 only (30i-B B-64484EN p. 260)
+length_register_step = 100         # registers: H = tool + (k-1) * step, the shop's numbering rule; a control counterpart (parameter 11419 under G43.8/G43.9) exists under memory A or B only
+radius_register_step = 100         # registers: D = tool + (k-1) * step
+point_comment = false              # true: one comment line with the point, a and r where a point is selected (D375)
+
+[[tool_point]]                     # a row per tool and point that the rule of the form does not give; tool and point are required (CFG010)
+tool = 5
+point = 2
+length = 12                        # registers: the H of the point
+radius = 12                        # registers: the D of the point
+# edge = 20                        # edge: the D of the point
+```
+
+A machine file without `[tool_points]` writes nothing for a point other than 1 and reports the INFO CMP016 once per program, because a control that cannot select a point is doing nothing wrong; a point the form cannot map is the ERROR of its family, CMP123 Heidenhain, CMP341 Fanuc, CMP514 Siemens, naming the tool and k, because another point's registers would cut with the wrong offsets (D373). A compiler writes only the register the mapping gives, never `TIP_OFFSET` or `POINT_RADIUS` as a control value, and a tool whose program names no point compiles as before (D375, D393). An `OFFSET` word on a holder whose tool named its point writes its own register in place of the mapped one, with the WARNING CMP033 (D393).
 
 ```toml
 [home]
@@ -138,11 +204,12 @@ incremental_letter = "U"           # Fanuc lathes: U/W/H/V are the incremental f
 kind = "linear"                    # linear | rotary
 limits = [-10, 650]                # min and max in machine coordinates (the G53 / M91 frame), for the travel-limit analytics (D100)
 rapid = 30000                      # mm/min, for the runtime estimate
-max_feed = 10000                   # mm/min, the F this axis can follow; the expander warns or clamps (D64)
+max_feed = 10000                   # mm/min (deg/min on a rotary axis), the F this axis can follow; VM441 compares the path feed of the axes a block moves, the expander warns or clamps (D64, D192)
 acceleration = 3000                # mm/s^2, for the trapezoidal profile of the runtime estimate
 programming = "diameter"           # X axis of a lathe: diameter | radius | switchable (D60); the reader interprets the source with it, the compiler writes it
 home = 0                           # reference point 1 in machine coordinates (the G53 / M91 frame), for HOME (D100)
 home2 = -50                        # reference point 2 (G30 P2), optional
+frames_in_diameter = false         # diameter axis only: true when the control keeps frame offsets and actual-value variables in diameters (Siemens MD20360 bits 3 and 6); default false, radii (D125, D388)
 clamp = { ON = "M10", OFF = "M11" }   # rotary axis clamping, written by the compiler around 3+2 machining when set
 
 [[axis]]
@@ -151,6 +218,7 @@ ncx = "C"
 letter = "C"
 kind = "rotary"
 owner = "S1"                       # rotary axis of a work spindle
+parallel = "Z"                     # rotary axis only: the linear axis it turns about, the cylinder axis of CYLINDER=n; X, Y or Z, default Z; a work spindle always turns about Z (D146)
 modulo = true                      # rotary axis only: its limits are the display range, never compared or clamped (D193)
 limits = [0, 360]                 # degrees, modulo axis: the display range, not a travel limit (D100)
 home = 0                           # the spindle zero mark, machine frame (D100)
@@ -158,7 +226,7 @@ home = 0                           # the spindle zero mark, machine frame (D100)
 
 `modulo = true` on a rotary axis says that its `limits` are the display range of the control (the Fanuc roll-over axis, the Heidenhain `isModulo`, the Siemens modulo range): they are never compared, never clamped and never reported by the travel-limit analytic. Without the key the `limits` of a rotary axis are travel limits like those of a linear axis, compared in the MACHINE frame, reported by the travel-limit analytic and clamped under `limits = "clamp"`; a swivel `B` is written that way. The key decides only the limits, not how a modulo position wraps (D193).
 
-`home` and `limits` are machine coordinates (the G53 / M91 frame). `HOME` on an axis without `home` (or without `home2` under `POINT=2`) is a WARNING at check time, once per run and axis, and an ERROR only in a compiler that must write the coordinates (D100). `[positions]` names further machine-frame positions, each a set of axis values; expansion rules reach them through `{position:NAME}` (section 5a).
+`home` and `limits` are machine coordinates (the G53 / M91 frame). The file writes the X values the way the axis is programmed: diameters for `programming = "diameter"` or `"switchable"`, radii for `"radius"` or without `programming`. The VM halves `home`, `home2` and `limits` of a diameter axis once, where it takes them, into the radii it stores (D28, D137); `[positions]` stays as written, and `{position:NAME}` becomes an X word that the VM halves under `DIAMETER=ON`, so on a switchable machine such a rule carries `requires = { DIAMETER = "ON" }` and `restore = ["DIAMETER"]` (5a). Values copied from Siemens machine data (the software limit switches, the display in the machine coordinate system) are radii on a facing axis and must be doubled (SINUMERIK 840D sl/828D Funktionshandbuch Grundfunktionen 2012 p. 901-902); a Fanuc stroke check (parameters 1320/1321) is a diameter already (D137). `owner` of a rotary axis names what it turns (D325): a work spindle or a table that holds the workpiece makes it a table axis, counted only while its owner is the workpiece holder; a tool holder (turret, tool carrier, swivel head) makes it a head axis that turns the tool vector; a tool spindle makes it the spindle's own rotation (the C-axis mode of a tool spindle), which turns no tool vector. A rotary axis without `owner` is taken as a head axis, and the tool-vector report names that assumption in a WARNING. `owner` may name a table resource; `parallel` then says which linear axis the table axis turns about, the cylinder axis of `CYLINDER=n` (D146). The letter without digits gives the machine axis a rotary axis turns about (DIN 66217). `HOME` on an axis without `home` (or without `home2` under `POINT=2`) is a WARNING at check time, once per run and axis, and an ERROR only in a compiler that must write the coordinates (D100). `[positions]` names further machine-frame positions, each a set of axis values; expansion rules reach them through `{position:NAME}` (section 5a).
 
 ```toml
 [positions]                        # named positions in machine coordinates (D100)
@@ -233,7 +301,7 @@ start_channel = ""                 # Siemens: "START({channel})"
 wait_channel = ""                  # Siemens: "WAITE({channel})"
 
 [coolant]
-STANDARD = { ON = "M8", OFF = "M9" }
+STANDARD = { ON = "M8", OFF = "M9" }   # required: the channel of a bare COOLANT; a machine file without it is the ERROR CFG004 (D130)
 AIR = { ON = "M14", OFF = "M15" }
 THROUGH = { ON = "M51", OFF = "M9" }
 
@@ -308,7 +376,7 @@ pre = ["FUNC:PECK_MODE=RETRACT"]   # Doosan M291 before G83, as an NCX word so t
 
 - `states`: the states of the function table whose words trigger the rule, `states = ["ON"]` on the clutch of the through-spindle coolant, so that the sequence runs when the coolant is switched on and not when it is switched off. Without the key every state of the table triggers it. One rule per table: a word triggers the state it sets, under the state names this section gives its table, so `SPINDLE=CW` triggers `CW`, `RPM`, `ORIENT` and `RPM_MAX` their own state, `CSS=ON` and `VC` the state `VC` and `CSS=OFF` the state `CSS_OFF`, `SPINDLE_MODE`, `COOLANT` and `FUNC` their value, `SPINDLE_SYNC` with two roles `ON` and `SPINDLE_SYNC=OFF` the state `OFF`, and `PHASE` the state `PHASE` (D198). The tool change and a catalog cycle have no states and take no key.
 - `pre` and `post`: lists of NCX blocks inserted before and after the block. They are NCX text, not native lines, so the VM executes them and the reader can recognize them; native text goes through `RAW:BUILDER`. A native line that is part of the cycle rather than a word of the program is the `before` key of section 6 (D256). A block may contain `{position:NAME}`, which expands to the axis words of that entry of `[positions]`, e.g. `pre = ["RAPID {position:tool_change} FRAME=MACHINE"]` (D100).
-- `requires`: state conditions that must hold while the function is written, as state variable = value (`SPINDLE = "OFF"`, `COOLANT = "OFF"`, `SPINDLE_MODE = "AXIS"`). The expander inserts the words that establish them, preceded by `@SAVE` of the variables named in `restore`.
+- `requires`: state conditions that must hold while the function is written, as state variable = value (`SPINDLE = "OFF"`, `COOLANT = "OFF"`, `SPINDLE_MODE = "AXIS"`). The expander inserts the words that establish them, preceded by `@SAVE` of the variables named in `restore`. A rule whose `pre` or `post` reaches a `[positions]` entry through `{position:NAME}` writes an X word, which the VM halves under `DIAMETER=ON`; on a switchable machine it carries `requires = { DIAMETER = "ON" }` and `restore = ["DIAMETER"]`, as the DMG tool-change cycle L710 writes `DIAMON` before `G153 X` and restores the mode (D137).
 - `restore`: the state variables to put back after the block, through `@RESTORE`; the VM re-applies the saved value from its own snapshot, so the rule never has to know the speed the spindle had. Restoring costs cycle time (a spindle stop and start), which the runtime estimate counts and a WARNING reports at compile time.
 
 The triggering block of a catalog cycle is the block that names the cycle (`CYCLE=name` or `CYCLE:<controller>=n`), never a `CYCLE_CALL` block, and the rule covers the cycle while it is active: `@SAVE`, `requires` and `pre` stand before that block, `post` and `@RESTORE` directly after the `CYCLE=OFF` that ends the cycle, and directly before every other block that ends it (the next `CYCLE`, a `TOOL`, the `PROGRAM=END`, or the `SUB=END` of a subprogram, where generated blocks stay in their section). A required state therefore holds at every hole, and a `post` that moves cannot drill while the cycle is still modal on the control. The expander finds the end in the text of the section, without VM state, and a `JUMP` out of the range skips `post` and `@RESTORE` like any block it jumps over (D204).
@@ -321,9 +389,11 @@ A named function is written as `FUNC:SUB_CHUCK=OPEN` in NCX and compiles to the 
 
 ```toml
 [cycles]
-catalog = "heidenhain.toml"         # controller family catalog <family>.toml, shipped with NCXchange, user-extendable (D156)
+catalog = "heidenhain.toml"         # controller family catalog <family>.toml, shipped with NCXchange, user-extendable (D156); looked up in the cycle folders (D207)
 
 # excerpt of a catalog file
+ncx_schema = 1                      # optional, as in the machine file (section 1, D348)
+
 [[cycle]]
 name = "RECT_POCKET"
 native = 251
@@ -336,6 +406,8 @@ name = "ROUGH_TURN"
 native = "G71"
 contour = ["P", "Q"]                # first and last block of the contour, the SUB section of CONTOUR=name (D65)
 ```
+
+The `catalog` value is looked up in the cycle folders alone, in this order: the folder `ncx.toml` names, `cycles/` of the working directory (the project), `cycles/` of the tool's own folder, and as the fourth and last place the catalogs built into `ncx` (D371). A value with a folder in it counts from each of them; a full path, or one that climbs out with `..`, names no file. A catalog found nowhere or unreadable is CLI202, exit code 2 (D97); one that loads with an ERROR exits 1. A shop's own catalog may override a shipped one on purpose; the CAM's bundle is protected by the schema version of D348 (D207).
 
 The built-in drilling family (`DRILL`, `DRILL_DWELL`, `PECK`, `CHIP_BREAK`, `TAP`, `REAM`, `BORE`) is defined in the same way inside NCXchange and can be overridden per machine. Four catalog files ship with `ncx`: `cycles/fanuc.toml` with the mill codes of the Fanuc family, `cycles/fanuc-lathe.toml` with the lathe drilling cycles along Z and along X and the turning cycles, which a Fanuc lathe names instead of the mill file, and `cycles/heidenhain.toml` and `cycles/siemens.toml` (D160). A catalog file is written in the numbers of Fanuc G-code system A, and the reader and the compiler translate them to the system of the machine through `gcode_system`, so no entry key ties an entry to a G-code system (`../controllers/fanuc.md` 3, D174). The `native` of an entry is the native cycle as the control writes it, a number for Heidenhain (`251`) and a string for Siemens and Fanuc (`"CYCLE952"`, `"G71"`, `"G83.5"`); a program that writes the cycle natively gives exactly that text after the controller address of its `CYCLE` word (`CYCLE:FANUC=G71`, `CYCLE:FANUC="G83.5"`; language 4.7, D144).
 
@@ -388,7 +460,7 @@ Every entry of `map` is a template of the variable's number with `{index}`, like
 # shaft.ncxjob.toml
 [job]
 name = "SHAFT"
-machine = "nakamura-ntjx.toml"
+machine = "nakamura-ntjx.toml"      # looked for next to the manifest first, then as --machine takes it (D303)
 
 [[channel]]
 id = 1
@@ -403,6 +475,8 @@ program = "SHAFT_CH2"              # NAME of a PROGRAM section in that file; the
 spindles = ["S1", "S2"]             # commanded from both channels; the scheduler checks conflicts
 axes = ["B1"]                       # machine axes commanded from both channels, checked like the spindles (D20, F24)
 ```
+
+A job manifest requires `[job] machine` and `id` and `file` of every `[[channel]]`; every other key is optional (D138).
 
 ```toml
 # pattern.vars.toml, start values for analyze
@@ -470,7 +544,11 @@ my-shop/
     fanuc-vmc/part-123.nc
 ```
 
+Every machine file and catalog file of the layout may begin with `ncx_schema = 1` (section 1, D348); the version is the schema's, so a file copied from another project keeps it.
+
 `ncx.toml` names the plugin assemblies (`plugins = ["MyShop.NcxPlugins.dll"]`) that subscribe to VM events (`ncx-virtual-machine.md`, section 7).
+
+A machine named without a path is looked up in `machines/` of the folder `ncx.toml` names, of the working directory and of the tool's own folder, in that order, and a catalog in the `cycles/` folders in the same order; a value that names an existing file, or has a folder in it, is a path (D206, D207). The installation of `ncx` holds the shipped machine files and catalogs twice: loose in `machines/` and `cycles/` beside the binary, to read and copy, and built into the binary as the fourth and last place of both lookups, so that a single-file `ncx` run on its own finds them (D371). A shop's own file of a shipped name wins; a shop that wants a shipped machine gone shadows it with its own file of that name, since deleting the loose copy falls back to the built-in one. A built-in file is named in a diagnostic as `built-in machines/<name>.toml`. The plugin template is no built-in file: `ncx plugin new` from a lone binary reports CLI552.
 
 ## 11. Example machine files
 

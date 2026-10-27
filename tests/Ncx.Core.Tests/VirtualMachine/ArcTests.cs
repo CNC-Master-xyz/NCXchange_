@@ -122,15 +122,16 @@ public sealed class ArcTests
     }
 
     // Language 6, D84: the TopSolid helix CP IPA+737.956 IZ-5.4 DR+ around CC X50 Y50 from 70/50: two full turns bring
-    // the tool back to 70/50, the rest of 17.956 degrees ends it at 69.026/56.166, 5.4 lower; the VM keeps the sweep.
+    // the tool back to 70/50, the rest of 17.956 degrees ends it at 69.025871/56.165731 (D121), 5.4 lower; the VM
+    // keeps the sweep.
     [Fact]
     public void Arc_AngleFormHelixOfTheLanguageExample_EndsAfterTwoFullTurnsAndTheRest()
     {
         VmHarness vm = Mill().Execute("RAPID X=70 Y=50 Z=0", "ARC=CCW IZ=-5.4 CENTER:X=50 CENTER:Y=50 ANGLE=737.956");
 
         vm.AssertNoDiagnostics();
-        Assert.Equal(Workpiece(69.026m), vm.Position("X"));
-        Assert.Equal(Workpiece(56.166m), vm.Position("Y"));
+        Assert.Equal(Workpiece(69.025871m), vm.Position("X"));
+        Assert.Equal(Workpiece(56.165731m), vm.Position("Y"));
         Assert.Equal(Workpiece(-5.4m), vm.Position("Z"));
         PlaneArc arc = LastArc(vm);
         Assert.Equal(2, arc.Arc.FullTurns);

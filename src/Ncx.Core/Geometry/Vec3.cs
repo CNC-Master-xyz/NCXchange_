@@ -36,14 +36,18 @@ internal readonly record struct Vec3(double X, double Y, double Z)
         return new Vec3((double)x, (double)y, (double)z);
     }
 
-    // A coordinate computed in double reaches the position store only as a decimal rounded to the units' decimals,
-    // never as a double (phase 1 risks, D62). Half away from zero is the one rounding NCX defines (language 4.12,
-    // ROUND).
-    // TODO(question): no document says how many decimals "the units' decimals" are (D62 is the math library, and the
-    // [format] decimals of machine-config 2 belong to the compiler, per address and machine), so the caller passes
-    // them (D121).
-    public static decimal RoundToDecimal(double coordinate, int decimals)
+    /// <summary>
+    /// The one fixed precision of every number the VM computes in double, in MM and INCH alike and with or without a
+    /// machine file: 6 decimals (D121). The compiler's [format] rounding alone decides the written digit.
+    /// </summary>
+    public const int VmDecimals = 6;
+
+    // A number computed in double reaches the position store, an event or a snapshot only as a decimal rounded to the
+    // VM precision, never as a double (virtual machine 3.2, D62, D121): 69.025870876999 becomes 69.025871, and
+    // 6.9999999999997 becomes 7, so that a computed point that should equal a written one compares equal (D122). Half
+    // away from zero is the one rounding NCX defines (language 4.12, ROUND).
+    public static decimal RoundToDecimal(double coordinate)
     {
-        return Math.Round((decimal)coordinate, decimals, MidpointRounding.AwayFromZero);
+        return Math.Round((decimal)coordinate, VmDecimals, MidpointRounding.AwayFromZero);
     }
 }

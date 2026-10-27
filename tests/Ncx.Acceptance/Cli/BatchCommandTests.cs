@@ -223,7 +223,7 @@ public sealed partial class BatchCommandTests : IDisposable
         int exitCode = _cli.Run(args);
 
         Assert.Equal(2, exitCode);
-        Assert.StartsWith("ncx(1): ERROR CLI001: ", _cli.Error, StringComparison.Ordinal);
+        Assert.StartsWith("ncx: ERROR CLI001: ", _cli.Error, StringComparison.Ordinal);
     }
 
     // The report holds counts and codes and the names of the files only: every outcome with its columns, the RAW
@@ -363,7 +363,7 @@ public sealed partial class BatchCommandTests : IDisposable
         return codes;
     }
 
-    [GeneratedRegex(@"\): (?:ERROR|WARNING|INFO) ([A-Z]+[0-9]{3}): ", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@": (?:ERROR|WARNING|INFO) ([A-Z]+[0-9]{3}): ", RegexOptions.CultureInvariant)]
     private static partial Regex DiagnosticCode();
 
     // A row of the files of the report: its name, then its result.

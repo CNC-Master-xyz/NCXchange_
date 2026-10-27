@@ -27,7 +27,8 @@ internal sealed record RunSettings
 
     /// <summary>
     /// The tool's own folder, whose machines/ and cycles/ hold the shipped machine files and cycle catalogs
-    /// (implementation 12, P2-04); the folder of ncx by default.
+    /// (implementation 12, P2-04); the folder of ncx by default. Its files come before the copies built into ncx, which
+    /// are the last place of the lookup (D371).
     /// </summary>
     public string ToolFolder { get; init; } = AppContext.BaseDirectory;
 

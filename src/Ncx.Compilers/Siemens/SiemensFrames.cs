@@ -344,9 +344,9 @@ internal static partial class SiemensFrames
     }
 
     // TRANS X Y Z or ATRANS X Y Z, the values of the SHIFT block as written where it appends the entry, else of the
-    // entry (controllers siemens.md 4).
-    // TODO(question): D125: the X of a SHIFT under DIAMETER=ON is a diameter or a radius; the virtual machine keeps it
-    // as written and the compiler writes it with the factor of an X word, until D125 is answered.
+    // entry (controllers siemens.md 4). The entry holds what the virtual machine stores: under DIAMETER=ON its X is the
+    // radius of the diameter the SHIFT wrote (D125), so it is written with the state factor of the axis, as a computed
+    // position is, while a word of the block is written with the factor of an X word.
     private static void WriteShift(SiemensBlock write, TransformEntry entry, bool first, bool appended)
     {
         var words = new List<string>();
@@ -357,7 +357,12 @@ internal static partial class SiemensFrames
             Word? word = fromBlock ? write.Block.Find(axis.Key) : null;
             Value? value = word?.Value
                 ?? (axis.Value is decimal known ? new DecimalValue(known, Invariant(known)) : null);
-            string? text = value is null ? null : SiemensAxes.ValueOf(write, axis.Key, value, letter);
+            string? text = word is not null
+                ? SiemensAxes.ValueOf(write, axis.Key, word.Value, letter)
+                : axis.Value is decimal stored
+                    ? write.FormatComputed(SiemensAxes.DecimalsAddress(write, letter),
+                        stored * SiemensAxes.StateFactor(write, axis.Key))
+                    : null;
             if (text is null)
             {
                 write.Error(DiagnosticCodes.SiemensChainNotWritable,

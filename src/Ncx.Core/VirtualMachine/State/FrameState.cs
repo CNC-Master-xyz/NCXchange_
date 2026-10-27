@@ -69,12 +69,26 @@ internal sealed class FrameState
     /// </summary>
     public Dictionary<string, SetposRecord> SetposAgainstMachine { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The chain entries that stood before the SETPOS of each axis, by axis: the frame its setpos shift was declared
+    /// in. A RESET that removes a ROTATE or MIRROR among them turns the shift into the remaining frame, one that
+    /// removes a TILT, a TILT_AXIS or an angle from an expression makes it unknown (virtual machine 3.4, D319). ORIGIN
+    /// clears it with the shifts.
+    /// </summary>
+    public Dictionary<string, IReadOnlyList<TransformEntry>> SetposChain { get; } = new(StringComparer.Ordinal);
+
     public bool Diameter { get; set; }
 
     /// <summary>
     /// The reference radius of CYLINDER=n; null for OFF (D96).
     /// </summary>
     public decimal? Cylinder { get; set; }
+
+    /// <summary>
+    /// The cylinder axis of CYLINDER=n, X, Y or Z: the linear axis parallel to the rotary axis of the workpiece holder
+    /// where the word stood (D146); Z while the transformation is off.
+    /// </summary>
+    public string CylinderAxis { get; set; } = "Z";
 
     public bool Polar { get; set; }
 

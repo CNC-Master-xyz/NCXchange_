@@ -116,12 +116,11 @@ internal static class LimitClamp
         return null;
     }
 
-    // F above the max_feed of an axis that moves (virtual machine 5): the feed is limited by the smallest max_feed of
-    // the moving axes (virtual machine 8), which are the axes the axis words of the block name.
-    // TODO(question): max_feed is in mm/min (deg/min on a rotary axis), F is in the units and the feed mode of the
-    // program, and only the axis words of its own block tell which axes move, while the expander never sees the state
-    // (architecture 5.5); F is compared as written, which never rewrites a feed within the limit (an INCH or a PER_REV
-    // feed is smaller than its value in mm/min), until D192 is answered.
+    // F above the max_feed of an axis that moves (virtual machine 5): the literal clamp compares F with the smallest
+    // max_feed of the linear axes its block names. That is exact for Siemens, where the slowest participating axis
+    // bounds the path speed, and errs to the slow side for Fanuc, whose clamp is a per-axis share (parameter 1430),
+    // which is safe. The expander never sees the state (architecture 5.5), so F is compared as written: an INCH or a
+    // PER_REV feed is smaller than its value in mm/min and is never rewritten within the limit (D192).
     private static Word? ClampFeed(Word word, decimal feed, Block block, MachineConfig machine, List<string> findings)
     {
         decimal? limit = null;
@@ -129,7 +128,7 @@ internal static class LimitClamp
         foreach (Word axisWord in block.Words)
         {
             if (AxisNameOf(axisWord, block) is string name
-                && machine.ResolveAxis(name)?.MaxFeed is decimal maxFeed
+                && machine.ResolveAxis(name) is { Kind: AxisKind.Linear, MaxFeed: decimal maxFeed }
                 && (limit is null || maxFeed < limit))
             {
                 limit = maxFeed;
@@ -145,26 +144,28 @@ internal static class LimitClamp
         return null;
     }
 
-    // A target beyond the axis limits, compared in the MACHINE frame (virtual machine 5, D100): an absolute axis word
-    // of a RAPID, LINE or ARC under FRAME=MACHINE is a machine coordinate, compared as written with the limits of its
-    // linear axis (an X of a diameter-programmed axis is D137).
-    // TODO(question): virtual machine 5 compares every target with the limits in the MACHINE frame, whose position only
-    // the virtual machine knows for a workpiece-frame target, and the expander never sees the state (architecture 5.5);
-    // only the targets of FRAME=MACHINE blocks are clamped, and the virtual machine reports the others, until D203 is
-    // answered.
+    // A target beyond the axis limits, compared in the MACHINE frame (virtual machine 5, D100): under "clamp" the
+    // expander rewrites only absolute axis words of RAPID and LINE under FRAME=MACHINE, compared as written with the
+    // limits; ARC is no clamped verb, since a clamped end point would no longer lie on its circle. Every other target
+    // keeps the WARNING of the virtual machine wherever it knows the machine position (D203). The word and the limits
+    // are both in the program's convention: an X of a diameter axis is a diameter, as its limits in the file are
+    // (D137). On a switchable axis the word is a diameter or a radius by DIAMETER, a state the expander never sees
+    // (architecture 5.5), so its target is not clamped and the virtual machine's WARNING reports it (D137, D203).
     // D193: the limits of a rotary axis are travel limits and are clamped like a linear axis's, unless its [[axis]]
     // carries modulo = true, which makes them its display range (decisions.md; machine-config 4).
     private static Word? ClampTarget(Word word, decimal target, Block block, MachineConfig machine,
         List<string> findings)
     {
-        bool machineFrameMotion = block.Has("FRAME", null, "MACHINE") && block.Verb?.Key is "RAPID" or "LINE" or "ARC";
+        bool machineFrameMotion = block.Has("FRAME", null, "MACHINE") && block.Verb?.Key is "RAPID" or "LINE";
         if (!machineFrameMotion || AxisNameOf(word, block) is not string name || IsIncremental(word))
         {
             return null;
         }
 
         AxisDef? axis = machine.ResolveAxis(name);
-        if (axis is null || (axis.Kind == AxisKind.Rotary && axis.Modulo))
+        if (axis is null
+            || (axis.Kind == AxisKind.Rotary && axis.Modulo)
+            || axis.Programming == Programming.Switchable)
         {
             return null;
         }

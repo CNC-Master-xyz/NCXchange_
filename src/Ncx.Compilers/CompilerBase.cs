@@ -1,3 +1,4 @@
+using Ncx.Config;
 using Ncx.Config.Templates;
 using Ncx.Core.Expander;
 using Ncx.Core.Machine;
@@ -143,6 +144,7 @@ public abstract partial class CompilerBase : ICompiler
         {
             RaiseBlockWrite = true,
             JobChannels = options.Job?.Channels.Count,
+            MeasuredPoint = MeasuredPointOf(options.ToolTable),
         };
         var vm = new VirtualMachine(machine, vmOptions, diagnostics);
         vm.Subscribe(recorder);
@@ -262,6 +264,18 @@ public abstract partial class CompilerBase : ICompiler
         _templates = new TemplateSet(machine, new Diagnostics(machine.Machine.Name));
         _lookAhead = new LookAhead(steps, machine);
         ResetWrite();
+    }
+
+    // The [[tool.point]] rows of the tool table, which the VM reads for the wear it adds to the radius it reports
+    // (D374, D376); null without a table.
+    private static Func<ToolRef, int, ToolPointData?>? MeasuredPointOf(ToolTable? table)
+    {
+        if (table is null)
+        {
+            return null;
+        }
+
+        return (tool, point) => table.Find(tool)?.FindPoint(point);
     }
 
     private static CompileResult Stopped(Diagnostics diagnostics)

@@ -6,6 +6,8 @@
 # D115: no kind key in 1.0; every parameter of this file that is not a word of language 4.7 takes a number or an expression, and the words of 4.7 keep
 # their kinds.
 
+ncx_schema = 1                     # the version of the machine-configuration schema, not of NCXchange (machine-config 6, D348)
+
 # ---------------------------------------------------------------------------------------------------------------------------------------------------
 # Drilling cycles of a lathe (fanuc 6, controller-mapping 5, AXIS; D59, D160)
 #

@@ -160,6 +160,60 @@ public sealed class DiagnosticsTests
         Assert.True(diagnostics.HasErrors);
     }
 
+    // A diagnostic about the command line names the tool as its origin and no line, in the MSBuild canonical form
+    // D98 follows: ncx: ERROR CLI001: message (D110).
+    [Fact]
+    public void ToText_ErrorAboutTheCommandLine_RendersTheToolWithoutALine()
+    {
+        var diagnostics = new Diagnostics("ncx");
+
+        diagnostics.CommandLineError("CLI001", "message");
+
+        Assert.Equal("ncx: ERROR CLI001: message\n", diagnostics.ToText());
+        Assert.Null(diagnostics.Items[0].Line);
+        Assert.True(diagnostics.HasErrors);
+    }
+
+    // Null is the one value of Diagnostic.Line without parentheses; an origin line without a line adds nothing (D110).
+    [Fact]
+    public void ToText_DiagnosticWithoutALine_HasNoParentheses()
+    {
+        var diagnostic = new Diagnostic
+        {
+            Severity = Severity.Warning,
+            File = "ncx",
+            Line = null,
+            Code = "CLI001",
+            Message = "message",
+        };
+
+        Assert.Equal("ncx: WARNING CLI001: message", diagnostic.ToText());
+    }
+
+    // A diagnostic on a generated block starts its message with the rule or rewriter that made the block and its
+    // reason, so that two blocks generated for one line can be told apart (D200).
+    [Fact]
+    public void Warning_OnABlockAnExpansionRuleMade_StartsWithTheRuleAndItsReason()
+    {
+        var diagnostics = new Diagnostics("2.5D_FRAESEN.ncx");
+        Block origin = new() { Line = 12, Words = [] };
+        Block block = GeneratedBlock(line: 12, originLine: 12) with
+        {
+            Generated = new GeneratedBlock
+            {
+                Origin = origin,
+                Source = "[tool_change]",
+                Reason = "pre",
+                Placement = GeneratedPlacement.Before,
+            },
+        };
+
+        diagnostics.Warning(block, "VM060", "message");
+
+        Assert.Equal("2.5D_FRAESEN.ncx(12, from 12): WARNING VM060: [tool_change] (pre): message\n",
+            diagnostics.ToText());
+    }
+
     // A block the expander made for the block of the origin line (language 4.15).
     private static Block GeneratedBlock(int line, int originLine)
     {

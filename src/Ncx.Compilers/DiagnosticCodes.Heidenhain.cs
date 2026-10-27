@@ -144,4 +144,12 @@ public static partial class DiagnosticCodes
     /// text for all of them (controllers heidenhain.md 3; D31).
     /// </summary>
     public const string HeidenhainLabelChainsDiffer = "CMP119";
+
+    /// <summary>
+    /// CMP123: a measurement point beyond the nine indices of a Klartext tool, k above 10, an ERROR; and, as a
+    /// WARNING, a point change of the tool in the spindle by an indexed TOOL CALL, which runs the change macro on the
+    /// TNC 640 and on the iTNC 530 depending on MP7480.0 and the builder's macro, unless point_change = "call"
+    /// (machine-config 3, D373).
+    /// </summary>
+    public const string HeidenhainToolPoint = "CMP123";
 }

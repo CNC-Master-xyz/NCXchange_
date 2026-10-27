@@ -9,7 +9,7 @@ An ERROR stops the run, a WARNING is reported and the run continues (D98); a dia
 stage named, and without a code where the code belongs to that stage's own project. The codes of the other
 projects (`CFG`, `RDR`, `CMP`, `ANA`, `PLG`, `CLI`) are not listed here.
 
-Suppressed inside a subprogram that no program of the file calls, because the state they check belongs to a caller that does not exist (virtual machine 3.9, D99): `VM040`, `VM041`, `VM042`, `VM043`, `VM044`, `VM200`, `VM201`, `VM202`, `VM227`, `VM250`, `VM251`, `VM480`, `VM500`.
+Suppressed inside a subprogram that no program of the file calls, because the state they check belongs to a caller that does not exist (virtual machine 3.9, D99): `VM040`, `VM041`, `VM042`, `VM043`, `VM044`, `VM200`, `VM201`, `VM202`, `VM227`, `VM250`, `VM251`, `VM480`, `VM481`, `VM500`.
 
 ## Structure
 
@@ -32,6 +32,7 @@ The file frame, the programs and subprograms, and the words of a block (language
 | `PAR014` | ERROR | An axis word without a value outside a HOME block. | language 4.3, 5 rule 2; D93 |
 | `PAR015` | ERROR | Duplicate key: a key twice in one block with one address. | language 5 rule 4; VM 5 |
 | `PAR016` | ERROR | IF, ARG, TIMES, WITH, FRAME, MOVE, ROT, POINT or PHASE without its verb or partner word in the block. | language 5 rule 5; VM 5 |
+| `PAR017` | ERROR | TOOL_POINT, TIP_OFFSET or POINT_RADIUS in a block that is neither a TOOL block nor a block of their own. | language 4.4; VM 5; D372, D392 |
 | `PAR020` | ERROR | Missing or misplaced FILE=BEGIN: it is the first block of the file and stands nowhere else. | language 4.1; VM 5; D92 |
 | `PAR021` | ERROR | FILE=BEGIN without NCX, the format version. | language 4.1; VM 5 |
 | `PAR022` | ERROR | NCX names a format version other than 1. | language 4.1 |
@@ -79,6 +80,7 @@ SETPOS, the path tolerance and the tilted plane (language 4.1, 4.2; VM 2.1, 3.4,
 | `VM420` | ERROR | TOLERANCE:ROTARY or TOLERANCE_MODE without an active TOLERANCE. | language 4.1; VM 5; D85 |
 | `VM421` | ERROR | SETPOS without an axis word. | language 4.2; VM 5 |
 | `VM422` | WARNING | ROT on a target without table kinematics: the machine file has no rotary axis on a table. Not checked without a machine file. | language 4.2; VM 5; D82 |
+| `VM215` | ERROR | CYLINDER=n while the workpiece holder has no rotary axis. | language 4.2; VM 3.4, 3.8, 5; D146 |
 
 ## Motion
 
@@ -91,7 +93,7 @@ Linear motion and the machine limits of a motion (language 4.3; VM 3.1, 5; machi
 | `VM202` | ERROR | IX from an unknown position. In a subprogram nothing calls the position becomes unknown instead. Suppressed inside a subprogram that no program of the file calls (D99). | VM 3.1, 5; D99 |
 | `VM203` | ERROR | Two forms of one axis in one block (X=10 IX=5). | language 4.3 |
 | `VM440` | WARNING | F in a RAPID block. | VM 5 |
-| `VM441` | WARNING | F above an axis max_feed. | VM 5; machine-config 4; D64 |
+| `VM441` | WARNING | F above the max_feed of an axis the LINE or ARC moves (rotary axes only in a rotary-only block under ROTARY_FEED=DEG_MIN), PER_REV with the known rpm, INCH times 25.4, CYCLE_F against the drilling axis; once per F or CYCLE_F word (MaxFeedCheck). | VM 5; machine-config 4; D64, D192 |
 | `VM442` | WARNING | A target beyond the axis limits, compared in the MACHINE frame and not checked while the machine position is unknown. | VM 5; machine-config 4; D64, D100 |
 | `VM670` | WARNING | With limits = "clamp" in the configuration: RPM, F or a target beyond a machine limit is rewritten to the limit, and the WARNING says so. Raised by the expander. | VM 5; machine-config 1; D64 |
 
@@ -127,6 +129,7 @@ The tool vector and the surface normal under TCPM (language 4.3; VM 3.1, 5; D81)
 | `VM211` | ERROR | Vector words mixed with rotary words. | language 4.3; VM 3.1, 5; D81 |
 | `VM212` | ERROR | Incomplete vector words: TX TY TZ all three, NX NY NZ all three and only with TX TY TZ. | language 4.3; VM 5; D81 |
 | `VM213` | ERROR | Vector words not of unit length within the arc tolerance. | VM 3.1, 5; D36, D81 |
+| `VM214` | ERROR | Vector words in a CYCLE_CALL block. | language 4.3, 5 rule 2; VM 3.1, 5; D185 |
 
 ## Retract and home
 
@@ -150,6 +153,10 @@ The tool change of the two-word model and the offsets (language 4.4; VM 2.3, 3.5
 | `VM043` | WARNING | TOOL while a cycle is active; the change ends the cycle. Suppressed inside a subprogram that no program of the file calls (D99). | VM 3.5, 4, 5 |
 | `VM044` | WARNING | TOOL while compensation is on. Suppressed inside a subprogram that no program of the file calls (D99). | VM 3.5, 5 |
 | `VM480` | ERROR | OFFSET mixed with OFFSET:LEN or OFFSET:RAD in one program. Suppressed inside a subprogram that no program of the file calls (D99). | language 4.4; VM 5 |
+| `VM481` | ERROR | TOOL_POINT, TIP_OFFSET or POINT_RADIUS on a holder that holds no tool. Suppressed inside a subprogram that no program of the file calls (D99). | language 4.4; VM 5; D372 |
+| `VM482` | ERROR | A negative TIP_OFFSET or POINT_RADIUS. | language 4.4; VM 5; D372 |
+| `VM483` | ERROR | TOOL_POINT of 0 or less. | language 4.4; VM 5; D372 |
+| `VM484` | WARNING | A motion with a TIP_OFFSET under TILT, TILT_AXIS or TCPM=ON: no tip is derived; once per program. | VM 5, 9; D374 |
 
 ## Spindle
 
@@ -162,7 +169,7 @@ The spindles, their mode and synchronization, and their speed limits (language 4
 | `VM012` | ERROR | SPINDLE_SYNC with a spindle that is not in SPINDLE mode. | VM 3.8 rule 5 |
 | `VM013` | WARNING | RPM or SPINDLE of the following spindle while it runs synchronized. | VM 3.8 rule 5 |
 | `VM014` | ERROR | SPINDLE_SYNC with more or fewer than two spindle roles. | language 4.5; VM 3.8 rule 5 |
-| `VM500` | WARNING | Spindle OFF before a LINE, an ARC or a CYCLE_CALL of the built-in drilling family other than TAP: the spindle of the current tool holder, the default spindle when the holder has none. Suppressed inside a subprogram that no program of the file calls (D99). | VM 2.3, 5; D194 |
+| `VM500` | WARNING | Spindle OFF before a LINE, an ARC or a CYCLE_CALL of the built-in drilling family other than TAP: the spindle of the current tool holder, the default spindle when the holder has none, while the spindle of the workpiece holder does not run either. Suppressed inside a subprogram that no program of the file calls (D99). | VM 2.3, 5; D129, D194 |
 | `VM501` | WARNING | RPM above the spindle's rpm_max. | VM 5; machine-config 5; D64 |
 | `VM502` | WARNING | RPM below the spindle's rpm_min. | VM 5; machine-config 5; D64 |
 

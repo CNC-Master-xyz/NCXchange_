@@ -110,6 +110,9 @@ internal static class FakeMachines
             CW = "M3"
             CCW = "M4"
             OFF = "M5"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """;
     }
 }

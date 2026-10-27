@@ -4,6 +4,8 @@
 # on a Fanuc machining center. A machine file overrides an entry in its own [cycles] table (machine-config 6), as a lathe does for its drilling codes (see below).
 # D115: no kind key in 1.0; every parameter of this file that is not a word of language 4.7 takes a number or an expression, and the words of 4.7 keep their kinds.
 
+ncx_schema = 1                     # the version of the machine-configuration schema, not of NCXchange (machine-config 6, D348)
+
 # ---------------------------------------------------------------------------------------------------------------------------------------------------
 # Drilling family, machining centers (fanuc 6, controller-mapping 5)
 #

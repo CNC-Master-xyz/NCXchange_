@@ -29,6 +29,8 @@
 # D178: the signatures below are the orders of the NC-example blocks of the iTNC 530 cycle manual, which is the order the control writes (heidenhain 5,
 # decisions.md). A Q parameter of a signature that no NCX word carries still needs a value from the compiler, which D164 settles.
 
+ncx_schema = 1                     # the version of the machine-configuration schema, not of NCXchange (machine-config 6, D348)
+
 # ---------------------------------------------------------------------------------------------------------------------------------------------------
 # Drilling family (controller-mapping 5: DRILL and DRILL_DWELL 200, PECK and CHIP_BREAK 203, TAP 207, REAM 201, BORE 202; CYCLE_F Q206, CYCLE_DWELL Q211)
 
