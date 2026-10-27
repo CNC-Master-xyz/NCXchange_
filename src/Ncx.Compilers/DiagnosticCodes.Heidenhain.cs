@@ -56,8 +56,9 @@ public static partial class DiagnosticCodes
     public const string HeidenhainWordNeedsKinematics = "CMP107";
 
     /// <summary>
-    /// CMP108, a WARNING: ROT=COORD of a tilt is not written, since the templates of the machine have no placeholder
-    /// for it (language 4.2, D82; machine-config 5).
+    /// CMP108, a WARNING: the ROT of a tilt is not written, since the machine has no [transform] rot map or its
+    /// TILT_ON no {rot}, and a target without the option ignores ROT with a WARNING (language 4.2; machine-config 5;
+    /// D191, D269).
     /// </summary>
     public const string HeidenhainRotNotWritten = "CMP108";
 
@@ -152,4 +153,10 @@ public static partial class DiagnosticCodes
     /// (machine-config 3, D373).
     /// </summary>
     public const string HeidenhainToolPoint = "CMP123";
+
+    /// <summary>
+    /// CMP128, an INFO: a ROT has no effect and is not written: on a TILT_AXIS block (PLANE AXIAL), or on a machine
+    /// without any rotary axis, where no tilt frees one (language 4.2; D191, D269).
+    /// </summary>
+    public const string HeidenhainRotWithoutEffect = "CMP128";
 }

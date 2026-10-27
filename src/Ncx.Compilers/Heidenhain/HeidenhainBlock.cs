@@ -234,8 +234,10 @@ internal sealed class HeidenhainBlock
     /// <param name="text">The template text as the record of the machine keeps it; null when the file has none.</param>
     /// <param name="what">The template as a message names it: "[spindle.TOOL] CW (machine-config 5)".</param>
     /// <param name="values">The values of its placeholders.</param>
+    /// <param name="collapseSpaces">True where a placeholder may be empty, {rot} of a ROT without effect: the runs of
+    /// spaces it leaves become one, and a space at the end of a line goes (D269).</param>
     /// <returns>True when it was written.</returns>
-    public bool Template(string? text, string what, TemplateValues values)
+    public bool Template(string? text, string what, TemplateValues values, bool collapseSpaces = false)
     {
         // A word whose template the machine does not give cannot be written (machine-config introduction).
         if (text is null)
@@ -251,6 +253,11 @@ internal sealed class HeidenhainBlock
         if (rendered is null)
         {
             return false;
+        }
+
+        if (collapseSpaces)
+        {
+            rendered = string.Join("\n", rendered.Split('\n').Select(CollapseSpaces));
         }
 
         if (rendered.Length > 0)
@@ -289,5 +296,13 @@ internal sealed class HeidenhainBlock
         }
 
         return string.Join(" ", texts);
+    }
+
+    // The line with each run of spaces as one space and none at its end.
+    private static string CollapseSpaces(string line)
+    {
+        string[] parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        string leading = line.Length - line.TrimStart(' ').Length > 0 ? " " : "";
+        return leading + string.Join(' ', parts);
     }
 }

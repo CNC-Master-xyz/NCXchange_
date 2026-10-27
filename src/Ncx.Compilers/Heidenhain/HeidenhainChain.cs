@@ -1,5 +1,6 @@
 using System.Globalization;
 using Ncx.Config.Templates;
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.State;
 
@@ -271,13 +272,10 @@ internal static class HeidenhainChain
         writing.Line(Parts(Rotation, RotationName, ["ROT" + angle]));
     }
 
-    // PLANE SPATIAL through TILT_ON, PLANE AXIAL through TILT_AXIS_ON, with the angles {a} {b} {c} and the {move} of
-    // [transform] move for MOVE (controllers heidenhain.md 3; controller-mapping 1, TILT, TILT_AXIS, MOVE;
-    // machine-config 5; D82). An empty TILT_AXIS_ON means the target writes TILT_AXIS only with the kinematics module
-    // (D82).
-    // TODO(question): the phase plan writes PLANE with MOVE and ROT from [transform], and machine-config 5 gives
-    // [transform] a {move} but no placeholder for ROT; ROT=COORD is not written, with the WARNING of language 4.2 for a
-    // target that has no such option.
+    // PLANE SPATIAL through TILT_ON, PLANE AXIAL through TILT_AXIS_ON, with the angles {a} {b} {c}, the {move} of
+    // [transform] move for MOVE and the {rot} of [transform] rot for ROT (controllers heidenhain.md 3; controller-
+    // mapping 1, TILT, TILT_AXIS, MOVE, ROT; machine-config 5; D82). An empty TILT_AXIS_ON means the target writes
+    // TILT_AXIS only with the kinematics module (D82).
     private static void WriteTilt(HeidenhainBlock writing, TransformEntry entry)
     {
         bool byAxes = entry.Kind == TransformKind.TiltAxis;
@@ -308,14 +306,67 @@ internal static class HeidenhainChain
             values.Set("move", moveText);
         }
 
-        if (entry.Rot == TiltRot.Coord)
+        values.Set("rot", RotOf(writing, entry, template));
+        writing.Template(template, what, values, collapseSpaces: true);
+    }
+
+    // D191, D269: the Heidenhain compiler always writes the transformation type, COORD ROT or TABLE ROT, from the
+    // [transform] rot map, an absent ROT as TABLE, since NCX defaults to TABLE (language 4.2) and the TNC 640 to COORD
+    // ROT (TNC 640 Klartext 892903-18, connector p. 435-436). A ROT on a TILT_AXIS block (PLANE AXIAL), and on a
+    // machine without any rotary axis, where no tilt frees one, has no effect: the INFO CMP128, and nothing is written.
+    // A machine without the map, or whose TILT_ON has no {rot}, ignores a ROT the block states with the WARNING of
+    // language 4.2 (CMP108). Whether a given tilt frees a rotary axis on a machine that has some is the kinematics
+    // module's (D191, D24).
+    private static string RotOf(HeidenhainBlock writing, TransformEntry entry, string? template)
+    {
+        bool stated = entry.Rot == TiltRot.Coord || writing.Block.Find("ROT") is not null;
+        string option = entry.Rot == TiltRot.Coord ? "COORD" : "TABLE";
+        bool byAxes = entry.Kind == TransformKind.TiltAxis;
+        if (byAxes || !HasRotaryAxis(writing))
         {
-            writing.Warning(DiagnosticCodes.HeidenhainRotNotWritten,
-                "ROT=COORD is not written: the [transform] templates of the machine have no placeholder for it, and a "
-                + "target that has no such option ignores it with a WARNING (language 4.2, D82; machine-config 5).");
+            if (stated)
+            {
+                writing.Diagnostics.Info(writing.Block, DiagnosticCodes.HeidenhainRotWithoutEffect,
+                    $"ROT={option} has no effect and is not written: "
+                    + (byAxes
+                        ? "PLANE AXIAL gives the rotary axis positions, where the transformation type does not act"
+                        : "the machine has no rotary axis, so no tilt frees one")
+                    + " (language 4.2, D191, D269).");
+            }
+
+            return "";
         }
 
-        writing.Template(template, what, values);
+        IReadOnlyDictionary<string, string>? map = writing.Machine.Transform?.Rot;
+        bool placeholder = template?.Contains("{rot}", StringComparison.Ordinal) == true;
+        if (map is not null && placeholder && map.TryGetValue(option, out string? text))
+        {
+            return text;
+        }
+
+        if (stated)
+        {
+            writing.Warning(DiagnosticCodes.HeidenhainRotNotWritten,
+                $"ROT={option} is not written: the machine has no [transform] rot value for it or its TILT_ON no "
+                + "{rot}, and a target without the option ignores ROT with a WARNING (language 4.2; machine-config 5; "
+                + "D269).");
+        }
+
+        return "";
+    }
+
+    // A rotary axis of the machine, whatever owns it (machine-config 4, D191).
+    private static bool HasRotaryAxis(HeidenhainBlock writing)
+    {
+        foreach (AxisDef axis in writing.Machine.Axes)
+        {
+            if (axis.Kind == AxisKind.Rotary)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // The value of an axis of the SHIFT verb from its word, a Q parameter; null when it has no Klartext form, which is
