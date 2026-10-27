@@ -675,4 +675,76 @@ public sealed class FanucCyclesTests
         Assert.Contains(FanucCompile.CompilerDiagnostics(result),
             diagnostic => diagnostic.Code == DiagnosticCodes.FanucNativeParameterNotALetter);
     }
+
+    // The contour program of the D278 tests: G71 and G70 name one contour section.
+    private static string ContourProgram(string first, string cycles = "")
+    {
+        return FanucCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+            "FEED_MODE=PER_REV COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
+            "RAPID X=40 Z=2",
+            "CYCLE=ROUGH_TURN CONTOUR=C1",
+            "CYCLE_CALL",
+            "CYCLE=OFF",
+            "CYCLE=FINISH CONTOUR=C1",
+            "CYCLE_CALL",
+            "CYCLE=OFF",
+            "RAPID X=100" + cycles,
+            "PROGRAM=END",
+            "SUB=BEGIN NAME=C1",
+            first,
+            "LINE Z=-10 F=0.2",
+            "LINE X=40",
+            "SUB=END",
+            "FILE=END");
+    }
+
+    // D278, D388 item 4: the contour is written inline after the first G71 of the program, numbered after its
+    // greatest label (D277), never as an O program; the later G70 repeats only P and Q; the CYCLE=OFF of a one-shot
+    // cycle writes nothing (D224).
+    [Fact]
+    public void ContourCycles_G71AndG70_WriteTheContourInlineOnce()
+    {
+        CompileResult result = FanucCompile.Run(ContourProgram("RAPID X=20"), FanucCompile.Lathe());
+        string text = FanucCompile.TextOf(result);
+
+        Assert.DoesNotContain(FanucCompile.CompilerDiagnostics(result),
+            diagnostic => diagnostic.Severity == Severity.Error);
+        Assert.Contains("\nG71 P1 Q2\nN1 G0 X20.\nG1 Z-10. F0.2\nN2 X40.\nG70 P1 Q2\nG0 X100.\n", text,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("M99", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("G80", text.Substring(text.IndexOf("G71", StringComparison.Ordinal)),
+            StringComparison.Ordinal);
+    }
+
+    // D278: a first block that names Z where Z does not move is type I, X alone; one that moves both is type II, which
+    // only a machine with [cycles] contour_type_ii takes (CMP389).
+    [Fact]
+    public void ContourCycles_FirstBlockOfG71_IsTypeIOrTypeII()
+    {
+        string typeI = FanucCompile.TextOf(FanucCompile.Run(ContourProgram("RAPID X=20 Z=2"), FanucCompile.Lathe()));
+        CompileResult typeII = FanucCompile.Run(ContourProgram("RAPID X=20 Z=1"), FanucCompile.Lathe());
+        string declared = FanucCompile.TextOf(FanucCompile.Run(ContourProgram("RAPID X=20 Z=1"),
+            FanucCompile.Lathe().Replace("catalog = \"fanuc-lathe.toml\"",
+                "catalog = \"fanuc-lathe.toml\"\ncontour_type_ii = true", StringComparison.Ordinal)));
+
+        Assert.Contains("\nN1 G0 X20.\n", typeI, StringComparison.Ordinal);
+        Assert.Contains(FanucCompile.CompilerDiagnostics(typeII),
+            diagnostic => diagnostic.Code == DiagnosticCodes.FanucContourTypeIINotDeclared);
+        Assert.Contains("\nN1 G0 X20. Z1.\n", declared, StringComparison.Ordinal);
+    }
+
+    // D278: a first block of G71 that does not move X is alarm PS0325, CMP390; a first block that is no RAPID or LINE
+    // is CMP392; a block other than motion, G04 or a label inside the range is CMP391.
+    [Theory]
+    [InlineData("RAPID Z=1", "CMP390")]
+    [InlineData("ARC=CW X=20 Z=0 R=2", "CMP392")]
+    [InlineData("RAPID X=20 COOLANT=ON", "CMP391")]
+    public void ContourCycles_ASectionTheContourCannotHold_IsAnError(string first, string code)
+    {
+        CompileResult result = FanucCompile.Run(ContourProgram(first), FanucCompile.Lathe());
+
+        Assert.Contains(FanucCompile.CompilerDiagnostics(result), diagnostic => diagnostic.Code == code);
+    }
 }

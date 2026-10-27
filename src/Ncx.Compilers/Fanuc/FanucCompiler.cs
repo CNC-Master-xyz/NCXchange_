@@ -19,6 +19,9 @@ public sealed class FanucCompiler : CompilerBase
     // The labels of each program and subprogram of the file being compiled, as block numbers.
     private readonly Dictionary<Section, FanucLabels> _labels = [];
 
+    // D278: the contour sections of G70 to G73 written inline, per program.
+    private FanucContours? _contourState;
+
     // The skipped blocks whose changes to the target state wait to be made unknown: the target state of the program or
     // walk of the block, what it held before the block, and the state of NCX before the block.
     private readonly List<(TargetState Target, Dictionary<string, string> Before, ChannelSnapshot NcxBefore)> _skipped =
@@ -112,6 +115,7 @@ public sealed class FanucCompiler : CompilerBase
             Writer = Line,
             CommentText = CommentText,
             PointRegisters = PointRegistersOf(after),
+            Contours = _contourState ??= new FanucContours(InlineSection),
         };
         MakeSkippedUnknown(write);
         if (!FanucProgramFrame.Write(write) && !WriteNative(write))

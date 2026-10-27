@@ -97,7 +97,7 @@ public abstract partial class CompilerBase
 
         foreach (Section sub in source.Subs)
         {
-            if (!called.Contains(sub))
+            if (!called.Contains(sub) && !IsInlined(sub))
             {
                 Diagnostics.Warning(source.Blocks[sub.FirstBlock], DiagnosticCodes.UncalledSubprogramNotWritten,
                     $"SUB {sub.Name} is called by no program, and under program_layout = \"file_per_program\" a "
@@ -138,7 +138,7 @@ public abstract partial class CompilerBase
     {
         foreach (Section sub in subs)
         {
-            if (_subs.TryGetValue(sub, out SubText? text))
+            if (_subs.TryGetValue(sub, out SubText? text) && !IsInlined(sub))
             {
                 output.Add(text.Lines);
             }

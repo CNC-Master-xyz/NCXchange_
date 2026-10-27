@@ -95,6 +95,12 @@ internal sealed class FanucBlock
     public ToolPointRegisters? PointRegisters { get; init; }
 
     /// <summary>
+    /// The contour sections of G70 to G73 written inline so far, with their P and Q (D278); null where the compiler
+    /// keeps none, as in a test of one concern.
+    /// </summary>
+    public FanucContours? Contours { get; init; }
+
+    /// <summary>
     /// The line of the block being composed: the modal codes, the motion, the functions (controllers fanuc.md 1).
     /// </summary>
     public FanucLine Main { get; } = new();

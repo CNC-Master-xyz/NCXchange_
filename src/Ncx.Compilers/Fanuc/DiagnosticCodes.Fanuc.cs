@@ -170,9 +170,10 @@ public static partial class DiagnosticCodes
     public const string FanucSafeRetractOnSystemA = "CMP383";
 
     /// <summary>
-    /// CMP384: a multiple repetitive cycle of a lathe with its CONTOUR, whose contour blocks the compiler does not
-    /// write inside the program yet (controllers fanuc.md 6, D65).
+    /// CMP384, retired 2026-10-27 (D278): a multiple repetitive cycle of a lathe with its CONTOUR is written with its
+    /// contour inline now; the errors of that contour are CMP389 to CMP392. The number is not reused.
     /// </summary>
+    [Obsolete("Retired by D278: G70 to G73 write their contour inline; CMP389 to CMP392 report what cannot be.")]
     public const string FanucContourCycleNotWritten = "CMP384";
 
     /// <summary>
@@ -202,6 +203,30 @@ public static partial class DiagnosticCodes
     /// no DRILL_DWELL; the dwell is dropped (D177).
     /// </summary>
     public const string FanucCycleDwellDropped = "CMP388";
+
+    /// <summary>
+    /// CMP389: the first block of the contour of G71 or G72 moves both plane axes, the type II pocketing cycle, on a
+    /// machine whose [cycles] declares no contour_type_ii (D278, D388 item 11).
+    /// </summary>
+    public const string FanucContourTypeIINotDeclared = "CMP389";
+
+    /// <summary>
+    /// CMP390: the first block of the contour of G71 does not move X (of G72 Z), which the control rejects with alarm
+    /// PS0325 (D278).
+    /// </summary>
+    public const string FanucContourFirstBlockWithoutInfeed = "CMP390";
+
+    /// <summary>
+    /// CMP391: a contour section of G70 to G73 holds a block other than G04, G00 to G03 motion, or a LABEL or JUMP
+    /// whose target is inside the range: a CALL, a cycle, a macro call (D278).
+    /// </summary>
+    public const string FanucContourBlockNotAllowed = "CMP391";
+
+    /// <summary>
+    /// CMP392: the first block of a contour of G70 to G73 is no RAPID or LINE, while the first block writes G00 or G01
+    /// (D278).
+    /// </summary>
+    public const string FanucContourFirstBlockNotLinear = "CMP392";
 
     /// <summary>
     /// CMP393: PECK on a Fanuc cycle code that takes no Q: G76, G87, G88 and G89, and G74 and G84 where the machine

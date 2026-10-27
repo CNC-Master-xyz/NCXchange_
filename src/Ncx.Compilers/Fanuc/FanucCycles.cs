@@ -112,7 +112,8 @@ internal static class FanucCycles
                 ? null
                 : CatalogOf(write).Find(name, write.After.Cycle.Axis);
             CheckCarried(write, defined);
-            if (name == "OFF" && write.Target.ActiveOf(FanucCodes.Cycle) != "G80")
+            // D224: a CYCLE=OFF that ends a one-shot cycle writes nothing.
+            if (name == "OFF" && write.Target.ActiveOf(FanucCodes.Cycle) != "G80" && !EndsAOneShotCycle(write))
             {
                 write.Main.Code(FanucCodes.RankOf(FanucCodes.Cycle), "G80");
                 Ended(write);
@@ -247,6 +248,13 @@ internal static class FanucCycles
     private static bool HasADwell(CycleSnapshot cycle)
     {
         return Parameter(cycle, "CYCLE_DWELL") is Value dwell && !IsZero(dwell);
+    }
+
+    // D224: whether the cycle of NCX that CYCLE=OFF ends is a one-shot entry, G70 to G76.
+    private static bool EndsAOneShotCycle(FanucBlock write)
+    {
+        CycleSnapshot before = write.Before.Cycle;
+        return before.Name is string name && CatalogOf(write).Find(name, before.Axis) is { Modal: false };
     }
 
     // D361, D377: the catalog of the channel compiled, the [[cycle]] tables of the machine file that name it over the
@@ -398,6 +406,14 @@ internal static class FanucCycles
             FanucMotion.Change(write, FanucCodes.Distance, "G90");
         }
 
+        if (entry is not null && entry.Contour.Count == 2)
+        {
+            // D278: the contour is written inline after the cycle block; the one-shot cycle leaves no cycle active.
+            FanucMotion.WritePlane(write);
+            FanucContour.Write(write, entry, cycle, code);
+            return;
+        }
+
         EndAnotherTappingRun(write, entry, code);
         if (entry is not null && !WriteBefore(write, entry, code))
         {
@@ -416,8 +432,13 @@ internal static class FanucCycles
             return;
         }
 
-        write.Target.Set(FanucCodes.Cycle, code);
-        write.Target.Set(Definition, definition);
+        // D224: a one-shot cycle runs once and leaves no cycle active.
+        if (entry?.Modal != false)
+        {
+            write.Target.Set(FanucCodes.Cycle, code);
+            write.Target.Set(Definition, definition);
+        }
+
         write.MakeUnknown(FanucCodes.Motion);
     }
 
@@ -503,16 +524,19 @@ internal static class FanucCycles
             return null;
         }
 
-        // TODO(question): G70 to G76 name their contour by the block numbers P and Q of its first and its last block,
-        // and machine-config 6 has the compiler write "the block numbers of that section"; the reader writes the
-        // section without labels, and no document gives the numbers, nor where a contour that G71 and G70 share
-        // stands in the program; the cycle is CMP384, until that is answered (controllers fanuc.md 6; D65).
-        if (!entry.Modal || entry.Contour.Count > 0)
+        // D278: G70 to G76 are one-shot blocks in the numbers of the machine's G-code system (D174); G70 to G73 with
+        // their contour are FanucContour's.
+        if (!entry.Modal)
         {
-            write.Error(DiagnosticCodes.FanucContourCycleNotWritten,
-                $"CYCLE={entry.Name} runs once with the contour P to Q in the program, which the Fanuc compiler does "
-                + "not write yet (controllers fanuc.md 6; language 4.7.1; D65).");
-            return null;
+            string? oneShot = FanucContour.CodeOf(write, entry.Native);
+            if (oneShot is null)
+            {
+                write.Error(DiagnosticCodes.FanucCycleNotInCatalog,
+                    $"CYCLE={entry.Name} is a one-shot cycle of a Fanuc lathe, and the machine is a mill (controllers "
+                    + "fanuc.md 3, 6).");
+            }
+
+            return oneShot;
         }
 
         bool turning = s_turningOfSystemB.ContainsKey(entry.Native);
