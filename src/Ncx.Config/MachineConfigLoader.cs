@@ -15,13 +15,14 @@ public static partial class MachineConfigLoader
     // The tables of machine-config 1 to 9 in the order of the specification, [raw] with F23.
     private static readonly string[] s_rootTables =
     [
-        "machine", "format", "tool_change", "home", "setpos", "roles", "resource", "axis", "positions", "dynamics",
+        "machine", "format", "tool_change", "tool_points", "tool_point", "home", "setpos", "roles", "resource", "axis",
+        "positions", "dynamics",
         "diameter", "spindle", "spindle_mode", "spindle_sync", "workpiece", "sync", "coolant", "func", "func_meta",
         "transform", "retract", "tolerance", "raw", "cycles", "cycle", "variables", "system_variables", "node",
     ];
 
     // The tables the file writes [[name]], one per entry.
-    private static readonly string[] s_rootTableArrays = ["resource", "axis", "cycle", "node"];
+    private static readonly string[] s_rootTableArrays = ["tool_point", "resource", "axis", "cycle", "node"];
 
     /// <summary>
     /// Loads the machine file at a path. A file that cannot be read is an I/O error, thrown for the composition root,
@@ -86,6 +87,7 @@ public static partial class MachineConfigLoader
             ToolTable = machineTable?.Text("tool_table"),
             Format = ReadFormat(root.Table("format", section: "machine-config 2")),
             ToolChange = ReadToolChange(root.Table("tool_change", section: "machine-config 3")),
+            ToolPoints = ReadToolPoints(root),
             Home = ReadHome(root.Table("home", section: "machine-config 3")),
             Setpos = ReadSetpos(root.Table("setpos", section: "machine-config 3")),
             Roles = ReadRoles(root.Table("roles", section: "machine-config 4")),

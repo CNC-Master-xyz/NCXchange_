@@ -44,25 +44,26 @@ public sealed class Vec3Tests
         Assert.Equal(new Vec3(50.534, 69.993, -5.4), point);
     }
 
-    // A coordinate computed in double reaches the position store only as a decimal rounded to the given decimals
-    // (phase 1 risks).
+    // A coordinate computed in double reaches the position store only as a decimal rounded to the one VM precision,
+    // 6 decimals, whatever the units (D121: trace reads 69.025871, and 6.9999999999997 becomes 7).
     [Fact]
-    public void RoundToDecimal_ComputedCoordinate_RoundsToTheGivenDecimals()
+    public void D121_ComputedCoordinate_RoundsToSixDecimals()
     {
-        Assert.Equal(69.026m, Vec3.RoundToDecimal(69.025870876999, 3));
-        Assert.Equal(56.166m, Vec3.RoundToDecimal(56.165730887068, 3));
-        Assert.Equal(7m, Vec3.RoundToDecimal(6.9999999999997, 3));
+        Assert.Equal(6, Vec3.VmDecimals);
+        Assert.Equal(69.025871m, Vec3.RoundToDecimal(69.025870876999));
+        Assert.Equal(56.165731m, Vec3.RoundToDecimal(56.165730887068));
+        Assert.Equal(7m, Vec3.RoundToDecimal(6.9999999999997));
     }
 
-    // Half away from zero, as NCX rounds everywhere it rounds (language 4.12, ROUND).
+    // Half away from zero, as NCX rounds everywhere it rounds (language 4.12, ROUND, D121).
     [Theory]
-    [InlineData(0.0005, 3, "0.001")]
-    [InlineData(-0.0005, 3, "-0.001")]
-    [InlineData(2.5, 0, "3")]
-    [InlineData(-2.5, 0, "-3")]
-    public void RoundToDecimal_HalfwayValue_RoundsAwayFromZero(double coordinate, int decimals, string expected)
+    [InlineData(0.0000005, "0.000001")]
+    [InlineData(-0.0000005, "-0.000001")]
+    [InlineData(2.5, "2.5")]
+    [InlineData(1.0000025, "1.000003")]
+    public void D121_HalfwayValue_RoundsAwayFromZero(double coordinate, string expected)
     {
         Assert.Equal(decimal.Parse(expected, System.Globalization.CultureInfo.InvariantCulture),
-            Vec3.RoundToDecimal(coordinate, decimals));
+            Vec3.RoundToDecimal(coordinate));
     }
 }

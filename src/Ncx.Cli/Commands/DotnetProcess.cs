@@ -63,7 +63,7 @@ internal static class DotnetProcess
     /// <param name="diagnostics">The diagnostics of the command.</param>
     public static void ReportNotStarted(string failure, Diagnostics diagnostics)
     {
-        diagnostics.Error(Program.CommandLine, DiagnosticCodes.DotnetNotStarted,
+        diagnostics.CommandLineError(DiagnosticCodes.DotnetNotStarted,
             $"dotnet cannot be started: {failure.ReplaceLineEndings(" ").TrimEnd('.')}; ncx plugin build and "
             + "ncx plugin test run dotnet of the .NET SDK, which must be installed and on the path (step 1 of the "
             + "README of the plugin, code-guidelines 11).");

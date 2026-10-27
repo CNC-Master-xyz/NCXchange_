@@ -33,6 +33,8 @@ internal static class FrameValidation
             ValidationRule.Warning(DiagnosticCodes.RotWithoutTableKinematics,
                 "ROT on a target without table kinematics: the machine file has no rotary axis on a table. Not checked "
                 + "without a machine file.", "language 4.2; VM 5; D82"),
+            ValidationRule.Error(DiagnosticCodes.CylinderWithoutRotaryAxis,
+                "CYLINDER=n while the workpiece holder has no rotary axis.", "language 4.2; VM 3.4, 3.8, 5; D146"),
         ],
     };
 

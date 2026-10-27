@@ -663,6 +663,75 @@ public sealed class MachineConfigLoaderTests
         Assert.False(machine.FindAxis("B1")?.Modulo);
     }
 
+    // Machine-config 4, D146, D388: parallel names the linear axis a rotary axis turns about (default Z, left null),
+    // frames_in_diameter whether the control keeps frames of a diameter axis in diameters (default false).
+    [Fact]
+    public void D146_ParallelAndFramesInDiameter_LoadFromTheAxis()
+    {
+        MachineConfig machine = LoadClean("""
+            [machine]
+            name = "Test mill-turn"
+            controller = "siemens"
+
+            [[axis]]
+            id = "X1"
+            ncx = "X"
+            kind = "linear"
+            programming = "switchable"
+            frames_in_diameter = true
+
+            [[axis]]
+            id = "A1"
+            ncx = "A"
+            kind = "rotary"
+            parallel = "X"
+
+            [[axis]]
+            id = "C1"
+            ncx = "C"
+            kind = "rotary"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
+            """);
+
+        Assert.True(machine.FindAxis("X1")?.FramesInDiameter);
+        Assert.Equal("X", machine.FindAxis("A1")?.Parallel);
+        Assert.Null(machine.FindAxis("C1")?.Parallel);
+        Assert.False(machine.FindAxis("C1")?.FramesInDiameter);
+    }
+
+    // Machine-config 4, D146, D388: parallel on a linear axis and frames_in_diameter on an axis programmed in radii
+    // say nothing true of their axis, each a CFG005.
+    [Fact]
+    public void D146_ParallelOnALinearAxisAndFramesInDiameterOnARadiusAxis_AreErrors()
+    {
+        Diagnostics diagnostics = Report("""
+            [machine]
+            name = "Test mill"
+            controller = "siemens"
+
+            [[axis]]
+            id = "X1"
+            ncx = "X"
+            kind = "linear"
+            parallel = "Z"
+
+            [[axis]]
+            id = "Z1"
+            ncx = "Z"
+            kind = "linear"
+            programming = "radius"
+            frames_in_diameter = true
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
+            """);
+
+        Assert.Equal(2, diagnostics.Items.Count);
+        Assert.All(diagnostics.Items, error => Assert.Equal(DiagnosticCodes.ValueNotAllowed, error.Code));
+    }
+
     // Machine-config 4: limits are a minimum and a maximum.
     [Fact]
     public void Axis_LimitsWithOneNumber_ReportsWrongType()

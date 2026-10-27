@@ -88,4 +88,25 @@ public sealed class HomeTests
 
         Assert.Equal(3, vm.Count(DiagnosticCodes.HomeWithoutReferencePoint));
     }
+
+    // D137: the file writes the X values of an axis programmed in diameters as diameters; the VM halves home, home2
+    // and limits once, so X starts and returns at radius 150, and a machine-frame target at diameter 320 is beyond the
+    // upper limit at radius 150 while diameter 290 is not. Z is taken as written.
+    [Fact]
+    public void D137_HomeAndLimitsOfADiameterAxis_AreHalvedIntoRadii()
+    {
+        VmHarness vm = new VmHarness(VmMachines.DiameterLathe());
+        Assert.Equal(new AxisPosition(150m, PositionFrame.Machine, Known: true), vm.Position("X"));
+        Assert.Equal(new AxisPosition(450m, PositionFrame.Machine, Known: true), vm.Position("Z"));
+
+        vm.Execute("UNITS=MM DIAMETER=ON", "RAPID X=100 Z=10", "HOME X POINT=2");
+        Assert.Equal(new AxisPosition(100m, PositionFrame.Machine, Known: true), vm.Position("X"));
+
+        vm.Execute("RAPID X=290 FRAME=MACHINE");
+        Assert.DoesNotContain(DiagnosticCodes.TargetBeyondLimits, vm.Codes());
+
+        vm.Execute("RAPID X=320 FRAME=MACHINE");
+        Assert.Contains(DiagnosticCodes.TargetBeyondLimits, vm.Codes());
+        Assert.Equal(new AxisPosition(160m, PositionFrame.Machine, Known: true), vm.Position("X"));
+    }
 }

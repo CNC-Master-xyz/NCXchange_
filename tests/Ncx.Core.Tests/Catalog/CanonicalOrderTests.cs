@@ -24,7 +24,8 @@ public sealed class CanonicalOrderTests
         "R=5", "ANGLE=90",
         "F=100",
         "FEED_MODE=PER_MIN",
-        "PRELOAD=1", "TOOL=1", "OFFSET=1", "OFFSET:LEN=1", "OFFSET:RAD=1", "COMP=OFF",
+        "PRELOAD=1", "TOOL=1", "TOOL_POINT=1", "OFFSET=1", "OFFSET:LEN=1", "OFFSET:RAD=1", "TIP_OFFSET=0",
+        "POINT_RADIUS=0", "COMP=OFF",
         "SPINDLE=CW", "RPM=1", "CSS=ON", "VC=1", "RPM_MAX=1", "SPINDLE_MODE=AXIS", "ORIENT=0", "SPINDLE_SYNC=MAIN,SUB",
         "PHASE=1",
         "COOLANT=ON", "FUNC:CHIP_CONVEYOR=ON", "MFUNC=1",
@@ -73,10 +74,15 @@ public sealed class CanonicalOrderTests
     }
 
     // The ranks are assigned in steps of ten in the order of D90, so a later word fits between two others without
-    // renumbering (phase 0, P0-03).
+    // renumbering (phase 0, P0-03); the words added later stand between two steps, and nothing was renumbered for
+    // them: TOOL_POINT at 435, TIP_OFFSET at 465 and POINT_RADIUS at 467 (D372).
     [Fact]
     public void D90_Ranks_AreInStepsOfTen()
     {
+        Assert.Equal(435, CanonicalRanks.ToolPoint);
+        Assert.Equal(465, CanonicalRanks.TipOffset);
+        Assert.Equal(467, CanonicalRanks.PointRadius);
+        int[] laterRanks = [CanonicalRanks.ToolPoint, CanonicalRanks.TipOffset, CanonicalRanks.PointRadius];
         var ranks = new SortedSet<int>
         {
             CanonicalRanks.MachineAxis,
@@ -85,6 +91,11 @@ public sealed class CanonicalOrderTests
         };
         foreach (WordDefinition definition in WordCatalog.All())
         {
+            if (laterRanks.Contains(definition.CanonicalRank))
+            {
+                continue;
+            }
+
             ranks.Add(definition.CanonicalRank);
             foreach (int addrRank in definition.AddrRanks.Values)
             {

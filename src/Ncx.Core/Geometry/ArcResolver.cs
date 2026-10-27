@@ -85,8 +85,9 @@ internal static class ArcResolver
             return ArcResult.Failed(ArcError.RadiusTooSmall);
         }
 
-        // h = sqrt(R² - (d/2)²), M = midpoint, u = (end - start)/d, n = left normal of u (virtual machine 3.2). A chord
-        // longer than 2|R| but within the tolerance leaves nothing under the root: h is 0, the center the midpoint.
+        // h = sqrt(R² - (d/2)²), M = midpoint, u = (end - start)/d, n = left normal of u (virtual machine 3.2). A
+        // chord longer than 2|R| but within the tolerance leaves nothing under the root: h is 0, the center the
+        // midpoint.
         double halfChord = chordLength / 2;
         double centerDistance = Math.Sqrt(Math.Max(0, (signedRadius * signedRadius) - (halfChord * halfChord)));
         Vec3 midpoint = start + (chord / 2);

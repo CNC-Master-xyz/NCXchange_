@@ -29,6 +29,31 @@ public sealed class VectorWordTests
         Assert.Equal(new AxisPosition(41.786m, PositionFrame.Workpiece, Known: true), vm.Position("X"));
     }
 
+    // D185: RAPID and ARC carry TX TY TZ under TCPM=ON with the meaning they have on a LINE, the tool direction at the
+    // end point, stored unresolved.
+    [Theory]
+    [InlineData("RAPID X=10 Y=0 Z=5 TX=0 TY=0 TZ=1")]
+    [InlineData("ARC=CCW X=10 Y=0 R=5 TX=0 TY=0 TZ=1 F=100")]
+    public void D185_RapidAndArcWithAVector_StoreTheVector(string motion)
+    {
+        VmHarness vm = Tcpm().Execute("RAPID X=0 Y=0 Z=5", motion);
+
+        vm.AssertNoDiagnostics();
+        decimal[] toolVector = [0m, 0m, 1m];
+        Assert.Equal(toolVector, vm.State.Motion.ToolVector);
+    }
+
+    // D185: vector words under CYCLE_CALL are the new ERROR VM214 after VM213, and the vector is not stored.
+    [Fact]
+    public void D185_CycleCallWithAVector_IsAnError()
+    {
+        VmHarness vm = Tcpm().Execute(
+            "CYCLE=DRILL SURFACE=0 CLEARANCE=5 DEPTH=-10 CYCLE_F=100", "CYCLE_CALL X=10 Y=10 TX=0 TY=0 TZ=1");
+
+        Assert.Contains(DiagnosticCodes.VectorUnderCycleCall, vm.Codes());
+        Assert.Null(vm.State.Motion.ToolVector);
+    }
+
     // VM 3.1, 5, D81: vector words without TCPM=ON are an ERROR.
     [Fact]
     public void Line_VectorWithoutTcpm_IsAnError()

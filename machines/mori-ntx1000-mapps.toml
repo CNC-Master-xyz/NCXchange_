@@ -72,7 +72,7 @@ magazine = false
 channel = 2
 
 # D100: home and limits are machine coordinates (the G53 frame); the reference point is the machine zero of every linear axis. The limits of a C axis are its display range, not a travel limit; those of the B swivel are travel limits.
-# TODO(question): machine-config 4 does not say whether home, limits and [positions] of an X axis programmed in diameters (D60) are diameters, as the control shows them, or radii, as the VM stores X (VM 3.1); the X values of this file are diameters (D137).
+# D137: the X values of an axis programmed in diameters are written as diameters, the way the axis is programmed (Fanuc parameters 1320/1321 are diameter values too); the VM halves home and limits once on load, and [positions] stays as written.
 
 [[axis]]
 id = "X1"
@@ -121,6 +121,7 @@ rapid = 36000                      # deg/min
 max_feed = 18000                   # deg/min
 acceleration = 1500                # deg/s^2
 home = 0
+owner = "H1"                       # D325: a head axis, the swivel of the tool spindle's holder H1; it turns the tool vector
 
 [[axis]]
 id = "C1"

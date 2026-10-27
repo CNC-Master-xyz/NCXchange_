@@ -134,7 +134,7 @@ public sealed class FanucWriterRulesTests
     public void Rule5_AnglesVectorsAndTemplateValues_CarryTheDecimalPoint()
     {
         string body = FanucCompile.Body("ROTATE=30\nROTATE=RESET\nCYLINDER=30\nCYLINDER=OFF\nTOOL=1 OFFSET:LEN=1"
-            + "\nTCPM=ON\nLINE X=1 Y=2 Z=3 TX=0 TY=0 TZ=1 F=100\nTCPM=OFF");
+            + "\nTCPM=ON\nLINE X=1 Y=2 Z=3 TX=0 TY=0 TZ=1 F=100\nTCPM=OFF", FanucCompile.TableRotaryAxis);
 
         Assert.Equal("G68 X0 Y0 R30.\nG69\nG7.1 C30.\nG7.1 C0\nT1 M6\nG43.5 H1\n"
             + "G1 G17 X1. Y2. Z3. I0. J0. K1. F100.\nG49\nG43 H1\n", body);

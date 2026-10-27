@@ -42,7 +42,7 @@ internal static class ArcRules
 
         if (frame.Cylinder is not null)
         {
-            return Plane.Cylinder;
+            return Plane.CylinderAbout(frame.CylinderAxis);
         }
 
         return frame.Workplane switch
@@ -158,8 +158,8 @@ internal static class ArcRules
         }
 
         // The end goes into the position store: in the CENTER and R forms as the words give it, in the ANGLE form the
-        // start rotated about the center, a double that reaches the store only rounded to a decimal (virtual machine
-        // 3.2; D62, phase 1 risks).
+        // start rotated about the center, a double that reaches the store only rounded to the VM precision (virtual
+        // machine 3.2; D62, D121).
         if (words.Angle is null)
         {
             Place(state, firstAxis, firstFrame, endFirst);
@@ -167,9 +167,8 @@ internal static class ArcRules
         }
         else
         {
-            int decimals = MotionRules.PositionDecimals(state.Frame.Units);
-            Place(state, firstAxis, firstFrame, Vec3.RoundToDecimal(arc.End.X, decimals));
-            Place(state, secondAxis, secondFrame, Vec3.RoundToDecimal(arc.End.Y, decimals));
+            Place(state, firstAxis, firstFrame, Vec3.RoundToDecimal(arc.End.X));
+            Place(state, secondAxis, secondFrame, Vec3.RoundToDecimal(arc.End.Y));
         }
 
         MoveToolAndOtherAxes(context, words);
@@ -222,8 +221,9 @@ internal static class ArcRules
         }
         else if (words.HasCenter && words.Radius is not null)
         {
-            // TODO(question): language 4.3 gives ARC "CENTER or R", and neither it nor virtual machine 5 says what an
-            // ARC with both is; the block says two things of one arc and is an ERROR until D186 is answered.
+            // An ARC goes to its target with CENTER or with R, not both: the block says two things of one arc and is an
+            // ERROR, listed in virtual machine 5 next to ANGLE with R. A Fanuc G2/G3 with both, where R wins, is the
+            // reader's to translate (language 4.3, fanuc 4, D186).
             diagnostics.Error(block, DiagnosticCodes.ArcCenterWithRadius,
                 "ARC goes to its target with CENTER or with R, and this one has both (language 4.3).");
             valid = false;

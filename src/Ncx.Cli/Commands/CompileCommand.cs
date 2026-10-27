@@ -168,8 +168,7 @@ internal static class CompileCommand
         // machine-config 10); a compile that an ERROR stopped has none (virtual machine 2.9). Neither is a file
         // written after the ERROR of a plugin that failed: the run went on without the plugin, and a program the
         // plugin did not see must not reach the machine (implementation 17, P7-01).
-        // TODO(question): D205, as recommended: compile writes no NC file after any ERROR, because that file goes to a
-        // control.
+        // compile writes no NC file after any ERROR, because that file goes to a control (architecture 10; D205).
         // TODO(question): architecture 10 writes the NC file "under out/<machine>/" and names no --output for compile,
         // while format and convert take --output as a file; a compile under file_per_program writes several files. The
         // --output of compile names the folder the files go into, until that is answered.
@@ -183,14 +182,14 @@ internal static class CompileCommand
     }
 
     // A machine file that neither --machine nor ncx.toml names is reported as a mistake of the command line: the tool
-    // as its file and line 1, the one line of the command, as a usage error is reported (wave-1 question #79; D98).
+    // as its origin and no line, as a usage error is reported (wave-1 question #79; D98, D110).
     private static void ReportMachineRequired(Diagnostics diagnostics)
     {
         diagnostics.Add(new Diagnostic
         {
             Severity = Severity.Error,
             File = Program.ToolName,
-            Line = Program.CommandLine,
+            Line = null,
             Code = DiagnosticCodes.CompileMachineRequired,
             Message = "compile needs the machine file of the machine it compiles for: name it with --machine or with "
                 + "the machine key of ncx.toml; compile never runs against the built-in default machine (D77, D103; "
@@ -228,13 +227,22 @@ internal static class CompileCommand
     }
 
     // The tool table that [machine] tool_table names lies next to the machine file (D10), and the warning block of D10
-    // names it as the user finds it. Null when it is there and cannot be read.
+    // names it as the user finds it. Null when it is there and cannot be read. A built-in machine file lies in no
+    // folder: its tool table is the built-in one of that name, beside it in machines/ (D371).
     internal static CompileOptions? OptionsWithToolTable(MachineConfig machine, FoundFile? machineFile,
         Diagnostics diagnostics)
     {
         if (machine.ToolTable is not string toolTable || machineFile is null)
         {
             return new CompileOptions();
+        }
+
+        if (machineFile.Text is not null)
+        {
+            string builtInName = BuiltInFiles.NameOf(BuiltInFiles.MachinesFolder, toolTable);
+            return BuiltInFiles.ToolTable(toolTable) is string builtInText
+                ? WithToolTable(builtInText, builtInName, diagnostics)
+                : new CompileOptions { ToolTableFile = builtInName };
         }
 
         string path = Path.Combine(Path.GetDirectoryName(machineFile.FullPath) ?? "", toolTable);
@@ -251,6 +259,12 @@ internal static class CompileCommand
             return null;
         }
 
+        return WithToolTable(text, name, diagnostics);
+    }
+
+    // The options with the tool table loaded from its text; its diagnostics name it as the user finds it (D10).
+    private static CompileOptions WithToolTable(string text, string name, Diagnostics diagnostics)
+    {
         var tableDiagnostics = new Diagnostics(name);
         ToolTable? table = ToolTable.LoadText(WithoutByteOrderMark(text), tableDiagnostics);
         foreach (Diagnostic diagnostic in tableDiagnostics.Items)

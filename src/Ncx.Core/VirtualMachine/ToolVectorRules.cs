@@ -41,10 +41,18 @@ internal static class ToolVectorRules
             return;
         }
 
-        // TODO(question): language 4.3 and virtual machine 3.1 write the vector form for a LINE, and the parser lets
-        // the vector words stand under RAPID, ARC and CYCLE_CALL as well (Heidenhain LN with FMAX is a rapid move with
-        // a tool vector); what they mean there is not said. They are checked and stored as on a LINE until D185 is
-        // answered.
+        // RAPID and LINE carry TX TY TZ (NX NY NZ optional) under TCPM=ON with one meaning, the tool direction at the
+        // end point, stored unresolved; ARC may carry them too, as Fanuc G43.5 documents arcs with a tool vector. A
+        // CYCLE_CALL carries none: its sequence has no end point of one motion (language 4.3, 5 rule 2; virtual
+        // machine 3.1, 5; D185).
+        if (block.Verb?.Key == "CYCLE_CALL")
+        {
+            context.Diagnostics.Error(block, DiagnosticCodes.VectorUnderCycleCall,
+                "Vector words TX TY TZ and NX NY NZ belong to RAPID, LINE and ARC under TCPM=ON, not to a CYCLE_CALL "
+                + "(language 4.3, virtual machine 3.1, D185).");
+            return;
+        }
+
         if (!CheckWords(context, rotaryWord, surfaceNormalWritten))
         {
             return;

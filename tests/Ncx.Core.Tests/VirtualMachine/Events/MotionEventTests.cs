@@ -47,7 +47,8 @@ public sealed class MotionEventTests
             rapid.ToString());
     }
 
-    // VM 3.2, 7: the R form of 2.5D_FRAESEN line 22, a quarter circle about the computed center 7/7, the arc length.
+    // VM 3.2, 7, D121 (6 decimals): the R form of 2.5D_FRAESEN line 22, a quarter circle about the computed center
+    // 7/7, the arc length.
     [Fact]
     public void Motion_ArcInTheRForm_CarriesCenterDirectionSweepAndArcLength()
     {
@@ -59,10 +60,10 @@ public sealed class MotionEventTests
         Assert.Equal(Workpiece(7m), arc.Center?["X"]);
         Assert.Equal(Workpiece(7m), arc.Center?["Y"]);
         Assert.Equal(90m, arc.Sweep);
-        Assert.Equal(7.854m, arc.Length);
+        Assert.Equal(7.853982m, arc.Length);
         Assert.Equal(
             "MOTION(3): ARC CW X 7 -> 2, Y 2 -> 7; center X=7 Y=7, sweep 90, feed 2387 PER_MIN, comp OFF, "
-            + "frame WORKPIECE, length 7.854",
+            + "frame WORKPIECE, length 7.853982",
             arc.ToString());
     }
 
@@ -75,8 +76,8 @@ public sealed class MotionEventTests
 
         MotionEvent arc = listener.Of<MotionEvent>()[1];
         Assert.Equal(ArcDirection.Counterclockwise, arc.Direction);
-        Assert.Equal(271.53m, arc.Sweep);
-        Assert.Equal(94.782m, arc.Length);
+        Assert.Equal(271.529969m, arc.Sweep);
+        Assert.Equal(94.782456m, arc.Length);
     }
 
     // VM 3.2: a tool-axis word makes a helix, and its travel is part of the length.
@@ -88,7 +89,7 @@ public sealed class MotionEventTests
 
         MotionEvent helix = listener.Of<MotionEvent>()[1];
         Assert.Equal(360m, helix.Sweep);
-        Assert.Equal(63.03m, helix.Length);
+        Assert.Equal(63.030483m, helix.Length);
     }
 
     // VM 2.1, row frame (block); 3.4, D35: a FRAME=MACHINE block moves in machine coordinates, and a move from the

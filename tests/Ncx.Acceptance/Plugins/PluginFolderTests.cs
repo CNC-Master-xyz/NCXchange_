@@ -23,7 +23,7 @@ public sealed class PluginFolderTests : IDisposable
         int exitCode = _workspace.Build("Empty");
 
         Assert.Equal(2, exitCode);
-        Assert.StartsWith("ncx(1): ERROR CLI553: ", _workspace.Error, StringComparison.Ordinal);
+        Assert.StartsWith("ncx: ERROR CLI553: ", _workspace.Error, StringComparison.Ordinal);
         Assert.Contains("Empty", _workspace.Error, StringComparison.Ordinal);
         Assert.False(Directory.Exists(_workspace.PathOf("plugins")));
     }
@@ -36,7 +36,7 @@ public sealed class PluginFolderTests : IDisposable
         int exitCode = _workspace.Build(null);
 
         Assert.Equal(2, exitCode);
-        Assert.StartsWith("ncx(1): ERROR CLI553: ", _workspace.Error, StringComparison.Ordinal);
+        Assert.StartsWith("ncx: ERROR CLI553: ", _workspace.Error, StringComparison.Ordinal);
     }
 
     // The TODO(question) of PluginFolder: without a folder, two plugins that ncx plugin new made in the working
@@ -50,7 +50,7 @@ public sealed class PluginFolderTests : IDisposable
         int exitCode = _workspace.Build(null);
 
         Assert.Equal(2, exitCode);
-        Assert.StartsWith("ncx(1): ERROR CLI553: ", _workspace.Error, StringComparison.Ordinal);
+        Assert.StartsWith("ncx: ERROR CLI553: ", _workspace.Error, StringComparison.Ordinal);
         Assert.Contains("First", _workspace.Error, StringComparison.Ordinal);
         Assert.Contains("Second", _workspace.Error, StringComparison.Ordinal);
     }
@@ -65,7 +65,7 @@ public sealed class PluginFolderTests : IDisposable
         int exitCode = workspace.Build(null);
 
         Assert.Equal(1, exitCode);
-        Assert.StartsWith("ncx(1): ERROR CLI554: ", workspace.Error, StringComparison.Ordinal);
+        Assert.StartsWith("ncx: ERROR CLI554: ", workspace.Error, StringComparison.Ordinal);
         Assert.Contains(".NET SDK", workspace.Error, StringComparison.Ordinal);
         Assert.False(Directory.Exists(workspace.PathOf("plugins")));
     }

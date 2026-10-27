@@ -43,6 +43,10 @@ tool_name_allowed = false          # TOOL CALL "NAME" is documented for the TNC 
 # No [home] table: HOME is written as L ... FMAX M91 to the home (home2 under POINT=2) of each [[axis]] (heidenhain 8 rule 5, machine-config 3).
 # No [setpos] table: the compiler folds SETPOS into SHIFT (machine-config 3).
 
+[tool_points]
+form = "indexed_tool"              # point k is TOOL CALL 5.(k-1), at most nine indices (D373 improvement 1; iTNC 530 Klartext 2010 p. 165-166)
+# No point_change: whether an indexed call of the tool in the spindle runs the change macro depends on MP7480.0 and the builder's macro, so the compiler warns (CMP123, D373).
+
 [roles]
 TOOL = "S1"                        # the only spindle of a mill (language 4.10)
 TABLE = "TABLE1"
