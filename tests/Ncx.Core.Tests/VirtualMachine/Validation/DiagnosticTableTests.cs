@@ -100,6 +100,7 @@ public sealed class DiagnosticTableTests
                 DiagnosticCodes.CycleCallWithoutDepthOrClearance,
                 DiagnosticCodes.OffsetFormsMixed,
                 DiagnosticCodes.PointWordWithoutTool,
+                DiagnosticCodes.TipOffsetUnderTilt,
                 DiagnosticCodes.SpindleOffBeforeLine,
             ],
             suppressed);

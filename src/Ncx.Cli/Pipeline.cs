@@ -1,3 +1,4 @@
+using Ncx.Cli.Commands;
 using Ncx.Config;
 using Ncx.Core.Expander;
 using Ncx.Core.Machine;
@@ -107,10 +108,15 @@ internal static class Pipeline
         // machine file gives (machine-config 7). An ERROR of the parser or the expander stops the run before its first
         // block (virtual machine 2.9). An INTERPRETED run loads the external programs its CALLs name from the working
         // directory (virtual machine 3.6).
+        // D374: the wear of the tool table next to the machine file joins the radius the MOTION events report, as the
+        // compiler's own run reads it (CompilerBase).
+        ToolTable? toolTable =
+            CompileCommand.OptionsWithToolTable(machine, runMachine.MachineFile, diagnostics)?.ToolTable;
         VmOptions options = VmOptions.ForMachine(machine) with
         {
             SkipBlocks = settings.SkipBlocks,
             ExpandCycles = settings.ExpandCycles,
+            MeasuredPoint = toolTable is null ? null : (tool, point) => toolTable.Find(tool)?.FindPoint(point),
         };
         ExecutionMode mode = settings.Interpreted ? ExecutionMode.Interpreted : ExecutionMode.Static;
         var vm = new VirtualMachine(machine, options, expanded.Diagnostics, mode, startValues)

@@ -158,4 +158,69 @@ public sealed class TipDerivationTests
         string line = Assert.Single(listener.LinesOf("MOTION"));
         Assert.Contains("comp OFF, point 2 radius 8, tip Z=48", line, StringComparison.Ordinal);
     }
+
+    // D376: every number of the tool table is in the machine's units_default, MM here, so the wear joins the radius
+    // of a program in INCH converted: 0.254 mm is 0.01 in.
+    [Fact]
+    public void Motion_WearOnAnMmMachineInAnInchProgram_IsConvertedToInch()
+    {
+        var wear = new ToolPointData { K = 2, TipOffset = 0.1m, Radius = 0.3m, Wear = 0.254m };
+        VmOptions options = VmOptions.ForMachine(VmMachines.Default()) with
+        {
+            MeasuredPoint = (tool, point) => tool == new ToolRef(5) && point == 2 ? wear : null,
+        };
+
+        FakeListener listener = EventRuns.Execute(VmMachines.Default(), options,
+            "UNITS=INCH", "TOOL=5 TOOL_POINT=2 POINT_RADIUS=0.3", "RAPID Z=2");
+
+        Assert.Equal(0.31m, Assert.Single(listener.Of<MotionEvent>()).PointRadius);
+    }
+
+    // Language 4.4, D372: the point words take effect with the next tool-axis motion. The block that sets them
+    // reports no tip, a motion without a word on the tool axis keeps the point before, and the next motion of Z takes
+    // the new point into effect.
+    [Fact]
+    public void PointWords_TakeEffectWithTheNextToolAxisMotion()
+    {
+        FakeListener listener = EventRuns.Execute(
+            "UNITS=MM F=100", "TOOL=5", "RAPID X=0 Y=0 Z=10", "TOOL_POINT=2 TIP_OFFSET=1 POINT_RADIUS=4", "RAPID X=5",
+            "LINE Z=5");
+
+        List<string> tipRows = listener.LinesOf("STATE_CHANGE")
+            .FindAll(static line => line.Contains("TIP:", StringComparison.Ordinal));
+        Assert.Equal(["STATE_CHANGE(6): TIP:Z 10 -> 4"], tipRows);
+        List<MotionEvent> motions = listener.Of<MotionEvent>();
+        Assert.Equal(1, motions[1].ToolPoint);
+        Assert.Equal(0m, motions[1].PointRadius);
+        Assert.Equal(0m, motions[1].TipOffset);
+        Assert.Equal(10m, motions[1].Tip?["Z"].Value);
+        Assert.Equal(2, motions[2].ToolPoint);
+        Assert.Equal(4m, motions[2].PointRadius);
+        Assert.Equal(4m, motions[2].Tip?["Z"].Value);
+    }
+
+    // D374: the tip comes back after TILT=RESET, so VM484 does not say the program has no tip.
+    [Fact]
+    public void Vm484_Message_SaysNoTipWhileTheToolAxisIsTurned()
+    {
+        var harness = new VmHarness(VmMachines.Default());
+
+        harness.Execute("UNITS=MM", PointTwo, "TCPM=ON", "RAPID Z=50");
+
+        string message = Assert.Single(harness.Messages(DiagnosticCodes.TipOffsetUnderTilt));
+        Assert.Contains("while the tool axis is turned", message, StringComparison.Ordinal);
+    }
+
+    // D374 with D99: VM484 depends on the caller's state and is suppressed inside a subprogram that no program calls;
+    // the program that follows the same way still warns once.
+    [Fact]
+    public void Vm484_InAnUncalledSubprogram_IsSuppressed()
+    {
+        string file = "FILE=BEGIN NCX=1\nPROGRAM=BEGIN NAME=\"TEST\"\nPROGRAM=END\n"
+            + "SUB=BEGIN NAME=\"FINISH\"\nUNITS=MM\n" + PointTwo + "\nTCPM=ON\nRAPID Z=50\nSUB=END\nFILE=END\n";
+
+        VmHarness harness = VmHarness.Run(file, VmMachines.Default());
+
+        Assert.DoesNotContain(DiagnosticCodes.TipOffsetUnderTilt, harness.Codes());
+    }
 }

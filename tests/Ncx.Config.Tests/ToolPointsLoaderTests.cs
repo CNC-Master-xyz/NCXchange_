@@ -88,6 +88,16 @@ public sealed class ToolPointsLoaderTests
         Assert.Equal(DiagnosticCodes.ToolPointConflict, Assert.Single(diagnostics.Items).Code);
     }
 
+    // P2-01: a tool that is no whole number is the wrong type, CFG003, and nothing else.
+    [Fact]
+    public void RowWithAFractionalTool_IsCfg003Only()
+    {
+        Diagnostics diagnostics =
+            Report(Head + "[tool_points]\nform = \"edge\"\n\n[[tool_point]]\ntool = 1.5\npoint = 2\n");
+
+        Assert.Equal(DiagnosticCodes.WrongType, Assert.Single(diagnostics.Items).Code);
+    }
+
     // D373 (3): under offset memory A or B, H and D share one pool, so one number as a length and as a radius is
     // CFG010, also within one row.
     [Theory]
@@ -99,6 +109,19 @@ public sealed class ToolPointsLoaderTests
             + "\"\n\n[[tool_point]]\n" + rows + "\n");
 
         Assert.Equal(DiagnosticCodes.ToolPointConflict, Assert.Single(diagnostics.Items).Code);
+    }
+
+    // D373 (3): the shared-pool CFG010 stands on the radius line of the row that reuses the register, not on the first
+    // line of the file.
+    [Fact]
+    public void RegisterAsLengthAndRadius_IsReportedOnTheRadiusLineOfTheRow()
+    {
+        Diagnostics diagnostics = Report(Head + "[tool_points]\nform = \"registers\"\noffset_memory = \"A\"\n\n"
+            + "[[tool_point]]\ntool = 5\npoint = 1\nlength = 5\nradius = 5\n");
+
+        Diagnostic error = Assert.Single(diagnostics.Items);
+        Assert.Equal(DiagnosticCodes.ToolPointConflict, error.Code);
+        Assert.Equal(15, error.Line);
     }
 
     // D373 (3): under memory C, and without the key, length = radius is legal.

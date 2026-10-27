@@ -142,6 +142,38 @@ public sealed class PipelineTests : IDisposable
     }
 
     // A listener that counts the MOTION events of each line (code-guidelines 8: a small hand-written fake).
+    // D374, D376: on the path of check, trace and analyze the tool table that the machine file names reaches the VM,
+    // and the wear of the point in effect joins the radius the MOTION event reports.
+    [Fact]
+    public void Pipeline_ToolTableOfTheMachine_AddsTheWearToTheReportedRadius()
+    {
+        string machine = _cli.WriteFile("clutch.toml", TestMachines.ClutchMill.Replace("units_default = \"MM\"",
+            "units_default = \"MM\"\ntool_table = \"clutch.tools.toml\"", StringComparison.Ordinal));
+        _cli.WriteFile("clutch.tools.toml",
+            "[[tool]]\nnumber = 5\n\n[[tool.point]]\nk = 2\ntip_offset = 2\nradius = 8\nwear = 0.02\n");
+        string file = _cli.WriteFile("point.ncx", CliHarness.OneProgram(
+            "UNITS=MM", "TOOL=5 TOOL_POINT=2 TIP_OFFSET=2 POINT_RADIUS=8", "RAPID X=0 Y=0 Z=50"));
+        var radii = new RadiusRecorder();
+
+        PipelineRun run = Pipeline.Run(new RunSettings { File = file, MachineFile = machine }, [radii]);
+
+        Assert.False(run.Diagnostics.HasErrors, run.Diagnostics.ToText());
+        Assert.Equal([8.02m], radii.Radii);
+    }
+
+    private sealed class RadiusRecorder : IVmListener
+    {
+        public List<decimal?> Radii { get; } = [];
+
+        public void On(VmEvent vmEvent)
+        {
+            if (vmEvent is MotionEvent motion)
+            {
+                Radii.Add(motion.PointRadius);
+            }
+        }
+    }
+
     private sealed class MotionRecorder : IVmListener
     {
         private readonly Dictionary<int, int> _motionsByLine = [];

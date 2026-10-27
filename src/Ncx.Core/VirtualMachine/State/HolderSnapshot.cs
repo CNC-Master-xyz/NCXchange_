@@ -49,6 +49,21 @@ public sealed record HolderSnapshot
     public decimal PointRadius { get; init; }
 
     /// <summary>
+    /// The point in effect since the last tool-axis motion, 1 by default (language 4.4, D372).
+    /// </summary>
+    public int ActiveToolPoint { get; init; } = 1;
+
+    /// <summary>
+    /// The TIP_OFFSET in effect since the last tool-axis motion, 0 by default; null while UNKNOWN (D374).
+    /// </summary>
+    public decimal? ActiveTipOffset { get; init; } = 0m;
+
+    /// <summary>
+    /// The POINT_RADIUS in effect since the last tool-axis motion, 0 by default; null while UNKNOWN (D374).
+    /// </summary>
+    public decimal? ActivePointRadius { get; init; } = 0m;
+
+    /// <summary>
     /// True when the program named the point with TOOL_POINT since the TOOL of the holder and no OFFSET word replaced
     /// the registers since (D393).
     /// </summary>
