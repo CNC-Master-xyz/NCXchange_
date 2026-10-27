@@ -110,6 +110,7 @@ rapid = 36000                      # deg/min
 max_feed = 18000                   # deg/min
 acceleration = 1500                # deg/s^2
 home = 0
+owner = "T1"                       # D325: a head axis, the swivel of tool carrier 1, T1; it turns the tool vector
 
 [[axis]]
 id = "C4"
