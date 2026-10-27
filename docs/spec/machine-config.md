@@ -80,6 +80,7 @@ unload = "T0 M6"                   # written for TOOL=0
 auto_preload = true                # insert PRELOAD of the next tool after each TOOL when the program has none
 preload_position = "after_change"  # after_change | before_first_motion
 offsets_with_change = false        # true on Heidenhain: OFFSET words are implicit in TOOL CALL and not written
+length_offset_by_macro = false     # Fanuc: true when the builder's change macro applies the length offset; otherwise the first tool-axis motion after a TOOL without OFFSET:LEN, OFFSET or a named point's register is the WARNING CMP342, and no G43 H is written by default (D388)
 tool_name_allowed = false          # TOOL="NAME" accepted (Heidenhain, Siemens) or mapped to numbers
 kind_map = { ROTARY = "0.", TURNING = "1." }   # the value of {kind} per tool kind of the tool table (D52); Mori Seiki as here, DMG { ROTARY = 1, TURNING = 2 }; a tool without data takes ROTARY (D265)
 ```

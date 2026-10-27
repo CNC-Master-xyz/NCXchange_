@@ -20,6 +20,9 @@ internal static class FanucToolWords
     /// </summary>
     public const string PendingLength = "PENDING:H";
 
+    // The tool whose change still waits for the length check of its first tool-axis motion (D388).
+    private const string LengthCheck = "CHECK:H";
+
     // The spindle whose M code the control saw last, which a bare S belongs to (controllers fanuc.md 5).
     private const string LastSpindle = "SPINDLE:LAST";
 
@@ -92,6 +95,39 @@ internal static class FanucToolWords
         {
             write.MakeUnknown(FanucCodes.Motion);
         }
+
+        // D388: the change applies no length offset of its own, so the first tool-axis motion after it is checked,
+        // unless the builder's change macro applies the length (length_offset_by_macro) or the spindle is empty.
+        HolderSnapshot? holder = HolderOf(write);
+        if (write.Machine.ToolChange?.LengthOffsetByMacro != true && holder is not null
+            && holder.SpindleTool != s_emptySpindle)
+        {
+            write.Target.Set(LengthCheck, holder.SpindleTool.ToString());
+        }
+    }
+
+    // D388: the first tool-axis motion after a change without OFFSET:LEN, OFFSET or the register of a named point runs
+    // without a length offset, and the tip one tool length below the programmed point: a WARNING naming the tool,
+    // once per tool change. No G43 H is written by default, since the M-series T has no relation to H (D373 audit).
+    private static void CheckLengthAfterChange(FanucBlock write)
+    {
+        if (write.Target.ActiveOf(LengthCheck) is not string tool)
+        {
+            return;
+        }
+
+        write.Target.Forget(LengthCheck);
+        HolderSnapshot? holder = HolderOf(write);
+        if (holder is null || holder.OffsetLen != 0 || holder.OffsetCombined != 0 || write.PointRegisters?.Length
+            is not null)
+        {
+            return;
+        }
+
+        write.Warning(DiagnosticCodes.FanucToolWithoutLengthOffset,
+            $"The first tool-axis motion after the change to tool {tool} runs without a length offset: the block has "
+            + "no G43 H, since the program gives no OFFSET:LEN, OFFSET or TOOL_POINT with a register; "
+            + "length_offset_by_macro = true says the builder's change macro applies it (D388).");
     }
 
     /// <summary>
@@ -154,6 +190,10 @@ internal static class FanucToolWords
 
         write.OffsetsAdded = true;
         HolderSnapshot? holder = HolderOf(write);
+        if (movesToolAxis)
+        {
+            CheckLengthAfterChange(write);
+        }
 
         // D375: TIP_OFFSET and POINT_RADIUS are never written to the control, no G10 and no macro variable; the point
         // selects its registers, which the mapping of [tool_points] gives (D373, D392).

@@ -45,6 +45,12 @@ public sealed record ToolChangeConfig
     public bool OffsetsWithChange { get; init; }
 
     /// <summary>
+    /// length_offset_by_macro: the builder's change macro applies the length offset, so a Fanuc tool change without
+    /// OFFSET:LEN is no WARNING (D388); false when left out.
+    /// </summary>
+    public bool LengthOffsetByMacro { get; init; }
+
+    /// <summary>
     /// tool_name_allowed: TOOL="NAME" is accepted (Heidenhain, Siemens) instead of being mapped to numbers; false when
     /// left out.
     /// </summary>

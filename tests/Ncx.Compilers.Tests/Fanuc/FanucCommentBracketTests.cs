@@ -33,7 +33,8 @@ public sealed class FanucCommentBracketTests
         CompileResult result = FanucCompile.Run(program, FanucCompile.Mill());
 
         Assert.Contains("O0001 (T [1])\n", FanucCompile.TextOf(result), StringComparison.Ordinal);
-        Assert.Equal(DiagnosticCodes.FanucBracketInComment, Assert.Single(FanucCompile.CompilerDiagnostics(result)).Code);
+        Diagnostic warning = Assert.Single(FanucCompile.CompilerDiagnostics(result));
+        Assert.Equal(DiagnosticCodes.FanucBracketInComment, warning.Code);
     }
 
     // A comment without a bracket is written as before and warns nothing; quotes pass (R1-14).

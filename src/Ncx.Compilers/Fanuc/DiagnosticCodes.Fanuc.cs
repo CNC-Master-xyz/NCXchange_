@@ -117,6 +117,13 @@ public static partial class DiagnosticCodes
     public const string FanucToolPointNotMapped = "CMP341";
 
     /// <summary>
+    /// CMP342, a WARNING: the first tool-axis motion after a TOOL runs without a length offset, since the holder has
+    /// neither OFFSET:LEN, OFFSET nor the register of a named point and the change applies none; once per tool change
+    /// (D388, R1-13).
+    /// </summary>
+    public const string FanucToolWithoutLengthOffset = "CMP342";
+
+    /// <summary>
     /// CMP360: the transform chain of the block cannot be written with the one G52, G68, G51.1 and G68.2 of a Fanuc
     /// control in program order (D31).
     /// </summary>
