@@ -1,6 +1,7 @@
 # Restore, build with warnings as errors, check the formatting and run the tests on every push and pull request,
 # on Linux and on Windows, so that the line-ending handling holds on both (implementation 00-method 3,
-# code-guidelines 9, phase 0 P0-01).
+# code-guidelines 9, phase 0 P0-01). The Linux job also fails on any C# line longer than 120 characters, which
+# dotnet format does not check (code-guidelines 3.3, D109).
 name: CI
 
 on:
@@ -23,6 +24,19 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: true
     steps:
       - uses: actions/checkout@v7
+      # Code-guidelines 3.3: at most 120 characters per line in every C# file of src/ and tests/ (D109). Run with
+      # bash on the Linux job only: the Windows job's default shell is PowerShell, and its checkout ends lines with
+      # CR LF. The UTF-8 locale makes grep count characters, not bytes.
+      - name: Lines of at most 120 characters
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          LC_ALL: C.UTF-8
+        run: |
+          if grep -rnE --include='*.cs' --exclude-dir=bin --exclude-dir=obj '^.{121,}$' src tests; then
+            echo "The lines above are longer than 120 characters (code-guidelines 3.3, D109)." >&2
+            exit 1
+          fi
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json

@@ -97,7 +97,7 @@ We follow the Microsoft conventions as written. The list below is what a reviewe
 ### 3.3 Layout
 
 - Four spaces, no tabs; Allman braces (opening and closing brace on their own line); one statement and one declaration per line; continuation lines indented one level; a blank line between members; parentheses that make clauses apparent; line breaks before binary operators.
-- Line length: the Microsoft page limits doc samples to 65 characters for mobile screens; this project uses 120 and lets the formatter enforce it.
+- Line length: the Microsoft page limits doc samples to 65 characters for mobile screens; this project uses 120 and lets CI enforce it: dotnet format has no line-length rule, so a step of the CI workflow fails on any `*.cs` line over 120 characters in `src/` and `tests/` (D109).
 - One type per file, file name equals type name, folder path equals namespace (`src/Ncx.Core/VirtualMachine/ToolChangeRules.cs` is `Ncx.Core.VirtualMachine.ToolChangeRules`).
 - Member order inside a type: constants and static fields, instance fields, constructors, properties, public methods, private methods.
 
@@ -205,7 +205,7 @@ Patterns we do not use, on purpose:
 
 - `Directory.Build.props` at the root: `<TargetFramework>` the current LTS, `<Nullable>enable</Nullable>`, `<ImplicitUsings>enable</ImplicitUsings>`, `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`, `<AnalysisLevel>latest-recommended</AnalysisLevel>`, `<EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>`, and the item `<RuntimeHostConfigurationOption Include="System.Globalization.Invariant" Value="true" />`, which makes every executable run culture-independent without the `InvariantGlobalization` property, under which the analyzers do not report CA1305 at all (D108).
 - `.editorconfig` copied from `dotnet/docs` as the starting point, with the project's additions: 120-character lines, `dotnet_diagnostic.CA1305.severity = error` (specify `IFormatProvider`), `csharp_style_namespace_declarations = file_scoped:error`.
-- `dotnet format --verify-no-changes` and `dotnet test` run in CI on every push; a formatting difference fails the build.
+- `dotnet format --verify-no-changes` and `dotnet test` run in CI on every push; a formatting difference fails the build, and so does a C# line over 120 characters (a grep step, D109).
 - License of the project: MIT (D75). Packages: Tomlyn (TOML), System.CommandLine (CLI), xUnit; each addition gets a line in the decision log with its license.
 - Every source file starts with the file-scoped namespace, no license header (the repository license covers it).
 
