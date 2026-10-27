@@ -97,12 +97,29 @@ internal static class AnalyticMachines
     }
 
     /// <summary>
-    /// A five-axis mill with a B head and a C table: B (B1) owned by the tool spindle S1, then C (C1) owned by the
-    /// table TABLE1 (implementation 14, P4-03).
+    /// A five-axis mill with a B head and a C table: B (B1) owned by the tool holder H1, a swivel head, then C (C1)
+    /// owned by the table TABLE1 (implementation 14, P4-03; D325).
     /// </summary>
     public static MachineConfig FiveAxisHeadTable()
     {
-        return FiveAxis(Rotary("B", "S1"), Rotary("C", "TABLE1"));
+        return FiveAxis(Rotary("B", "H1"), Rotary("C", "TABLE1"));
+    }
+
+    /// <summary>
+    /// The B head and C table mill with B without an owner, as on the default machine of D103 (D325).
+    /// </summary>
+    public static MachineConfig FiveAxisHeadWithoutOwner()
+    {
+        return FiveAxis(Rotary("B", null), Rotary("C", "TABLE1"));
+    }
+
+    /// <summary>
+    /// A mill whose tool spindle S1 has a C axis of its own (the C-axis mode of a tool spindle), owned by S1, beside
+    /// the A table axis owned by TABLE1 (D325).
+    /// </summary>
+    public static MachineConfig ToolSpindleAxis()
+    {
+        return FiveAxis(Rotary("A", "TABLE1"), Rotary("C", "S1"));
     }
 
     private static MachineConfig FiveAxis(AxisDef first, AxisDef second)
@@ -126,7 +143,7 @@ internal static class AnalyticMachines
         };
     }
 
-    private static AxisDef Rotary(string name, string owner)
+    private static AxisDef Rotary(string name, string? owner)
     {
         return new AxisDef { Id = name + "1", NcxName = name, Letter = name, Kind = AxisKind.Rotary, Owner = owner };
     }

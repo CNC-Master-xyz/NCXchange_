@@ -79,9 +79,9 @@ public sealed class ToolVectorAnalyticTests
         Assert.Equal(30, vectors.Largest[1].Value, Precision);
     }
 
-    // P4-03: a head axis turns the tool (its owner is the tool spindle): B=30 turns 0 0 1 about Y to 0.5 0 0.866, 30
-    // degrees (line 5); the C table then turns the workpiece under the tilted tool, and a quarter turn swings the
-    // vector about Z to 0 -0.5 0.866 (line 6).
+    // P4-03, D325: a head axis turns the tool (its owner is a tool holder, here a swivel head): B=30 turns 0 0 1 about
+    // Y to 0.5 0 0.866, 30 degrees (line 5); the C table then turns the workpiece under the tilted tool, and a quarter
+    // turn swings the vector about Z to 0 -0.5 0.866 (line 6).
     [Fact]
     public void RotaryAxes_BHeadAndCTable_TurnTheToolAndTheWorkpiece()
     {
@@ -95,6 +95,41 @@ public sealed class ToolVectorAnalyticTests
         Assert.Equal(5, vectors.Largest[1].Line);
         Assert.Equal(30, vectors.Largest[1].Value, Precision);
         Assert.Equal("0.5 0 0.866", vectors.Largest[1].End);
+    }
+
+    // D325: a rotary axis owned by a tool spindle is the spindle's own rotation (the C-axis mode of a tool spindle),
+    // which turns no tool vector: C=90 on line 5 changes nothing, A=30 of the table on line 6 changes it by 30
+    // degrees, and the axes table says what C turns.
+    [Fact]
+    public void RotaryAxes_AxisOwnedByAToolSpindle_TurnsNoToolVector()
+    {
+        MachineConfig machine = AnalyticMachines.ToolSpindleAxis();
+        var vectors = new ToolVectorAnalytic(AnalyticRuns.Options(machine));
+        string report = AnalyticRuns.Run(CliHarness.OneProgram("UNITS=MM", "RAPID X=0 Y=0 Z=0 A=0 C=0",
+            "LINE C=90 F=1000", "LINE A=30"), machine, vectors);
+
+        Assert.Equal(2, vectors.Statistics.All.Count);
+        WorstMotion largest = Assert.Single(vectors.Largest);
+        Assert.Equal(6, largest.Line);
+        Assert.Equal(30, largest.Value, Precision);
+        Assert.Contains("\nC     C1  Z      nothing, the own rotation of the tool spindle S1\n", report,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("WARNING", report, StringComparison.Ordinal);
+    }
+
+    // D325: a rotary axis without owner stays a head axis, and the report header carries a WARNING naming the axis and
+    // the assumption.
+    [Fact]
+    public void Report_RotaryAxisWithoutOwner_WarnsThatItIsTakenAsAHeadAxis()
+    {
+        MachineConfig machine = AnalyticMachines.FiveAxisHeadWithoutOwner();
+        var vectors = new ToolVectorAnalytic(AnalyticRuns.Options(machine));
+        string report = AnalyticRuns.Run(CliHarness.OneProgram("UNITS=MM", "RAPID X=0 Y=0 Z=0 B=0 C=0",
+            "LINE B=30 F=1000"), machine, vectors);
+
+        Assert.Equal(30, vectors.Statistics.All.Maximum, Precision);
+        Assert.Contains("\nWARNING: the rotary axis B (B1) names no owner in [[axis]]; it is taken as a head axis that "
+            + "turns the tool (machine-config 4, D325).\n", report, StringComparison.Ordinal);
     }
 
     // P4-03: the tool axis is the normal of the WORKPLANE. Under WORKPLANE=ZX it is Y, which the turn of the B head

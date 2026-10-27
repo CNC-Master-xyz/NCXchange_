@@ -48,7 +48,7 @@ public sealed class AnalyzeCommandTests : IDisposable
 
     // P4-02 done when: the runtime of 3D_FRAESEN.fanuc.nc, converted with fanuc-mill-30i, is within 10 percent of the
     // cycle time the maintainer measured on the machine. That time is not known yet, so the computed report is the
-    // reference, unverified (implementation 14, P4-02): 191.5 s with the dynamics of fanuc-mill-30i.toml, which are
+    // reference, unverified (implementation 14, P4-02): 191.6 s with the dynamics of fanuc-mill-30i.toml, which are
     // plausible values and not verified on a machine either (D100).
     // TODO: when the maintainer's measured cycle time of 3D_FRAESEN is known, assert the estimated time within 10
     // percent of it (P4-02 done when), and correct the dynamics of fanuc-mill-30i.toml rather than the code where it is
@@ -200,8 +200,9 @@ public sealed class AnalyzeCommandTests : IDisposable
         Assert.True(exitCode == 0, _cli.Error);
         Assert.StartsWith("Runtime estimate: 2.5D_FRAESEN.ncx, the whole file, on fanuc-mill-30i.toml, INTERPRETED run",
             _cli.Output, StringComparison.Ordinal);
-        Assert.Contains("Motions: trapezoidal profile (virtual machine 8, D64), path_mode continuous, "
-            + "corner_speed 2000 mm/min, block_time 0.001 s.", _cli.Output, StringComparison.Ordinal);
+        Assert.Contains("Motions: trapezoidal profile (virtual machine 8, D64), path_mode continuous (the start value "
+            + "of PATH_MODE, D350), corner_speed 2000 mm/min, block_time 0.001 s.", _cli.Output,
+            StringComparison.Ordinal);
     }
 
     // D97: a file that cannot be read exits 2 before the run starts, and no report is written.
@@ -245,6 +246,68 @@ public sealed class AnalyzeCommandTests : IDisposable
         Assert.NotEqual("", _cli.Output);
     }
 
+    // D324: --segment-bins gives the bounds of the segment histogram in mm, --vector-bins those of the tool-vector
+    // histogram in degrees, each a comma-separated rising list above 0.
+    [Fact]
+    public void Analyze_SegmentAndVectorBins_AreTheBoundsOfTheHistograms()
+    {
+        string file = _cli.CopyExample("2.5D_FRAESEN.ncx");
+
+        int exitCode = _cli.Run("analyze", file, "--analytic", "segments,vectors", "--segment-bins", "1,10",
+            "--vector-bins", "0.5");
+
+        Assert.True(exitCode == 0, _cli.Error);
+        Assert.Contains("\nlength (mm)  motions\n0 to 1 ", _cli.Output, StringComparison.Ordinal);
+        Assert.Contains("\n1 to 10 ", _cli.Output, StringComparison.Ordinal);
+        Assert.Contains("\n10 and more ", _cli.Output, StringComparison.Ordinal);
+        Assert.Contains("\nchange (degrees)  motions\n0 to 0.5 ", _cli.Output, StringComparison.Ordinal);
+        Assert.Contains("\n0.5 and more ", _cli.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("\n0.01 to 0.1 ", _cli.Output, StringComparison.Ordinal);
+    }
+
+    // D324: a list of bounds that does not rise, or holds a bound of 0 or less, or no number, is CLI001, exit 2.
+    [Theory]
+    [InlineData("--segment-bins", "10,1")]
+    [InlineData("--segment-bins", "1,1")]
+    [InlineData("--segment-bins", "0,1")]
+    [InlineData("--vector-bins", "-1")]
+    [InlineData("--vector-bins", "1,x")]
+    [InlineData("--vector-bins", "")]
+    public void Analyze_BinsNotRisingOrNotPositive_IsAUsageError(string option, string bins)
+    {
+        string file = _cli.CopyExample("2.5D_FRAESEN.ncx");
+
+        int exitCode = _cli.Run("analyze", file, option, bins);
+
+        Assert.Equal(2, exitCode);
+        Assert.Contains("ERROR CLI001", _cli.Error, StringComparison.Ordinal);
+        Assert.Contains(option + " takes comma-separated rising bounds greater than 0", _cli.Error,
+            StringComparison.Ordinal);
+        Assert.Equal("", _cli.Output);
+    }
+
+    // D302: in CSV the heading of a channel of ncx analyze --job is a row of one field, as every line of text of a
+    // report is (D237), before the reports of that channel: in quotes where it holds a comma.
+    [Fact]
+    public void AnalyzeJob_FormatCsv_WritesTheHeadingOfEachChannelAsOneField()
+    {
+        _cli.CopyExample("machines/nakamura-ntjx.toml");
+        _cli.WriteFile("one.ncx", CliHarness.OneProgram("UNITS=MM", "SYNC=100"));
+        _cli.WriteFile("two.ncx", CliHarness.OneProgram("UNITS=MM", "SYNC=100"));
+        string manifest = _cli.WriteFile("job.ncxjob.toml", CliHarness.Lines(
+            "[job]", "machine = \"nakamura-ntjx.toml\"",
+            "[[channel]]", "id = 1", "file = \"one.ncx\"", "program = \"T\"",
+            "[[channel]]", "id = 2", "file = \"two.ncx\""));
+
+        int exitCode = _cli.Run("analyze", "--job", manifest, "--analytic", "runtime", "--format", "csv");
+
+        Assert.True(exitCode == 0, _cli.Error);
+        Assert.StartsWith("\"Channel 1: one.ncx, program T\"\n\n\"Runtime estimate: one.ncx,", _cli.Output,
+            StringComparison.Ordinal);
+        Assert.Contains("\nChannel 2: two.ncx\n\n\"Runtime estimate: two.ncx,", _cli.Output,
+            StringComparison.Ordinal);
+    }
+
     // Architecture 10: the help of analyze names its options.
     [Fact]
     public void Analyze_Help_NamesItsOptions()
@@ -253,7 +316,7 @@ public sealed class AnalyzeCommandTests : IDisposable
 
         Assert.Equal(0, exitCode);
         foreach (string option in new[] { "--machine", "--vars", "--from", "--to", "--analytic", "--static", "--format",
-            "--skip-blocks", "--strict" })
+            "--skip-blocks", "--strict", "--segment-bins", "--vector-bins" })
         {
             Assert.Contains(option, _cli.Output, StringComparison.Ordinal);
         }
