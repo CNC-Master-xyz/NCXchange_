@@ -22,9 +22,10 @@ internal static class WordCatalogTable
         (internal, D95), and every form with a rank of its own: the addresses of a fixed set (`OFFSET:LEN`,
         `CENTER:IX`, `TOLERANCE:ROTARY`), the reset form of `SHIFT`, `TILT` and `TILT_AXIS`, the machine axis words
         (D93) and the native cycle parameters (D94). Words of one key with an open address (a role, a channel, a
-        variable) sort under their rank by the address text. The ten verbs share one rank; a block has at most one.
-        The ranks of D90 go in steps of ten; a word added later takes a rank between two steps and nothing is
-        renumbered (D372: `TOOL_POINT` 435, `TIP_OFFSET` 465, `POINT_RADIUS` 467).
+        variable) sort under their rank by the address text. The eleven verbs share one rank; a block has at most
+        one. The ranks of D90 go in steps of ten; a word added later takes a rank between two steps and nothing is
+        renumbered (`MAX:X` 371, D351; `TOOL_POINT` 435, `TIP_OFFSET` 465, `POINT_RADIUS` 467, D372; `PATH_MODE` 785,
+        D349; `ROUND_LIMIT` 813, D363).
 
         | Rank | Word | Value | Verb | Axis words | Address | Scope | Section | Meaning |
         |---:|---|---|---|---|---|---|---|---|
@@ -36,7 +37,7 @@ internal static class WordCatalogTable
     /// </summary>
     public static string Write()
     {
-        // The rows by rank; rows of one rank, the ten verbs, in the order of the tables of language 4.
+        // The rows by rank; rows of one rank, the eleven verbs, in the order of the tables of language 4.
         var rowsByRank = new SortedDictionary<int, List<string>>();
         foreach (WordDefinition definition in WordCatalog.All())
         {

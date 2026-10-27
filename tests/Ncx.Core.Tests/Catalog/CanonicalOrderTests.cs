@@ -6,11 +6,12 @@ namespace Ncx.Core.Tests.Catalog;
 
 /// <summary>
 /// The canonical order of language 5 rule 6 is the rank table of D90 in the word catalog: every word has a rank, in
-/// steps of ten, and the examples of the specification stand in that order (phase 0, P0-03).
+/// steps of ten with the words added later between them, and the examples of the specification stand in that order
+/// (phase 0, P0-03).
 /// </summary>
 public sealed class CanonicalOrderTests
 {
-    // The rank table of D90 as the decision writes it, one form per rank, bucket by bucket (language 5 rule 6). The ten
+    // The rank table of D90 as the decision writes it, one form per rank, bucket by bucket (language 5 rule 6). The
     // verbs share the one rank of bucket 2, so LINE stands for them; C2, W and Z2 stand for the machine axes of
     // bucket 3 (D93).
     private static readonly string[] s_rankTableOfD90 =
@@ -74,16 +75,16 @@ public sealed class CanonicalOrderTests
         Assert.True(firstRank < secondRank, $"{first} must stand before {second} (D90).");
     }
 
-    // The ranks are assigned in steps of ten in the order of D90, so a later word fits between two others without
-    // renumbering (phase 0, P0-03); the words added later stand between two steps, and nothing was renumbered for
-    // them: TOOL_POINT at 435, TIP_OFFSET at 465 and POINT_RADIUS at 467 (D372).
+    // The ranks of D90 are assigned in steps of ten, so a later word fits between two others without renumbering
+    // (phase 0, P0-03): the steps of ten run without a gap, and a word added later takes a free number between two of
+    // them, as MAX:X to MAX:Z (D351), TOOL_POINT at 435, TIP_OFFSET at 465 and POINT_RADIUS at 467 (D372), PATH_MODE
+    // (D349) and ROUND_LIMIT (D363) do.
     [Fact]
-    public void D90_Ranks_AreInStepsOfTen()
+    public void D90_Ranks_AreInStepsOfTenWithTheLaterWordsBetween()
     {
         Assert.Equal(435, CanonicalRanks.ToolPoint);
         Assert.Equal(465, CanonicalRanks.TipOffset);
         Assert.Equal(467, CanonicalRanks.PointRadius);
-        int[] laterRanks = [CanonicalRanks.ToolPoint, CanonicalRanks.TipOffset, CanonicalRanks.PointRadius];
         var ranks = new SortedSet<int>
         {
             CanonicalRanks.MachineAxis,
@@ -92,11 +93,6 @@ public sealed class CanonicalOrderTests
         };
         foreach (WordDefinition definition in WordCatalog.All())
         {
-            if (laterRanks.Contains(definition.CanonicalRank))
-            {
-                continue;
-            }
-
             ranks.Add(definition.CanonicalRank);
             foreach (int addrRank in definition.AddrRanks.Values)
             {
@@ -112,14 +108,44 @@ public sealed class CanonicalOrderTests
         int expected = 10;
         foreach (int rank in ranks)
         {
+            if (rank % 10 != 0)
+            {
+                continue;
+            }
+
             Assert.Equal(expected, rank);
             expected += 10;
         }
+
+        Assert.Contains(CanonicalRanks.MaxX, ranks);
+        Assert.Contains(CanonicalRanks.ToolPoint, ranks);
+        Assert.Contains(CanonicalRanks.PathMode, ranks);
+        Assert.Contains(CanonicalRanks.RoundLimitRotary, ranks);
     }
 
-    // Bucket 2 is the verb: a block has at most one, so the ten verbs share its rank (language 5 rules 1 and 6).
+    // The later words stand where their decisions put them: MAX:X to MAX:Z after CENTER:IC and before R, PATH_MODE
+    // between ROTARY_FEED and TOLERANCE, ROUND_LIMIT and ROUND_LIMIT:ROTARY after TOLERANCE_MODE and before CYCLE
+    // (language 5 rule 6; D349, D351, D363).
+    [Theory]
+    [InlineData("CENTER:IC=1", "MAX:X=1")]
+    [InlineData("MAX:Z=1", "R=1")]
+    [InlineData("ROTARY_FEED=MM_MIN", "PATH_MODE=EXACT_STOP")]
+    [InlineData("PATH_MODE=EXACT_STOP", "TOLERANCE=0.01")]
+    [InlineData("TOLERANCE_MODE=ROUGH", "ROUND_LIMIT=0.001")]
+    [InlineData("ROUND_LIMIT=0.001", "ROUND_LIMIT:ROTARY=0.01")]
+    [InlineData("ROUND_LIMIT:ROTARY=0.01", "CYCLE=DRILL")]
+    public void LaterWords_FirstWord_StandsBeforeTheSecond(string first, string second)
+    {
+        int firstRank = CanonicalOrder.RankOf(WordOf(first), s_plainBlock);
+        int secondRank = CanonicalOrder.RankOf(WordOf(second), s_plainBlock);
+
+        Assert.True(firstRank < secondRank, $"{first} must stand before {second} (D349, D351, D363).");
+    }
+
+    // Bucket 2 is the verb: a block has at most one, so the eleven verbs share its rank (language 5 rules 1 and 6,
+    // D351).
     [Fact]
-    public void D90_TenVerbs_ShareTheRankOfBucket2()
+    public void D90_ElevenVerbs_ShareTheRankOfBucket2()
     {
         foreach (WordDefinition definition in WordCatalog.All())
         {

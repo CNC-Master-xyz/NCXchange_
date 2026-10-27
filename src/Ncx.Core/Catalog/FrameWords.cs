@@ -2,7 +2,8 @@ namespace Ncx.Core.Catalog;
 
 /// <summary>
 /// The frame words of language 4.2: working plane, datum, the transforms of the frame chain with their reset forms,
-/// the tilted plane and its options, SETPOS, and the kinematic transformations CYLINDER, POLAR and TCPM.
+/// the tilted plane and its options, SETPOS, the blank STOCK with its MAX corner (D351), and the kinematic
+/// transformations CYLINDER, POLAR and TCPM.
 /// </summary>
 internal static class FrameWords
 {
@@ -161,6 +162,47 @@ internal static class FrameWords
             Section = "4.2",
             Description = "Declares that the current position has these coordinates in the active workpiece frame; "
                 + "nothing moves (D55, D101).",
+        },
+
+        // STOCK is the eleventh verb (language 5 rule 1): the blank for the control's graphic, given by its bounding
+        // box, the bare absolute X Y Z of one corner and MAX:X MAX:Y MAX:Z of the opposite one (D351). It moves
+        // nothing.
+        new WordDefinition
+        {
+            Key = "STOCK",
+            Group = WordKind.Frame,
+            ValueKinds = ValueKinds.Ident,
+            AllowedIdents = ["BOX", "CYLINDER"],
+            IsVerb = true,
+            TakesAxisWords = true,
+            Scope = Scope.Block,
+            CanonicalRank = CanonicalRanks.Verb,
+            Section = "4.2",
+            Description = "The blank for the control's graphic by its bounding box, X Y Z one corner and MAX:X MAX:Y "
+                + "MAX:Z the opposite one; STOCK=CYLINDER is the cylinder inscribed in it about the tool axis. Once "
+                + "per program, after the first ORIGIN and before the first motion (D351).",
+        },
+
+        // The address of MAX is the axis of the opposite corner of STOCK, X, Y or Z, at the end of bucket 5 (D351).
+        new WordDefinition
+        {
+            Key = "MAX",
+            Group = WordKind.Frame,
+            ValueKinds = ValueKinds.NumberOrExpr,
+            IsAxisWord = true,
+            AddrKind = AddrKind.Axis,
+            IsAddrRequired = true,
+            AddrRanks = new Dictionary<string, int>
+            {
+                ["X"] = CanonicalRanks.MaxX,
+                ["Y"] = CanonicalRanks.MaxY,
+                ["Z"] = CanonicalRanks.MaxZ,
+            },
+            Scope = Scope.Block,
+            CanonicalRank = CanonicalRanks.MaxX,
+            Section = "4.2",
+            Description = "The corner of the STOCK box opposite X Y Z, always absolute in the workpiece frame of the "
+                + "block (D351).",
         },
 
         // The value of CYLINDER is the reference radius; there is no ON form (D96).
