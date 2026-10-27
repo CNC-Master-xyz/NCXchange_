@@ -98,6 +98,12 @@ public static partial class DiagnosticCodes
     public const string SiemensRetractNotWritable = "CMP534";
 
     /// <summary>
+    /// CMP535: a ROTATE or MIRROR before a tilt in the chain, which CYCLE800 with a new swivel plane deletes, and no
+    /// rule for an additive swivel is drafted (840D sl/828D Bedienhandbuch Fräsen 2013 p.481, 483; D333).
+    /// </summary>
+    public const string SiemensFrameBeforeTilt = "CMP535";
+
+    /// <summary>
     /// CMP550: an ARC with ANGLE whose start, center or end the virtual machine does not know, so that neither AR nor
     /// TURN can be written (language 4.3, ANGLE; controllers siemens.md 12 rule 2; D84).
     /// </summary>

@@ -126,6 +126,67 @@ public sealed class SiemensFrameTests
             Body(Run(Program(MillTurnHeader, "TILT B=45 MOVE=TURN"), constant)));
     }
 
+    // D333: a swivel to a new plane (_ST ones digit 0) deletes the programmable frames, so a SHIFT before the tilt
+    // goes into _X0/_Y0/_Z0 of CYCLE800, the reference point before the rotation (Bedienhandbuch Fräsen 2013
+    // p.481, 483; Arbeitsvorbereitung 2013 p.712-713); the TRANS of the SHIFT block stands until then.
+    [Fact]
+    public void Tilt_AfterAShift_WritesTheShiftIntoX0Y0Z0()
+    {
+        Assert.Equal(Lines("TRANS X10 Y5 Z-2", "CYCLE800(1,\"TC1\",0,27,10,5,-2,0,30,0,0,0,0,-1,100,1)"),
+            Body(Run(Program(MillHeader, "SHIFT X=10 Y=5 Z=-2", "TILT B=30 MOVE=TURN"), FiveAxis())));
+    }
+
+    // D333: a SHIFT after the tilt is TRANS after CYCLE800, which the swivel leaves standing, since CYCLE800 writes
+    // system frames, not the programmable frame (Bedienhandbuch Fräsen 2013 p.481).
+    [Fact]
+    public void Shift_AfterATilt_IsTransAfterCycle800()
+    {
+        Assert.Equal(Lines("CYCLE800(1,\"TC1\",0,27,0,0,0,0,30,0,0,0,0,-1,100,1)", "TRANS X10"),
+            Body(Run(Program(MillHeader, "TILT B=30 MOVE=TURN", "SHIFT X=10"), FiveAxis())));
+    }
+
+    // D333: ROTATE=RESET after the tilt writes the programmable frame again without CYCLE800; the shift before the
+    // tilt stays in its _X0 and is not written a second time as TRANS, so TRANS alone clears the rotation.
+    [Fact]
+    public void RotateReset_AfterATiltOverAShift_IsTransAloneWithoutCycle800()
+    {
+        Assert.Equal(Lines("TRANS X10", "CYCLE800(1,\"TC1\",0,27,10,0,0,0,30,0,0,0,0,-1,100,1)", "ROT RPL=30",
+                "TRANS"),
+            Body(Run(Program(MillHeader, "SHIFT X=10", "TILT B=30 MOVE=TURN", "ROTATE=30", "ROTATE=RESET"),
+                FiveAxis())));
+    }
+
+    // D333: TILT=RESET clears the swivel with CYCLE800() and its _X0 with it, so the shift that stays in the chain is
+    // written again as TRANS.
+    [Fact]
+    public void TiltReset_OverAShift_WritesTheShiftAgainAsTrans()
+    {
+        Assert.Equal(Lines("TRANS X10", "CYCLE800(1,\"TC1\",0,27,10,0,0,0,30,0,0,0,0,-1,100,1)", "CYCLE800()",
+                "TRANS X10"),
+            Body(Run(Program(MillHeader, "SHIFT X=10", "TILT B=30 MOVE=TURN", "TILT=RESET"), FiveAxis())));
+    }
+
+    // D333: a ROTATE or a MIRROR before a tilt is the ERROR CMP535, since the new swivel deletes it and no rule for
+    // the additive swivel is drafted.
+    [Theory]
+    [InlineData("ROTATE=30")]
+    [InlineData("MIRROR=X")]
+    public void Tilt_AfterARotationOrAMirror_IsTheErrorCmp535(string before)
+    {
+        Assert.Contains("CMP535",
+            CompilerCodes(Run(Program(MillHeader, before, "TILT B=30 MOVE=TURN"), FiveAxis())));
+    }
+
+    // D333: a template whose _X0, _Y0 and _Z0 are constants cannot carry a shift before the tilt, CMP532.
+    [Fact]
+    public void Tilt_AfterAShiftWithoutXyzInTheTemplate_IsTheErrorCmp532()
+    {
+        MachineConfig constant = Replaced(MillTurnFile, "27,{x},{y},{z},", "27,0,0,0,");
+
+        Assert.Equal(["CMP532"],
+            CompilerCodes(Run(Program(MillTurnHeader, "SHIFT Z=5", "TILT B=45 MOVE=TURN"), constant)));
+    }
+
     // D82: TILT_AXIS without TILT_AXIS_ON needs the kinematics module, an ERROR.
     [Fact]
     public void TiltAxis_WithoutTemplate_IsAnError()
