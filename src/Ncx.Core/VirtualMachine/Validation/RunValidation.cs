@@ -23,6 +23,9 @@ internal sealed class RunValidation
     // linear axis, and a rotary axis that is not a modulo axis (virtual machine 5, D100, D193).
     private readonly bool _comparesLimits;
 
+    // Where the STOCK of the program that runs may stand (FrameValidation, D351).
+    private readonly StockPlacement _stockPlacement = new();
+
     // The line where the program that runs gave each form of the offsets first (ToolValidation).
     private readonly Dictionary<string, int> _offsetForms = new(StringComparer.Ordinal);
 
@@ -119,6 +122,7 @@ internal sealed class RunValidation
     {
         FrameValidation.CheckSetposNamesAnAxis(context);
         FrameValidation.CheckToleranceWords(context);
+        FrameValidation.CheckStock(context, _stockPlacement);
         MotionValidation.CheckFeedAboveMaxFeed(context);
         if (_positionsBefore is not null)
         {

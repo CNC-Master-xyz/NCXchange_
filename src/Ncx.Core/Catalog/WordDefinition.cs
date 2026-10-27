@@ -52,14 +52,14 @@ public sealed record WordDefinition
 
     /// <summary>
     /// True for a verb that carries axis words in its block: the motion verbs but RETRACT, which carries none, HOME
-    /// with bare axis names, and SHIFT, TILT, TILT_AXIS and SETPOS with their own (language 5 rule 2). A machine axis
-    /// word stands only in a block whose verb takes axis words (D93).
+    /// with bare axis names, and SHIFT, TILT, TILT_AXIS, SETPOS and STOCK with their own (language 5 rule 2, D351). A
+    /// machine axis word stands only in a block whose verb takes axis words (D93).
     /// </summary>
     public bool TakesAxisWords { get; init; }
 
     /// <summary>
     /// True for an axis word, which requires a verb that takes axis words in its block: X and IX for every standard
-    /// axis, CENTER, R, ANGLE, TX TY TZ, NX NY NZ (language 5 rule 2).
+    /// axis, CENTER, R, ANGLE, TX TY TZ, NX NY NZ, and MAX of STOCK (language 5 rule 2, D351).
     /// </summary>
     public bool IsAxisWord { get; init; }
 
@@ -77,9 +77,9 @@ public sealed record WordDefinition
 
     /// <summary>
     /// The addresses of a word whose addresses are a fixed set, each with its rank in the canonical order: OFFSET:LEN
-    /// and OFFSET:RAD, CENTER:X to CENTER:IC, TOLERANCE:ROTARY (language 4, 5 rule 6, D90); the word accepts no other
-    /// address. Empty for a word whose address names something open, a role, a channel or a variable; its words sort
-    /// under its own rank by the address text.
+    /// and OFFSET:RAD, CENTER:X to CENTER:IC, MAX:X to MAX:Z, TOLERANCE:ROTARY (language 4, 5 rule 6, D90); the word
+    /// accepts no other address. Empty for a word whose address names something open, a role, a channel or a
+    /// variable; its words sort under its own rank by the address text.
     /// </summary>
     public IReadOnlyDictionary<string, int> AddrRanks { get; init; } = new Dictionary<string, int>();
 

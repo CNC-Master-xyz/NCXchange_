@@ -7,7 +7,9 @@ tables of section 4 of `../ncx-language.md` with the section it comes from, the 
 (internal, D95), and every form with a rank of its own: the addresses of a fixed set (`OFFSET:LEN`,
 `CENTER:IX`, `TOLERANCE:ROTARY`), the reset form of `SHIFT`, `TILT` and `TILT_AXIS`, the machine axis words
 (D93) and the native cycle parameters (D94). Words of one key with an open address (a role, a channel, a
-variable) sort under their rank by the address text. The ten verbs share one rank; a block has at most one.
+variable) sort under their rank by the address text. The eleven verbs share one rank; a block has at most
+one. The ranks were laid out in steps of ten; a word added later takes a free number between two of them
+(`MAX:X` 371, `PATH_MODE` 785, `ROUND_LIMIT` 813; D349, D351, D363, D372), and no rank is renumbered.
 
 | Rank | Word | Value | Verb | Axis words | Address | Scope | Section | Meaning |
 |---:|---|---|---|---|---|---|---|---|
@@ -23,6 +25,7 @@ variable) sort under their rank by the address text. The ten verbs share one ran
 | 90 | `TILT` | none, `RESET` | verb | carries |  | modal | 4.2 | Tilted working plane by the spatial angles A, B, C, appended to the chain; TILT=RESET removes it and what follows. |
 | 90 | `TILT_AXIS` | none, `RESET` | verb | carries |  | modal | 4.2 | Tilted working plane by the rotary axis positions of this machine, appended to the chain; TILT_AXIS=RESET removes it and what follows (D82). |
 | 90 | `SETPOS` | none | verb | carries |  | block | 4.2 | Declares that the current position has these coordinates in the active workpiece frame; nothing moves (D55, D101). |
+| 90 | `STOCK` | `BOX`, `CYLINDER` | verb | carries |  | block | 4.2 | The blank for the control's graphic by its bounding box, X Y Z one corner and MAX:X MAX:Y MAX:Z the opposite one; STOCK=CYLINDER is the cylinder inscribed in it about the tool axis. Once per program, after the first ORIGIN and before the first motion (D351). |
 | 90 | `RAPID` | none | verb | carries |  | block | 4.3 | Rapid positioning (G0, FMAX) to the target given by the axis words. |
 | 90 | `LINE` | none | verb | carries |  | block | 4.3 | Linear interpolation at the active feed (G1, L with F). |
 | 90 | `ARC` | `CW`, `CCW` | verb | carries |  | block | 4.3 | Circular interpolation in the working plane to the target, with CENTER or R, or over a sweep ANGLE around CENTER. |
@@ -57,6 +60,9 @@ variable) sort under their rank by the address text. The ten verbs share one ran
 | 350 | `CENTER:IY` | number, expression |  | is one | `IY` | block | 4.3 | Arc center on a plane axis, CENTER:X absolute, CENTER:IX incremental from the start point of the arc (the I J K of Fanuc and Siemens). |
 | 360 | `CENTER:IZ` | number, expression |  | is one | `IZ` | block | 4.3 | Arc center on a plane axis, CENTER:X absolute, CENTER:IX incremental from the start point of the arc (the I J K of Fanuc and Siemens). |
 | 370 | `CENTER:IC` | number, expression |  | is one | `IC` | block | 4.3 | Arc center on a plane axis, CENTER:X absolute, CENTER:IX incremental from the start point of the arc (the I J K of Fanuc and Siemens). |
+| 371 | `MAX:X` | number, expression |  | is one | `X` | block | 4.2 | The corner of the STOCK box opposite X Y Z, always absolute in the workpiece frame of the block (D351). |
+| 372 | `MAX:Y` | number, expression |  | is one | `Y` | block | 4.2 | The corner of the STOCK box opposite X Y Z, always absolute in the workpiece frame of the block (D351). |
+| 373 | `MAX:Z` | number, expression |  | is one | `Z` | block | 4.2 | The corner of the STOCK box opposite X Y Z, always absolute in the workpiece frame of the block (D351). |
 | 380 | `R` | number, expression |  | is one |  | block | 4.3 | Arc radius, not 0, positive for an arc of 180 degrees or less, negative for more; the key belongs to arcs only (D96). |
 | 390 | `ANGLE` | number, expression |  | is one |  | block | 4.3 | Sweep angle of an ARC in degrees, greater than 0, in the direction of its verb, instead of the plane end point (D84). |
 | 400 | `F` | number, expression |  |  |  | modal | 4.3 | Feed in the active feed mode. |

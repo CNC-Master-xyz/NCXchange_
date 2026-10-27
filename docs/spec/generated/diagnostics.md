@@ -70,7 +70,7 @@ The blocks the expander generates from the expansion rules of the machine config
 
 ## Frame
 
-SETPOS, the path tolerance and the tilted plane (language 4.1, 4.2; VM 2.1, 3.4, 5). MOVE and ROT without TILT or TILT_AXIS are PAR016 of the structure.
+SETPOS, the path tolerance, the tilted plane and the blank (language 4.1, 4.2; VM 2.1, 3.4, 5). MOVE and ROT without TILT or TILT_AXIS are PAR016 of the structure.
 
 | Code | Severity | Rule | Section |
 |---|---|---|---|
@@ -79,6 +79,9 @@ SETPOS, the path tolerance and the tilted plane (language 4.1, 4.2; VM 2.1, 3.4,
 | `VM420` | ERROR | TOLERANCE:ROTARY or TOLERANCE_MODE without an active TOLERANCE. | language 4.1; VM 5; D85 |
 | `VM421` | ERROR | SETPOS without an axis word. | language 4.2; VM 5 |
 | `VM422` | WARNING | ROT on a target without table kinematics: the machine file has no rotary axis on a table. Not checked without a machine file. | language 4.2; VM 5; D82 |
+| `VM423` | ERROR | STOCK without all six coordinate words of its form, X Y Z and MAX:X MAX:Y MAX:Z. | language 4.2; VM 5; D351 |
+| `VM424` | ERROR | STOCK with a side of zero or negative extent, or STOCK=CYLINDER whose two sides across the tool axis of the WORKPLANE differ, so that its footprint is not a circle. | language 4.2; VM 5; D351 |
+| `VM425` | ERROR | A second STOCK in one program, a STOCK before the first ORIGIN or one after the first motion verb. | language 4.2; VM 5; D351 |
 
 ## Motion
 

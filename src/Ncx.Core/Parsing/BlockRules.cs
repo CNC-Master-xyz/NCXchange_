@@ -13,16 +13,21 @@ internal static class BlockRules
     // The verb of the reference point return, which carries bare axis names (language 4.3).
     private const string HomeKey = "HOME";
 
+    // The verb of the blank and the key of its opposite corner, MAX:X MAX:Y MAX:Z (language 4.2, D351).
+    private const string StockKey = "STOCK";
+    private const string MaxKey = "MAX";
+
     // The motion verbs that carry every axis word: the verbs of the blocks that move (language 2 rule 2; D83) but
     // HOME, which carries bare axis names, and RETRACT, which carries none (language 5 rule 2).
     private const string MotionVerbsWithAxisWords = "RAPID, LINE, ARC or CYCLE_CALL";
 
     // The verbs that carry an axis name: the motion verbs, HOME and the verbs of the frame table (language 5 rule 2).
-    private const string VerbsWithAxisNames = "RAPID, LINE, ARC, HOME, CYCLE_CALL, SHIFT, TILT, TILT_AXIS or SETPOS";
+    private const string VerbsWithAxisNames =
+        "RAPID, LINE, ARC, HOME, CYCLE_CALL, SHIFT, TILT, TILT_AXIS, SETPOS or STOCK";
 
     // The verbs of the frame table, which carry their own axis words, the axis names of their rows, and no arc or
     // vector word (language 5 rule 2; 4.2).
-    private static readonly string[] s_frameVerbs = ["SHIFT", "TILT", "TILT_AXIS", "SETPOS"];
+    private static readonly string[] s_frameVerbs = ["SHIFT", "TILT", "TILT_AXIS", "SETPOS", StockKey];
 
     // Rule 5: the block words and the verbs or partner words of which one must stand in the same block; FRAME needs a
     // motion verb, the verbs of language 2 rule 2 and RETRACT (language 5 rule 5; 4.2, 4.3, 4.5, 4.8, 4.9; D83).
@@ -93,7 +98,8 @@ internal static class BlockRules
 
     // Axis words require a verb that carries them: a motion verb carries every axis word, RETRACT none. SHIFT, TILT,
     // TILT_AXIS and SETPOS carry their own axis words, the axis names of their rows, so CENTER, R, ANGLE, TX TY TZ and
-    // NX NY NZ, which name no axis, still require a motion verb under them. HOME carries bare axis names; under any
+    // NX NY NZ, which name no axis, still require a motion verb under them; STOCK carries X Y Z and the MAX words of
+    // its bounding box, and MAX stands under STOCK only (D351). HOME carries bare axis names; under any
     // other verb an axis word has a value. A machine axis word counts as an axis word; a native parameter is none
     // (language 5 rule 2; 4.2, 4.3; D93, D94).
     // D117: the four frame verbs take absolute axis words only, each the kinds language 4.2 gives it (decisions.md).
@@ -113,7 +119,13 @@ internal static class BlockRules
                 continue;
             }
 
-            if (verb is null || !verbCarriesAxisWords)
+            if (word.Key == MaxKey && word.Definition is not null && verb?.Key != StockKey)
+            {
+                diagnostics.Error(block, DiagnosticCodes.AxisWordWithoutVerb,
+                    $"{word.ToCanonical()} is the opposite corner of the blank and stands under STOCK only (language 5 "
+                    + "rule 2, 4.2; D351).");
+            }
+            else if (verb is null || !verbCarriesAxisWords)
             {
                 string verbs = NamesAnAxis(word) ? VerbsWithAxisNames : MotionVerbsWithAxisWords;
                 string rule = verb is null
@@ -121,7 +133,7 @@ internal static class BlockRules
                     : $"{verb.Key} carries no axis words, not {word.ToCanonical()}";
                 diagnostics.Error(block, DiagnosticCodes.AxisWordWithoutVerb, $"{rule} (language 5 rule 2).");
             }
-            else if (s_frameVerbs.Contains(verb.Key) && !NamesAnAxis(word))
+            else if (s_frameVerbs.Contains(verb.Key) && verb.Key != StockKey && !NamesAnAxis(word))
             {
                 diagnostics.Error(block, DiagnosticCodes.AxisWordWithoutVerb,
                     $"{verb.Key} carries its own axis words, the axis names, not {word.ToCanonical()}; CENTER, R, "
@@ -149,11 +161,22 @@ internal static class BlockRules
         }
     }
 
-    // Why a frame verb refuses an axis word that names an axis, null when it carries it (D117): none of the four takes
-    // an incremental form, TILT carries the spatial angles A, B and C alone, and TILT_AXIS carries those three and the
-    // machine axis names of the D93 form, not a standard linear axis (language 4.2, 5 rule 2).
+    // Why a frame verb refuses an axis word, null when it carries it (D117): none of the five takes an incremental
+    // form, TILT carries the spatial angles A, B and C alone, TILT_AXIS carries those three and the machine axis names
+    // of the D93 form, not a standard linear axis, and STOCK carries X, Y, Z and MAX:X, MAX:Y, MAX:Z alone, the two
+    // corners of its bounding box (language 4.2, 5 rule 2; D351). The catalog gives MAX the addresses X, Y and Z only.
     private static string? FrameVerbRefusal(string verb, Word word)
     {
+        if (verb == StockKey)
+        {
+            bool corner = word.Definition is not null
+                && (word.Key == MaxKey || (word.Addr is null && word.Key is "X" or "Y" or "Z"));
+            return corner
+                ? null
+                : $"STOCK carries X, Y, Z and MAX:X, MAX:Y, MAX:Z alone, the corners of its bounding box, not "
+                    + $"{word.ToCanonical()} (language 5 rule 2, 4.2; D117, D351).";
+        }
+
         if (!IsAxisName(word))
         {
             return $"{verb} carries absolute axis words only, not {word.ToCanonical()}: a shift stands in the frame "

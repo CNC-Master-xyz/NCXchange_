@@ -30,6 +30,24 @@ public static partial class DiagnosticCodes
     public const string RotWithoutTableKinematics = "VM422";
 
     /// <summary>
+    /// VM423: a STOCK without all six coordinate words of its form, X Y Z and MAX:X MAX:Y MAX:Z (language 4.2, virtual
+    /// machine 5, D351).
+    /// </summary>
+    public const string StockWithoutItsCorners = "VM423";
+
+    /// <summary>
+    /// VM424: a STOCK with a side of zero or negative extent, or a STOCK=CYLINDER whose footprint across the tool axis
+    /// is not a circle (language 4.2, virtual machine 5, D351).
+    /// </summary>
+    public const string StockExtentInvalid = "VM424";
+
+    /// <summary>
+    /// VM425: a second STOCK in one program, a STOCK before the first ORIGIN or one after the first motion verb
+    /// (language 4.2, virtual machine 5, D351).
+    /// </summary>
+    public const string StockMisplaced = "VM425";
+
+    /// <summary>
     /// VM440, a WARNING: F in a RAPID block (virtual machine 5).
     /// </summary>
     public const string FeedInRapid = "VM440";

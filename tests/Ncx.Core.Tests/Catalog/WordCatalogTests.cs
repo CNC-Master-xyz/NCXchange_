@@ -9,20 +9,21 @@ namespace Ncx.Core.Tests.Catalog;
 /// </summary>
 public sealed class WordCatalogTests
 {
-    // The verbs of language 5 rule 1.
+    // The eleven verbs of language 5 rule 1, STOCK the eleventh (D351).
     private static readonly string[] s_verbs =
-        ["RAPID", "LINE", "ARC", "RETRACT", "HOME", "CYCLE_CALL", "SHIFT", "TILT", "TILT_AXIS", "SETPOS"];
+        ["RAPID", "LINE", "ARC", "RETRACT", "HOME", "CYCLE_CALL", "SHIFT", "TILT", "TILT_AXIS", "SETPOS", "STOCK"];
 
     // The verbs that carry axis words in their block: the motion verbs except RETRACT, which carries none; SHIFT,
-    // TILT, TILT_AXIS and SETPOS with their own; HOME with bare axis names (language 5 rule 2).
+    // TILT, TILT_AXIS, SETPOS and STOCK with their own; HOME with bare axis names (language 5 rule 2, D351).
     private static readonly string[] s_verbsWithAxisWords =
-        ["RAPID", "LINE", "ARC", "HOME", "CYCLE_CALL", "SHIFT", "TILT", "TILT_AXIS", "SETPOS"];
+        ["RAPID", "LINE", "ARC", "HOME", "CYCLE_CALL", "SHIFT", "TILT", "TILT_AXIS", "SETPOS", "STOCK"];
 
-    // The axis words of language 5 rule 2: X and IX for every standard axis, CENTER:*, R, ANGLE, TX TY TZ, NX NY NZ.
+    // The axis words of language 5 rule 2: X and IX for every standard axis, CENTER:*, R, ANGLE, TX TY TZ, NX NY NZ,
+    // and MAX:* of STOCK (D351).
     private static readonly string[] s_axisWords =
     [
         "X", "Y", "Z", "A", "B", "C", "IX", "IY", "IZ", "IA", "IB", "IC",
-        "CENTER", "R", "ANGLE", "TX", "TY", "TZ", "NX", "NY", "NZ",
+        "CENTER", "R", "ANGLE", "TX", "TY", "TZ", "NX", "NY", "NZ", "MAX",
     ];
 
     // The entries whose key is not written in the Word column of a table of language 4, each with the place that
@@ -47,7 +48,7 @@ public sealed class WordCatalogTests
         Assert.Empty(shared);
     }
 
-    // A block has at most one verb, and the verbs are these ten (language 5 rule 1).
+    // A block has at most one verb, and the verbs are these eleven (language 5 rule 1, D351).
     [Fact]
     public void BlockRule1_EveryVerb_IsMarkedIsVerb()
     {
