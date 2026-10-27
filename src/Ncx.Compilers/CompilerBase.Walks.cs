@@ -34,6 +34,7 @@ public abstract partial class CompilerBase
     {
         _contexts.Clear();
         _programs.Clear();
+        _programFileNames = null;
         _subs.Clear();
         _fileBegin.Clear();
         _fileEnd.Clear();

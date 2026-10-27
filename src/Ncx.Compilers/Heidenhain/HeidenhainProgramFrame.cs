@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Ncx.Config.Templates;
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.State;
 
@@ -141,8 +142,8 @@ internal static partial class HeidenhainProgramFrame
     // The program whose file the block is written into (program_layout = "file_per_program", D48): its own program,
     // or, in the walk of a subprogram, the program whose walk entered it, the last PROGRAM=BEGIN before it in walk
     // order (architecture 8, D99). The walk of a subprogram that no program calls follows the PROGRAM=END of the last
-    // program and belongs to none: that subprogram stands in no output file, with the WARNING of the framework and its
-    // TODO(question) (CompilerBase.FilePerProgram), and its UNITS has no BEGIN PGM to be compared with.
+    // program: under file_per_program it stands in the first program's file (D264, CompilerBase.FilePerProgram), under
+    // one_file it belongs to none, and its UNITS has no BEGIN PGM to be compared with.
     private static Section? ProgramOf(HeidenhainBlock writing)
     {
         if (writing.Step.Section is Section { Kind: SectionKind.Program } own)
@@ -156,12 +157,27 @@ internal static partial class HeidenhainProgramFrame
             Block block = steps[index].Block;
             if (block.Has("PROGRAM", null, "END"))
             {
-                return null;
+                return writing.Machine.Format?.ProgramLayout == ProgramLayout.FilePerProgram
+                    ? FirstProgram(steps) : null;
             }
 
             if (block.Has("PROGRAM", null, "BEGIN"))
             {
                 return steps[index].Section;
+            }
+        }
+
+        return null;
+    }
+
+    // The first program of the file, whose file holds the subprograms no program calls (D264).
+    private static Section? FirstProgram(IReadOnlyList<BlockStep> steps)
+    {
+        foreach (BlockStep step in steps)
+        {
+            if (step.Block.Has("PROGRAM", null, "BEGIN"))
+            {
+                return step.Section;
             }
         }
 
@@ -214,10 +230,10 @@ internal static partial class HeidenhainProgramFrame
         };
     }
 
-    // The name of the program, the name of the NCX file for a program without NAME, as the framework names its file.
+    // The name of the program, the final name the framework gives its file (D266).
     private static string NameOf(HeidenhainBlock writing, Section program)
     {
-        return program.Name ?? Path.GetFileNameWithoutExtension(writing.Diagnostics.File);
+        return writing.ProgramName(program);
     }
 
     // The block number in front of a Klartext block, 2 of "2 BLK FORM 0.1 Z X0 Y0 Z-20".

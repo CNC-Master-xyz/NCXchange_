@@ -36,10 +36,17 @@ public static partial class DiagnosticCodes
     public const string SubprogramWalksDiffer = "CMP002";
 
     /// <summary>
-    /// CMP003, a WARNING: under program_layout = "file_per_program" a subprogram that no program calls stands in no
-    /// output file (machine-config 2, D48, D99).
+    /// CMP003, retired 2026-10-27 (D264): a subprogram that no program calls is written once, into the first program's
+    /// file under program_layout = "file_per_program". The number is not reused.
     /// </summary>
+    [Obsolete("Retired by D264: every SUB is written at least once.")]
     public const string UncalledSubprogramNotWritten = "CMP003";
+
+    /// <summary>
+    /// CMP005, a WARNING: under program_layout = "file_per_program" a program name, compared case-insensitively, is
+    /// taken already by an earlier program, and the file gets _2, _3 (machine-config 2, D266).
+    /// </summary>
+    public const string ProgramNameTaken = "CMP005";
 
     /// <summary>
     /// CMP016, an INFO: the program names a measurement point other than 1 and the machine file has no [tool_points],

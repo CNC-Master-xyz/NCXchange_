@@ -87,6 +87,11 @@ internal sealed class HeidenhainBlock
     public required Func<string, string> CommentText { get; init; }
 
     /// <summary>
+    /// The final name of a program's file, which BEGIN PGM and END PGM carry (CompilerBase.ProgramFileName, D266).
+    /// </summary>
+    public required Func<Section, string> ProgramName { get; init; }
+
+    /// <summary>
     /// The index of the named measurement point of the holder after the block, from [tool_points]; null where the
     /// program named no point since the TOOL or the mapping gives none (D373, D393; CompilerBase.PointRegistersOf).
     /// </summary>

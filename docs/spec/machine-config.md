@@ -76,6 +76,8 @@ program_end = "M30"                # M30 | M2 (Siemens also M17), written for PR
 sub_end = "M99"                    # written for SUB=END and RETURN; Heidenhain "LBL 0", Siemens "RET"
 program_layout = "one_file"        # one_file: all programs and subprograms of an NCX file into one output file (Fanuc O programs, Siemens %_N_ units)
                                    # file_per_program: one output file per program, subprograms copied after the M30 of every caller (Heidenhain)
+                                   # a subprogram no program calls goes after the last program, or into the first program's file (D264); a file is named
+                                   # after its program's NAME, else the NCX file stem, a name taken already (case-insensitive) gets _2, _3 with CMP005 (D266)
 max_line_length = 0                # 0 = unlimited; Siemens family value 512 (D263)
 comment_charset = "ASCII"          # "ASCII" | "UTF-8", any other value is the ERROR CFG005; under ASCII umlauts are transliterated before writing (D263)
 label_max = 999                    # optional: the largest label number; the Heidenhain compiler numbers labels from 1 to it (D271)
