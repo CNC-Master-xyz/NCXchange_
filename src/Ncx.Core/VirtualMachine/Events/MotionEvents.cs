@@ -10,10 +10,6 @@ namespace Ncx.Core.VirtualMachine.Events;
 /// </summary>
 internal static class MotionEvents
 {
-    // A sweep in degrees keeps three decimals, the resolution of a rotary axis on the common controls, as a length
-    // keeps those of MotionRules.PositionDecimals; no document says how many (wave-1 question #46).
-    private const int SweepDecimals = 3;
-
     /// <summary>
     /// The MOTION events of a block, in the order the machine moves.
     /// </summary>
@@ -61,12 +57,12 @@ internal static class MotionEvents
             FeedMode = after.Motion.FeedMode,
             Comp = after.Motion.Comp,
             Frame = FrameOf(block),
-            Length = verb == Verb.Arc ? null : LengthOf(context, from, to, after.Frame.Units, [], 0d),
+            Length = verb == Verb.Arc ? null : LengthOf(context, from, to, [], 0d),
         };
 
         if (verb == Verb.Arc)
         {
-            motion = WithArc(motion, context, arc, after.Frame.Units);
+            motion = WithArc(motion, context, arc);
         }
 
         motions.Add(motion);
@@ -75,7 +71,7 @@ internal static class MotionEvents
 
     // An ARC carries its direction, and when it resolved its center, its sweep and its arc length, the travel of a
     // helix included (virtual machine 3.2, 7, 8; D84).
-    private static MotionEvent WithArc(MotionEvent motion, BlockContext context, PlaneArc? arc, Units units)
+    private static MotionEvent WithArc(MotionEvent motion, BlockContext context, PlaneArc? arc)
     {
         ArcDirection direction = context.Block.Verb is Word verb && BlockContext.IdentOf(verb) == "CCW"
             ? ArcDirection.Counterclockwise
@@ -88,14 +84,13 @@ internal static class MotionEvents
         Plane plane = arc.Plane;
         string firstAxis = context.Resources.KeyOfAxis(plane.FirstAxis, context.State) ?? plane.FirstAxis;
         string secondAxis = context.Resources.KeyOfAxis(plane.SecondAxis, context.State) ?? plane.SecondAxis;
-        int decimals = MotionRules.PositionDecimals(units);
         bool machineFrame = motion.Frame == PositionFrame.Machine;
         var center = new Dictionary<string, AxisPosition>(StringComparer.Ordinal)
         {
-            [firstAxis] = Stored(context, firstAxis, plane.FirstAxis, Vec3.RoundToDecimal(arc.Arc.Center.X, decimals),
+            [firstAxis] = Stored(context, firstAxis, plane.FirstAxis, Vec3.RoundToDecimal(arc.Arc.Center.X),
                 machineFrame),
             [secondAxis] = Stored(context, secondAxis, plane.SecondAxis,
-                Vec3.RoundToDecimal(arc.Arc.Center.Y, decimals), machineFrame),
+                Vec3.RoundToDecimal(arc.Arc.Center.Y), machineFrame),
         };
 
         // The arc turns r times the sweep in the plane; the tool axis and any other axis of the block travel along it.
@@ -104,8 +99,8 @@ internal static class MotionEvents
         {
             Direction = direction,
             Center = center.AsReadOnly(),
-            Sweep = Vec3.RoundToDecimal(arc.Arc.Sweep, SweepDecimals),
-            Length = LengthOf(context, motion.From, motion.To, units, [firstAxis, secondAxis], inThePlane),
+            Sweep = Vec3.RoundToDecimal(arc.Arc.Sweep),
+            Length = LengthOf(context, motion.From, motion.To, [firstAxis, secondAxis], inThePlane),
         };
     }
 
@@ -140,7 +135,7 @@ internal static class MotionEvents
                 FeedMode = after.Motion.FeedMode,
                 Comp = after.Motion.Comp,
                 Frame = FrameOf(context.Block),
-                Length = LengthOf(context, from, to, after.Frame.Units, [], 0d),
+                Length = LengthOf(context, from, to, [], 0d),
             });
         }
     }
@@ -148,10 +143,10 @@ internal static class MotionEvents
     // The length of a motion (virtual machine 8): the euclidean length over the axes that moved, with the length the
     // arc covers in its plane; null when an axis that moved is not known at both ends in one frame. A rotary axis turns
     // in degrees and is no part of a length, except in the polar and the cylinder plane, where its word is a length
-    // (virtual machine 3.1, D102). A length computed in double reaches the event as a decimal rounded to the units'
-    // decimals (D62; wave-1 question #46).
+    // (virtual machine 3.1, D102). A length computed in double reaches the event as a decimal rounded to the VM
+    // precision, as the centre and the sweep of an arc do (D62, D121).
     private static decimal? LengthOf(BlockContext context, IReadOnlyDictionary<string, AxisPosition> from,
-        IReadOnlyDictionary<string, AxisPosition> to, Units units, string[] planeAxes, double inThePlane)
+        IReadOnlyDictionary<string, AxisPosition> to, string[] planeAxes, double inThePlane)
     {
         double squares = inThePlane * inThePlane;
         foreach (KeyValuePair<string, AxisPosition> target in to)
@@ -172,7 +167,7 @@ internal static class MotionEvents
             squares += travel * travel;
         }
 
-        return Vec3.RoundToDecimal(Math.Sqrt(squares), MotionRules.PositionDecimals(units));
+        return Vec3.RoundToDecimal(Math.Sqrt(squares));
     }
 
     private static bool IsLength(BlockContext context, string axis, AxisPosition start, AxisPosition end)

@@ -16,7 +16,7 @@ The specification is the design; the code implements it sentence by sentence. Co
 Rules:
 
 - Every non-trivial method or block of logic begins with a comment that says what is being established, in the language of the specification, with the section in brackets: `// A different tool preloaded than called is a WARNING, the magazine cycles twice (virtual machine 3.5).`
-- A comment describes intent and rule, never mechanics. `// Increment i` is forbidden; `// Consume the preload only when it names the tool that arrives` is the point.
+- A comment describes intent and rule, never mechanics. `// Increment i` is forbidden; `// The tool that arrives consumes any preload` is the point.
 - Where a comment would narrate what the code obviously does, the code needs a better name instead of a comment.
 - Public types and members of `Ncx.Core`, `Ncx.Config`, `Ncx.Readers`, `Ncx.Compilers` and `Ncx.Plugins` carry XML documentation comments (`/// <summary>`), because plugins and future front ends are written against them (the four plugin interfaces live in Core, Readers and Compilers, D106). Internal members carry XML comments only when the summary says something the name does not.
 - Microsoft's comment style applies: `//` single-line comments on their own line above the code, one space after the delimiter, first letter uppercase, a full stop at the end; no `/* */` blocks; no comments at the end of a code line except for a table-like sequence of constants.
@@ -34,9 +34,8 @@ namespace Ncx.Core.VirtualMachine;
 /// </summary>
 internal static class ToolChangeRules
 {
-    // TOOL=n puts n into the spindle. The preload is consumed only when it names the
-    // tool that arrives; a different preload is a WARNING because the magazine has to
-    // cycle twice (virtual machine 3.5, row TOOL=n).
+    // TOOL=n puts n into the spindle and consumes any preload; a different preload is
+    // a WARNING because the magazine has to cycle twice (virtual machine 3.5, row TOOL=n).
     public static void ApplyTool(HolderState holder, ToolRef tool, Block block, Diagnostics diagnostics)
     {
         if (holder.Preloaded is ToolRef preloaded && preloaded != tool)
@@ -48,7 +47,7 @@ internal static class ToolChangeRules
         // The change itself: TOOL_END for the old tool, TOOL_BEGIN for the new one, is
         // raised by the caller from the Before and After snapshots.
         holder.SpindleTool = tool;
-        holder.Preloaded = holder.Preloaded == tool ? null : holder.Preloaded;
+        holder.Preloaded = null;
     }
 
     // A bare TOOL changes to the preloaded tool and is an ERROR when nothing is

@@ -34,9 +34,10 @@ internal static class ToolChangeRules
         holder.Preloaded = tool;
     }
 
-    // TOOL=n puts n into the spindle. The preload is consumed only when it names the
-    // tool that arrives; a different preload is a WARNING because the magazine has to
-    // cycle twice (virtual machine 3.5, row TOOL=n).
+    // TOOL=n puts n into the spindle and consumes any preload: a different preload is a
+    // WARNING because the magazine has to cycle twice (virtual machine 3.5, row TOOL=n;
+    // D42, D132). After the change the control's preselection is n, so a later bare TOOL
+    // has nothing preloaded.
     public static void ApplyTool(HolderState holder, ToolRef tool, Block block, Diagnostics diagnostics)
     {
         if (holder.Preloaded is ToolRef preloaded && preloaded != tool)
@@ -47,11 +48,10 @@ internal static class ToolChangeRules
 
         // The change itself: TOOL_END for the old tool, TOOL_BEGIN for the new one, is
         // raised by the caller from the Before and After snapshots.
-        // TODO(question): virtual machine 3.5 and the sample of code-guidelines 2 keep a different preload after
-        // TOOL=k, while the state diagram of architecture 5.2 draws TOOL=k as a transition from Pending to Loaded; the
-        // preload is kept, as the virtual machine says, until D132 is answered.
+        // spindleTool = n; preloaded = none (virtual machine 3.5, row TOOL=n; architecture 5.2, Pending to Loaded;
+        // D132).
         holder.SpindleTool = tool;
-        holder.Preloaded = holder.Preloaded == tool ? null : holder.Preloaded;
+        holder.Preloaded = null;
     }
 
     // A bare TOOL changes to the preloaded tool and is an ERROR when nothing is

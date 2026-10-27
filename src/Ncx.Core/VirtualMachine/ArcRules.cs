@@ -158,8 +158,8 @@ internal static class ArcRules
         }
 
         // The end goes into the position store: in the CENTER and R forms as the words give it, in the ANGLE form the
-        // start rotated about the center, a double that reaches the store only rounded to a decimal (virtual machine
-        // 3.2; D62, phase 1 risks).
+        // start rotated about the center, a double that reaches the store only rounded to the VM precision (virtual
+        // machine 3.2; D62, D121).
         if (words.Angle is null)
         {
             Place(state, firstAxis, firstFrame, endFirst);
@@ -167,9 +167,8 @@ internal static class ArcRules
         }
         else
         {
-            int decimals = MotionRules.PositionDecimals(state.Frame.Units);
-            Place(state, firstAxis, firstFrame, Vec3.RoundToDecimal(arc.End.X, decimals));
-            Place(state, secondAxis, secondFrame, Vec3.RoundToDecimal(arc.End.Y, decimals));
+            Place(state, firstAxis, firstFrame, Vec3.RoundToDecimal(arc.End.X));
+            Place(state, secondAxis, secondFrame, Vec3.RoundToDecimal(arc.End.Y));
         }
 
         MoveToolAndOtherAxes(context, words);

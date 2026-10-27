@@ -318,18 +318,6 @@ internal static class MotionRules
         return name.StartsWith('I') ? name.Substring(1) : name;
     }
 
-    /// <summary>
-    /// The decimals a coordinate computed in double keeps when it goes back into the position store (phase 1 risks,
-    /// D62): 3 in millimetres and 4 in inches, the resolution of the common controls.
-    /// </summary>
-    /// <remarks>
-    /// No document says how many decimals "the units' decimals" are (wave-1 question #46); these are the workaround.
-    /// </remarks>
-    public static int PositionDecimals(Units units)
-    {
-        return units == Units.Inch ? 4 : 3;
-    }
-
     // The name of a frame in a message.
     private static string FrameName(PositionFrame frame)
     {

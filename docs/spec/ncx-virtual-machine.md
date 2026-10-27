@@ -63,7 +63,7 @@ Everything below exists once per channel unless marked "per resource" or "per jo
 | Variable | Initial | Set by |
 |---|---|---|
 | holder[r].spindleTool | 0 | `TOOL[:r]` |
-| holder[r].preloaded | none | `PRELOAD[:r]`; consumed by `TOOL` |
+| holder[r].preloaded | none | `PRELOAD[:r]`; consumed by every `TOOL`, `TOOL=k` of another tool included (D132) |
 | holder[r].offset.length, offset.radius, offset.combined | 0, 0, 0 | `OFFSET:LEN`, `OFFSET:RAD`, `OFFSET` on the holder called last |
 | lastHolder | `default_holder` from TOML | `TOOL:r` |
 
@@ -121,7 +121,7 @@ For every block:
 
 1. Parse the words. Unknown key, wrong value type, duplicate key, two verbs, axis words without a verb: ERROR. A key of the form of a machine axis (D93) and, in a block that carries `CYCLE:<controller>=n`, a native parameter (D94) are not unknown keys; they are resolved in step 2 (3.8) or carried unresolved. A key starting with `@` is a pseudo-word (3.10): accepted, with a state key as its value, only in a block the expander generated; in a user file it is the ERROR "pseudo-word in a user file" (D95).
 2. Resolve role addresses and axis names against the machine configuration (3.8).
-3. Apply the state words, in any order; they do not depend on each other within a block. A `CYCLE:<controller>=n` word sets the cycle and stores the native parameters of the block unresolved, in source order; the VM does not interpret them (D94).
+3. Apply the state words, in any order; they do not depend on each other within a block, with one exception: in a block with both `TOOL` and `PRELOAD`, `TOOL` applies first, so the change comes before the preload of the next tool (language 4.4, D132). A `CYCLE:<controller>=n` word sets the cycle and stores the native parameters of the block unresolved, in source order; the VM does not interpret them (D94).
 4. If the verb is `SHIFT`, `TILT`, `TILT_AXIS` or `SETPOS`, update the frame.
 5. If the verb is a motion verb, resolve the target (3.1 to 3.3) and execute it. `HOME` moves the named axes at rapid to the reference point of the configuration (`POINT=2` selects the second reference point); afterwards those axes are known in the MACHINE frame at the reference coordinates. `HOME` on an axis without a reference point in the configuration is a WARNING, once per run and axis, and the axis becomes unknown in every frame afterwards; a compiler that must write the coordinates reports the ERROR (D100).
 6. Reset block-scoped items: `FRAME`, `IF`, `ARG`, `TIMES`, `WITH`.
@@ -162,7 +162,7 @@ The two-word model (`PRELOAD`, `TOOL`) is executed against the holder state:
 | Word | Effect on holder state | Diagnostics |
 |---|---|---|
 | `PRELOAD=n` | preloaded = n (0 clears) | WARNING when n is already in the spindle (no-op on the machine) |
-| `TOOL=n` | spindleTool = n; if preloaded == n: preloaded = none; raises TOOL_END for the old tool and TOOL_BEGIN for n | WARNING when a different tool was preloaded (the magazine has to cycle twice) |
+| `TOOL=n` | spindleTool = n; preloaded = none (TOOL=n consumes any preload, D132); raises TOOL_END for the old tool and TOOL_BEGIN for n | WARNING when a different tool was preloaded (the magazine has to cycle twice) |
 | `TOOL` | spindleTool = preloaded; preloaded = none | ERROR when nothing is preloaded |
 | `TOOL=0` | spindleTool = 0 | WARNING when a cycle is still active or compensation is on |
 

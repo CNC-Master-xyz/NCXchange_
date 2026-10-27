@@ -162,7 +162,7 @@ A tool change is two things on most machines and one thing in a careless program
 
 | Word | Value | Meaning | Scope |
 |---|---|---|---|
-| `PRELOAD=5` | integer or string | Prepare tool 5 in the magazine (Fanuc `T5` alone, Heidenhain `TOOL DEF 5`, Siemens `T5` on machines that change with M6). Nothing happens to the spindle. `PRELOAD=0` clears a pending preload. | modal until consumed |
+| `PRELOAD=5` | integer or string | Prepare tool 5 in the magazine (Fanuc `T5` alone, Heidenhain `TOOL DEF 5`, Siemens `T5` on machines that change with M6). Nothing happens to the spindle. `PRELOAD=0` clears a pending preload. | modal until consumed by the next `TOOL`, of whatever tool (D132) |
 | `TOOL=4` | integer or string; optional addr = holder role | The spindle (or the addressed holder) now carries tool 4. This is the change. The compiler writes what the machine needs: `T4 M6`, `M6` alone when 4 is already preloaded and the machine allows it, `TOOL CALL 4 Z S...`, `T4` on a turret. `TOOL=0` empties the spindle. A reader writes the role of the holder whenever the word does not belong to `default_holder`, since a bare `TOOL` reaches that one (D219; virtual machine 3.8 rule 2). | modal |
 | `TOOL` | no value | Change to the preloaded tool. ERROR when nothing is preloaded. The compilers write the number; `ncx format` keeps the word as written (D91). | |
 | `OFFSET:LEN=4` | integer | Tool length offset register (G43 H). 0 cancels. On a controller with one register for both, a `OFFSET:LEN=0` block cancels that register and so the radius with it (Siemens `D0`, D301). | modal |
