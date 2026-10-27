@@ -608,18 +608,20 @@ classDiagram
 
 ### 5.4 Job scheduler
 
-A job runs one VM per channel program in rounds. `SYNC` marks pair in execution order; a deadlock is reported with the marks and channels involved.
+A job runs one VM per channel program in rounds. `SYNC` marks pair in execution order; channels reaching one mark with different participants are an ERROR at once (VM573, D304); when no channel can execute a block and some channel has not finished, whether the others wait or have finished, the deadlock is reported with what each channel waits for (VM571, D305). The spindle and holder state is one per job, which every channel's VM reads and changes in round order; lastHolder, the offsets and the rest of the state stay per channel (virtual machine 2.8, D308).
 
 ```mermaid
 flowchart TD
     A([start job]) --> B[load manifest, one VM per channel, shared resources]
     B --> C{any channel neither finished nor waiting?}
-    C -- no --> D{all waiting?}
-    D -- yes --> E[ERROR deadlock: list marks per channel]
-    D -- no --> F([job finished, timeline per channel])
+    C -- no --> D{all finished?}
+    D -- no --> E[ERROR deadlock: what each channel waits for]
+    D -- yes --> F([job finished, timeline per channel])
     C -- yes --> G[every runnable channel executes one block]
     G --> H{SYNC reached?}
-    H -- yes --> I[mark channel waiting at m with its WITH set]
+    H -- yes --> X{another participant waits at m with another set?}
+    X -- yes --> Y[ERROR VM573, job stops]
+    X -- no --> I[mark channel waiting at m with its WITH set]
     I --> J{all participants waiting at m?}
     J -- yes --> K[release them, raise SYNC_RELEASE]
     J -- no --> C
@@ -1096,7 +1098,7 @@ The API is shaped for NC programmers with little C# (code-guidelines.md, section
 | `ncx convert <file> [--machine <name or toml>] [--output <file>] [--channel <n>] [--strict]` | controller file, read as UTF-8 when its bytes are valid UTF-8, else as Windows-1252 with a WARNING (D229) | reader, NcxWriter, STATIC check | NCX text to stdout or `--output`, with `CHANNEL=n` on the program under `--channel`, which wins over the `.P-n` suffix of a Fanuc file name (D223); nothing written that the command line does not name (D209; a converted program that a `CALL="name"` is to find is written as `<name>.ncx`, D215); diagnostics |
 | `ncx convert --batch <folder> --machine <toml> --report <file> [--strict]` | every file of a folder and of its folders, in ordinal path order, hidden files and folders (names starting with `.`) skipped (D284) | per file as `convert`, never stopping on an error; the plugins of the working directory load once per batch and read along, their diagnostics going to the file being converted, and a plugin that fails is dropped for the rest of the batch (D284) | the report of `--report`: per file and in total the blocks, the `RAW` blocks per word (a `RAW` block counted by its `RAW` word, the constructs behind it in the standard error only) and the diagnostics per code, in the form of `tests/corpus-reports/README.md` (D285); the diagnostics of every file |
 | `ncx compile <file.ncx> --machine <toml> [--output <folder>]` | NCX | parser, VM STATIC, compiler | NC file under `out/<machine>/` or in the folder of `--output`, diagnostics |
-| `ncx compile --job <name.ncxjob.toml>` | job manifest | parser per channel, job compiler | one NC file per channel |
+| `ncx compile --job <name.ncxjob.toml>` | job manifest | parser per channel, job compiler | one NC file per channel, named by `[format] channel_files` (D310), and the library file `<job>_LIB` of the subprograms no channel calls (D316) |
 | `ncx format <file.ncx> [--check] [--output <file>]` | NCX | parser, NcxWriter | canonical text to stdout or `--output`; with `--check` no output, exit 1 on a difference |
 | `ncx check <file.ncx> [--machine <toml>] [--skip-blocks none\|all\|0,3] [--expand-cycles]` | NCX | parser, expander, VM STATIC | diagnostics only |
 | `ncx check --job <name.ncxjob.toml>` with the options of `check` | job manifest (machine-config 8) | parser and expander per channel file, one VM STATIC per channel program in rounds (VM 3.7) | diagnostics only |

@@ -25,6 +25,12 @@ public sealed partial class VirtualMachine
     internal int? JobChannels { get; init; }
 
     /// <summary>
+    /// The spindle and tool rows the channels of the job share, read and changed by every channel's virtual machine in
+    /// round order (virtual machine 2.8, D308); null outside a job, where the run has rows of its own.
+    /// </summary>
+    internal ResourceState? JobResources { get; init; }
+
+    /// <summary>
     /// The subprograms the walks of this run entered by CALL (D99).
     /// </summary>
     internal IReadOnlySet<Section> CalledSubs => _calledSubs;
@@ -42,7 +48,8 @@ public sealed partial class VirtualMachine
     internal SyncEvent ChangeWait(Block block, int? waitingAt, int mark, IReadOnlyList<int> channels, int round)
     {
         // The Before of the event is the After of the events before it, so that a listener misses no change (virtual
-        // machine 7); without a listener nobody keeps that chain.
+        // machine 7); without a listener nobody keeps that chain. The shared rows are taken as they stand (D308).
+        TakeOverSharedChanges();
         ChannelSnapshot before = _lastAfter is ChannelSnapshot last && ReferenceEquals(_eventState, _state)
             ? last
             : _state.Snapshot();

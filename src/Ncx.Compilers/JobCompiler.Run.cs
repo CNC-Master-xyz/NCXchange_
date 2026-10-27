@@ -27,6 +27,9 @@ public sealed partial class JobCompiler
         Ncx.Core.Model.DiagnosticCodes.ChannelAlreadyStarted,
         Ncx.Core.Model.DiagnosticCodes.ChannelOtherThanHeader,
         Ncx.Core.Model.DiagnosticCodes.ChannelTwiceInJob,
+        Ncx.Core.Model.DiagnosticCodes.SyncParticipantsDiffer,
+        Ncx.Core.Model.DiagnosticCodes.ChannelNotRunByJob,
+        Ncx.Core.Model.DiagnosticCodes.FinishedChannelNotRestarted,
     ];
 
     // Every file of the job expanded once, with the rules of the machine and the rewriters of the plugins, into
@@ -122,7 +125,7 @@ public sealed partial class JobCompiler
             AddRun(diagnostics, runs[file].Diagnostics, result.Stopped);
         }
 
-        return result.Stopped ? null : Channels(job, files, expanded, result, marks);
+        return result.Stopped ? null : Channels(jobFile, job, files, expanded, result, marks);
     }
 
     // The job as it would be written runs STATIC once more, every channel program with the SYNCs the job compiler
@@ -130,11 +133,10 @@ public sealed partial class JobCompiler
     // with no releasable mark is the deadlock ERROR (virtual machine 3.7), and nothing is written (2.9). The run of the
     // written job reports on diagnostics of its own, since the compile of each channel program reports what the
     // virtual machine finds on its blocks; only the deadlock is taken from it. True after the ERROR.
-    // TODO(question): machine-config 5 writes start_mark "as the first block of every channel program" and D56 has the
-    // job compiler insert "the SYNC it needs", but no document says where such a SYNC stands when a channel is started
-    // by the START_CHANNEL of another or waits for the end of another with WAIT_CHANNEL (language 4.8), so that it can
-    // never be released; a generated SYNC that a channel waits at in the deadlock is the ERROR CMP712 that names the
-    // deadlock, until that is answered.
+    // D314: start_mark is written only when some channel program does not already pass it as its first mark with all
+    // channels; a channel that a START_CHANNEL of another starts, or that waits for the end of another, may then never
+    // release the generated SYNC, and a generated SYNC that a channel waits at in the deadlock is the ERROR CMP712
+    // that names the deadlock.
     private static bool RunWrittenJob(string jobFile, JobManifest job, List<JobChannel> channels,
         MachineConfig machine, Diagnostics diagnostics)
     {
@@ -220,7 +222,8 @@ public sealed partial class JobCompiler
     // The channels of the job in the order of the manifest, each with the program it ran in its expanded file and the
     // marks it passed; what the parser and the expander found in a file starts the program of its first channel. A
     // subprogram that no channel calls stands in no channel file, with a WARNING.
-    private static List<JobChannel> Channels(JobManifest job, IReadOnlyDictionary<string, NcxProgram> files,
+    private static List<JobChannel> Channels(string jobFile, JobManifest job,
+        IReadOnlyDictionary<string, NcxProgram> files,
         Dictionary<NcxProgram, NcxProgram> expanded, JobResult result, List<ChannelMarks> marks)
     {
         var channels = new List<JobChannel>();
@@ -241,8 +244,18 @@ public sealed partial class JobCompiler
             });
         }
 
-        ReportUncalledSubs(channels);
+        ReportUncalledSubs(channels, LibraryName(job, jobFile));
         return channels;
+    }
+
+    // D316, D388 (13): the library file of the job is <job name>_LIB, the [job] name or else the manifest's file name
+    // without .ncxjob.toml, with the family's extension.
+    private static string LibraryName(JobManifest job, string jobFile)
+    {
+        string stem = Path.GetFileName(jobFile);
+        int manifest = stem.IndexOf(".ncxjob", StringComparison.OrdinalIgnoreCase);
+        stem = manifest > 0 ? stem[..manifest] : Path.GetFileNameWithoutExtension(stem);
+        return (job.Name ?? stem) + "_LIB";
     }
 
     // What the run found in one file: everything, after what the parser found, when the job stopped; else the rules of
@@ -253,7 +266,7 @@ public sealed partial class JobCompiler
         {
             if (stopped || s_jobRules.Contains(diagnostic.Code))
             {
-                diagnostics.Add(diagnostic);
+                diagnostics.Add(CompileForm(diagnostic));
             }
         }
     }
@@ -274,14 +287,15 @@ public sealed partial class JobCompiler
         return null;
     }
 
-    // A subprogram of a file of the job that no channel program calls stands in no channel file: every channel file
-    // holds the subprograms its program calls (language 4.13, D99).
-    // TODO(question): the documents do not say where a job compile writes a subprogram that no channel program calls;
-    // it is written into no channel file, with a WARNING as under program_layout = "file_per_program" (CMP003), until
-    // that is answered.
-    private static void ReportUncalledSubs(List<JobChannel> channels)
+    // D316: a subprogram of a file of the job that no channel program calls is neither dropped nor put into the first
+    // channel's file: the compile of the first channel of its file writes it once into the library file of the job
+    // (CompilerBase.LibraryFiles), with the WARNING CMP720 that names that file; every channel file holds the
+    // subprograms its program calls (language 4.13, D99, D264). A second file with such subprograms gets its own
+    // library file, the name with _2, _3 in the order of the manifest. A job of one channel has no library file.
+    private static void ReportUncalledSubs(List<JobChannel> channels, string library)
     {
         var reported = new HashSet<NcxProgram>(ReferenceEqualityComparer.Instance);
+        int libraries = 0;
         foreach (JobChannel channel in channels)
         {
             if (!reported.Add(channel.File))
@@ -293,11 +307,25 @@ public sealed partial class JobCompiler
             {
                 if (!CalledByAChannel(channels, channel.File, sub))
                 {
-                    channel.Diagnostics.Warning(channel.File.Blocks[sub.FirstBlock],
-                        DiagnosticCodes.SubprogramOfNoChannel,
-                        $"SUB {sub.Name} is called by no channel program of the job, and a channel file holds the "
-                        + "subprograms its program calls, so it is in no output file (language 4.13, D99).");
+                    channel.LibrarySubs.Add(sub);
                 }
+            }
+
+            // Language 4.13: a job of one channel writes them into its own file, as a compile of one file does (D264).
+            if (channel.LibrarySubs.Count == 0 || channels.Count < 2)
+            {
+                continue;
+            }
+
+            libraries++;
+            channel.Library = libraries == 1
+                ? library
+                : library + "_" + libraries.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            foreach (Section sub in channel.LibrarySubs)
+            {
+                channel.Diagnostics.Warning(channel.File.Blocks[sub.FirstBlock], DiagnosticCodes.SubprogramOfNoChannel,
+                    $"SUB {sub.Name} is called by no channel program of the job, so it is written once into the "
+                    + $"library file {channel.Library} of the job and into no channel file (language 4.13, D316).");
             }
         }
     }

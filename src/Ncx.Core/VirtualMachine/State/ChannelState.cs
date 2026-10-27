@@ -22,8 +22,10 @@ internal sealed class ChannelState
     /// <param name="channelId">1, or the CHANNEL of the program the channel runs (virtual machine 2.8).</param>
     /// <param name="startValues">The start values of the variables from &lt;file&gt;.vars.toml; null without
     /// one.</param>
+    /// <param name="resources">The spindle and tool rows the channels of a job share (D308); null for a state of its
+    /// own.</param>
     public ChannelState(MachineConfig machine, int channelId = 1,
-        IReadOnlyDictionary<string, Value>? startValues = null)
+        IReadOnlyDictionary<string, Value>? startValues = null, ResourceState? resources = null)
     {
         // channel.id is 1 or CHANNEL; waitingAt starts none and finished false (virtual machine 2.8).
         ChannelId = channelId;
@@ -40,16 +42,15 @@ internal sealed class ChannelState
         Vars = new VariableStore(this, machine, startValues ?? new Dictionary<string, Value>());
 
         // The resources come from TOML (virtual machine 2.8): every work and tool spindle gets the spindle rows of 2.4,
-        // every tool holder the tool rows of 2.3, by resource id.
+        // every tool holder the tool rows of 2.3, by resource id. D308: in a job the spindle and tool rows are one per
+        // job, shared by every channel's virtual machine; the offsets stay per channel.
+        Resources = resources ?? new ResourceState(machine);
+        Unknown = new UnknownKeys(Resources);
         foreach (ResourceDef resource in machine.Resources)
         {
-            if (resource.IsSpindle)
+            if (resource.Type == ResourceType.ToolHolder)
             {
-                Spindles[resource.Id] = new SpindleState();
-            }
-            else if (resource.Type == ResourceType.ToolHolder)
-            {
-                Holders[resource.Id] = new HolderState();
+                Offsets[resource.Id] = new HolderOffsets();
             }
         }
 
@@ -92,18 +93,30 @@ internal sealed class ChannelState
     public VariableStore Vars { get; }
 
     /// <summary>
-    /// The state of each spindle by its resource id (virtual machine 2.4).
+    /// The spindle and tool rows of the resources: the channel's own, or those of its job (D308).
     /// </summary>
-    public Dictionary<string, SpindleState> Spindles { get; } = new();
+    public ResourceState Resources { get; }
 
     /// <summary>
-    /// The state of each tool holder by its resource id (virtual machine 2.3).
+    /// The state of each spindle by its resource id (virtual machine 2.4); one per job (D308).
     /// </summary>
-    public Dictionary<string, HolderState> Holders { get; } = new();
+    public Dictionary<string, SpindleState> Spindles => Resources.Spindles;
 
     /// <summary>
-    /// lastHolder: the resource id of the holder of the last TOOL (virtual machine 2.3); null on a machine without a
-    /// holder.
+    /// The tool in the spindle and the preload of each tool holder by its resource id (virtual machine 2.3); one per
+    /// job (D308).
+    /// </summary>
+    public Dictionary<string, HolderState> Holders => Resources.Holders;
+
+    /// <summary>
+    /// The offset registers and the measurement point of each tool holder by its resource id (virtual machine 2.3);
+    /// per channel also in a job (D308, D388 (7)).
+    /// </summary>
+    public Dictionary<string, HolderOffsets> Offsets { get; } = new();
+
+    /// <summary>
+    /// lastHolder: the resource id of the holder of the last TOOL (virtual machine 2.8); per channel (D308). Null on a
+    /// machine without a holder.
     /// </summary>
     public string? LastHolder { get; set; }
 
@@ -134,7 +147,22 @@ internal sealed class ChannelState
     /// reference point (D101). Each is named by the key that sets it and, for a variable per resource or per axis, the
     /// resource id or the axis name as its address, after the state keys of virtual machine 3.10: F, RPM:S1, SETPOS:C.
     /// </summary>
-    public HashSet<string> Unknown { get; } = new(StringComparer.Ordinal);
+    public UnknownKeys Unknown { get; }
+
+    /// <summary>
+    /// The offsets of a holder in this channel, made on first use for a holder created on the spot (virtual machine
+    /// 3.8).
+    /// </summary>
+    public HolderOffsets OffsetsOf(string holderId)
+    {
+        if (!Offsets.TryGetValue(holderId, out HolderOffsets? offsets))
+        {
+            offsets = new HolderOffsets();
+            Offsets.Add(holderId, offsets);
+        }
+
+        return offsets;
+    }
 
     /// <summary>
     /// An immutable deep copy of the channel as it is now: the Before or the After of an event (virtual machine 7,
@@ -153,7 +181,9 @@ internal sealed class ChannelState
         var holders = new Dictionary<string, HolderSnapshot>();
         foreach (KeyValuePair<string, HolderState> holder in Holders)
         {
-            holders[holder.Key] = holder.Value.Snapshot();
+            // A snapshot adds nothing: a holder without offsets in this channel shows the start values.
+            holders[holder.Key] = holder.Value.Snapshot(
+                Offsets.TryGetValue(holder.Key, out HolderOffsets? offsets) ? offsets : new HolderOffsets());
         }
 
         return new ChannelSnapshot

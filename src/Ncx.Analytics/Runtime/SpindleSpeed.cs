@@ -28,7 +28,12 @@ internal static class SpindleSpeed
             ? machine.FindResource(holder)?.Spindle
             : null;
         holderSpindle ??= machine.ResolveDefaultSpindle()?.Id;
-        if (Turns(state, holderSpindle))
+
+        // D308 with D288: in a job the spindle counts only while it is the channel's own: it belongs to the channel or
+        // turns because of the channel's SPINDLE word; otherwise the workpiece spindle below (SpindleChannels).
+        if (Turns(state, holderSpindle)
+            && SpindleChannels.IsOwn(machine, state.ChannelId, holderSpindle!,
+                state.Spindles[holderSpindle!].StartedBy))
         {
             return holderSpindle;
         }
@@ -38,10 +43,13 @@ internal static class SpindleSpeed
         string? workpieceSpindle = state.Frame.WorkpieceHolder is string workpiece
             ? machine.FindResource(workpiece)?.Spindle ?? workpiece
             : null;
-        return Turns(state, workpieceSpindle)
-            && state.Spindles[workpieceSpindle!].Mode == SpindleMode.Spindle
-                ? workpieceSpindle
-                : holderSpindle;
+        if (Turns(state, workpieceSpindle) && state.Spindles[workpieceSpindle!].Mode == SpindleMode.Spindle)
+        {
+            return workpieceSpindle;
+        }
+
+        // A spindle that only another channel turns is none of this channel's (D308).
+        return Turns(state, holderSpindle) ? workpieceSpindle ?? holderSpindle : holderSpindle;
     }
 
     // A spindle of the machine that turns: a direction other than OFF (virtual machine 2.4).

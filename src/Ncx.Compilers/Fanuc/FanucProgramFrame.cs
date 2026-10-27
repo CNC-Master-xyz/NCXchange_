@@ -202,6 +202,13 @@ internal static class FanucProgramFrame
         string? name = write.Step.Section?.Name;
         if (name is null || name.Length == 0 || name.Length > MostDigits || !name.All(char.IsAsciiDigit))
         {
+            // A SUB walked more than once (D99), a call from another uncalled SUB among them, is reported once.
+            if (write.Diagnostics.Items.Any(diagnostic => diagnostic.Line == write.Block.Line
+                && diagnostic.Code == DiagnosticCodes.FanucSubNameNotAProgramNumber))
+            {
+                return;
+            }
+
             write.Error(DiagnosticCodes.FanucSubNameNotAProgramNumber,
                 $"SUB {name} has no Fanuc program number: a subprogram is an O program named by up to eight digits "
                 + "(controllers fanuc.md 1).");

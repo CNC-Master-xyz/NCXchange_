@@ -25,7 +25,7 @@ internal static class TipRules
         if (!MotionRules.IsMotion(context.Block)
             || context.Block.Verb is not Word verb
             || state.LastHolder is not string id
-            || !state.Holders.TryGetValue(id, out HolderState? holder)
+            || !state.Offsets.TryGetValue(id, out HolderOffsets? holder)
             || !MovesToolAxis(context, verb.Key))
         {
             return;

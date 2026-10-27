@@ -266,10 +266,13 @@ Channels and their synchronization in a job (language 4.8, 4.14; VM 3.7, 5; mach
 | Code | Severity | Rule | Section |
 |---|---|---|---|
 | `VM570` | WARNING | SYNC in a single-channel job; the channel does not wait. | VM 3.7, 5 |
-| `VM571` | ERROR | Deadlock at SYNC: every channel waits and no mark can be released; the ERROR names the marks. Raised by the job scheduler. | VM 3.7, 5 |
+| `VM571` | ERROR | Deadlock: no channel can execute a block and some channel has not finished; the ERROR names what each channel waits for. Raised by the job scheduler. | VM 3.7, 5; D305 |
 | `VM572` | WARNING | Two channels on one spindle of [shared] between marks. Raised by the job scheduler. | VM 3.7, 5; machine-config 8; D20 |
+| `VM573` | ERROR | A channel reaches a mark while another participant of either list waits there with other participants; the job stops. Raised by the job scheduler. | VM 3.7, 5; D304 |
 | `VM850` | WARNING | Two channels on one axis of [shared] between marks, checked like the spindles. Raised by the job scheduler. | VM 3.7; machine-config 8; D20 |
-| `VM851` | ERROR | WITH, WAIT_CHANNEL or START_CHANNEL names a channel the job does not run. Raised by the job scheduler. | language 4.8; VM 3.7 |
-| `VM852` | WARNING | START_CHANNEL of a channel that runs or has run; nothing starts. Raised by the job scheduler. | language 4.8; VM 3.7 |
-| `VM853` | WARNING | The CHANNEL of the program's header names another channel than the job runs it on; the job's channel applies. Raised by the job scheduler. | language 4.14; VM 2.8; machine-config 8 |
+| `VM851` | ERROR | WITH, WAIT_CHANNEL or START_CHANNEL names a channel the machine does not have. Raised by the job scheduler. | language 4.8; VM 3.7; D306 |
+| `VM852` | WARNING | START_CHANNEL of a channel that runs; nothing starts. Raised by the job scheduler. | language 4.8; VM 3.7; D309 |
+| `VM853` | ERROR | The CHANNEL of the program's header names another channel than the job manifest runs it on. Raised by the job scheduler. | language 4.14; VM 2.8; machine-config 8; D307 |
 | `VM854` | ERROR | The job manifest names one channel twice. Raised by the job scheduler. | machine-config 8; VM 2.8, 3.7 |
+| `VM855` | WARNING | WITH, WAIT_CHANNEL or START_CHANNEL names a channel the machine has but the job does not run; the word is taken as if that channel were not named. Raised by the job scheduler. | language 4.8; VM 3.7; D306 |
+| `VM856` | WARNING | START_CHANNEL of a channel that has finished; NCX runs one program per channel per job, and nothing starts. Raised by the job scheduler. | language 4.8; VM 3.7; D309 |

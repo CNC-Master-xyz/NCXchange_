@@ -50,7 +50,8 @@ public static partial class DiagnosticCodes
 
     /// <summary>
     /// CMP711: the job compiler needs a SYNC of every channel for a word bound to every channel, and [sync] of the
-    /// machine gives no wait template or no range of marks for it (machine-config 5, D56).
+    /// machine gives no wait template or no range of marks for it, or reserves every mark of the range (machine-config
+    /// 5, D56, D315).
     /// </summary>
     public const string NoMarkForGeneratedSync = "CMP711";
 
@@ -62,8 +63,26 @@ public static partial class DiagnosticCodes
     public const string GeneratedSyncDeadlocks = "CMP712";
 
     /// <summary>
-    /// CMP720, a WARNING: a subprogram of a file of the job that no channel program calls stands in the output file of
-    /// no channel (language 4.13, D99).
+    /// CMP713: channels at one mark name different participants, which the wait codes the job compiler writes would
+    /// pair with different path lists (Fanuc alarm PS0160); the compile's form of VM573 (virtual machine 3.7, D304).
+    /// </summary>
+    public const string MarkParticipantsDiffer = "CMP713";
+
+    /// <summary>
+    /// CMP720, a WARNING: a subprogram of a file of the job that no channel program calls is written once into the
+    /// library file of the job, &lt;job name&gt;_LIB, and into no channel file (language 4.13, D99, D316).
     /// </summary>
     public const string SubprogramOfNoChannel = "CMP720";
+
+    /// <summary>
+    /// CMP721, a WARNING: two channels of a job would write files of one name under [format] channel_files; each takes
+    /// _C&lt;n&gt; after its name (machine-config 2, D310, as D266).
+    /// </summary>
+    public const string ChannelFileNameTaken = "CMP721";
+
+    /// <summary>
+    /// CMP722, a WARNING: two library files of a job hold one program, the same O number on Fanuc or the same SPF or
+    /// program name, which one control memory cannot hold twice (D316).
+    /// </summary>
+    public const string LibraryProgramTwice = "CMP722";
 }

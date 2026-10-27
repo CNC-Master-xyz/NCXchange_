@@ -28,9 +28,16 @@ internal static class ProgramEndRules
 
         // Spindle direction, rpm, vc, mode, sync and phase, css: PROGRAM=END sets OFF, mode SPINDLE, sync OFF (virtual
         // machine 4). "Sets OFF" applies to the items that have an OFF value, the direction and CSS (virtual machine
-        // 2.4, language 4.11; wave-1 question #99).
+        // 2.4, language 4.11; wave-1 question #99). D308: in a job the spindle rows are one per job, so the end of a
+        // channel resets the spindles the channel owns, and a spindle no channel owns once every channel has ended.
+        bool allEnded = state.Resources.ChannelEnded(state.ChannelId);
         foreach (KeyValuePair<string, SpindleState> spindle in state.Spindles)
         {
+            if (!state.Resources.EndResets(spindle.Key, state.ChannelId, allEnded))
+            {
+                continue;
+            }
+
             spindle.Value.Direction = SpindleDirection.Off;
             spindle.Value.Mode = SpindleMode.Spindle;
             spindle.Value.SyncPartner = null;
