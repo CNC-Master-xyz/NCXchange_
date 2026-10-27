@@ -502,26 +502,21 @@ internal static partial class HeidenhainCycles
     // TODO(question): the catalog maps cycles 204 to 209, 240, 241 and 251 to 257 only partly (wave-1 question #22),
     // and a catalog cycle's own parameter names, LENGTH and WIDTH of RECT_POCKET, are not words the parser knows
     // (wave-1 questions #36 and #59); such a definition is written natively.
+    // D164: the reader takes the named entry only when every Q parameter no word of the entry carries holds what the
+    // compiler would write for it (HeidenhainCycleMatch), so CAM output that differs only where the cycle does not use
+    // a value still converts; otherwise it keeps the cycle as CYCLE:HEIDENHAIN=n (D94), as D5 requires (decisions.md).
     private static HeidenhainDefinition Define(HeidenhainBlock block, CycleEntry entry, string native,
         List<SourceWord> parameters)
     {
         bool family = DrillingFamily.Names.Contains(entry.Name);
-        var unmapped = new List<string>();
-        foreach (SourceWord parameter in parameters)
-        {
-            if (!entry.Params.Values.Contains(parameter.Address))
-            {
-                unmapped.Add(parameter.Address);
-            }
-        }
-
         bool languageWords = true;
         foreach (string word in entry.Params.Keys)
         {
             languageWords &= WordCatalog.Lookup(word) is not null;
         }
 
-        if (!family && (unmapped.Count > 0 || !languageWords))
+        if ((!family && !languageWords)
+            || HeidenhainCycleMatch.FirstDiffering(block.Machine, entry, parameters) is not null)
         {
             return Native(block, native, parameters);
         }
@@ -552,7 +547,6 @@ internal static partial class HeidenhainCycles
         }
 
         AddRetract(block, entry, parameters, words, family);
-        WarnUnmapped(block, entry, native, unmapped);
         return new HeidenhainDefinition { Native = native, Words = words };
     }
 
@@ -589,25 +583,6 @@ internal static partial class HeidenhainCycles
         decimal? second = NumberOfParameter(block, parameters, safe);
         decimal? first = NumberOfParameter(block, parameters, entry.NativeOf("CLEARANCE"));
         return second is decimal above && first is decimal clearance ? above > clearance : null;
-    }
-
-    // TODO(question): a Q parameter of a drilling definition that no word of its catalog entry carries (Q202 and Q210
-    // of cycle 200, Q208 of cycle 201, Q212, Q213, Q205, Q208 and Q256 of cycle 203) has no NCX word, and the documents
-    // say neither which value the compiler writes for it nor what the reader does with it (D164, which repeats wave-1
-    // question #21 and whose recommendation is this reader side: the named entry only where the values equal what the
-    // compiler writes, CYCLE:HEIDENHAIN=n otherwise). The reader does not write it and reports it with a WARNING, so
-    // that the definition reads into the words of controller-mapping 5, until D164 is answered.
-    private static void WarnUnmapped(HeidenhainBlock block, CycleEntry entry, string native, List<string> unmapped)
-    {
-        if (unmapped.Count == 0)
-        {
-            return;
-        }
-
-        block.Draft.Warnings.Add(new HeidenhainWarning(DiagnosticCodes.HeidenhainCycleParameterNotCarried,
-            $"{string.Join(", ", unmapped)} of cycle {native} {(unmapped.Count == 1 ? "has" : "have")} no NCX word in "
-            + $"the catalog entry {entry.Name} and {(unmapped.Count == 1 ? "is" : "are")} not written (controllers "
-            + "heidenhain.md 5, machine-config 6)."));
     }
 
     // CYCLE:HEIDENHAIN=n with every Q parameter as written, in source order (language 4.7.1, D94).

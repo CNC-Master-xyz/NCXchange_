@@ -18,17 +18,54 @@ public sealed class HeidenhainCycleTests
         "CYCLE=DRILL SURFACE=0 CLEARANCE=2 DEPTH=-10 CYCLE_RETRACT=CLEARANCE CYCLE_F=100";
 
     // The definition becomes CYCLE with SURFACE = Q203, CLEARANCE = Q203 + Q200, DEPTH = Q203 + Q201, SAFE = Q203 +
-    // Q204 (heidenhain 5, 7 rule 7); the Q parameters no word carries are reported.
+    // Q204 (heidenhain 5, 7 rule 7). D164: Q202 of at least the depth is one infeed and Q210=0 the catalog's default,
+    // what the compiler writes, so nothing is lost and nothing is reported.
     [Fact]
     public void CyclDef200_BecomesDrillWithCoordinatesAbsoluteFromQ203()
     {
         NcxProgram program = FramedProgram("1 CYCL DEF 200 BOHREN ~\n    Q200=+2 ~\n    Q201=-20 ~\n    Q206=+150 ~\n"
-            + "    Q202=+5 ~\n    Q210=+0 ~\n    Q203=-10 ~\n    Q204=+50 ~\n    Q211=+0\n2 CYCL CALL");
+            + "    Q202=+25 ~\n    Q210=+0 ~\n    Q203=-10 ~\n    Q204=+50 ~\n    Q211=+0\n2 CYCL CALL");
 
         Assert.Equal(Lines(
             "CYCLE=DRILL SURFACE=-10 CLEARANCE=-8 DEPTH=-30 SAFE=40 CYCLE_RETRACT=SAFE CYCLE_F=150 CYCLE_DWELL=0",
             "CYCLE_CALL"), BodyOf(Ncx.Core.Writing.NcxWriter.Write(program)));
-        Assert.Equal([DiagnosticCodes.HeidenhainCycleParameterNotCarried], Codes(program));
+        Assert.Empty(Codes(program));
+    }
+
+    // D164: a Q202 of cycle 200 below the depth, several infeeds, or a Q210 other than the default differs from what
+    // the compiler writes for DRILL, so the definition is the native cycle.
+    [Theory]
+    [InlineData("Q202=+5", "Q210=+0")]
+    [InlineData("Q202=+20", "Q210=+1")]
+    public void CyclDef200_WithAnUnmappedValueTheCompilerWouldNotWrite_IsWrittenNatively(string infeed, string dwell)
+    {
+        string body = Body("1 CYCL DEF 200 BOHREN ~\n    Q200=+2 ~\n    Q201=-20 ~\n    Q206=+150 ~\n    " + infeed
+            + " ~\n    " + dwell + " ~\n    Q203=-10 ~\n    Q204=+50 ~\n    Q211=+0");
+
+        Assert.StartsWith("CYCLE:HEIDENHAIN=200 Q200=2 Q201=-20", body, StringComparison.Ordinal);
+    }
+
+    // D164, D358: Q256 is compared with [cycles] chip_break_lift; CHIP_BREAK with another lift is the native cycle,
+    // which the literal Q208=MAX then keeps RAW (D115), while PECK, whose Q213=0 never breaks a chip, does not
+    // compare it. Q205 is not compared while Q212=0.
+    [Theory]
+    [InlineData(4, "0,6", "5", "CYCLE=CHIP_BREAK")]
+    [InlineData(4, "0,6", "1", "CYCLE=CHIP_BREAK")]
+    [InlineData(4, "0,3", "5", "RAW:HEIDENHAIN=\"1 CYCL DEF 203")]
+    [InlineData(0, "0,3", "5", "CYCLE=PECK")]
+    public void CyclDef203_ComparesQ256WithTheMachineKey(int breaks, string lift, string least, string reading)
+    {
+        string source = Universal(breaks, retract: "MAX").Replace("Q256=0,6", "Q256=" + lift, StringComparison.Ordinal)
+            .Replace("Q205=5", "Q205=" + least, StringComparison.Ordinal);
+
+        Assert.StartsWith(reading, Body(source), StringComparison.Ordinal);
+    }
+
+    // D164: Q208 of cycle 203 other than the default MAX is a retract feed the compiler would not write.
+    [Fact]
+    public void CyclDef203_WithAnotherRetractFeed_IsWrittenNatively()
+    {
+        Assert.StartsWith("CYCLE:HEIDENHAIN=203", Body(Universal(breaks: 0)), StringComparison.Ordinal);
     }
 
     // D163: cycle 200 with Q211 = 0 is DRILL, and with any other Q211 it is DRILL_DWELL with CYCLE_DWELL = Q211
@@ -49,7 +86,7 @@ public sealed class HeidenhainCycleTests
     {
         Assert.Equal(Lines("CYCLE=PECK SURFACE=0 CLEARANCE=2 DEPTH=-20 CYCLE_RETRACT=CLEARANCE PECK=5 CYCLE_F=100 "
             + "CYCLE_DWELL=0"),
-            Body(Universal(breaks: 0)));
+            Body(Universal(breaks: 0, retract: "MAX")));
     }
 
     [Fact]
@@ -57,7 +94,7 @@ public sealed class HeidenhainCycleTests
     {
         Assert.Equal(Lines("CYCLE=CHIP_BREAK SURFACE=0 CLEARANCE=2 DEPTH=-20 CYCLE_RETRACT=CLEARANCE PECK=5 "
             + "CYCLE_F=100 CYCLE_DWELL=0"),
-            Body(Universal(breaks: 4)));
+            Body(Universal(breaks: 4, retract: "MAX")));
     }
 
     // D163: a Q213 between 0 and the number of infeeds is the mixed form, which has no NCX cycle and is written
@@ -72,7 +109,7 @@ public sealed class HeidenhainCycleTests
     // or an expression (language 4.7.1, D94), so a Q parameter that carries a literal of the control instead has no
     // NCX value and the definition is kept as RAW with its calls (heidenhain 7 rule 9): that is the Q208=MAX of the
     // fourth operation of BOHREN.h, the one such block the repository owns. Whether a parameter may carry such a
-    // literal at all is the open D115, and D164 writes Q208=MAX back (03-open-questions, wave 2 question 94).
+    // literal on the native side is settled by D115, and D164 writes Q208=MAX back from the catalog's defaults.
     [Fact]
     public void MixedCycle203_WithAQParameterThatIsAControlLiteral_IsKeptAsRaw()
     {

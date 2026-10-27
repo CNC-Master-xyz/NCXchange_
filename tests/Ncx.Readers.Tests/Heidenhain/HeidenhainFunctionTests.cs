@@ -1,3 +1,6 @@
+using Ncx.Core.Machine;
+using Ncx.Core.Model;
+using Ncx.Core.Writing;
 using static Ncx.Readers.Tests.Heidenhain.HeidenhainRead;
 
 namespace Ncx.Readers.Tests.Heidenhain;
@@ -15,6 +18,30 @@ public sealed class HeidenhainFunctionTests
     {
         Assert.Equal(Lines("SPINDLE=CW", "SPINDLE=CCW", "SPINDLE=OFF", "COOLANT=ON", "COOLANT=OFF"),
             Body("1 M3\n2 M4\n3 M5\n4 M8\n5 M9"));
+    }
+
+    // D154: an ORIENT state whose template carries no angle, M19, is ORIENT at 0 with the WARNING RDR021.
+    [Fact]
+    public void Orient_WithoutAnAngle_IsOrientZeroWithRdr021()
+    {
+        MachineConfig machine = MillWith("OFF = \"M5\"\n", "OFF = \"M5\"\nORIENT = \"M19\"\n");
+        NcxProgram program = FramedProgram("1 M19", machine);
+
+        Assert.Equal(Lines("ORIENT=0"), BodyOf(NcxWriter.Write(program)));
+        Assert.Equal([DiagnosticCodes.FunctionAngleSetByTheMachine], Codes(program));
+    }
+
+    // D155: a code two coolant channels switch on writes the first in file order, with the WARNING RDR020 naming the
+    // other.
+    [Fact]
+    public void Code_OfTwoResources_WritesTheFirstWithRdr020()
+    {
+        MachineConfig machine = MillWith("STANDARD = { ON = \"M8\", OFF = \"M9\" }",
+            "STANDARD = { ON = \"M8\", OFF = \"M9\" }\nTHROUGH = { ON = \"M8\", OFF = \"M9\" }");
+        NcxProgram program = FramedProgram("1 M8", machine);
+
+        Assert.Equal(Lines("COOLANT=ON"), BodyOf(NcxWriter.Write(program)));
+        Assert.Equal([DiagnosticCodes.FunctionCodeOfSeveralResources], Codes(program));
     }
 
     // M3, M4, M8, M13 and M14 become effective at the start of a positioning block, so their words stand in the NCX

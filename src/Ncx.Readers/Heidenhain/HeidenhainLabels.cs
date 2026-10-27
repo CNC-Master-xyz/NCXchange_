@@ -62,6 +62,12 @@ internal sealed class HeidenhainLabels
     public HashSet<string> EndTargets { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The lines of the FN jumps that leave a part a CALL LBL n REP k repeats, from inside it to a target outside it,
+    /// with the label of that part (D213).
+    /// </summary>
+    public Dictionary<int, string> JumpsLeavingRepeats { get; } = [];
+
+    /// <summary>
     /// The label a block names after its keyword LBL: "1" of LBL 1 and of CALL LBL 1 REP 3, "NAME" of LBL "NAME"; null
     /// when it names none.
     /// </summary>
@@ -168,6 +174,7 @@ internal sealed class HeidenhainLabels
         var labels = new HeidenhainLabels();
         var called = new HashSet<string>(StringComparer.Ordinal);
         var jumps = new List<int>();
+        var repeats = new List<int>();
         int mainEnd = -1;
         for (int index = 0; index < blocks.Count; index++)
         {
@@ -181,6 +188,7 @@ internal sealed class HeidenhainLabels
             if (IsRepeat(block) && label is not null)
             {
                 labels.Targets.Add(label);
+                repeats.Add(index);
             }
             else if (IsLabelCall(block) && label is not null)
             {
@@ -193,8 +201,36 @@ internal sealed class HeidenhainLabels
         }
 
         labels.DecideJumps(blocks, jumps);
+        labels.FindJumpsLeavingRepeats(blocks, jumps, repeats);
         labels.DecideSubs(blocks, called, mainEnd);
         return labels;
+    }
+
+    // D213: a JUMP that leaves the LABEL..REPEAT part ends the repeat in NCX, and a later arrival starts it fresh; the
+    // TNC keeps a REP count as block state that only GOTO 0 or a new program selection resets, so the reader warns at
+    // every FN jump inside the part between LBL n and CALL LBL n REP k whose target, JUMP=END included, lies outside it
+    // (decisions.md; controllers heidenhain.md 1).
+    private void FindJumpsLeavingRepeats(IReadOnlyList<SourceBlock> blocks, List<int> jumps, List<int> repeats)
+    {
+        foreach (int repeat in repeats)
+        {
+            string label = LabelOf(blocks[repeat])!;
+            int start = FindLabel(blocks, label);
+            if (start < 0 || start > repeat)
+            {
+                continue;
+            }
+
+            foreach (int jump in jumps)
+            {
+                int target = JumpsToTheEnd.Contains(blocks[jump].Line) ? blocks.Count
+                    : FindLabel(blocks, LabelOf(blocks[jump])!);
+                if (jump > start && jump < repeat && (target < start || target > repeat))
+                {
+                    JumpsLeavingRepeats.TryAdd(blocks[jump].Line, label);
+                }
+            }
+        }
     }
 
     // An FN jump to an LBL that the end of the program follows directly is JUMP=END, which needs no LABEL; every other

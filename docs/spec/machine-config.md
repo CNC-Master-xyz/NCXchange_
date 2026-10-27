@@ -129,7 +129,7 @@ Templates found in the manuals:
 | Mori Seiki NT/NTX tool spindle (MAPPS) | `"G361 B{b} D{kind}"` with `kind` mapped 0 (rotary), 1 (turning) | `"T{tool:04}"` (the `T` word brings the tool to the change position, the change is `G361`); `unload = "T0\nG361"` |
 | DMG structure programming (840D) | `change_named = "T=\"{name}\"\nTC({offset},,,{kind},{b},{c})"` with `kind` mapped 1 (rotary), 2 (turning), 3 and 4 for turret tools at spindle 3 or 4 | `preload_named = "T=\"{name}\""` on machines that prepare on the `T` word |
 
-`change` and `preload` write numeric tools; `change_named` and `preload_named` write a tool called by name, with `{name}`. A named tool on a machine with `tool_name_allowed = true` but without the named template is a compile ERROR (D172).
+`change` and `preload` write numeric tools; `change_named` and `preload_named` write a tool called by name, with `{name}`. A named tool on a machine with `tool_name_allowed = true` but without the named template is a compile ERROR (D172). The row of the tool table is the mapping of a name to a number: `number` and `name` are keys of one row (D239).
 
 `[tool_change]` describes the change of `default_holder`. A machine with a second tool holder needs no table of its own: a `T` word of the source belongs to the tool holder whose `channel` is the channel of the program, else to `default_holder` (virtual machine 3.8 rule 2). A `T` word of `default_holder` is read through these templates first, so the Mori Seiki `T9001` is `PRELOAD=9001` through its `preload`; a `T` word none of them matches, and every `T` word of another holder, is the turret form `T{tool:02}{offset:02}` of `fanuc.md` 5, whose `TOOL` carries that holder's role, and the compiler writes a change on such a holder in that form (D219).
 
