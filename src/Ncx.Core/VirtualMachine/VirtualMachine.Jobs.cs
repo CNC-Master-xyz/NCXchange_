@@ -48,7 +48,8 @@ public sealed partial class VirtualMachine
     internal SyncEvent ChangeWait(Block block, int? waitingAt, int mark, IReadOnlyList<int> channels, int round)
     {
         // The Before of the event is the After of the events before it, so that a listener misses no change (virtual
-        // machine 7); without a listener nobody keeps that chain.
+        // machine 7); without a listener nobody keeps that chain. The shared rows are taken as they stand (D308).
+        TakeOverSharedChanges();
         ChannelSnapshot before = _lastAfter is ChannelSnapshot last && ReferenceEquals(_eventState, _state)
             ? last
             : _state.Snapshot();

@@ -50,26 +50,55 @@ public sealed class HeidenhainCompiler : CompilerBase
         var files = new List<CompiledFile>();
         foreach (Section sub in subs)
         {
+            // Every SUB is written, also one whose walk wrote no lines; its program is then empty.
             IReadOnlyList<OutputLine> lines = SubLines(sub);
-            if (lines.Count < 2)
-            {
-                continue;
-            }
-
+            Block begin = lines.Count > 0 ? lines[0].Block : SubBeginBlock(sub);
+            Block end = lines.Count > 0 ? lines[^1].Block : begin;
             string name = library + "_" + sub.Name;
             OutputBuffer output = NewOutput();
-            Block begin = lines[0].Block;
             output.Line("BEGIN PGM " + name + " " + units, begin);
             for (int index = 1; index < lines.Count - 1; index++)
             {
-                output.Add([lines[index]]);
+                output.Add([LibraryCall(lines[index], library, subs)]);
             }
 
-            output.Line("END PGM " + name + " " + units, lines[^1].Block);
-            files.Add(new CompiledFile { Name = name + FileExtension, Text = output.ToText(Diagnostics) });
+            output.Line("END PGM " + name + " " + units, end);
+            files.Add(new CompiledFile
+            {
+                Name = name + FileExtension,
+                Text = output.ToText(Diagnostics),
+                Library = true,
+            });
         }
 
         return files;
+    }
+
+    // Inside a library program a call of another SUB of the library is a call of that program, CALL PGM
+    // <job name>_LIB_<sub>, since the LBL is in another program now (D316, D274); every other line stays.
+    private static OutputLine LibraryCall(OutputLine line, string library, IReadOnlyList<Section> subs)
+    {
+        if (!line.Text.StartsWith("CALL LBL ", StringComparison.Ordinal)
+            || line.Block.Find("CALL")?.Value is not Value target)
+        {
+            return line;
+        }
+
+        string called = target switch
+        {
+            StringValue text => text.Content,
+            IdentValue ident => ident.Name,
+            _ => target.ToCanonical(),
+        };
+        foreach (Section sub in subs)
+        {
+            if (sub.Name == called)
+            {
+                return line with { Text = "CALL PGM " + library + "_" + sub.Name };
+            }
+        }
+
+        return line;
     }
 
     /// <summary>

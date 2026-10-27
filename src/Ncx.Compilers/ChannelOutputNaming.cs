@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Ncx.Core.Machine;
 using Ncx.Core.Model;
 
@@ -51,10 +52,52 @@ internal static class ChannelOutputNaming
                     + $"D310)."));
             }
 
-            files.Add(outputs[index].File with { Name = name });
+            CompiledFile file = outputs[index].File;
+            files.Add(file with
+            {
+                Name = name,
+                Text = name == file.Name
+                    ? file.Text
+                    : Renamed(file.Text, [Stem(file.Name), Stem(names[index])], Stem(name), machine.Machine.Controller),
+            });
         }
 
         return files;
+    }
+
+    // The name of a file without the family's extension; O1000.P-2 has none.
+    private static string Stem(string name)
+    {
+        string extension = Path.GetExtension(name);
+        return extension is ".nc" or ".mpf" or ".h" or ".NC" or ".MPF" or ".H" ? name[..^extension.Length] : name;
+    }
+
+    // D310 as D266: a file that the job renames renames the program it holds, where the program carries the name of
+    // its file: the unit header %_N_<name>_MPF on Siemens, BEGIN PGM and END PGM on Heidenhain, and on Fanuc the
+    // comment of the O line when it carries the name of the file before the job renamed it.
+    private static string Renamed(string text, string[] oldStems, string newStem, Controller? controller)
+    {
+        switch (controller)
+        {
+            case Controller.Siemens:
+                return new Regex(@"^%_N_.+?_MPF", RegexOptions.Multiline).Replace(text, "%_N_" + newStem + "_MPF", 1);
+            case Controller.Heidenhain:
+                return Regex.Replace(text, @"(BEGIN|END) PGM \S+ ",
+                    match => match.Groups[1].Value + " PGM " + newStem + " ");
+            case Controller.Fanuc:
+                foreach (string oldStem in oldStems)
+                {
+                    var comment = new Regex(@"^(O\d+) \(" + Regex.Escape(oldStem) + @"\)", RegexOptions.Multiline);
+                    if (oldStem != newStem && comment.IsMatch(text))
+                    {
+                        return comment.Replace(text, match => match.Groups[1].Value + " (" + newStem + ")", 1);
+                    }
+                }
+
+                return text;
+            default:
+                return text;
+        }
     }
 
     // The name of one channel's file by the form of channel_files.

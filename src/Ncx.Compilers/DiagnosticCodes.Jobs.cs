@@ -79,4 +79,10 @@ public static partial class DiagnosticCodes
     /// _C&lt;n&gt; after its name (machine-config 2, D310, as D266).
     /// </summary>
     public const string ChannelFileNameTaken = "CMP721";
+
+    /// <summary>
+    /// CMP722, a WARNING: two library files of a job hold one program, the same O number on Fanuc or the same SPF or
+    /// program name, which one control memory cannot hold twice (D316).
+    /// </summary>
+    public const string LibraryProgramTwice = "CMP722";
 }

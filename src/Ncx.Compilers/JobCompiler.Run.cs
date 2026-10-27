@@ -291,7 +291,7 @@ public sealed partial class JobCompiler
     // channel's file: the compile of the first channel of its file writes it once into the library file of the job
     // (CompilerBase.LibraryFiles), with the WARNING CMP720 that names that file; every channel file holds the
     // subprograms its program calls (language 4.13, D99, D264). A second file with such subprograms gets its own
-    // library file, the name with _2, _3 in the order of the manifest.
+    // library file, the name with _2, _3 in the order of the manifest. A job of one channel has no library file.
     private static void ReportUncalledSubs(List<JobChannel> channels, string library)
     {
         var reported = new HashSet<NcxProgram>(ReferenceEqualityComparer.Instance);
@@ -311,7 +311,8 @@ public sealed partial class JobCompiler
                 }
             }
 
-            if (channel.LibrarySubs.Count == 0)
+            // Language 4.13: a job of one channel writes them into its own file, as a compile of one file does (D264).
+            if (channel.LibrarySubs.Count == 0 || channels.Count < 2)
             {
                 continue;
             }

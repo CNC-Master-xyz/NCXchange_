@@ -61,7 +61,7 @@ public abstract partial class CompilerBase
         output.Add(_fileBegin);
         WriteSubprograms(output, subs);
         output.Add(_fileEnd);
-        return [new CompiledFile { Name = library + FileExtension, Text = output.ToText(Diagnostics) }];
+        return [new CompiledFile { Name = library + FileExtension, Text = output.ToText(Diagnostics), Library = true }];
     }
 
     /// <summary>
@@ -71,6 +71,15 @@ public abstract partial class CompilerBase
     private protected IReadOnlyList<OutputLine> SubLines(Section sub)
     {
         return _subs.TryGetValue(sub, out SubText? text) && !IsInlined(sub) ? text.Lines : [];
+    }
+
+    /// <summary>
+    /// The SUB=BEGIN block of a subprogram of the file being compiled.
+    /// </summary>
+    private protected Block SubBeginBlock(Section sub)
+    {
+        NcxProgram source = _program ?? throw NotCompiling();
+        return source.Blocks[sub.FirstBlock];
     }
 
     // program_layout = "one_file": every program and subprogram of the NCX file in one output file (machine-config 2,
@@ -104,7 +113,7 @@ public abstract partial class CompilerBase
         var uncalled = new List<Section>();
         foreach (Section sub in source.Subs)
         {
-            if (!placed.Contains(sub) && Options.Job is null)
+            if (!placed.Contains(sub) && Options.Job?.Library is null)
             {
                 uncalled.Add(sub);
             }
@@ -137,7 +146,7 @@ public abstract partial class CompilerBase
         }
 
         var uncalled = new List<Section>();
-        if (Options.Job is null)
+        if (Options.Job?.Library is null)
         {
             foreach (Section sub in source.Subs)
             {

@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Ncx.Core.Machine;
 using Ncx.Core.Model;
 
@@ -98,7 +99,7 @@ public sealed partial class JobCompiler
             // D316: the library file of the job stands after the channel files, under its own name.
             foreach (CompiledFile file in result.Files)
             {
-                if (channel.Library is string library && file.Name.StartsWith(library, StringComparison.Ordinal))
+                if (file.Library)
                 {
                     libraries.Add(file);
                     continue;
@@ -114,6 +115,7 @@ public sealed partial class JobCompiler
         }
 
         List<CompiledFile> named = ChannelOutputNaming.Name(outputs, job, machine, diagnostics);
+        CheckLibraries(libraries, diagnostics);
         named.AddRange(libraries);
         return new CompileResult { Files = named, Diagnostics = diagnostics };
     }
@@ -211,5 +213,33 @@ public sealed partial class JobCompiler
     private static CompileResult Stopped(Diagnostics diagnostics)
     {
         return new CompileResult { Files = [], Diagnostics = diagnostics };
+    }
+
+    // D316: the library files of a job go into one control memory, so two of them must not hold one program: the same
+    // file name (an SPF or a Heidenhain program of each file), or on Fanuc the same O number in _LIB and _LIB_2. The
+    // WARNING CMP722 names it once; the files are written as they are.
+    private static void CheckLibraries(List<CompiledFile> libraries, Diagnostics diagnostics)
+    {
+        var programs = new Dictionary<string, CompiledFile>(StringComparer.OrdinalIgnoreCase);
+        foreach (CompiledFile library in libraries)
+        {
+            var names = new List<string> { library.Name };
+            foreach (Match number in Regex.Matches(library.Text, @"^O\d+", RegexOptions.Multiline))
+            {
+                names.Add(number.Value);
+            }
+
+            foreach (string name in names)
+            {
+                if (programs.TryGetValue(name, out CompiledFile? first) && !ReferenceEquals(first, library))
+                {
+                    diagnostics.Warning(1, DiagnosticCodes.LibraryProgramTwice,
+                        $"The library files {first.Name} and {library.Name} of the job both hold {name}, which one "
+                        + "control memory cannot hold twice (language 4.13, D316).");
+                }
+
+                programs.TryAdd(name, library);
+            }
+        }
     }
 }

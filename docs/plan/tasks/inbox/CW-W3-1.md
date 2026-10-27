@@ -36,8 +36,13 @@ Decided while doing it:
   every channel of the job has ended.
 - Gap closed 2026-10-27 (delegated): the Before of a channel's next block takes the shared rows as they stand, so a
   listener of one channel sees no TOOL_BEGIN or STATE_CHANGE for a change another channel made (VM 7).
-- Gap closed 2026-10-27 (delegated): the UNKNOWN marks of the shared rows (`RPM:S1` and the like) stay per channel;
-  a channel that set an RPM from an expression keeps it UNKNOWN until its own next RPM word.
+- Gap closed 2026-10-27 (delegated): the UNKNOWN marks of the shared spindle rows (`RPM:S1` and the like) live in the
+  `ResourceState` with the rows (`UnknownKeys`), so every channel sees a speed another channel set from an expression
+  as UNKNOWN.
+- Gap closed 2026-10-27 (delegated): D308 with D288: a channel takes a spindle for its feed per revolution (the
+  default-spindle fallback, Core `MaxFeedCheck` and Analytics `SpindleSpeed`) and for VM551 only while it is the
+  channel's own: its `[[resource]]` (or the holder whose tool spindle it is) names the channel, or the channel's own
+  SPINDLE word turned it (`SpindleState.StartedBy`); otherwise the workpiece spindle.
 - Gap closed 2026-10-27 (delegated): the new codes are VM573 `SyncParticipantsDiffer` (D304), VM855
   `ChannelNotRunByJob` (D306), VM856 `FinishedChannelNotRestarted` (D309), CMP713 `MarkParticipantsDiffer`
   (D304), CMP721 `ChannelFileNameTaken` (D310).
@@ -51,12 +56,32 @@ Decided while doing it:
   never gets VM851 for the job's own channels.
 - Gap closed 2026-10-27 (delegated): CMP721 stands on line 1 of the manifest, one WARNING per renamed file.
 - Gap closed 2026-10-27 (delegated): the library name is the `[job] name`, else the manifest's file name without
-  `.ncxjob.toml`, plus `_LIB`; a second file of the job with uncalled SUBs gets `_LIB_2`. Siemens writes the SPF
-  units into `<job>_LIB.mpf` (the family extension); Heidenhain writes one `<job>_LIB_<sub>.h` per SUB, BEGIN PGM and
-  END PGM in the machine's `units_default`, no M30 (iTNC 530 Klartext 340490, connector p.523).
+  `.ncxjob.toml`, plus `_LIB`; a second file of the job with uncalled SUBs gets `_LIB_2`. Siemens writes one
+  `<name>.spf` per SUB, named by its unit (D316 "an SPF per SUB"); Heidenhain writes one `<job>_LIB_<sub>.h` per
+  SUB, BEGIN PGM and END PGM in the machine's `units_default`, no M30 (iTNC 530 Klartext 340490, connector p.523), a
+  call of another library SUB inside it as CALL PGM, and a SUB whose walk wrote no lines as an empty program. Library
+  files carry `CompiledFile.Library`. Two library files that hold one program (the same O number, SPF or program
+  name) are the new WARNING CMP722 `LibraryProgramTwice`. A job of one channel has no library file: its uncalled SUBs
+  stand in its own file as D264 writes them, without CMP720 (language 4.13 says multi-channel).
+- Gap closed 2026-10-27 (delegated): a channel file that the job renames (channel_files or the CMP721 suffix) renames
+  its program, as D266: `%_N_<final>_MPF` on Siemens, BEGIN/END PGM on Heidenhain, the comment of the O line on Fanuc
+  when it carries the old name.
 - Gap closed 2026-10-27 (delegated): `JobChannel.Build` places each comment line before the block that now takes the
   place of the block it stood before (before the blocks the job compiler inserted there); the lines of sections the
   channel leaves out are dropped.
+
+Review fixes (after merging main with W3-3 and W3-4): the four blocking points of the review (shared UNKNOWN marks,
+Heidenhain library calls, the spindle a channel takes in a job, renamed programs) and the small ones: ChangeWait takes
+the shared rows first, `ResourceState.ChannelEnded`, `ChannelState.Snapshot` adds no offsets, the lastHolder comment
+cites VM 2.8, CMP301 is reported once for a SUB walked twice (also in a compile of one file).
+
+The Nakamura WY-250L job against main (both with W3-3), `analyze --job --skip-blocks all`: path 2 tools 5 and 6 read
+1785 rpm again, tool 8 1200; the VM551 at `P-2.ncx(59)` and the one at `O1000.ncx(64)` are gone (each was a spindle the
+other path turned). The remaining difference is time: tools 6 and 12 of path 1 and tool 8 of path 2 lose 0.6 s to 1.4
+s, totals 18.4 s to 17.2 s and 16.4 s to 14.9 s. The spindle is one row per job now, and the runtime estimate charges
+the spindle ramp to the channel whose block changes the speed; a channel that commands the speed the other path has
+set already sees no change and pays no ramp, where main ramped each channel's own copy. Errors and check output are
+otherwise the same; the compiled files are now named O1000 and O1000.P-2 (D310).
 
 Left: none of the package's decisions. `SharedResources.cs` keeps its marker (row 160, answered by D20, not a
 decision of this package).

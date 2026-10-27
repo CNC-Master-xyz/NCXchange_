@@ -150,7 +150,13 @@ internal sealed class MaxFeedCheck
         MachineConfig machine = context.Machine;
         string? holderSpindle = state.LastHolder is string holder ? machine.FindResource(holder)?.Spindle : null;
         holderSpindle ??= machine.ResolveDefaultSpindle()?.Id;
-        string? spindle = Turns(state, holderSpindle) ? holderSpindle : null;
+
+        // D308 with D288: in a job the default spindle counts only while it is the channel's own (SpindleChannels).
+        string? spindle = Turns(state, holderSpindle)
+            && SpindleChannels.IsOwn(machine, state.ChannelId, holderSpindle!,
+                state.Spindles[holderSpindle!].StartedBy)
+                ? holderSpindle
+                : null;
         if (spindle is null
             && state.Frame.WorkpieceHolder is string workpiece
             && Turns(state, workpiece)

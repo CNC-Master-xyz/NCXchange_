@@ -45,6 +45,7 @@ internal sealed class ChannelState
         // every tool holder the tool rows of 2.3, by resource id. D308: in a job the spindle and tool rows are one per
         // job, shared by every channel's virtual machine; the offsets stay per channel.
         Resources = resources ?? new ResourceState(machine);
+        Unknown = new UnknownKeys(Resources);
         foreach (ResourceDef resource in machine.Resources)
         {
             if (resource.Type == ResourceType.ToolHolder)
@@ -114,7 +115,7 @@ internal sealed class ChannelState
     public Dictionary<string, HolderOffsets> Offsets { get; } = new();
 
     /// <summary>
-    /// lastHolder: the resource id of the holder of the last TOOL (virtual machine 2.1); per channel (D308). Null on a
+    /// lastHolder: the resource id of the holder of the last TOOL (virtual machine 2.8); per channel (D308). Null on a
     /// machine without a holder.
     /// </summary>
     public string? LastHolder { get; set; }
@@ -146,7 +147,7 @@ internal sealed class ChannelState
     /// reference point (D101). Each is named by the key that sets it and, for a variable per resource or per axis, the
     /// resource id or the axis name as its address, after the state keys of virtual machine 3.10: F, RPM:S1, SETPOS:C.
     /// </summary>
-    public HashSet<string> Unknown { get; } = new(StringComparer.Ordinal);
+    public UnknownKeys Unknown { get; }
 
     /// <summary>
     /// The offsets of a holder in this channel, made on first use for a holder created on the spot (virtual machine
@@ -180,7 +181,9 @@ internal sealed class ChannelState
         var holders = new Dictionary<string, HolderSnapshot>();
         foreach (KeyValuePair<string, HolderState> holder in Holders)
         {
-            holders[holder.Key] = holder.Value.Snapshot(OffsetsOf(holder.Key));
+            // A snapshot adds nothing: a holder without offsets in this channel shows the start values.
+            holders[holder.Key] = holder.Value.Snapshot(
+                Offsets.TryGetValue(holder.Key, out HolderOffsets? offsets) ? offsets : new HolderOffsets());
         }
 
         return new ChannelSnapshot

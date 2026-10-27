@@ -1,3 +1,4 @@
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.Events;
 using Ncx.Core.VirtualMachine.State;
@@ -98,6 +99,59 @@ public sealed class SharedStateTests
         job.AssertFinished();
         Assert.False(LastBefore(job, 2, "PROGRAM_END").Coolant["STANDARD"]);
         Assert.True(LastBefore(job, 1, "PROGRAM_END").Coolant["STANDARD"]);
+    }
+
+    // D308: the UNKNOWN mark of a shared spindle row is shared with it. Channel 2 sets the speed of the main spindle
+    // from an expression, which STATIC mode does not evaluate; channel 1 must not take the stale 4000 rpm as known and
+    // warns no VM441 for its feed per revolution (virtual machine 1, D288).
+    [Fact]
+    public void Rpm_SetFromAnExpressionByChannelTwo_IsUnknownInChannelOne()
+    {
+        MachineConfig machine = Ncx.Core.Tests.VirtualMachine.VmMachines.Default();
+        var axes = new List<AxisDef>();
+        foreach (AxisDef axis in machine.Axes)
+        {
+            axes.Add(axis.Id == "Z" ? axis with { MaxFeed = 10000m } : axis);
+        }
+
+        JobHarness job = JobHarness.Run(new JobSetup
+        {
+            Files =
+            [
+                JobHarness.File("UNITS=MM", "WORKPIECE=MAIN", "SPINDLE:MAIN=CW RPM:MAIN=4000", "SYNC=110",
+                    "SYNC=111", "FEED_MODE=PER_REV", "LINE Z=-10 F=5", "PROGRAM=END"),
+                JobHarness.File("UNITS=MM", "SYNC=110", "RPM:MAIN={$V528}", "SYNC=111", "DWELL=1", "PROGRAM=END"),
+            ],
+            Machine = machine with { Axes = axes },
+            Mode = Ncx.Core.VirtualMachine.ExecutionMode.Static,
+        });
+
+        job.AssertFinished();
+        Assert.DoesNotContain(DiagnosticCodes.FeedAboveMaxFeed, job.Codes());
+        Assert.Contains("RPM:S1", LastBefore(job, 1, "PROGRAM_END").Unknown);
+    }
+
+    // D308 with VM551: a WORKPIECE change warns only for a spindle that is the channel's own; the main spindle that
+    // channel 2 turns says nothing about the part of channel 1, while the one channel 1 turns itself still warns.
+    [Theory]
+    [InlineData(2, false)]
+    [InlineData(1, true)]
+    public void WorkpieceChange_WhileAnotherChannelTurnsTheSpindle_WarnsOnlyForItsOwn(int turnedBy, bool warns)
+    {
+        string turn = "SPINDLE:MAIN=CW RPM:MAIN=1000";
+        JobHarness job = JobHarness.Run(new JobSetup
+        {
+            Files =
+            [
+                JobHarness.File(turnedBy == 1 ? turn : "UNITS=MM", "UNITS=MM", "UNITS=MM", "WORKPIECE=SUB",
+                    "PROGRAM=END"),
+                JobHarness.File(turnedBy == 2 ? turn : "UNITS=MM", "UNITS=MM", "UNITS=MM", "UNITS=MM", "UNITS=MM",
+                    "PROGRAM=END"),
+            ],
+            Machine = Ncx.Core.Tests.VirtualMachine.VmMachines.MillTurn(),
+        });
+
+        Assert.Equal(warns, job.Codes().Contains(DiagnosticCodes.WorkpieceChangeWhileSpindleRuns));
     }
 
     // The state a channel had in front of its last event of this kind.

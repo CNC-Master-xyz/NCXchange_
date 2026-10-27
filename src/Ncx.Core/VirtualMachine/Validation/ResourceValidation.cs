@@ -81,7 +81,8 @@ internal static class ResourceValidation
     /// A WORKPIECE change while the old holder's spindle runs is a WARNING (virtual machine 5): the part changes hands
     /// while it turns. The state words of a block do not depend on each other (virtual machine 3 step 3), so a SPINDLE
     /// of the old holder that goes OFF in the same block stops it first; selecting the holder that already holds the
-    /// part is no change (virtual machine 3.4).
+    /// part is no change (virtual machine 3.4). In a job only a spindle that is the channel's own counts: one another
+    /// channel turns says nothing about this channel's part (D308, SpindleChannels).
     /// </summary>
     /// <param name="context">The block after its state words.</param>
     /// <param name="holderBefore">The workpiece holder before the block.</param>
@@ -91,7 +92,8 @@ internal static class ResourceValidation
             || holderBefore is null
             || context.State.Frame.WorkpieceHolder == holderBefore
             || !context.State.Spindles.TryGetValue(holderBefore, out SpindleState? spindle)
-            || spindle.Direction == SpindleDirection.Off)
+            || spindle.Direction == SpindleDirection.Off
+            || !SpindleChannels.IsOwn(context.Machine, context.State.ChannelId, holderBefore, spindle.StartedBy))
         {
             return;
         }

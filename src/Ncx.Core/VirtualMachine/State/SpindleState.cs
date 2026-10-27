@@ -55,6 +55,12 @@ internal sealed class SpindleState
     public decimal? RpmMax { get; set; }
 
     /// <summary>
+    /// The channel whose SPINDLE word last set the direction; null while none did. In a job the spindle rows are one
+    /// per job, and a channel takes a spindle another channel turns for none of its own (D308, D288).
+    /// </summary>
+    public int? StartedBy { get; set; }
+
+    /// <summary>
     /// An immutable copy of the spindle as it is now.
     /// </summary>
     public SpindleSnapshot Snapshot()
@@ -70,6 +76,7 @@ internal sealed class SpindleState
             Css = Css,
             Vc = Vc,
             RpmMax = RpmMax,
+            StartedBy = StartedBy,
         };
     }
 }

@@ -50,4 +50,9 @@ public sealed record SpindleSnapshot
     /// rpmMax: the speed limit of RPM_MAX under CSS; null for none.
     /// </summary>
     public required decimal? RpmMax { get; init; }
+
+    /// <summary>
+    /// The channel whose SPINDLE word last set the direction; null while none did (D308).
+    /// </summary>
+    public int? StartedBy { get; init; }
 }

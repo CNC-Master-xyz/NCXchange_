@@ -61,9 +61,15 @@ internal sealed class ResourceState
     public Dictionary<string, HolderState> Holders { get; } = new();
 
     /// <summary>
+    /// The UNKNOWN keys of the spindle rows, RPM:S1 and the like, which every channel of the job sees (D308,
+    /// UnknownKeys).
+    /// </summary>
+    public HashSet<string> Unknown { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// The program of a channel has ended; true when every channel of the job has ended now.
     /// </summary>
-    public bool Ended(int channel)
+    public bool ChannelEnded(int channel)
     {
         _ended.Add(channel);
         return _ended.Count >= JobChannels;
