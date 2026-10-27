@@ -183,14 +183,14 @@ internal static class CompileCommand
     }
 
     // A machine file that neither --machine nor ncx.toml names is reported as a mistake of the command line: the tool
-    // as its file and line 1, the one line of the command, as a usage error is reported (wave-1 question #79; D98).
+    // as its origin and no line, as a usage error is reported (wave-1 question #79; D98, D110).
     private static void ReportMachineRequired(Diagnostics diagnostics)
     {
         diagnostics.Add(new Diagnostic
         {
             Severity = Severity.Error,
             File = Program.ToolName,
-            Line = Program.CommandLine,
+            Line = null,
             Code = DiagnosticCodes.CompileMachineRequired,
             Message = "compile needs the machine file of the machine it compiles for: name it with --machine or with "
                 + "the machine key of ncx.toml; compile never runs against the built-in default machine (D77, D103; "

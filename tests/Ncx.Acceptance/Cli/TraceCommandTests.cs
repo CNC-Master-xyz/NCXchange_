@@ -163,7 +163,7 @@ public sealed class TraceCommandTests : IDisposable
         int exitCode = _cli.Run("trace", file, "--format", "xml");
 
         Assert.Equal(2, exitCode);
-        Assert.StartsWith("ncx(1): ERROR CLI001: ", _cli.Error, StringComparison.Ordinal);
+        Assert.StartsWith("ncx: ERROR CLI001: ", _cli.Error, StringComparison.Ordinal);
     }
 
     // The help of trace names --format and the shared options (architecture 10, F28).

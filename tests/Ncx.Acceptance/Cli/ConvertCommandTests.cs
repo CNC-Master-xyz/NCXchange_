@@ -54,7 +54,7 @@ public sealed partial class ConvertCommandTests : IDisposable
 
         Assert.Equal(2, exitCode);
         Assert.Equal("", _output);
-        Assert.StartsWith("ncx(1): ERROR CLI250: ", _error, StringComparison.Ordinal);
+        Assert.StartsWith("ncx: ERROR CLI250: ", _error, StringComparison.Ordinal);
         Assert.Single(Lines(_error));
     }
 

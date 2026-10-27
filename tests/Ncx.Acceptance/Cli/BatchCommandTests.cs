@@ -223,7 +223,7 @@ public sealed partial class BatchCommandTests : IDisposable
         int exitCode = _cli.Run(args);
 
         Assert.Equal(2, exitCode);
-        Assert.StartsWith("ncx(1): ERROR CLI001: ", _cli.Error, StringComparison.Ordinal);
+        Assert.StartsWith("ncx: ERROR CLI001: ", _cli.Error, StringComparison.Ordinal);
     }
 
     // The report holds counts and codes and the names of the files only: every outcome with its columns, the RAW

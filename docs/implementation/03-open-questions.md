@@ -86,7 +86,7 @@ The tasks of wave 1 (P0-01 to P0-06, P2-01 to P2-04a, P1-01 to P1-03a and P4-01a
 | 76 | P0-06 | What is a column of language 5 rule 7 beyond ASCII? | D166 | `src/Ncx.Core/Writing/NcxWriter.cs:106` |
 | 77 | P0-06 | Trivia placed by line number cannot stay in place where a reader's block lines decrease | D142 | `src/Ncx.Core/Writing/NcxBuilder.cs:190` |
 | 78 | P0-06 | Is NcxBuilder.Raw a whole RAW block or a word of the open block? | answered by language 4.1 (RAW has scope block), language 5 rule 6 (RAW ranks among the words of a block), controller-mapping 2 (DC(), ACP(), ACN() read as `C=` plus RAW) and architecture 7 (a whole RAW block is `ReaderBase.EmitRaw`); main matches; code: the marker becomes a comment citing them. Document fix: in the class diagram of architecture 7, Begin and Raw return NcxBuilder; applied 2026-09-14 | `src/Ncx.Core/Writing/NcxBuilder.cs:111` |
-| 79 | P0-06 | How is a usage error rendered, which has no file? | D110 | `src/Ncx.Cli/Program.cs:46` |
+| 79 | P0-06 | How is a usage error rendered, which has no file? | settled 2026-10-27 (D110) | `src/Ncx.Cli/Program.cs:46` |
 | 80 | P0-06 | May a byte order mark begin an NCX file, and does format keep it? | D111 | `src/Ncx.Cli/Commands/FormatCommand.cs:89` |
 | 81 | P4-01a | What does an index on a variable that is not a SYS_ name mean ($Q1[2])? | D145 | `src/Ncx.Core/Expressions/Evaluator.cs:93` |
 | 82 | P4-01a | What does an index that is not a whole number select ($SYS_WEAR_Z[99.5])? | D145 | `src/Ncx.Core/Expressions/Evaluator.cs:177` |

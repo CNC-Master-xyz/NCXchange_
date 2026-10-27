@@ -82,6 +82,17 @@ public sealed class Diagnostics
     }
 
     /// <summary>
+    /// Reports an ERROR about the command line, which stands on no line of a file: the diagnostic has no line and
+    /// renders as ncx: ERROR CLI001: message (D110). A diagnostic about a whole file reports line 1 of that file.
+    /// </summary>
+    /// <param name="code">The code of the rule, a constant of DiagnosticCodes.</param>
+    /// <param name="message">The message, naming the rule and what the command line got wrong.</param>
+    public void CommandLineError(string code, string message)
+    {
+        Report(Severity.Error, null, null, code, message);
+    }
+
+    /// <summary>
     /// Reports an ERROR on a block; on a generated block the diagnostic carries the line of the block it was
     /// generated for (D98).
     /// </summary>
@@ -143,7 +154,7 @@ public sealed class Diagnostics
 
     // Every diagnostic of this list is about its file; a diagnostic on a generated block also names the line of the
     // block it was generated for (D98).
-    private void Report(Severity severity, int line, int? originLine, string code, string message)
+    private void Report(Severity severity, int? line, int? originLine, string code, string message)
     {
         _items.Add(new Diagnostic
         {

@@ -211,12 +211,13 @@ classDiagram
         +void Error(int line, string code, string message)
         +void Warning(int line, string code, string message)
         +void Info(int line, string code, string message)
+        +void CommandLineError(string code, string message)
         +string ToText()
     }
     class Diagnostic {
         +Severity Severity
-        +int Line
-        +int OriginLine
+        +int? Line
+        +int? OriginLine
         +string Code
         +string Message
         +string File
@@ -237,7 +238,7 @@ classDiagram
     Diagnostics "1" *-- "*" Diagnostic
 ```
 
-Enumerations: `WordKind` (Program, Frame, Motion, Tool, Spindle, Function, Cycle, Channel, Flow, Lathe, Resource, Pseudo), `ValueKind` (None, Integer, Decimal, Number, Ident, List, String, Expr, NumberOrExpr, StateKey), `Scope` (None, File, Program, Header, Block, Modal, WithPartner), `AddrKind` (None, Axis, OffsetKind, ToleranceKind, Channel, Role, Function, Variable, Argument, Controller), `Severity` (ERROR, WARNING, INFO, where INFO carries notes that are neither). A diagnostic code is an area prefix and three digits (`PAR`, `VM`, `CFG`, `RDR`, `CMP`, `ANA`, `PLG`, `CLI`), rendered as `file(line): ERROR VM042: message`, with `OriginLine` rendered as `file(line, from 12)` for a diagnostic on a generated block (D98). Comment-only lines and blank lines are not blocks but `Trivia` (line number, text) kept in place; a block keeps its trailing comment text in `Comment` (D92). `StateKeyValue` is the internal value of the pseudo-words `@SAVE` and `@RESTORE`: a state key `KEY[:ADDR]` naming a state variable of the channel, produced only when the parser runs with the option the expander uses for generated text (D95). The catalog entries of `@SAVE` and `@RESTORE` have `WordKind.Pseudo` and `IsInternal = true`; the parser accepts an internal entry only under `ParserOptions.AllowPseudoWords` (D95).
+Enumerations: `WordKind` (Program, Frame, Motion, Tool, Spindle, Function, Cycle, Channel, Flow, Lathe, Resource, Pseudo), `ValueKind` (None, Integer, Decimal, Number, Ident, List, String, Expr, NumberOrExpr, StateKey), `Scope` (None, File, Program, Header, Block, Modal, WithPartner), `AddrKind` (None, Axis, OffsetKind, ToleranceKind, Channel, Role, Function, Variable, Argument, Controller), `Severity` (ERROR, WARNING, INFO, where INFO carries notes that are neither). A diagnostic code is an area prefix and three digits (`PAR`, `VM`, `CFG`, `RDR`, `CMP`, `ANA`, `PLG`, `CLI`), rendered as `file(line): ERROR VM042: message`, with `OriginLine` rendered as `file(line, from 12)` for a diagnostic on a generated block (D98). A diagnostic about the command line has the tool as its origin and no line (`Line` null) and renders as `ncx: ERROR CLI001: message`, the MSBuild canonical form for a tool; a diagnostic about a whole file (CLI002, the loaders of `Ncx.Config`) keeps line 1 of that file (D110). Comment-only lines and blank lines are not blocks but `Trivia` (line number, text) kept in place; a block keeps its trailing comment text in `Comment` (D92). `StateKeyValue` is the internal value of the pseudo-words `@SAVE` and `@RESTORE`: a state key `KEY[:ADDR]` naming a state variable of the channel, produced only when the parser runs with the option the expander uses for generated text (D95). The catalog entries of `@SAVE` and `@RESTORE` have `WordKind.Pseudo` and `IsInternal = true`; the parser accepts an internal entry only under `ParserOptions.AllowPseudoWords` (D95).
 
 ### 4.1 Parsing
 

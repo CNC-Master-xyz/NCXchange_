@@ -248,7 +248,7 @@ internal static class ConvertCommand
 
     /// <summary>
     /// A machine file that neither --machine nor ncx.toml names is reported as a mistake of the command line: the tool
-    /// as its file and line 1, the one line of the command, as a usage error is reported (wave-1 question #79; D98).
+    /// as its origin and no line, as a usage error is reported (wave-1 question #79; D98, D110).
     /// </summary>
     internal static void ReportMachineRequired(Diagnostics diagnostics)
     {
@@ -256,7 +256,7 @@ internal static class ConvertCommand
         {
             Severity = Severity.Error,
             File = Program.ToolName,
-            Line = Program.CommandLine,
+            Line = null,
             Code = DiagnosticCodes.MachineRequired,
             Message = "convert needs the machine file the program was written for: name it with --machine or with the "
                 + "machine key of ncx.toml; convert never runs against the built-in default machine (D77, D103; "
