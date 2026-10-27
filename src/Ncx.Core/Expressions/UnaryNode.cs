@@ -9,19 +9,16 @@ namespace Ncx.Core.Expressions;
 public sealed record UnaryNode(UnaryOperator Operator, ExprNode Operand) : ExprNode
 {
     /// <summary>
-    /// The minus directly before its operand; NOT with one space before its operand.
+    /// The minus directly before its operand; NOT with one space before its operand; the operand in parentheses where
+    /// a tree built in code needs them (D112; language 4.12).
     /// </summary>
     public override string ToCanonical()
     {
-        // The unary minus stands directly before its operand (P0-05, canonical text).
-        if (Operator == UnaryOperator.Minus)
-        {
-            return ExprSymbols.Of(Operator) + Operand.ToCanonical();
-        }
-
-        // TODO(question): the phase file (P0-05) writes NOT, like the minus, directly before its operand, but its own
-        // case {$Q1 < $Q2 AND NOT $Q3} has a space, and NOT written directly before a function name reads back as one
-        // name (NOTSIN). NOT is written with one space until the canonical text of NOT is settled (D112).
-        return ExprSymbols.Of(Operator) + " " + Operand.ToCanonical();
+        // The unary minus stands directly before its operand, NOT is followed by one space, so that NOT before a
+        // function name never reads back as one name (D112).
+        string operand = ExprPrecedence.Operand(Operator, Operand);
+        return Operator == UnaryOperator.Minus
+            ? ExprSymbols.Of(Operator) + operand
+            : ExprSymbols.Of(Operator) + " " + operand;
     }
 }

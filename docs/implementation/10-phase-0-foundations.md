@@ -99,7 +99,7 @@ Tests first (`tests/Ncx.Core.Tests/Parsing/`):
 
 ### P0-05 Expression parser
 
-Files in `src/Ncx.Core/Expressions/`: `ExprParser` (recursive descent, one method per production of language 4.12), `ExprNode` records (`NumberNode` with text, `VariableNode` with name and optional index node, `CallNode` with function and arguments, `UnaryNode`, `BinaryNode` with operator), `ExprFunction` enum (the seventeen names of 4.12), `ExprNode.ToString()` producing the canonical text: one space around binary operators including `AND`, `OR`, `MOD`; `NOT` and unary minus followed by their operand without a space; `, ` between arguments; no spaces inside parentheses and brackets; numbers as written; `{` and `}` added by the writer.
+Files in `src/Ncx.Core/Expressions/`: `ExprParser` (recursive descent, one method per production of language 4.12), `ExprNode` records (`NumberNode` with text, `VariableNode` with name and optional index node, `CallNode` with function and arguments, `UnaryNode`, `BinaryNode` with operator), `ExprFunction` enum (the seventeen names of 4.12), `ExprNode.ToString()` producing the canonical text: one space around binary operators including `AND`, `OR`, `MOD`; the unary minus followed by its operand without a space and `NOT` with one space (D112); written parentheses kept, and the parentheses precedence needs added where a tree built in code lacks them (D112); function names and `AND`, `OR`, `NOT`, `MOD` written uppercase (D112); `, ` between arguments; no spaces inside parentheses and brackets; numbers as written; `{` and `}` added by the writer.
 
 Cite: language 4.12 (the grammar, degrees, `INT`, `ROUND`, `MOD`, comparisons yield 1 or 0); architecture 4 (Interpreter pattern in code-guidelines 5).
 

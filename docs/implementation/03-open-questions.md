@@ -44,9 +44,9 @@ The tasks of wave 1 (P0-01 to P0-06, P2-01 to P2-04a, P1-01 to P1-03a and P4-01a
 | 34 | P0-03 | What kind of address is ROTARY in TOLERANCE:ROTARY? | implementation (as 30): AddrKind.ToleranceKind; accepting only ROTARY and refusing OFF on it follows from the 4.1 rows (PAR152, PAR153); applied 2026-09-14 | `src/Ncx.Core/Catalog/AddrKind.cs:3` |
 | 35 | P0-03 | Is the role address of SPINDLE_MODE required? | D113 | `src/Ncx.Core/Catalog/SpindleWords.cs:38` |
 | 36 | P0-03 | How does the parser accept the parameter names of a catalog cycle (LENGTH, WIDTH)? | D114 | `src/Ncx.Core/Catalog/WordCatalog.cs:111` |
-| 37 | P0-05 | How does NOT appear in the canonical text? | D112 | `src/Ncx.Core/Expressions/UnaryNode.cs:22` |
-| 38 | P0-05 | Does the canonical text keep parentheses the grammar does not need? | D112 | `src/Ncx.Core/Expressions/ParenthesesNode.cs:15` |
-| 39 | P0-05 | Does Case (language 3) cover function names and AND, OR, NOT, MOD? | D112 | `src/Ncx.Core/Expressions/ExprTokenizer.cs:59` |
+| 37 | P0-05 | How does NOT appear in the canonical text? | settled 2026-10-27 (D112) | `src/Ncx.Core/Expressions/UnaryNode.cs:22` |
+| 38 | P0-05 | Does the canonical text keep parentheses the grammar does not need? | settled 2026-10-27 (D112) | `src/Ncx.Core/Expressions/ParenthesesNode.cs:15` |
+| 39 | P0-05 | Does Case (language 3) cover function names and AND, OR, NOT, MOD? | settled 2026-10-27 (D112) | `src/Ncx.Core/Expressions/ExprTokenizer.cs:59` |
 | 40 | P0-05 | How many arguments does each function take, and in which order does ATAN2 take them? | the count: settled 2026-10-01 (D118); the ATAN2 order is settled 2026-10-01 (D119) | `src/Ncx.Core/Expressions/ExprParser.cs:307` |
 | 41 | P2-02a | Is template text that cannot be read as placeholders an ERROR? | answered by code-guidelines 6 (a WARNING only where the specification allows it) and the machine-config introduction (an unusable template is reported); main matches (CFG101, CFG102); code: the marker becomes a comment citing them; applied 2026-09-14 | `src/Ncx.Config/Templates/DiagnosticCodes.Templates.cs:6` |
 | 42 | P2-02a | What does Literal of Placeholder mean in architecture 6? | implementation: the class diagrams are the intended shape, not a contract (HANDOFF); Template keeps its literal text, Width and IsText cover either reading. The marker becomes a comment; the Placeholder box of architecture 6 becomes Name, Format, Width, IsText, and Template.Render and Matches take TemplateValues; applied 2026-09-14 | `src/Ncx.Config/Templates/Placeholder.cs:6` |
