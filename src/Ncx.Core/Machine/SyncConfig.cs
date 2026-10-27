@@ -27,6 +27,12 @@ public sealed record SyncConfig
     public int? StartMark { get; init; }
 
     /// <summary>
+    /// reserved_marks: marks of the range the job compiler never picks for a SYNC it generates, the builder's own
+    /// template marks, [0, 1, 10, 15, 20, 25, 80, 90, 95] (D315); empty when left out.
+    /// </summary>
+    public IReadOnlyList<int> ReservedMarks { get; init; } = [];
+
+    /// <summary>
     /// groups: further wait groups between other channels with their own marks (Nakamura WTW); empty when left out.
     /// </summary>
     public IReadOnlyList<SyncGroup> Groups { get; init; } = [];

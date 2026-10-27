@@ -223,6 +223,7 @@ paths = "list"                     # two paths: no P needed; NTY3: P12, P13, P23
 start_mark = 198                   # the program-start mark of the Super NTJX header template, "M198 (SYNCHRONISATION MIT *U*/*O*)" (18i-TB guide 2009 p.19-20;
                                    # the WY template uses M199). The job compiler writes it after the header only when some channel program does not already pass
                                    # it as its first mark with all channels, wherever that SYNC stands (machine-config 5, D314, D388)
+reserved_marks = [199]             # the G196 transfer cycle waits at M199, which a generated SYNC never takes (D315)
 
 [coolant]
 STANDARD = { ON = "M8", OFF = "M9" }

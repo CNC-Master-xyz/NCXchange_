@@ -100,6 +100,12 @@ public sealed record MachineConfig
     public FunctionTable? SpindleSync { get; init; }
 
     /// <summary>
+    /// [spindle_sync] pair: the two roles SPINDLE_SYNC=ON couples, the leader first, ["MAIN", "SUB"]; required only
+    /// with more than two work spindles or when the default spindle is not a work spindle (D154); empty when left out.
+    /// </summary>
+    public IReadOnlyList<string> SpindleSyncPair { get; init; } = [];
+
+    /// <summary>
     /// [workpiece]: the native selection of the workpiece holder and how its side is programmed (machine-config 5,
     /// D57); null when the file has none.
     /// </summary>
@@ -140,6 +146,11 @@ public sealed record MachineConfig
     /// [tolerance]: the TOLERANCE templates (machine-config 5, D85); null when the file has none.
     /// </summary>
     public ToleranceTable? Tolerance { get; init; }
+
+    /// <summary>
+    /// [stock]: the STOCK templates, one per value form (machine-config 5, D351); null when the file has none.
+    /// </summary>
+    public StockTable? Stock { get; init; }
 
     /// <summary>
     /// [raw]: the builder codes the reader keeps as RAW (machine-config 5, F23); null when the file has none.
@@ -329,6 +340,61 @@ public sealed record MachineConfig
         }
 
         return function.States.TryGetValue(state, out string? template) ? template : null;
+    }
+
+    /// <summary>
+    /// The two roles [spindle_sync] ON couples, the leader first: the pair key where the file writes it, otherwise the
+    /// role of the default spindle and the role of the other work spindle, SPINDLE_SYNC=MAIN,SUB (D154); empty when the
+    /// machine has no such pair, which the loader reports for a machine with a [spindle_sync] table.
+    /// </summary>
+    public IReadOnlyList<string> SpindleSyncRoles()
+    {
+        if (SpindleSyncPair.Count == 2)
+        {
+            return SpindleSyncPair;
+        }
+
+        // [spindle_sync] ON couples the default spindle (the leader) with the other work spindle; the default must be a
+        // work spindle and the other one the only other work spindle of the machine (D154).
+        ResourceDef? leader = ResolveDefaultSpindle();
+        if (leader?.Type != ResourceType.WorkSpindle)
+        {
+            return [];
+        }
+
+        ResourceDef? follower = null;
+        foreach (ResourceDef resource in Resources)
+        {
+            if (resource.Type != ResourceType.WorkSpindle || resource.Id == leader.Id)
+            {
+                continue;
+            }
+
+            if (follower is not null)
+            {
+                return [];
+            }
+
+            follower = resource;
+        }
+
+        string? leaderRole = follower is null ? null : RoleOf(leader.Id);
+        string? followerRole = follower is null ? null : RoleOf(follower.Id);
+        return leaderRole is null || followerRole is null ? [] : [leaderRole, followerRole];
+    }
+
+    // The role that [roles] gives a resource, the first in file order (machine-config 4); null when it has none.
+    private string? RoleOf(string resourceId)
+    {
+        foreach (KeyValuePair<string, string> role in Roles)
+        {
+            if (role.Value == resourceId)
+            {
+                return role.Key;
+            }
+        }
+
+        return null;
     }
 
     // The one resource of a kind, spindles or tool holders, when the machine has exactly one (virtual machine 3.8

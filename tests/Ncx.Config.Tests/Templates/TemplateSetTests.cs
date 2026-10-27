@@ -426,6 +426,64 @@ public sealed class TemplateSetTests
         Assert.Equal(word, Templates(SharedCodes).FindFunctionByCode(code));
     }
 
+    // D155: FindFunctionsByCode returns every state that writes the code, in file order with the values it carried:
+    // M9 is the OFF of both coolant channels, M5 the OFF of the spindle and the SPINDLE of its spindle mode.
+    [Fact]
+    public void FindFunctionsByCode_CodeOfSeveralStates_IsEveryStateInFileOrder()
+    {
+        TemplateSet templates = Templates(SeveralStates);
+
+        Assert.Equal(["COOLANT:STANDARD=OFF", "COOLANT:LOW_PRESSURE=OFF"], Keys(templates.FindFunctionsByCode("M9")));
+        Assert.Equal(["SPINDLE:MAIN=OFF", "SPINDLE_MODE:MAIN=SPINDLE"], Keys(templates.FindFunctionsByCode("M05")));
+        Assert.Empty(templates.FindFunctionsByCode("M77"));
+    }
+
+    // D155: a code that is also a [workpiece] template gives the WORKPIECE word first (D40), the Doosan M134 that
+    // selects the right side and switches its spindle to SPINDLE mode.
+    [Fact]
+    public void FindFunctionsByCode_WorkpieceTemplate_GivesTheWorkpieceWordFirst()
+    {
+        TemplateSet templates = Templates(SeveralStates);
+
+        IReadOnlyList<FunctionMatch> matches = templates.FindFunctionsByCode("M134");
+
+        Assert.Equal(["WORKPIECE=SUB", "SPINDLE_MODE:SUB=SPINDLE"], Keys(matches));
+        Assert.Null(matches[0].Table);
+        Assert.Equal("SPINDLE_MODE", matches[1].Family);
+        Assert.Equal("SUB", matches[1].Address);
+        Assert.Equal("SPINDLE_MODE:SUB=SPINDLE", templates.FindFunctionByCode("M134"));
+    }
+
+    // D155: the values the code carried come with the state, the angle of an ORIENT template (D154), and the table
+    // with its channel binding (D56).
+    [Fact]
+    public void FindFunctionsByCode_CodeWithAValue_CarriesTheValueAndTheTable()
+    {
+        TemplateSet templates = Templates(SeveralStates);
+
+        FunctionMatch match = Assert.Single(templates.FindFunctionsByCode("M19 S45"));
+
+        Assert.Equal("SPINDLE:MAIN=ORIENT", match.Key);
+        Assert.True(match.Values.TryGetNumber("angle", out decimal angle));
+        Assert.Equal(45m, angle);
+        Assert.Equal(2, Assert.Single(templates.FindFunctionsByCode("M96")).Table?.Channel);
+    }
+
+    // The new templates of the code wave are templates of the set: the named tool change (D172), the path mode
+    // (D349), ON_ROTARY (D151) and the stock (D351).
+    [Theory]
+    [InlineData("T=\"{name}\" M6")]
+    [InlineData("T=\"{name}\"")]
+    [InlineData("G61")]
+    [InlineData("G64")]
+    [InlineData("CYCLE832({tol},1{mode},{rotary})")]
+    [InlineData("BLK FORM 0.1 {axis} X{x} Y{y} Z{z}\nBLK FORM 0.2 X{max_x} Y{max_y} Z{max_z}")]
+    [InlineData("WORKPIECE(,,,\"CYLINDER\",192,{max_z},{z},{z},{diameter})")]
+    public void For_TemplateOfTheCodeWaveKeys_IsTheParsedTemplateOfThatText(string text)
+    {
+        Assert.NotNull(Templates(CodeWaveKeys).For(text));
+    }
+
     // An empty template names no code: an empty text is found by no state.
     [Theory]
     [InlineData("")]
@@ -660,6 +718,74 @@ public sealed class TemplateSetTests
         Assert.Empty(templates.Templates);
         Assert.Null(templates.FindFunctionByCode("M8"));
         Assert.Empty(diagnostics.Items);
+    }
+
+    // Codes several states write (D155): M9 of two coolant channels, M5 of the spindle and its mode, M134 of
+    // [workpiece] and of the spindle mode, as on the Doosan.
+    private const string SeveralStates = """
+        [machine]
+        name = "Several states"
+        controller = "fanuc"
+
+        [spindle.MAIN]
+        OFF = "M5"
+        ORIENT = "M19 S{angle}"
+
+        [spindle_mode.MAIN]
+        SPINDLE = "M5"
+
+        [spindle_mode.SUB]
+        SPINDLE = "M134"
+
+        [workpiece]
+        MAIN = "M34"
+        SUB = "M134"
+
+        [coolant]
+        STANDARD = { ON = "M8", OFF = "M9" }
+        LOW_PRESSURE = { ON = "M7", OFF = "M9" }
+
+        [spindle_sync]
+        ON = "M96"
+        channel = 2
+        """;
+
+    // The keys of the code wave in their tables (D151, D172, D349, D351).
+    private const string CodeWaveKeys = """
+        [machine]
+        name = "Code wave keys"
+        controller = "siemens"
+
+        [coolant]
+        STANDARD = { ON = "M8", OFF = "M9" }
+
+        [tool_change]
+        change_named = "T=\"{name}\" M6"
+        preload_named = "T=\"{name}\""
+
+        [transform]
+        PATH_MODE_EXACT_STOP = "G61"
+        PATH_MODE_CONTINUOUS = "G64"
+
+        [tolerance]
+        ON = "CYCLE832({tol},{mode},1)"
+        ON_ROTARY = "CYCLE832({tol},1{mode},{rotary})"
+
+        [stock]
+        BOX = "BLK FORM 0.1 {axis} X{x} Y{y} Z{z}\nBLK FORM 0.2 X{max_x} Y{max_y} Z{max_z}"
+        CYLINDER = "WORKPIECE(,,,\"CYLINDER\",192,{max_z},{z},{z},{diameter})"
+        """;
+
+    // The keys of the states, in the order given.
+    private static List<string> Keys(IReadOnlyList<FunctionMatch> matches)
+    {
+        var keys = new List<string>();
+        foreach (FunctionMatch match in matches)
+        {
+            keys.Add(match.Key);
+        }
+
+        return keys;
     }
 
     // A machine file of these tests, loaded without a diagnostic.

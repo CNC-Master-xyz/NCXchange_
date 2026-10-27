@@ -117,16 +117,18 @@ internal static class ResourceValidation
     }
 
     // The templates the compiler writes for the words of a program, by the table and state that hold them: the program
-    // end of [format] (machine-config 2), the tool change, HOME and SETPOS (3), and every table of functions and
-    // coolant (5).
+    // end of [format] (machine-config 2), the tool change with its named templates (3, D172), HOME and SETPOS (3), and
+    // every table of functions and coolant, the path mode, ON_ROTARY and the stock (5, D349, D151, D351).
     private static Dictionary<string, string> Templates(MachineConfig machine)
     {
         var templates = new Dictionary<string, string>(StringComparer.Ordinal);
         Add(templates, "[format] program_end", machine.Format?.ProgramEnd);
         Add(templates, "[format] sub_end", machine.Format?.SubEnd);
         Add(templates, "[tool_change] change", machine.ToolChange?.Change);
+        Add(templates, "[tool_change] change_named", machine.ToolChange?.ChangeNamed);
         Add(templates, "[tool_change] change_preloaded", machine.ToolChange?.ChangePreloaded);
         Add(templates, "[tool_change] preload", machine.ToolChange?.Preload);
+        Add(templates, "[tool_change] preload_named", machine.ToolChange?.PreloadNamed);
         Add(templates, "[tool_change] unload", machine.ToolChange?.Unload);
         Add(templates, "[home]", machine.Home?.Template);
         Add(templates, "[setpos]", machine.Setpos?.Template);
@@ -160,9 +162,12 @@ internal static class ResourceValidation
         Add(templates, "[retract] MAX", machine.Retract?.Max);
         Add(templates, "[retract] BY", machine.Retract?.By);
         Add(templates, "[tolerance] ON", machine.Tolerance?.On);
+        Add(templates, "[tolerance] ON_ROTARY", machine.Tolerance?.OnRotary);
         Add(templates, "[tolerance] OFF", machine.Tolerance?.Off);
         Add(templates, "[diameter] ON", machine.Diameter?.On);
         Add(templates, "[diameter] OFF", machine.Diameter?.Off);
+        Add(templates, "[stock] BOX", machine.Stock?.Box);
+        Add(templates, "[stock] CYLINDER", machine.Stock?.Cylinder);
         return templates;
     }
 
@@ -192,6 +197,8 @@ internal static class ResourceValidation
         }
 
         Add(templates, "[transform] CYLINDER_ON", transform.CylinderOn);
+        Add(templates, "[transform] PATH_MODE_EXACT_STOP", transform.PathModeExactStop);
+        Add(templates, "[transform] PATH_MODE_CONTINUOUS", transform.PathModeContinuous);
         Add(templates, "[transform] CYLINDER_OFF", transform.CylinderOff);
         Add(templates, "[transform] POLAR_ON", transform.PolarOn);
         Add(templates, "[transform] POLAR_OFF", transform.PolarOff);

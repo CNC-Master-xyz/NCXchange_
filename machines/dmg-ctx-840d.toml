@@ -163,8 +163,8 @@ corner_speed = 2000                # mm/min carried through a corner
 
 [tool_change]
 pre = ["HOME X Y Z"]              # the tool change point cycle L711 of [home] runs before every change (expansion rule, machine-config 5a)
-change = "T=\"{name}\"\nTC({offset},,,{kind},{b},{c})"   # TC(D number, turret direction, place, kind, B1 angle, C1 angle); kind 1 rotary, 2 turning, 3 turret at spindle 3 mirrored, 4 turret at spindle 4
-preload = "T=\"{name}\""
+change_named = "T=\"{name}\"\nTC({offset},,,{kind},{b},{c})"   # TC(D number, turret direction, place, kind, B1 angle, C1 angle); kind 1 rotary, 2 turning, 3 turret at spindle 3 mirrored, 4 turret at spindle 4; the machine calls its tools by name, so only the named templates (D172)
+preload_named = "T=\"{name}\""
 unload = "T0 D0"
 auto_preload = true
 tool_name_allowed = true
@@ -246,6 +246,7 @@ OFF = "DIAMOF"
 [sync]
 wait = "WAITM({mark},{channels})"
 mark_range = [0, 99]               # marks are reused freely (the DMG template waits at 0, 80 and 90 several times); 95 is used by BARLOAD_SYNC
+reserved_marks = [0, 1, 10, 15, 20, 25, 80, 90, 95]   # the builder template marks and BARLOAD_SYNC 95, which a generated SYNC never takes (D315)
 start_channel = "START({channel})"
 wait_channel = "WAITE({channel})"
 

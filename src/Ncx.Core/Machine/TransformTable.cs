@@ -37,7 +37,8 @@ public sealed record TransformTable
     public string? TcpmOff { get; init; }
 
     /// <summary>
-    /// TILT_ON: written for TILT, "G68.2 X{x} Y{y} Z{z} I{a} J{b} K{c}"; null when left out.
+    /// TILT_ON: written for TILT, "G68.2 X{x} Y{y} Z{z} I{a} J{b} K{c}",
+    /// "PLANE SPATIAL SPA{a} SPB{b} SPC{c} {move} {rot}" (D269); null when left out.
     /// </summary>
     public string? TiltOn { get; init; }
 
@@ -82,4 +83,24 @@ public sealed record TransformTable
     /// move: the value of {move} per MOVE option, TURN = "TURN FMAX", STAY = "STAY" (Heidenhain); empty when left out.
     /// </summary>
     public IReadOnlyDictionary<string, string> Move { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>
+    /// rot: the value of {rot} per ROT option, TABLE = "TABLE ROT", COORD = "COORD ROT" (Heidenhain); the ROT of the
+    /// block, TABLE when it has none, since an absent ROT means TABLE in NCX (language 4.2, D269); empty when left out,
+    /// and then the machine ignores ROT with the WARNING of language 4.2.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> Rot { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>
+    /// PATH_MODE_EXACT_STOP: written for PATH_MODE=EXACT_STOP, "G61", "G60"; empty on a control without a modal
+    /// switch, Heidenhain Klartext (D349); null when left out. An empty or missing template is a WARNING of the
+    /// compiler.
+    /// </summary>
+    public string? PathModeExactStop { get; init; }
+
+    /// <summary>
+    /// PATH_MODE_CONTINUOUS: written for PATH_MODE=CONTINUOUS, "G64" (D349); empty on a control without a modal
+    /// switch; null when left out.
+    /// </summary>
+    public string? PathModeContinuous { get; init; }
 }
