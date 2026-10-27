@@ -173,4 +173,21 @@ public sealed class CycleCatalogTests
     {
         return new Dictionary<string, decimal> { [native] = value };
     }
+
+    // D359: where a machine's TAP sets before = "", its G84 is always rigid: the reader takes TAP whatever stands
+    // before the block, and TAP_COMPENSATING, which has no before key, counts as not in that machine's catalog.
+    [Fact]
+    public void FindNativeByBeforeLine_TapWithEmptyBefore_IsAlwaysTapAndHidesTheEntryWithoutTheKey()
+    {
+        CycleCatalog catalog = DrillingFamily.Catalog(Controller.Fanuc).Override(
+        [
+            new CycleEntry { Name = "TAP", Native = "G84", Before = "", WrittenKeys = ["name", "native", "before"] },
+            new CycleEntry { Name = "TAP_COMPENSATING", Native = "G84", WrittenKeys = ["name", "native"] },
+        ]);
+
+        Assert.Equal("TAP", catalog.FindNativeByBeforeLine("G84", lineReaches: false)?.Name);
+        Assert.Equal("TAP", catalog.FindNativeByBeforeLine("G84", lineReaches: true)?.Name);
+        Assert.Null(catalog.Find("TAP_COMPENSATING"));
+        Assert.NotNull(catalog.Find("TAP"));
+    }
 }

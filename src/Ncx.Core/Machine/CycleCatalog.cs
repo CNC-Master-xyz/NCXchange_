@@ -34,7 +34,7 @@ public sealed record CycleCatalog
         {
             if (entry.Name == ncxName)
             {
-                return entry;
+                return IsHidden(entry) ? null : entry;
             }
         }
 
@@ -59,13 +59,13 @@ public sealed record CycleCatalog
 
             if (entry.ForAxis == axis)
             {
-                return entry;
+                return IsHidden(entry) ? null : entry;
             }
 
             defaultAxis ??= entry.ForAxis is null ? entry : null;
         }
 
-        return defaultAxis;
+        return defaultAxis is not null && IsHidden(defaultAxis) ? null : defaultAxis;
     }
 
     /// <summary>
@@ -75,10 +75,19 @@ public sealed record CycleCatalog
     public CycleEntry? FindNative(string native)
     {
         // A reader turns a native cycle into the entry that maps it; of two entries of one cycle, DRILL and
-        // DRILL_DWELL on cycle 200, the first in catalog order (controller-mapping 5).
+        // DRILL_DWELL on cycle 200, the first in catalog order (controller-mapping 5). A native no entry writes as its
+        // own is the dwell_native of an entry, the Fanuc mill G89 of REAM (D177).
         foreach (CycleEntry entry in Entries)
         {
             if (entry.Native == native)
+            {
+                return entry;
+            }
+        }
+
+        foreach (CycleEntry entry in Entries)
+        {
+            if (entry.DwellNative == native)
             {
                 return entry;
             }
@@ -108,16 +117,62 @@ public sealed record CycleCatalog
         // (machine-config 6, D160).
         foreach (CycleEntry entry in Entries)
         {
-            if (entry.Native == native
-                && (forAxis is null || entry.ForAxis == forAxis)
-                && CarriesFixedValues(nativeValues, entry)
-                && entry.CoversNativeWords(nativeValues.Keys))
+            if (entry.Native == native && Fits(entry, nativeValues, forAxis))
+            {
+                return entry;
+            }
+        }
+
+        // D177: the dwell_native of an entry, the Fanuc mill G89 of REAM, where no entry writes it as its own.
+        foreach (CycleEntry entry in Entries)
+        {
+            if (entry.DwellNative == native && Fits(entry, nativeValues, forAxis))
             {
                 return entry;
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The entry of a native cycle that has two entries told apart by their before line, the Fanuc G84 of TAP and
+    /// TAP_COMPENSATING (D359, an amendment of D160): the entry whose before line reaches the block where it does, the
+    /// entry with no before key where it does not. Where an entry of the native sets before = "", the cycle is always
+    /// that entry and an entry without the key counts as not in the catalog (D359). Null when no entry fits.
+    /// </summary>
+    /// <param name="native">The native cycle, "G84".</param>
+    /// <param name="lineReaches">Whether the before line of an entry reaches the block in one of the ways of
+    /// D256.</param>
+    /// <param name="forAxis">The drilling axis of the block, which picks the entries of that for_axis (D160); null
+    /// where the family has no such entries.</param>
+    public CycleEntry? FindNativeByBeforeLine(string native, bool lineReaches, string? forAxis = null)
+    {
+        CycleEntry? withLine = null;
+        CycleEntry? withoutKey = null;
+        foreach (CycleEntry entry in Entries)
+        {
+            if (entry.Native != native || (forAxis is not null && entry.ForAxis != forAxis))
+            {
+                continue;
+            }
+
+            if (entry.Before == "")
+            {
+                return entry;
+            }
+
+            if (entry.Before is null)
+            {
+                withoutKey ??= entry;
+            }
+            else
+            {
+                withLine ??= entry;
+            }
+        }
+
+        return lineReaches ? withLine : withoutKey;
     }
 
     /// <summary>
@@ -173,6 +228,35 @@ public sealed record CycleCatalog
         // cycle words; a compiler of any other family reports the block as an ERROR like RAW (language 4.7.1, D45,
         // D94). NCX writes the address in capitals (language 3).
         return Controller is { } family && controllerAddress == Enum.GetName(family)?.ToUpperInvariant();
+    }
+
+    // An entry fits a source block when it maps the drilling axis asked for, the block carries its fixed values and
+    // its params cover the words of the block (machine-config 6, D160).
+    private static bool Fits(CycleEntry entry, IReadOnlyDictionary<string, decimal> nativeValues, string? forAxis)
+    {
+        return (forAxis is null || entry.ForAxis == forAxis)
+            && CarriesFixedValues(nativeValues, entry)
+            && entry.CoversNativeWords(nativeValues.Keys);
+    }
+
+    // D359: an entry without a before key does not count where an entry of its native and its for_axis sets
+    // before = "", the machine's G84 being always rigid.
+    private bool IsHidden(CycleEntry entry)
+    {
+        if (entry.Before is not null)
+        {
+            return false;
+        }
+
+        foreach (CycleEntry other in Entries)
+        {
+            if (other.Native == entry.Native && other.ForAxis == entry.ForAxis && other.Before == "")
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // An entry fits a source block when the block carries every fixed value of the entry (machine-config 6).

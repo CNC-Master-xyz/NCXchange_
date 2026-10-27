@@ -53,6 +53,8 @@ name = "TAP"
 native = "G84"
 modal = true
 params = { DEPTH = "Z", CLEARANCE = "R", CYCLE_DWELL = "P", CYCLE_F = "F" }           # the spindle reverses at the bottom (fanuc lathe manual 4.3.2)
+# The rigid-tapping line "M29 S{rpm}" of the built-in TAP stands before G84 and G88 alike: M29 S before the tapping block makes either rigid (Fanuc
+# B-64484EN-1 p. 112, 4.5.1; D256, D361). A machine file overrides it with its builder's code.
 
 [[cycle]]
 name = "TAP"
@@ -60,12 +62,29 @@ for_axis = "X"
 native = "G88"
 modal = true
 params = { DEPTH = "X", CLEARANCE = "R", CYCLE_DWELL = "P", CYCLE_F = "F" }
+before = "M29 S{rpm}"                                                                # side face rigid tapping, as G84 (B-64484EN-1 p. 112)
+
+[[cycle]]
+name = "TAP_COMPENSATING"
+native = "G84"
+modal = true
+params = { DEPTH = "Z", CLEARANCE = "R", CYCLE_DWELL = "P", CYCLE_F = "F" }           # G84 without the rigid-tapping line: conventional mode (D359)
+
+[[cycle]]
+name = "TAP_COMPENSATING"
+for_axis = "X"
+native = "G88"
+modal = true
+params = { DEPTH = "X", CLEARANCE = "R", CYCLE_DWELL = "P", CYCLE_F = "F" }
+# D359: tapping in conventional mode, the spindle started and reversed by M03/M04/M05 with a compensating chuck (B-64484EN-1 p. 110), the floating tap of
+# every family; no before key, so the reader takes it for a G84 or G88 the rigid-tapping line does not reach.
 
 [[cycle]]
 name = "REAM"
 native = "G85"
 modal = true
 params = { DEPTH = "Z", CLEARANCE = "R", CYCLE_DWELL = "P", CYCLE_F = "F" }           # feed in, dwell, feed out at twice the cutting feedrate (4.3.3)
+dwell_native = "G85"                                                                 # a lathe G85 takes P itself: no G89 of the mill (D177)
 
 [[cycle]]
 name = "REAM"

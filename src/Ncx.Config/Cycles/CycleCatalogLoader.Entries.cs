@@ -11,7 +11,7 @@ public static partial class CycleCatalogLoader
     private static readonly string[] s_entryKeys =
     [
         "name", "native", "for_axis", "params", "absolute_from_surface", "modal", "contour", "signature",
-        "fixed", "before", "defaults", "title",
+        "fixed", "before", "defaults", "title", "dwell_native",
         "pre", "post", "requires", "restore",
     ];
 
@@ -100,6 +100,7 @@ public static partial class CycleCatalogLoader
             Fixed = fixedValues,
             Defaults = defaults,
             Title = table.Text("title"),
+            DwellNative = table.Text("dwell_native"),
             Before = table.Has("before") ? table.Template("before") ?? "" : null,
             Rule = rule,
             Family = controller,

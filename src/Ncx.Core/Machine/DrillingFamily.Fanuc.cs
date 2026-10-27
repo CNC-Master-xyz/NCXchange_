@@ -14,6 +14,11 @@ public static partial class DrillingFamily
     // (machine-config 6; fanuc 6; D256).
     private const string FanucTapBefore = "M29 S{rpm}";
 
+    // D177: on a machining centre only G82 and G84 (and G89, REAM with a dwell) carry the dwell P; G73, G81, G83, G85
+    // and G86 have none (Fanuc B-64484EN-2 p. 56, 61-84). A DRILL with a dwell is written as G82, a REAM with one as
+    // G89, which reads back as REAM with CYCLE_DWELL: the P of REAM is the P of its G89.
+    private const string FanucReamDwell = "G89";
+
     // The cycle block defines and calls at its own position, every following block with a position calls again, G80
     // cancels: every entry is modal (fanuc 6, 9.5).
     private static CycleCatalog FanucFamily()
@@ -23,22 +28,21 @@ public static partial class DrillingFamily
             Controller = Controller.Fanuc,
             Entries =
             [
-                FanucEntry("DRILL", "G81", peck: false),        // G81 G99 Z-21.732 R5. F565
-                FanucEntry("DRILL_DWELL", "G82", peck: false),  // G82 adds a dwell P
-                FanucEntry("PECK", "G83", peck: true),          // G83 pecks with Q, full retract
-                FanucEntry("CHIP_BREAK", "G73", peck: true),    // G73 chip-breaks
-                FanucEntry("TAP", "G84", peck: false, FanucTapBefore),
-                FanucEntry("REAM", "G85", peck: false),         // G85 G99 Z-20. R5. F420
-                FanucEntry("BORE", "G86", peck: false),         // G86 bores
+                FanucEntry("DRILL", "G81", peck: false, dwell: false),       // G81 G99 Z-21.732 R5. F565
+                FanucEntry("DRILL_DWELL", "G82", peck: false, dwell: true),  // G82 adds a dwell P
+                FanucEntry("PECK", "G83", peck: true, dwell: false),         // G83 pecks with Q, full retract
+                FanucEntry("CHIP_BREAK", "G73", peck: true, dwell: false),   // G73 chip-breaks
+                FanucEntry("TAP", "G84", peck: false, dwell: true) with { Before = FanucTapBefore },
+                FanucEntry("REAM", "G85", peck: false, dwell: true) with { DwellNative = FanucReamDwell },
+                FanucEntry("BORE", "G86", peck: false, dwell: false),        // G86 bores
             ],
         };
     }
 
-    // Z and R of the cycle block are the absolute DEPTH and CLEARANCE, Q the peck of G83 and G73, F and P the cycle's
-    // own feed and dwell, which never touch the modal F of the program (fanuc 6, controller-mapping 5, D29).
-    // TODO(question): fanuc 6 names the dwell P for G82 only; P stands on every entry as controller-mapping 5 writes
-    // "F and P on the G8x block", as cycles/fanuc.toml does (D177).
-    private static CycleEntry FanucEntry(string name, string native, bool peck, string? before = null)
+    // Z and R of the cycle block are the absolute DEPTH and CLEARANCE, Q the peck of G83 and G73, F the cycle's own
+    // feed and P its dwell where the code has one, which never touch the modal F of the program (fanuc 6,
+    // controller-mapping 5, D29, D177).
+    private static CycleEntry FanucEntry(string name, string native, bool peck, bool dwell)
     {
         var parameters = new Dictionary<string, string>
         {
@@ -50,7 +54,11 @@ public static partial class DrillingFamily
             parameters["PECK"] = "Q";
         }
 
-        parameters["CYCLE_DWELL"] = "P";
+        if (dwell)
+        {
+            parameters["CYCLE_DWELL"] = "P";
+        }
+
         parameters["CYCLE_F"] = "F";
         return new CycleEntry
         {
@@ -58,7 +66,6 @@ public static partial class DrillingFamily
             Native = native,
             Modal = true,
             Params = parameters,
-            Before = before,
             Family = Controller.Fanuc,
         };
     }

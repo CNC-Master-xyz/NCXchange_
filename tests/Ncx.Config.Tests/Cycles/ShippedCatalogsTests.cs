@@ -54,27 +54,74 @@ public sealed class ShippedCatalogsTests
 
     // P2-03 done when: an entry for G81, CYCLE81 and CYCL DEF 200 exists in the three catalogs and maps the same NCX
     // words, SURFACE, CLEARANCE, DEPTH, SAFE, CYCLE_F, CYCLE_DWELL, CYCLE_RETRACT, each by its parameters and the
-    // rules of its family (controller-mapping 5).
+    // rules of its family (controller-mapping 5), CYCLE_DWELL through G82 on the Fanuc mill (D177).
     [Fact]
     public void Drill_G81Cycle81AndCyclDef200_MapTheSameNcxWords()
     {
         CycleEntry fanuc = NativeEntry("fanuc.toml", Controller.Fanuc, "G81");
+        CycleEntry fanucDwell = NativeEntry("fanuc.toml", Controller.Fanuc, "G82");
         CycleEntry heidenhain = NativeEntry("heidenhain.toml", Controller.Heidenhain, "200");
         CycleEntry siemens = NativeEntry("siemens.toml", Controller.Siemens, "CYCLE81");
 
         Assert.Equal("DRILL", fanuc.Name);
         Assert.Equal("DRILL", heidenhain.Name);
         Assert.Equal("DRILL", siemens.Name);
+        var fanucWords = new List<string>(fanuc.Words) { "CYCLE_DWELL" };
+        Assert.Equal("P", fanucDwell.CycleDwell);
         foreach (string word in s_drillWords)
         {
-            Assert.Contains(word, fanuc.Words);
+            Assert.Contains(word, fanucWords);
             Assert.Contains(word, heidenhain.Words);
             Assert.Contains(word, siemens.Words);
         }
 
-        Assert.Equal(Sorted(fanuc.Words), Sorted(heidenhain.Words));
-        Assert.Equal(Sorted(fanuc.Words), Sorted(siemens.Words));
+        Assert.Equal(Sorted(fanucWords), Sorted(heidenhain.Words));
+        Assert.Equal(Sorted(fanucWords), Sorted(siemens.Words));
     }
+
+    // D177: on the Fanuc mill only G82, G84 and G89 carry the dwell P; REAM goes out as G89 with a dwell and G89
+    // reads back as REAM. The lathe catalog keeps P on every entry, its G85 taking P itself.
+    [Theory]
+    [InlineData("DRILL", null)]
+    [InlineData("DRILL_DWELL", "P")]
+    [InlineData("PECK", null)]
+    [InlineData("CHIP_BREAK", null)]
+    [InlineData("TAP", "P")]
+    [InlineData("REAM", "P")]
+    [InlineData("BORE", null)]
+    public void FanucMillDwell_OnlyG82G84AndTheG89OfReam_CarryP(string name, string? dwell)
+    {
+        CycleCatalog mill = Load("fanuc.toml", Controller.Fanuc);
+
+        Assert.Equal(dwell, mill.Find(name)!.CycleDwell);
+        Assert.Equal(dwell, DrillingFamily.Catalog(Controller.Fanuc).Find(name)!.CycleDwell);
+        Assert.Equal("REAM", mill.FindNative("G89")?.Name);
+        Assert.Equal("G89", mill.Find("REAM")!.DwellNative);
+        Assert.Equal("G85", Load("fanuc-lathe.toml", Controller.Fanuc).Find("REAM", "Z")!.DwellNative);
+    }
+
+    // D359: TAP_COMPENSATING is G84 without the rigid-tapping line on the Fanuc mill and lathe, with the word set of
+    // TAP; of the two entries on G84 the one whose before line reaches the block is TAP, the one with no before key
+    // the other.
+    [Theory]
+    [InlineData("fanuc.toml", "G84", null)]
+    [InlineData("fanuc-lathe.toml", "G84", null)]
+    [InlineData("fanuc-lathe.toml", "G88", "X")]
+    public void FanucG84_WithAndWithoutTheRigidTappingLine_IsTapOrTapCompensating(
+        string fileName, string native, string? axis)
+    {
+        CycleCatalog catalog = Load(fileName, Controller.Fanuc);
+
+        Assert.Equal("TAP", catalog.FindNativeByBeforeLine(native, lineReaches: true, axis)?.Name);
+        Assert.Equal("TAP_COMPENSATING", catalog.FindNativeByBeforeLine(native, lineReaches: false, axis)?.Name);
+        CycleEntry floating = catalog.FindNativeByBeforeLine(native, lineReaches: false, axis)!;
+        CycleEntry rigid = catalog.FindNativeByBeforeLine(native, lineReaches: true, axis)!;
+        Assert.Null(floating.Before);
+        Assert.Equal("M29 S{rpm}", rigid.Before);
+        Assert.Equal(Sorted(rigid.Words), Sorted(floating.Words));
+        Assert.Contains("PITCH", floating.Words);
+    }
+
 
     // P2-03: the Heidenhain entry converts Q203-relative depths to absolute through AbsoluteFromSurface. The values of
     // examples/sources/BOHREN.h (Q200=5, Q201=-21,732, Q203=0, Q204=5) give the R5. and Z-21.732 of BOHREN.fanuc.nc;
@@ -246,6 +293,8 @@ public sealed class ShippedCatalogsTests
             Assert.Equal(Pairs(inCode.Fixed), Pairs(inFile.Fixed));
             Assert.Equal(Pairs(inCode.Defaults), Pairs(inFile.Defaults));
             Assert.Equal(inCode.Title, inFile.Title);
+            Assert.Equal(inCode.DwellNative, inFile.DwellNative);
+            Assert.Equal(inCode.Before, inFile.Before);
             Assert.Equal(inCode.RuleWords, inFile.RuleWords);
         }
     }

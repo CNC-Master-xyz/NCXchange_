@@ -74,6 +74,13 @@ public sealed record CycleEntry
     public string? Before { get; init; }
 
     /// <summary>
+    /// dwell_native: the native cycle the entry is written as where the block carries a CYCLE_DWELL other than 0,
+    /// its own native having no dwell: the Fanuc mill G89 of REAM, whose G85 takes no P, so the P that params maps is
+    /// the P of the G89; the reader reads that native back as this entry (D177). Null for an entry without one.
+    /// </summary>
+    public string? DwellNative { get; init; }
+
+    /// <summary>
     /// fixed: native parameters the entry always writes with this value, which tell two entries of one native cycle
     /// apart, VARI = 1 for PECK on CYCLE83 (machine-config 6, controller-mapping 5).
     /// </summary>
@@ -285,6 +292,7 @@ public sealed record CycleEntry
             Defaults = entry.Writes("defaults") ? entry.Defaults : Defaults,
             Title = entry.Writes("title") ? entry.Title : Title,
             Before = entry.Writes("before") ? entry.Before : Before,
+            DwellNative = entry.Writes("dwell_native") ? entry.DwellNative : DwellNative,
             Rule = OverriddenRule(entry),
             Family = Family ?? entry.Family,
             WrittenKeys = writtenKeys,

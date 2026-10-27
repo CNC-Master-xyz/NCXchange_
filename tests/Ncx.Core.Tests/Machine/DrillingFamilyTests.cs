@@ -73,11 +73,13 @@ public sealed class DrillingFamilyTests
     }
 
     // Phase 2, P2-03: G81, CYCL DEF 200 and CYCLE81 carry the same NCX words, each with its parameters and the rules
-    // of its family (language 4.7, controller-mapping 5).
+    // of its family (language 4.7, controller-mapping 5), CYCLE_DWELL through G82 on the Fanuc mill (D177).
     [Fact]
     public void Catalog_DrillOfEveryFamily_CarriesTheSameNcxWords()
     {
         List<string> fanuc = SortedWords(Controller.Fanuc, "DRILL");
+        Assert.DoesNotContain("CYCLE_DWELL", fanuc);
+        fanuc = SortedWords(Controller.Fanuc, "DRILL_DWELL");
 
         foreach (string word in s_drillWords)
         {
