@@ -1,4 +1,5 @@
 using System.Globalization;
+using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.State;
 
 namespace Ncx.Compilers.Siemens;
@@ -48,26 +49,60 @@ internal static class SiemensFeedUnits
     }
 
     /// <summary>
-    /// The text of a feed as the control reads it: as written, or converted into the basic system where UNITS differs
-    /// from it and the machine has no G700/G710 (D292): a number converted and formatted for F, an expression
-    /// multiplied or divided by 25.4 in parentheses; null stays null.
+    /// The text of a feed word as the control reads it: as written, or converted into the basic system where UNITS
+    /// differs from it and the machine has no G700/G710 (D292): a number converted from its exact value and rounded
+    /// to the decimals of F, an expression multiplied or divided by 25.4 in parentheses.
     /// </summary>
     /// <param name="write">The block being written.</param>
-    /// <param name="feed">The text of the feed in the units of the program.</param>
-    public static string? InBaseUnits(SiemensBlock write, string? feed)
+    /// <param name="value">The value of the feed in the units of the program.</param>
+    public static string? Text(SiemensBlock write, Value value)
     {
-        if (feed is null || Differs(write) is not true || write.Machine.Machine.ExtendedUnits)
+        if (!Converts(write))
         {
-            return feed;
+            return SiemensExpressions.ValueText(write, value, "F");
         }
 
-        bool toMm = write.After.Frame.Units == Units.Inch;
-        if (decimal.TryParse(feed, NumberStyles.Float, CultureInfo.InvariantCulture, out decimal number))
+        decimal? number = value switch
         {
-            return write.Format("F", toMm ? number * MmPerInch : number / MmPerInch);
+            IntegerValue integer => integer.Number,
+            DecimalValue literal => literal.Number,
+            _ => null,
+        };
+        if (number is decimal exact)
+        {
+            return Text(write, exact);
         }
 
-        return "(" + feed + ")" + (toMm ? "*" : "/") + MmPerInch.ToString(CultureInfo.InvariantCulture);
+        return SiemensExpressions.ValueText(write, value, "F") is string text
+            ? "(" + text + ")" + (ToMm(write) ? "*" : "/") + MmPerInch.ToString(CultureInfo.InvariantCulture)
+            : null;
+    }
+
+    /// <summary>
+    /// The text of a known feed of the virtual machine, converted as <see cref="Text(SiemensBlock, Value)"/> does.
+    /// </summary>
+    public static string Text(SiemensBlock write, decimal feed)
+    {
+        if (!Converts(write))
+        {
+            return write.Format("F", feed);
+        }
+
+        return write.FormatComputed("F", ToMm(write) ? feed * MmPerInch : feed / MmPerInch);
+    }
+
+    /// <summary>
+    /// True where the feeds are written converted: UNITS differs from the basic system and G700/G710 are not there.
+    /// </summary>
+    public static bool Converts(SiemensBlock write)
+    {
+        return Differs(write) is true && !write.Machine.Machine.ExtendedUnits;
+    }
+
+    // True where the program's units are inches and the basic system millimetres.
+    private static bool ToMm(SiemensBlock write)
+    {
+        return write.After.Frame.Units == Units.Inch;
     }
 
     // True where the UNITS of the block after it differ from the basic system of the machine, null where either is not

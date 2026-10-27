@@ -323,15 +323,14 @@ internal static class SiemensMotion
         if (write.Block.Find("F") is Word word)
         {
             write.Written(word);
-            feed = SiemensExpressions.ValueText(write, word.Value, "F");
+            feed = SiemensFeedUnits.Text(write, word.Value);
             expression = word.Value is ExprValue;
         }
         else if (write.After.Motion.Feed is decimal known)
         {
-            feed = write.Format("F", known);
+            feed = SiemensFeedUnits.Text(write, known);
         }
 
-        feed = SiemensFeedUnits.InBaseUnits(write, feed);
         if (feed is not null && write.Target.Changes(Feed, feed))
         {
             write.Main.Word(SiemensLine.FeedRank, SiemensAxes.Address("F", feed, "", expression));

@@ -70,6 +70,34 @@ public sealed class SiemensUnitsTests
             TextOf(result));
     }
 
+    // D292: the feed is converted from its exact value, not from the text rounded to the decimals of F: the
+    // F=0.393701 the reader writes for a source F10 under G70 comes back as F10, with no CMP020.
+    [Fact]
+    public void Feed_ConvertedFromTheExactValue_RoundTripsTheSourceFeed()
+    {
+        CompileResult result = Run(Program(InchHeader, "LINE X=1 F=0.393701"), Mill());
+
+        Assert.Equal(["CMP551"], CompilerCodes(result));
+        Assert.Contains("G1 X1 F10", LinesOf(TextOf(result)));
+    }
+
+    // D292: a positional cycle feed is a feed too: under G70 on the metric mill FFR of CYCLE85, S_FB of CYCLE830 and
+    // FFD of SLOT1 are written in mm/min, CYCLE_F=4 inch/min as 101.6 (SW4.92 p.115, p.164-166).
+    [Theory]
+    [InlineData("CYCLE=REAM SURFACE=0 CLEARANCE=0.1 DEPTH=-1 CYCLE_F=4", "MCALL CYCLE85(0.1,0,0.1,-1,,,101.6)")]
+    [InlineData("CYCLE=DEEP_HOLE SURFACE=0 CLEARANCE=0.1 DEPTH=-1 SAFE=1 CYCLE_RETRACT=SAFE CYCLE_F=4",
+        "CYCLE830(1,0,0.1,-1,,,,,,,,,,,,,,101.6,")]
+    [InlineData("CYCLE=SLOT SURFACE=0 CLEARANCE=0.1 DEPTH=-1 SAFE=1 CYCLE_RETRACT=SAFE PECK=0.1 CYCLE_F=4",
+        ",,,,101.6,,0.1,")]
+    public void PositionalCycleFeed_UnderG70OnAMetricMill_IsInTheBasicSystem(string cycle, string expected)
+    {
+        CompileResult result = Run(Program(InchHeader, "RAPID X=0 Y=0 Z=1", cycle, "CYCLE_CALL X=1 Y=1",
+            "CYCLE=OFF"), Mill());
+
+        Assert.Contains(expected, TextOf(result), StringComparison.Ordinal);
+        Assert.DoesNotContain(",4,", TextOf(result), StringComparison.Ordinal);
+    }
+
     // The 840D sl mill with G700/G710 available (MD10260 = 1).
     private static MachineConfig Extended()
     {
