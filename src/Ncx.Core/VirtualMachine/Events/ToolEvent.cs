@@ -32,13 +32,14 @@ public sealed record ToolEvent : VmEvent
     public decimal? Rpm { get; init; }
 
     /// <summary>
-    /// The feed distance under the tool, the known lengths of the MOTIONs other than RAPID while the tool was in the
+    /// The feed distance under the tool, the known lengths of the LINE and ARC motions while the tool was in the
     /// spindle of the holder called last; 0 at TOOL_BEGIN (D235).
     /// </summary>
     public decimal FeedDistance { get; init; }
 
     /// <summary>
-    /// The rapid distance under the tool, the known lengths of its RAPID motions; 0 at TOOL_BEGIN (D235).
+    /// The rapid distance under the tool, the known lengths of its RAPID, HOME and RETRACT motions; 0 at TOOL_BEGIN
+    /// (D235).
     /// </summary>
     public decimal RapidDistance { get; init; }
 

@@ -9,12 +9,12 @@ namespace Ncx.Core.VirtualMachine.Events;
 internal sealed class RunStatistics
 {
     /// <summary>
-    /// The sum of the known lengths of every MOTION other than RAPID.
+    /// The sum of the known lengths of the LINE and ARC motions, the plunges of an expanded cycle among them.
     /// </summary>
     public decimal FeedDistance { get; private set; }
 
     /// <summary>
-    /// The sum of the known lengths of the RAPID motions.
+    /// The sum of the known lengths of the RAPID, HOME and RETRACT motions.
     /// </summary>
     public decimal RapidDistance { get; private set; }
 
@@ -41,8 +41,9 @@ internal sealed class RunStatistics
             {
                 UnknownLengthMotions++;
             }
-            else if (motion.Verb == State.Verb.Rapid)
+            else if (motion.Verb is not (State.Verb.Line or State.Verb.Arc))
             {
+                // RAPID, HOME and RETRACT are rapid motions on the controls, as the tool list counts them (D235).
                 RapidDistance += length;
             }
             else

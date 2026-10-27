@@ -30,14 +30,14 @@ public sealed record ProgramEvent : VmEvent
     public int Blocks { get; init; }
 
     /// <summary>
-    /// Run statistics at PROGRAM_END: the known lengths of the MOTIONs of those blocks other than RAPID; 0 at
+    /// Run statistics at PROGRAM_END: the known lengths of the LINE and ARC motions of those blocks; 0 at
     /// PROGRAM_BEGIN (D235).
     /// </summary>
     public decimal FeedDistance { get; init; }
 
     /// <summary>
-    /// Run statistics at PROGRAM_END: the known lengths of the RAPID motions of those blocks; 0 at PROGRAM_BEGIN
-    /// (D235).
+    /// Run statistics at PROGRAM_END: the known lengths of the RAPID, HOME and RETRACT motions of those blocks; 0 at
+    /// PROGRAM_BEGIN (D235).
     /// </summary>
     public decimal RapidDistance { get; init; }
 

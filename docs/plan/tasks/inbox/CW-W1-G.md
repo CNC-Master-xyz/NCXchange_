@@ -38,10 +38,11 @@ Gaps closed 2026-10-27 (delegated):
 
 - `surface_clearance` follows its neighbours: millimetres, zero or greater, a negative value CFG005 (D158).
 - A Heidenhain machine without `chip_break_lift` takes 0 (the lift is the cycle's Q256, which NCX does not carry), as does a run without a machine family (D357).
-- A Siemens machine without `peck_clearance` takes 0: `_DIS1 = 0` lets the cycle compute the distance (840D sl PGH SW4.92, connector p.1088), which NCX cannot know (D357).
+- Siemens peck_clearance absent → the control's automatic _DIS1: 0.6 mm up to a drilling depth of 30 mm, otherwise depth/50, at most 7 mm (840D sl/828D ISO-Fräsen 2012, connector p.93-94; ISO-Drehen 2012, p.104; D357).
 - The Heidenhain default re-entry is Q200, the gap between SURFACE and CLEARANCE, and 0 without SURFACE (D357).
 - A run without a machine family takes CLEARANCE for REAM (D378).
-- The CHIP_BREAK lift is a RAPID motion; a lift of 0 raises no motion. The PECK re-entry is raised also when `peck_clearance` is 0 (D190).
+- The CHIP_BREAK lift is a RAPID motion; a lift of 0 raises no motion. The PECK re-entry is raised also when `peck_clearance` is 0. Both stop at CLEARANCE when larger than the gap left (D190).
+- D235: HOME and RETRACT count as rapidDistance with RAPID, as the tool list counts them; LINE and ARC as feedDistance.
 - D136: the forgetting after the pass raises no STATE_CHANGE; the chain of Before and After restarts from the state with the axes unknown, so the caller's next block starts from it.
 - D202: TOLERANCE:ROTARY and TOLERANCE_MODE come back with TOLERANCE and are not state keys of their own (VM681). TOLERANCE=OFF is restored alone.
 - D235: the payload text is `blocks n, feedDistance f, rapidDistance r, unknownLengthMotions u, distance d` on both TOOL_END and PROGRAM_END.

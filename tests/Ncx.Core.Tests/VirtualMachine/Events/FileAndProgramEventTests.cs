@@ -132,4 +132,17 @@ public sealed class FileAndProgramEventTests
 
         return lines;
     }
+
+    // D235: HOME and RETRACT are rapid motions on the controls and count as rapidDistance, as RAPID does.
+    [Fact]
+    public void ProgramEnd_HomeMotion_CountsAsRapidDistance()
+    {
+        FakeListener listener = EventRuns.Run(
+            VmHarness.File("UNITS=MM", "HOME X Z", "HOME X POINT=2", "PROGRAM=END"), VmMachines.MillTurn());
+
+        ProgramEvent end = listener.Of<ProgramEvent>()[^1];
+        Assert.Equal(0m, end.FeedDistance);
+        Assert.True(end.RapidDistance > 0m);
+        Assert.Equal(end.RapidDistance, end.Distance);
+    }
 }

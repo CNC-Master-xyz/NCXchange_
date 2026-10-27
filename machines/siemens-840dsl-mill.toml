@@ -137,7 +137,7 @@ mode = { FINISH = 1, ROUGH = 3 }   # value of {mode}: 1 finish, 3 rough (siemens
 
 [cycles]
 catalog = "siemens.toml"           # the 840D sl cycle catalog shipped with NCXchange (siemens 7)
-chip_break_lift = 1.0              # _VRT of CYCLE83, the lift of the chip break, 1 mm by default (840D sl PGH SW4.92, connector p.1087; D357); peck_clearance left out: _DIS1 = 0 lets the cycle compute it (p.1088)
+chip_break_lift = 1.0              # _VRT of CYCLE83, the lift of the chip break, 1 mm by default (840D sl PGH SW4.92, connector p.1087; D357); peck_clearance left out: the automatic _DIS1, 0.6 mm up to 30 mm depth, else depth/50, at most 7 mm (p.1088; ISO-Fräsen 2012 p.93-94)
 
 [variables]
 unassigned = "error"

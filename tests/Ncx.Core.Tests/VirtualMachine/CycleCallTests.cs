@@ -274,6 +274,47 @@ public sealed class CycleCallTests
             Describe(vm.Vm.LastCycleMotions));
     }
 
+    // D190, D357: a CHIP_BREAK lift and a PECK re-entry larger than the gap left end at CLEARANCE.
+    [Fact]
+    public void CycleCall_LiftAndReentryLargerThanTheGap_StopAtClearance()
+    {
+        VmHarness chip = Expanding(Controller.Fanuc, new CyclesConfig { ChipBreakLift = 5m }).Execute(
+            "RAPID X=0 Y=0 Z=10", "CYCLE=CHIP_BREAK SURFACE=0 CLEARANCE=2 DEPTH=-3 PECK=1 CYCLE_F=100", "CYCLE_CALL");
+        VmHarness peck = Expanding(Controller.Fanuc, new CyclesConfig { PeckClearance = 10m }).Execute(
+            "RAPID X=0 Y=0 Z=10", "CYCLE=PECK SURFACE=0 CLEARANCE=2 DEPTH=-2 PECK=1 CYCLE_F=100", "CYCLE_CALL");
+
+        Assert.Equal(
+            [
+                "RAPID Z=2", "LINE Z=-1 F=100", "RAPID Z=2", "LINE Z=-2 F=100", "RAPID Z=2", "LINE Z=-3 F=100",
+                "RAPID Z=2",
+            ],
+            Describe(chip.Vm.LastCycleMotions));
+        Assert.Equal(
+            ["RAPID Z=2", "LINE Z=-1 F=100", "RAPID Z=2", "RAPID Z=2", "LINE Z=-2 F=100", "RAPID Z=2"],
+            Describe(peck.Vm.LastCycleMotions));
+    }
+
+    // D357: on Siemens without peck_clearance the re-entry is the control's automatic _DIS1: 0.6 mm up to a drilling
+    // depth of 30 mm, otherwise the depth / 50, at most 7 mm.
+    [Theory]
+    [InlineData("-20", "10", "-9.4")]
+    [InlineData("-40", "20", "-19.2")]
+    [InlineData("-400", "200", "-193")]
+    public void CycleCall_PeckOnSiemensWithoutKey_ReentersAtTheAutomaticDistance(
+        string depth, string peck, string reentry)
+    {
+        VmHarness vm = Expanding(Controller.Siemens, new CyclesConfig()).Execute(
+            "RAPID X=0 Y=0 Z=10", $"CYCLE=PECK SURFACE=0 CLEARANCE=2 DEPTH={depth} PECK={peck} CYCLE_F=100",
+            "CYCLE_CALL");
+
+        Assert.Equal(
+            [
+                "RAPID Z=2", $"LINE Z=-{peck} F=100", "RAPID Z=2", $"RAPID Z={reentry}", $"LINE Z={depth} F=100",
+                "RAPID Z=2",
+            ],
+            Describe(vm.Vm.LastCycleMotions));
+    }
+
     // D357: the keys are millimetres whatever the units; under UNITS=INCH the lift is converted.
     [Fact]
     public void CycleCall_ChipBreakLiftUnderInch_IsConvertedFromMillimetres()

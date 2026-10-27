@@ -38,7 +38,10 @@ internal sealed record CycleDistances
     /// <param name="context">The CYCLE_CALL block.</param>
     /// <param name="clearance">CLEARANCE along the drilling axis.</param>
     /// <param name="surface">SURFACE along the drilling axis; unknown when not written.</param>
-    public static CycleDistances Of(BlockContext context, AxisPosition clearance, AxisPosition surface)
+    /// <param name="start">The plane the steps of PECK count from, SURFACE or CLEARANCE (D355).</param>
+    /// <param name="depth">DEPTH along the drilling axis.</param>
+    public static CycleDistances Of(BlockContext context, AxisPosition clearance, AxisPosition surface,
+        AxisPosition start, AxisPosition depth)
     {
         Controller? family = context.Machine.Machine.Controller;
         CyclesConfig cycles = context.Machine.Cycles ?? new CyclesConfig();
@@ -47,7 +50,7 @@ internal sealed record CycleDistances
         {
             ChipBreakLift = InProgramUnits(cycles.ChipBreakLift, inch) ?? DefaultChipBreakLift(family, inch),
             PeckClearance = InProgramUnits(cycles.PeckClearance, inch)
-                ?? DefaultPeckClearance(family, clearance, surface),
+                ?? DefaultPeckClearance(family, clearance, surface, start, depth, inch),
             ReamFeedsOutToSafe = (cycles.ReamFeedOut ?? DefaultReamFeedOut(family)) == ReamFeedOut.Safe,
         };
     }
@@ -68,17 +71,32 @@ internal sealed record CycleDistances
 
     // D357: on Heidenhain the re-entry is the cycle's Q200, the safety clearance between SURFACE and CLEARANCE
     // (iTNC 530 Zyklen 670388-12 p.79: back at FMAX to the safety clearance above the previous infeed depth), 0
-    // without SURFACE; on Fanuc 0. Gap closed 2026-10-27 (delegated): on Siemens _DIS1 = 0 lets the cycle compute the
-    // distance itself (840D sl PGH SW4.92, connector p.1088), which NCX cannot know, so the VM takes 0 there too, and
-    // so does a run without a machine family.
-    private static decimal DefaultPeckClearance(Controller? family, AxisPosition clearance, AxisPosition surface)
+    // without SURFACE; on Fanuc 0, and so in a run without a machine family. Gap closed 2026-10-27 (delegated):
+    // Siemens peck_clearance absent -> the control's automatic _DIS1 (SiemensAutomaticDistance).
+    private static decimal DefaultPeckClearance(Controller? family, AxisPosition clearance, AxisPosition surface,
+        AxisPosition start, AxisPosition depth, bool inch)
     {
         if (family == Controller.Heidenhain && clearance.Known && surface.Known)
         {
             return Math.Abs(clearance.Value - surface.Value);
         }
 
+        if (family == Controller.Siemens && start.Known && depth.Known)
+        {
+            return SiemensAutomaticDistance(Math.Abs(depth.Value - start.Value), inch);
+        }
+
         return 0m;
+    }
+
+    // _DIS1 = 0 lets the cycle compute the advance distance itself (840D sl PGH SW4.92, connector p.1088): 0.6 mm for
+    // a drilling depth up to 30 mm, otherwise the depth / 50, at most 7 mm (840D sl/828D Programmierhandbuch
+    // ISO-Fräsen 2012, connector p.93-94; ISO-Drehen 2012, connector p.104). In the units of the program.
+    private static decimal SiemensAutomaticDistance(decimal drillingDepth, bool inch)
+    {
+        decimal millimetres = inch ? drillingDepth * MillimetresPerInch : drillingDepth;
+        decimal distance = millimetres <= 30m ? 0.6m : Math.Min(millimetres / 50m, 7m);
+        return inch ? distance / MillimetresPerInch : distance;
     }
 
     // D378: CLEARANCE on Fanuc and Heidenhain (G85 back to point R at feed, 30i-B B-64484EN-2 p.56-57, p.76; cycle

@@ -151,7 +151,7 @@ internal static class CycleRules
         motions.Add(Rapid(drillingAxis, clearance));
         AxisPosition surface = PlaneAt(state, SurfaceKey, drillingAxis, frame);
         AxisPosition start = ParameterOf(cycle, SurfaceKey) is null ? clearance : surface;
-        CycleDistances distances = CycleDistances.Of(context, clearance, surface);
+        CycleDistances distances = CycleDistances.Of(context, clearance, surface, start, depth);
         foreach (AxisPosition peck in Pecks(cycle, start, depth))
         {
             motions.Add(Feed(drillingAxis, peck, feed));
@@ -203,7 +203,8 @@ internal static class CycleRules
     }
 
     // A position a distance from a plane toward another along the drilling axis: the lift of CHIP_BREAK above the
-    // depth reached, the end of the re-entry of PECK. Unknown when either plane is.
+    // depth reached, the end of the re-entry of PECK. It never passes the plane it goes toward, CLEARANCE, so a lift
+    // larger than the gap left ends there. Unknown when either plane is.
     private static AxisPosition Toward(AxisPosition plane, AxisPosition toward, decimal distance)
     {
         if (!plane.Known || !toward.Known)
@@ -211,8 +212,9 @@ internal static class CycleRules
             return AxisPosition.Unknown;
         }
 
+        decimal gap = Math.Abs(toward.Value - plane.Value);
         decimal direction = toward.Value < plane.Value ? -1m : 1m;
-        return plane with { Value = plane.Value + (direction * distance) };
+        return plane with { Value = plane.Value + (direction * Math.Min(distance, gap)) };
     }
 
     // D355: the depths a PECK greater than 0 reaches before DEPTH, in steps of PECK from SURFACE, or from CLEARANCE
