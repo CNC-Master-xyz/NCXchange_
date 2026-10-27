@@ -39,32 +39,70 @@ public static class FunctionChoice
             }
         }
 
-        // Nothing remains: the first state in file order (D155).
+        // Nothing remains: the first state of a function table in file order, or the [workpiece] selection where no
+        // table writes the code (D155).
         if (remaining.Count == 0)
         {
-            return matches.Count == 0 ? [] : [matches[0]];
+            return FirstTableState(matches) is FunctionMatch first ? [first] : matches.Count == 0 ? [] : [matches[0]];
         }
 
-        // Two resources of one word would be switched on, M3 of MAIN and TOOL on the Mori Seiki: the first state in
-        // file order, with a WARNING that names the others (D155).
-        var others = new List<string>();
-        for (int index = 1; index < remaining.Count; index++)
+        // Two resources of one word would be switched on, M3 of MAIN and TOOL on the Mori Seiki: of each such group of
+        // table states the first in file order is written, with a WARNING that names the others; every state that
+        // conflicts with none, the [workpiece] selection among them, is written as well (D155).
+        var chosen = new List<FunctionMatch>();
+        var dropped = new Dictionary<FunctionMatch, List<string>>(ReferenceEqualityComparer.Instance);
+        foreach (FunctionMatch match in remaining)
         {
-            if (SwitchesOnAnother(remaining[0], remaining[index]))
+            FunctionMatch? kept = null;
+            foreach (FunctionMatch earlier in chosen)
             {
-                others.Add(remaining[index].Key);
+                if (SwitchesOnAnother(earlier, match))
+                {
+                    kept = earlier;
+                    break;
+                }
+            }
+
+            if (kept is null)
+            {
+                chosen.Add(match);
+                continue;
+            }
+
+            if (!dropped.TryGetValue(kept, out List<string>? others))
+            {
+                others = [];
+                dropped.Add(kept, others);
+            }
+
+            others.Add(match.Key);
+        }
+
+        foreach (FunctionMatch kept in chosen)
+        {
+            if (dropped.TryGetValue(kept, out List<string>? others))
+            {
+                diagnostics.Warning(line, DiagnosticCodes.FunctionCodeOfSeveralResources,
+                    $"{nativeCode} switches on more than one resource of the machine; the reader writes {kept.Key} and "
+                    + $"not {string.Join(", ", others)} (machine-config 5, D155).");
             }
         }
 
-        if (others.Count == 0)
+        return chosen;
+    }
+
+    // The first state of a function table in file order; null when only [workpiece] selections write the code.
+    private static FunctionMatch? FirstTableState(IReadOnlyList<FunctionMatch> matches)
+    {
+        foreach (FunctionMatch match in matches)
         {
-            return remaining;
+            if (match.Table is not null)
+            {
+                return match;
+            }
         }
 
-        diagnostics.Warning(line, DiagnosticCodes.FunctionCodeOfSeveralResources,
-            $"{nativeCode} switches on more than one resource of the machine; the reader writes {remaining[0].Key} and "
-            + $"not {string.Join(", ", others)} (machine-config 5, D155).");
-        return [remaining[0]];
+        return null;
     }
 
     // A state the source state rules out (D155): bound to another channel (D56), a spindle word of a role the source

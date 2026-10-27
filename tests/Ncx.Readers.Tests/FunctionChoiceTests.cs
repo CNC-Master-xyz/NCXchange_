@@ -107,6 +107,51 @@ public sealed class FunctionChoiceTests
         Assert.Contains("SPINDLE:TOOL=CW", warning.Message, StringComparison.Ordinal);
     }
 
+    // D155: a [workpiece] code that also switches on two spindles: the selection is written, of the two spindle states
+    // the first in file order, and RDR020 names the other.
+    [Fact]
+    public void Choose_WorkpieceSelectionAndTwoSpindlesSwitchedOn_KeepsTheSelectionAndReportsTheConflict()
+    {
+        FunctionMatch[] matches = [Workpiece("MAIN"), Match("SPINDLE:MAIN", "CW"), Match("SPINDLE:TOOL", "CW")];
+
+        IReadOnlyList<FunctionMatch> chosen = Choose(matches, new FunctionContext(), out Diagnostics diagnostics);
+
+        Assert.Equal(["WORKPIECE=MAIN", "SPINDLE:MAIN=CW"], Keys(chosen));
+        Diagnostic warning = Assert.Single(diagnostics.Items);
+        Assert.Equal(DiagnosticCodes.FunctionCodeOfSeveralResources, warning.Code);
+        Assert.Contains("not SPINDLE:TOOL=CW", warning.Message, StringComparison.Ordinal);
+    }
+
+    // D155: a conflict between two resources of one word drops only the later of them; a state of another word that
+    // conflicts with nothing is written.
+    [Fact]
+    public void Choose_ConflictBesideAnotherWord_KeepsTheStateThatConflictsWithNothing()
+    {
+        FunctionMatch[] matches =
+            [Match("SPINDLE:MAIN", "CW"), Match("SPINDLE:TOOL", "CW"), Match("COOLANT:STANDARD", "ON")];
+
+        IReadOnlyList<FunctionMatch> chosen = Choose(matches, new FunctionContext(), out Diagnostics diagnostics);
+
+        Assert.Equal(["SPINDLE:MAIN=CW", "COOLANT:STANDARD=ON"], Keys(chosen));
+        Assert.Single(diagnostics.Items);
+    }
+
+    // D155: when nothing remains the fallback is the first state of a function table, not the [workpiece] selection
+    // that stands first.
+    [Fact]
+    public void Choose_NothingRemainsBehindAWorkpieceSelection_IsTheFirstTableState()
+    {
+        FunctionMatch[] matches = [Workpiece("MAIN"), Match("SPINDLE_MODE:MAIN", "SPINDLE")];
+        var context = new FunctionContext
+        {
+            Holding = new Dictionary<string, string> { ["WORKPIECE"] = "MAIN", ["SPINDLE_MODE:MAIN"] = "SPINDLE" },
+        };
+
+        IReadOnlyList<FunctionMatch> chosen = Choose(matches, context, out _);
+
+        Assert.Equal(["SPINDLE_MODE:MAIN=SPINDLE"], Keys(chosen));
+    }
+
     // D155: the [workpiece] selection comes first and is written with the state of its spindle mode, the Doosan M34
     // that gives WORKPIECE=MAIN and SPINDLE_MODE:MAIN=SPINDLE when the C axis was on.
     [Fact]
@@ -137,6 +182,12 @@ public sealed class FunctionChoiceTests
     {
         diagnostics = new Diagnostics(Source);
         return FunctionChoice.Choose(matches, context, 12, "M3", diagnostics);
+    }
+
+    // A [workpiece] selection, which has no function table.
+    private static FunctionMatch Workpiece(string role)
+    {
+        return new FunctionMatch { Word = "WORKPIECE", State = role, Values = new TemplateValues() };
     }
 
     // A state of a function table, bound to a channel when one is given.

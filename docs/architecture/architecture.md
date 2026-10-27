@@ -727,7 +727,7 @@ classDiagram
         +decimal BlockTime
         +PathMode PathMode
         +decimal CornerSpeed
-        +bool RapidExactStop
+        +bool? RapidExactStop
     }
     class ResourceDef {
         +string Id

@@ -87,25 +87,10 @@ internal static partial class SiemensCompile
         string transform = millTurn.Substring(start, end - start);
         return Variant(MillFile, text =>
         {
-            string mill = WithoutTable(text, "[transform]");
-            return mill.Insert(mill.IndexOf("\n[positions]", StringComparison.Ordinal), RotaryTable) + transform;
+            string mill = text.Insert(text.IndexOf("\n[positions]", StringComparison.Ordinal), RotaryTable);
+            return MachineText.With(mill, transform);
         });
     }
-
-    // The text of a machine file without one of its tables, from its header to the next table: a test that adds its
-    // own [transform] replaces the path mode table of the file (D349), since TOML defines a table once.
-    private static string WithoutTable(string toml, string header)
-    {
-        int start = toml.IndexOf("\n" + header, StringComparison.Ordinal);
-        if (start < 0)
-        {
-            return toml;
-        }
-
-        int end = toml.IndexOf("\n[", start + 1, StringComparison.Ordinal);
-        return toml.Remove(start, (end < 0 ? toml.Length : end) - start);
-    }
-
     /// <summary>
     /// A machine file of the repository with a change of its text, with the Siemens cycle catalog.
     /// </summary>

@@ -1,3 +1,4 @@
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 
 namespace Ncx.Core.Tests.VirtualMachine.Validation;
@@ -77,6 +78,32 @@ public sealed class ResourceValidationTests
     public void Mfunc_APartOfALongerCode_IsNoMatch()
     {
         VmHarness.Run(VmHarness.File("MFUNC=5", "PROGRAM=END"), VmMachines.MillTurn()).AssertNoDiagnostics();
+    }
+
+    // Language 4.6, VM 5: the templates of the code wave count too: ON_ROTARY (D151), the named tool change (D172),
+    // the path mode (D349) and the stock (D351).
+    [Theory]
+    [InlineData("230", "[tolerance] ON_ROTARY")]
+    [InlineData("231", "[tool_change] change_named")]
+    [InlineData("232", "[tool_change] preload_named")]
+    [InlineData("233", "[transform] PATH_MODE_EXACT_STOP")]
+    [InlineData("234", "[transform] PATH_MODE_CONTINUOUS")]
+    [InlineData("235", "[stock] BOX")]
+    [InlineData("236", "[stock] CYLINDER")]
+    public void Mfunc_ANumberOfTheCodeWaveTemplates_Warns(string number, string table)
+    {
+        MachineConfig machine = VmMachines.MillTurn() with
+        {
+            Tolerance = new ToleranceTable { OnRotary = "M230" },
+            ToolChange = new ToolChangeConfig { ChangeNamed = "T=\"{name}\" M231", PreloadNamed = "M232" },
+            Transform = new TransformTable { PathModeExactStop = "M233", PathModeContinuous = "M234" },
+            Stock = new StockTable { Box = "M235", Cylinder = "M236" },
+        };
+
+        Diagnostic warning = RuleAssert.Only(VmHarness.Run(VmHarness.File("MFUNC=" + number, "PROGRAM=END"), machine),
+            DiagnosticCodes.MfuncNamedByMachine);
+
+        Assert.Contains(table, warning.Message, StringComparison.Ordinal);
     }
 
     // VM 5: a WORKPIECE change while the old holder's spindle runs is a WARNING.
