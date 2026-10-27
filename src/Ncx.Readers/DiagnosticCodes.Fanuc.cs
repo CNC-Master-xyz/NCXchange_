@@ -52,4 +52,10 @@ public static partial class DiagnosticCodes
     /// not a channel of the machine file; CHANNEL=n is written as given (D223; controller-mapping 7).
     /// </summary>
     public const string FanucChannelNotOfTheMachine = "RDR107";
+
+    /// <summary>
+    /// RDR109, a WARNING: a G2 or G3 carries both its radius R and its centre I J K; the control takes R and ignores
+    /// I J K, and the reader writes the radius form (D186; controllers fanuc.md 4).
+    /// </summary>
+    public const string FanucArcRadiusOverCentre = "RDR109";
 }

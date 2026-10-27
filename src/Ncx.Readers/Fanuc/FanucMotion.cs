@@ -221,7 +221,9 @@ internal static class FanucMotion
         // 3; controller-mapping 1, FRAME=MACHINE; D242).
         string? motion = block.MachineFrame ? "G0" : block.State.ActiveCode(FanucModalGroups.Motion);
         bool arc = motion is "G2" or "G3";
-        bool vector = block.Fanuc.VectorTcpm && motion == "G1";
+
+        // D185: under G43.5 the I J K of G0, G1, G2 and G3 are the tool vector at the end point (controller-mapping 2).
+        bool vector = block.Fanuc.VectorTcpm && motion is null or "G0" or "G1" or "G2" or "G3";
         List<FanucAxisWord> axes = FanucAxes.Unread(block);
         bool centreOnly = (arc || vector) && (block.Find("I") ?? block.Find("J") ?? block.Find("K")) is not null;
         if (axes.Count == 0 && !centreOnly)
@@ -283,7 +285,11 @@ internal static class FanucMotion
             }
         }
 
-        if (arc)
+        if (arc && vector)
+        {
+            ReadVectorArc(block, main);
+        }
+        else if (arc)
         {
             ReadArc(block, main, start, incremental);
         }
@@ -377,13 +383,18 @@ internal static class FanucMotion
             return;
         }
 
+        // D186: with both, R takes precedence on the control and I J K are ignored (controllers fanuc.md 4), so the
+        // reader writes the radius form with the WARNING RDR109; NCX keeps VM223, an ARC with CENTER and R is an ERROR.
         if (radius is not null)
         {
             if (firstWord is not null || secondWord is not null)
             {
-                block.Draft.KeepAsRaw("an arc carries its centre or its radius, not both");
+                block.Diagnostics.Warning(block.Line, DiagnosticCodes.FanucArcRadiusOverCentre,
+                    "The arc carries its radius R and its centre I J K; the control takes R and ignores I J K, and so "
+                    + "does the reader (D186; controllers fanuc.md 4).");
             }
-            else if (FanucMacro.ValueOf(block, radius) is Value value)
+
+            if (FanucMacro.ValueOf(block, radius) is Value value)
             {
                 main.Add("R", value);
             }
@@ -447,6 +458,26 @@ internal static class FanucMotion
         if (x is not null && y is not null && z is not null)
         {
             main.Add("TX", x).Add("TY", y).Add("TZ", z);
+        }
+    }
+
+    // D185: under G43.5 the I J K of G2 and G3 are the tool vector, documented for arcs of TCP type 2, so the arc
+    // takes its radius form ARC R with TX TY TZ; without R it has no centre NCX can write and stays RAW
+    // (controller-mapping 2; language 4.3).
+    private static void ReadVectorArc(FanucBlock block, DraftBlock main)
+    {
+        SourceWord? radius = block.Take("R");
+        if (radius is null)
+        {
+            block.Draft.KeepAsRaw("under G43.5 the I J K of an arc are its tool vector, and the arc names no radius R "
+                + "(D185)");
+            return;
+        }
+
+        if (FanucMacro.ValueOf(block, radius) is Value value)
+        {
+            main.Add("R", value);
+            ReadToolVector(block, main);
         }
     }
 

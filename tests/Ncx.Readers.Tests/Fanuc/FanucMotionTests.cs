@@ -1,3 +1,5 @@
+using Ncx.Core.Model;
+using Ncx.Core.Writing;
 using static Ncx.Readers.Tests.Fanuc.FanucRead;
 
 namespace Ncx.Readers.Tests.Fanuc;
@@ -28,6 +30,32 @@ public sealed class FanucMotionTests
     public void G2_WithR_IsArcCwWithTheRadius()
     {
         Assert.Equal(Lines("ARC=CW X=10 Y=0 R=5 F=100"), Body("G2 X10. Y0 R5. F100"));
+    }
+
+    // D186: with both R and I J K the control takes R and ignores I J K; the reader writes the radius form with the
+    // WARNING RDR109 instead of keeping the block RAW.
+    [Fact]
+    public void G2_WithRAndACentre_IsTheRadiusFormWithRdr109()
+    {
+        NcxProgram program = FramedProgram("G0 X0 Y0\nG2 X10. Y0 I5. J0 R5. F100");
+
+        Assert.Equal(Lines("RAPID X=0 Y=0", "ARC=CW X=10 Y=0 R=5 F=100"), BodyOf(NcxWriter.Write(program)));
+        Diagnostic warning = Assert.Single(program.Diagnostics.Items);
+        Assert.Equal((Severity.Warning, "RDR109", 4), (warning.Severity, warning.Code, warning.Line));
+    }
+
+    // D185: under G43.5 the I J K of G0 are the tool vector, RAPID with TX TY TZ, and those of G2 and G3 with R the
+    // radius form ARC R with TX TY TZ; without R the arc stays RAW.
+    [Fact]
+    public void G435_RapidAndArcWithIJK_CarryTheToolVector()
+    {
+        Assert.Equal(
+            Lines(
+                "OFFSET:LEN=1 TCPM=ON",
+                "RAPID X=0 Y=0 TX=0 TY=0 TZ=1",
+                "ARC=CW X=10 Y=0 TX=0 TY=0.5 TZ=0.866 R=5 F=100",
+                "RAW:FANUC=\"G3 X0 Y0 I0 J0 K1.\""),
+            Body("G43.5 H1\nG0 X0 Y0 I0 J0 K1.\nG2 X10. Y0 R5. I0 J0.5 K0.866 F100\nG3 X0 Y0 I0 J0 K1."));
     }
 
     // CENTER:X is computed from I J K and the start point (controller-mapping 2; language 6, the centre arc of
