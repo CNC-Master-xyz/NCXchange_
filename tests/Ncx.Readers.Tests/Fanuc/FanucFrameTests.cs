@@ -343,6 +343,48 @@ public sealed class FanucFrameTests
             Body("G68 X0 Y0 R30.\nG68 X10. Y10. R45.\nG69\nG52 X5."));
     }
 
+    // D124: G50.1 cancels the mirror of the axes it names and keeps the others (B-64484EN p.367); the chain holds one
+    // MIRROR with the set of the mirrored axes, which a change replaces with MIRROR=OFF and the new set.
+    [Fact]
+    public void G501_CancelsOnlyTheAxesItNames()
+    {
+        Assert.Equal(
+            Lines("MIRROR=X,Y", "MIRROR=OFF", "MIRROR=Y", "MIRROR=OFF", "MIRROR=X", "MIRROR=OFF", "MIRROR=X,Y",
+                "MIRROR=OFF", "MIRROR=Y"),
+            Body("G51.1 X0 Y0\nG50.1 X0\nG50.1 Y0\nG51.1 X0\nG51.1 Y0\nG50.1 X0"));
+    }
+
+    // D124, D245: an axis a G51.1 kept as RAW mirrors stays native, so its G50.1 stays RAW, while the G50.1 of an axis
+    // the chain holds writes MIRROR=OFF; G51.1 and G50.1 under a G68 raise an alarm (B-64484EN p.368) and stay RAW.
+    [Fact]
+    public void Mirror_OfANativeAxisAndUnderG68_StaysRaw()
+    {
+        Assert.Equal(
+            Lines("RAW:FANUC=\"G51.1 Y5.\"", "MIRROR=X", "MIRROR=OFF", "RAW:FANUC=\"G50.1 Y0\""),
+            Body("G51.1 Y5.\nG51.1 X0\nG50.1 X0\nG50.1 Y0"));
+        Assert.Equal(
+            Lines("ROTATE=30", "RAW:FANUC=\"G51.1 X0\"", "ROTATE=RESET"),
+            Body("G68 X0 Y0 R30.\nG51.1 X0\nG69"));
+    }
+
+    // D225: at a label a jump enters with another chain, and at the head of a loop or the target of a jump back over
+    // a range that changes the frames, the chain is unknown, so the G69 after it stays RAW.
+    [Fact]
+    public void Chain_AtJumpTargetsAndLoopHeads_IsForgottenWhereTheEdgesDisagree()
+    {
+        Assert.Equal(
+            Lines("VAR:V1=1", "ROTATE=30", "JUMP=10 IF={$V1 == 1}", "ROTATE=RESET", "LABEL=10",
+                "RAW:FANUC=\"N10 G69\""),
+            Body("#1=1\nG68 X0 Y0 R30.\nIF [#1 EQ 1] GOTO 10\nG69\nN10 G69"));
+        Assert.Contains("RAW:FANUC=\"G68 X0 Y0 R10.\"",
+            Body("#1=0\nWHILE [#1 LT 3] DO1\nG68 X0 Y0 R10.\nG69\n#1=#1+1\nEND1"), StringComparison.Ordinal);
+        Assert.Contains("RAW:FANUC=\"N30 G68 X0 Y0 R10.\"",
+            Body("N30 G68 X0 Y0 R10.\nG69\n#5=#5+1\nIF [#5 LT 3] GOTO 30"), StringComparison.Ordinal);
+        Assert.Equal(
+            Lines("VAR:V1=1", "JUMP=10 IF={$V1 == 1}", "VAR:V2=2", "LABEL=10", "ROTATE=30"),
+            Body("#1=1\nIF [#1 EQ 1] GOTO 10\n#2=2\nN10 G68 X0 Y0 R30."));
+    }
+
     // D244 (a): G52 holds in all of G54..G59, so after the ORIGIN the reader writes the G52 shift again; G52 X0 then
     // cancels it.
     [Fact]

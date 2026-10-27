@@ -21,6 +21,10 @@ internal sealed class FanucChain
     // "G68" (a rotation), "G68.2" (a tilted plane) and "G51.1" (a mirror) (D244, D245).
     private readonly HashSet<string> _native = new(StringComparer.Ordinal);
 
+    // The axes a G51.1 kept as RAW mirrors on the control, which a G50.1 of the axis cancels (D124, D245; B-64484EN
+    // p.367).
+    private readonly HashSet<string> _nativeMirror = new(StringComparer.Ordinal);
+
     /// <summary>
     /// True while the reader knows the whole chain: from PROGRAM=BEGIN and from an ORIGIN on (language 4.2).
     /// </summary>
@@ -61,6 +65,7 @@ internal sealed class FanucChain
         Clear();
         Local.Clear();
         _native.Clear();
+        _nativeMirror.Clear();
         Conversions = 0;
     }
 
@@ -72,6 +77,7 @@ internal sealed class FanucChain
         _entries.Clear();
         Local.Clear();
         _native.Clear();
+        _nativeMirror.Clear();
         Conversions = 0;
         Known = false;
     }
@@ -91,7 +97,9 @@ internal sealed class FanucChain
         }
 
         _native.Clear();
+        _nativeMirror.Clear();
         _native.UnionWith(other._native);
+        _nativeMirror.UnionWith(other._nativeMirror);
         Conversions = other.Conversions;
         Known = other.Known;
     }
@@ -140,7 +148,7 @@ internal sealed class FanucChain
     /// <param name="owner">The function, "G68", "G68.2" or "G51.1".</param>
     public bool Active(string owner)
     {
-        return Holds(owner) || _native.Contains(owner);
+        return Holds(owner) || HoldsNative(owner);
     }
 
     /// <summary>
@@ -149,7 +157,29 @@ internal sealed class FanucChain
     /// <param name="owner">The function, "G68", "G68.2" or "G51.1".</param>
     public bool HoldsNative(string owner)
     {
-        return _native.Contains(owner);
+        return owner == "G51.1" ? _nativeMirror.Count > 0 : _native.Contains(owner);
+    }
+
+    /// <summary>
+    /// The axes a G51.1 kept as RAW mirrors on the control (D245).
+    /// </summary>
+    public IReadOnlyCollection<string> NativeMirrorAxes => _nativeMirror;
+
+    /// <summary>
+    /// A G51.1 kept as RAW mirrors these axes on the control, or a G50.1 cancels them there (D124, D245).
+    /// </summary>
+    /// <param name="axes">The axes.</param>
+    /// <param name="on">True when the axes are mirrored afterwards.</param>
+    public void SetNativeMirror(IEnumerable<string> axes, bool on)
+    {
+        if (on)
+        {
+            _nativeMirror.UnionWith(axes);
+        }
+        else
+        {
+            _nativeMirror.ExceptWith(axes);
+        }
     }
 
     /// <summary>
@@ -193,6 +223,10 @@ internal sealed class FanucChain
         {
             parts.Add("native " + owner);
         }
+
+        var mirrored = new List<string>(_nativeMirror);
+        mirrored.Sort(StringComparer.Ordinal);
+        parts.Add("native mirror " + string.Join(",", mirrored));
 
         parts.Add("conversions " + Conversions.ToString(CultureInfo.InvariantCulture));
 

@@ -68,8 +68,8 @@ internal static partial class FanucFrames
     /// <param name="code">The code, "G69".</param>
     public static string UnknownChain(string code)
     {
-        return $"{code} acts on the transforms of the caller of its subprogram, or on those a called subprogram left, "
-            + "which the reader does not know (virtual machine 3.9)";
+        return $"{code} acts on transforms the reader does not know here: those of the caller of its subprogram, of a "
+            + "called subprogram, or of a jump or a loop that enters this place (virtual machine 3.6, 3.9; D225)";
     }
 
     // The chain becomes the one the control holds after the code (FanucChain.TryChange); where no cut of the chain

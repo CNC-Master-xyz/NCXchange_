@@ -36,6 +36,9 @@ public sealed partial class FanucReader : ReaderBase
     // The channel of the file being read, from the command line or the file name (D223).
     private long? _fileChannel;
 
+    // The chain of transforms after each jump block read, by line, for the labels the jumps enter (FanucJoins).
+    private readonly Dictionary<int, string> _chainAtJumps = [];
+
     /// <summary>
     /// The Fanuc family, Fanuc and the ISO dialects (controllers fanuc.md).
     /// </summary>
@@ -62,6 +65,7 @@ public sealed partial class FanucReader : ReaderBase
     {
         FanucState fanuc = Facts();
         _fileChannel = ChannelOfFile(blocks);
+        _chainAtJumps.Clear();
         foreach (SourceBlock block in blocks)
         {
             if (block.IsTrivia)
@@ -417,10 +421,12 @@ public sealed partial class FanucReader : ReaderBase
         KnowGroupsOf(fanuc, block);
 
         // A label a jump enters is reached with a state the blocks before it do not tell (virtual machine 3.6).
+        // The chain is kept there only where every edge into the label agrees with it (FanucJoins; D225).
         if (block.Find("N") is SourceWord number && fanuc.JumpTargets.Contains(FanucState.LabelOf(number)))
         {
             fanuc.ForgetPositions();
             fanuc.ForgetWritten();
+            FanucJoins.AtLabel(fanuc, block, FanucState.LabelOf(number), _chainAtJumps, Machine);
         }
 
         string? reason = fanuc.ContourLines.Contains(block.Line)
@@ -462,6 +468,10 @@ public sealed partial class FanucReader : ReaderBase
         Write(reading);
         EnterCalls(fanuc, reading);
         Derive(fanuc);
+        if (FanucJoins.JumpsOf(fanuc, block, Machine).Count > 0)
+        {
+            _chainAtJumps[block.Line] = fanuc.Chain.ToKey();
+        }
 
         // The shift of an expanded corner holds for the one block after the corner (FanucCorners.FromCornerEnd).
         if (fanuc.CornerLine == block.Line)
@@ -656,7 +666,7 @@ public sealed partial class FanucReader : ReaderBase
             changes.EndsCycle |= !starts
                 && (code == "G80" || group is FanucModalGroups.Motion or FanucModalGroups.ReturnLevel);
             changes.Chain |= code is "G52" or "G54" or "G55" or "G56" or "G57" or "G58" or "G59" or "G54.1" or "G68"
-                or "G68.2" or "G69" or "G51.1" or "G50.1";
+                or "G68.1" or "G68.2" or "G68.3" or "G68.4" or "G69" or "G51.1" or "G50.1";
             changes.Tool |= word.Address == "T" || code == "M6";
             changes.Feed |= word.Address == "F";
             changes.Spindle |= word.Address == "S" || code is "G96" or "G97"

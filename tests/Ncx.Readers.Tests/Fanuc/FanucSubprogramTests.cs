@@ -115,6 +115,16 @@ public sealed class FanucSubprogramTests
             StringComparison.Ordinal) || diagnostic.Message.Contains("PS5462", StringComparison.Ordinal));
     }
 
+    // D225, D245: a subprogram with G68.3, G68.4 or G68.1 may change the chain, so the caller's G69 after the call
+    // stays RAW.
+    [Fact]
+    public void SubprogramWithG683_LeavesTheChainOfItsCallerUnknown()
+    {
+        string text = Text("%\nO0001\nM98 P2000\nG69\nM30\nO2000\nG68.3 X0 Y0 Z0 R10.\nM99\n%\n");
+
+        Assert.Contains("\nCALL=2000\nRAW:FANUC=\"G69\"\n", text, StringComparison.Ordinal);
+    }
+
     // With the chain its one caller left, a subprogram's G69 resets the caller's rotation (controllers fanuc.md 4).
     [Fact]
     public void SubprogramOfACallerWithARotation_ResetsItWithG69()

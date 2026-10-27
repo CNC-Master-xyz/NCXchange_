@@ -775,6 +775,7 @@ internal static class FanucMacro
             block.Fanuc.Loops.Add(new FanucLoop(LoopNumber(head), label));
             block.Fanuc.ForgetPositions();
             block.Fanuc.ForgetWritten();
+            FanucJoins.AtLoopHead(block.Fanuc, block.Source, LoopNumber(head), block.Machine);
         }
 
         if (end is not null)

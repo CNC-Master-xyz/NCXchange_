@@ -43,3 +43,8 @@ Review fixes, 2026-10-27:
 - G68.3 and G68.4 are taken by FanucTilt and kept RAW, so a G54 under them stays RAW (D244 (c)).
 - G-code groups follow B-64484EN-2 p.27-28: 12 is G66/G67, 14 is G54..G59, 15 is G61..G64. G68.2/.3/.4 belong to group 16. Changed in FanucModalGroups, the fanuc.md 3 table, and the toml comments (both copies).
 - RDR107-110 are now in number order. RDR021 has its own wording for PHASE; RDR108 no longer calls an MPOS value a diameter. FanucBuilder no longer uses `!`. The I J K of G68 are read without an array. FanucFrames is split into partials: Datums, Rotations, Modes. Row 71 now reads "settled 2026-10-27 (D250)" only.
+
+Second review fixes, 2026-10-27:
+- Mirrors are tracked by axis. The chain holds one MIRROR entry with the set of mirrored axes; native axes are kept in a separate per-axis set. G51.1 writes the union, G50.1 the set minus its axes, each as MIRROR=OFF plus the new set (B-64484EN p.367; D124). A G50.1 of a native axis stays RAW and clears only that axis. G51.1 and G50.1 under G68 stay RAW, naming the alarm (p.368). A mirror change that cannot cut the chain cleanly names MIRROR=OFF in its reason.
+- Chain at joins (FanucJoins): at a jump target the chain is kept only where every forward jump left the same chain (`FanucChain.ToKey` recorded after each jump block) and no backward jump closes a range with a frame code or a call; at a loop head only where the body has none. Otherwise `Chain.Forget()`, and a later G69, G50.1 or G52 stays RAW. `UnknownChain` now names jumps and loops too.
+- G68.1, G68.3 and G68.4 in a subprogram make the caller's chain unknown (FanucReader).

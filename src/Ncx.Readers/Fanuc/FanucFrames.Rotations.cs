@@ -227,10 +227,11 @@ internal static partial class FanucFrames
             chain.Conversions = 0;
         }
 
+        List<string> mirrorAxes = mirror || mirrorCancel ? SourceAxes(block) : [];
         if (mirrorCancel)
         {
-            EndBesideRaw(block, "G51.1");
-            chain.SetNative("G51.1", false);
+            EndMirrorBesideRaw(block, mirrorAxes);
+            chain.SetNativeMirror(mirrorAxes, false);
         }
 
         bool rotated = chain.Active("G68") || chain.Conversions > 0;
@@ -258,9 +259,9 @@ internal static partial class FanucFrames
             chain.SetNative("G68.2", true);
         }
 
-        if (mirror)
+        if (mirror && !chain.Active("G68"))
         {
-            chain.SetNative("G51.1", true);
+            chain.SetNativeMirror(mirrorAxes, true);
         }
 
         block.Fanuc.ForgetPositions();
@@ -331,9 +332,12 @@ internal static partial class FanucFrames
         return desired;
     }
 
-    // G51.1 X0 mirrors the named axes, G50.1 cancels (controllers fanuc.md 4; controller-mapping 1, MIRROR). The value
-    // is the position of the mirror line and MIRROR mirrors about the origin (language 4.2), so another value stays
-    // RAW.
+    // G51.1 X0 mirrors the named axes, G50.1 cancels the mirror of the axes it names and keeps the others (controllers
+    // fanuc.md 4; controller-mapping 1, MIRROR; B-64484EN p.367; language 4.2, D124): the chain holds one MIRROR with
+    // the set of the mirrored axes, which a change replaces with MIRROR=OFF and the new set. The value is the position
+    // of the mirror line and MIRROR mirrors about the origin (language 4.2), so another value stays RAW and its axis
+    // mirrors natively (KeepRawModes); a G50.1 of such an axis stays RAW too. G51.1 and G50.1 may not stand while the
+    // coordinate rotation G68 is on (B-64484EN p.368), and on a chain the reader does not know they stay RAW (D225).
     private static void ReadMirror(FanucBlock block)
     {
         bool mirror = block.TakeCode("G51.1");
@@ -343,52 +347,159 @@ internal static partial class FanucFrames
             return;
         }
 
+        string code = mirror ? "G51.1" : "G50.1";
         var axes = new List<string>();
+        bool away = false;
         foreach (FanucAxisWord axis in FanucAxes.Unread(block))
         {
             block.MarkRead(axis.Word);
-            if (mirror && axis.Word.Number != 0m)
+            away |= mirror && axis.Word.Number != 0m;
+            if (!axes.Contains(axis.Axis))
             {
-                block.Draft.KeepAsRaw("G51.1 mirrors about a line away from the origin, MIRROR about the origin");
-                return;
+                axes.Add(axis.Axis);
             }
-
-            axes.Add(axis.Axis);
         }
 
         FanucChain chain = block.Fanuc.Chain;
-        if (cancel && chain.HoldsNative("G51.1"))
+        if (chain.Active("G68"))
         {
-            // A G50.1 that cancels a mirror the reader kept as RAW stays RAW, so that the control gets it back; the
-            // MIRROR=OFF of the mirror the chain holds stands beside it (KeepRawModes).
-            block.Draft.KeepAsRaw("G50.1 cancels a G51.1 the reader kept as RAW");
+            block.Draft.KeepAsRaw($"{code} may not stand while the coordinate rotation G68 is on, the control raises "
+                + "an alarm (D124)");
             return;
         }
 
-        if (mirror && axes.Count > 0)
+        if (axes.Count == 0)
+        {
+            return;
+        }
+
+        if (away)
+        {
+            block.Draft.KeepAsRaw("G51.1 mirrors about a line away from the origin, MIRROR about the origin");
+            return;
+        }
+
+        if (cancel && axes.Exists(chain.NativeMirrorAxes.Contains))
+        {
+            block.Draft.KeepAsRaw("G50.1 cancels the mirror of an axis the reader kept as RAW (D245)");
+            return;
+        }
+
+        if (!chain.Known)
+        {
+            block.Draft.KeepAsRaw(UnknownChain(code));
+            return;
+        }
+
+        List<string> held = MirroredAxes(chain);
+        List<string> next = mirror ? [.. held.Union(axes)] : [.. held.Except(axes)];
+        if (next.SequenceEqual(held))
+        {
+            return;
+        }
+
+        var blocks = new List<DraftBlock>();
+        if (!chain.TryChange(WithMirror(chain, next), blocks))
+        {
+            block.Draft.KeepAsRaw($"{code} would unwind the chain of transforms with a MIRROR=OFF that the documents "
+                + "read in two ways (language 4.2)");
+            return;
+        }
+
+        chain.SetNativeMirror(axes, false);
+        Write(block, blocks);
+        block.Fanuc.ForgetPositions();
+    }
+
+    // The axes the MIRROR of the chain holds, in its order; empty without one.
+    private static List<string> MirroredAxes(FanucChain chain)
+    {
+        foreach (FanucChainEntry entry in chain.Entries)
+        {
+            if (entry.Owner == "G51.1")
+            {
+                return entry.Words[0].Value switch
+                {
+                    ListValue list => [.. list.Items],
+                    IdentValue axis => [axis.Name],
+                    _ => [],
+                };
+            }
+        }
+
+        return [];
+    }
+
+    // The chain with its MIRROR holding these axes: the entry replaced, appended where the chain holds none, removed
+    // where no axis is left (D124).
+    private static List<FanucChainEntry> WithMirror(FanucChain chain, List<string> axes)
+    {
+        FanucChainEntry? mirror = null;
+        if (axes.Count > 0)
         {
             Value value = axes.Count == 1 ? new IdentValue(axes[0]) : new ListValue(axes);
-            var blocks = new List<DraftBlock>();
-            chain.Append(new FanucChainEntry("MIRROR", "G51.1", [new Word { Key = "MIRROR", Value = value }]), blocks);
-            Write(block, blocks);
-            block.Fanuc.ForgetPositions();
+            mirror = new FanucChainEntry("MIRROR", "G51.1", [new Word { Key = "MIRROR", Value = value }]);
         }
-        else if (cancel && !chain.Known)
-        {
-            block.Draft.KeepAsRaw(UnknownChain("G50.1"));
-        }
-        else if (cancel && chain.Holds("G51.1"))
-        {
-            var desired = new List<FanucChainEntry>();
-            foreach (FanucChainEntry entry in chain.Entries)
-            {
-                if (entry.Owner != "G51.1")
-                {
-                    desired.Add(entry);
-                }
-            }
 
-            Change(block, desired, "G50.1");
+        var desired = new List<FanucChainEntry>();
+        bool placed = false;
+        foreach (FanucChainEntry entry in chain.Entries)
+        {
+            if (entry.Owner != "G51.1")
+            {
+                desired.Add(entry);
+            }
+            else if (mirror is not null)
+            {
+                desired.Add(mirror);
+                placed = true;
+            }
         }
+
+        if (!placed && mirror is not null)
+        {
+            desired.Add(mirror);
+        }
+
+        return desired;
+    }
+
+    // A G50.1 kept as RAW ends the mirror of its axes the chain holds: MIRROR=OFF and the rest beside the RAW block,
+    // dropped on a chain the reader does not know (D124, D225).
+    private static void EndMirrorBesideRaw(FanucBlock block, List<string> axes)
+    {
+        FanucChain chain = block.Fanuc.Chain;
+        List<string> held = MirroredAxes(chain);
+        List<string> next = [.. held.Except(axes)];
+        if (next.SequenceEqual(held))
+        {
+            return;
+        }
+
+        if (!chain.Known)
+        {
+            chain.Drop("G51.1");
+            return;
+        }
+
+        if (!chain.TryChange(WithMirror(chain, next), block.Draft.BesideRaw))
+        {
+            chain.Forget();
+        }
+    }
+
+    // The axes the source block names, read or not.
+    private static List<string> SourceAxes(FanucBlock block)
+    {
+        var axes = new List<string>();
+        foreach (SourceWord word in block.Source.Words)
+        {
+            if (FanucAxes.Of(word, block) is FanucAxisWord axis && !axes.Contains(axis.Axis))
+            {
+                axes.Add(axis.Axis);
+            }
+        }
+
+        return axes;
     }
 }
