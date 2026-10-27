@@ -1,0 +1,6 @@
+# The start values of path 2 of the Nakamura WY-250L pair for an INTERPRETED run (machine-config 8; virtual machine 2.7,
+# 3.6). nakamura-ntjx.toml maps #11099 to SYS_WEAR_Z and #5025 to SYS_MPOS_B (D250), so the transfer reads
+# $SYS_WEAR_Z[99], the Z wear of offset 99 that it adds to the B position, and $SYS_MPOS_B, the machine position of B,
+# which the run does not know before B moves; both need a value: a tool without wear and B at its machine zero.
+"SYS_WEAR_Z[99]" = 0.0
+SYS_MPOS_B = 0.0

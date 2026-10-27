@@ -141,10 +141,10 @@ A two-path lathe runs one program per path (turret, or head and turret). The pat
 
 ## 10. Rules for the writer
 
-1. Write `G0`/`G1` only when the verb changes (a `[format]` option may ask for the G on every block); write `G90` once in the header and use absolute values, or write `G91` blocks where the NCX block had incremental words (a machine setting).
+1. Write `G0`/`G1` only when the verb changes and `G2`/`G3` on every arc block, the Fanuc family value of `[format] motion_code` ("change" and "every_block" are the other forms, D299); write `G90` once in the header and use absolute values, or write `G91` blocks where the NCX block had incremental words (a machine setting).
 2. Write `M3 S1000` in one block, never `S1000` alone after another spindle's M code (section 5).
 3. Program end from `program_end` (`M30` or `M2`); subprograms after it as `O` programs ending with `M99`, or as separate files when the machine wants that; a `JUMP` to the label after the header is written back as `M99`, the loop of a bar-work program, where every jump to that label is unconditional; `M99` takes no condition, so a conditional one keeps the label's `N` and `IF [ ] GOTO` (D210).
 4. Wait marks from the `[sync]` table with the path form the machine uses (list or bitmask).
-5. Decimal point on every real number per `[format]` (`decimals`, `trailing_zeros`); comments in parentheses, transliterated to ASCII (`comment_charset`).
+5. Decimal point on every real number per `[format]` (`decimals`, `trailing_zeros`); comments in parentheses, transliterated to ASCII under `comment_charset`, which defaults to "ASCII" on every family and takes "ASCII" or "UTF-8" (machine-config 2, D263); at most `[format] m_codes_per_block` M codes in a block, 1 by default (D339).
 6. Numbers, names and file names per `[format]`; block numbers per `format.block_numbers`.
 7. The `before` line of a catalog entry stands in its own line directly before the cycle block, `M29 S500` before `G84 G99 Z-20. R5. F750`, and once per run of the cycle, since an `M29` inside a running tapping cycle alarms PS0204 (machine-config 6, D256).

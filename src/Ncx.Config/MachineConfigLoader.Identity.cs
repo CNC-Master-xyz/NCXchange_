@@ -26,7 +26,13 @@ public static partial class MachineConfigLoader
         "decimal_separator", "decimals", "trailing_zeros", "block_numbers", "line_ending", "program_end", "sub_end",
         "program_layout", "max_line_length", "comment_charset", "external_call", "header",
         "plane_with_first_motion", "motion_code_after_tool_change", "length_offset_with_tool_axis", "channel_files",
+        "label_max", "motion_code", "m_codes_per_block", "m_codes_combinable", "helix_feed",
     ];
+
+    // comment_charset takes these two values; any other is CFG005 (D263).
+    private static readonly string[] s_commentCharsets = ["ASCII", "UTF-8"];
+    private static readonly string[] s_motionCodes = ["change", "arcs", "every_block"];
+    private static readonly string[] s_helixFeeds = ["path", "arc"];
 
     private static readonly string[] s_blockNumberKeys = ["enabled", "start", "step"];
     private static readonly string[] s_lineEndings = ["CRLF", "LF"];
@@ -137,23 +143,42 @@ public static partial class MachineConfigLoader
                 _ => null,
             },
             MaxLineLength = table.Integer("max_line_length"),
-            CommentCharset = table.Text("comment_charset"),
+            CommentCharset = table.Choice("comment_charset", s_commentCharsets),
             ExternalCall = table.Template("external_call"),
 
-            // TODO(question): the options of the Fanuc output habits that phase 3 asks for (implementation 13, Risks),
-            // which machine-config 2 does not name; the header is a template like program_end (D105).
+            // The options of the Fanuc output habits, adopted as coded; the header is a template like program_end
+            // (D105, D276).
             Header = table.Template("header"),
             PlaneWithFirstMotion = table.Flag("plane_with_first_motion"),
             MotionCodeAfterToolChange = table.Flag("motion_code_after_tool_change"),
             LengthOffsetWithToolAxis = table.Flag("length_offset_with_tool_axis"),
 
-            // TODO(question): the naming of the files of a job's channels, which implementation 16 (P6-02) gives a
-            // [format] key that machine-config 2 does not name.
+            // The naming of the files of a job's channels (D310, machine-config 2).
             ChannelFiles = table.Choice("channel_files", s_channelFiles) switch
             {
                 "path_suffix" => ChannelFiles.PathSuffix,
                 "channel_suffix" => ChannelFiles.ChannelSuffix,
                 "program_name" => ChannelFiles.ProgramName,
+                _ => null,
+            },
+
+            // The label range of a Klartext program, LBL 1 to label_max; 65535 is the largest of the TNC 640 (D271).
+            LabelMax = table.IntegerInRange("label_max", 1, 65535),
+            MotionCode = table.Choice("motion_code", s_motionCodes) switch
+            {
+                "change" => MotionCode.Change,
+                "arcs" => MotionCode.Arcs,
+                "every_block" => MotionCode.EveryBlock,
+                _ => null,
+            },
+
+            // The M codes of one Fanuc block: 1 to 5, and the codes that may join another (D339).
+            MCodesPerBlock = table.IntegerInRange("m_codes_per_block", 1, 5),
+            MCodesCombinable = table.TextList("m_codes_combinable").Select(FunctionValues.Normalize).ToList(),
+            HelixFeed = table.Choice("helix_feed", s_helixFeeds) switch
+            {
+                "path" => HelixFeed.Path,
+                "arc" => HelixFeed.Arc,
                 _ => null,
             },
         };

@@ -280,8 +280,8 @@ internal sealed class ConfigTable
 
         Diagnostics.Error(LineOf(key), DiagnosticCodes.ValueNotAllowed,
             $"{Place(key)} must be a whole number from {first.ToString(CultureInfo.InvariantCulture)} to "
-            + $"{last.ToString(CultureInfo.InvariantCulture)}, not {number.Value.ToString(CultureInfo.InvariantCulture)} "
-            + $"({Section}).");
+            + $"{last.ToString(CultureInfo.InvariantCulture)}, not "
+            + $"{number.Value.ToString(CultureInfo.InvariantCulture)} ({Section}).");
         return null;
     }
 

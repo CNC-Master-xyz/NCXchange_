@@ -59,9 +59,10 @@ public static partial class MachineConfigLoader
         SchemaVersion.Check(root, "machine file");
 
         // [machine] names the machine and its controller (machine-config 1).
-        // TODO(question): machine-config names no required key. The loader requires [machine] with name and
-        // controller, id and type of every [[resource]], id, ncx and kind of every [[axis]] and id of every [[node]],
-        // the keys without which a record cannot be built or referenced; every other key is optional (D138).
+        // The required keys are [machine] name and controller, id and type of every [[resource]], id, ncx and kind of
+        // every [[axis]] and id of every [[node]], the keys without which a record cannot be built or referenced;
+        // every other key is optional with its documented effect, and compiler needs are checked by the compiler
+        // (D138, machine-config 1).
         if (!root.Has("machine"))
         {
             diagnostics.Error(1, DiagnosticCodes.MissingKey,

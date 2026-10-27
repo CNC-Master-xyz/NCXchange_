@@ -122,7 +122,8 @@ home = 0
 [[axis]]
 id = "C2"
 ncx = "C2"                         # a program writes C; the VM resolves it to C2 while the sub spindle holds the workpiece (VM 3.8 rule 3)
-# TODO(question): docs/ does not give the address of the sub spindle C axis on the Puma 2600SY; C is written here, as for the Nakamura (D179).
+# M35 selects C1, M135 C2, and the selected axis is moved with plain C and H (Doosan 2600SY M functions p.2-3; MX programming book p.25-26; PUMA operating
+# manual 2020 p.55); the command mix does not change the address (D179).
 letter = "C"
 incremental_letter = "H"
 kind = "rotary"
