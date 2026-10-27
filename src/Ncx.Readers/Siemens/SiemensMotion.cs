@@ -17,6 +17,10 @@ internal static class SiemensMotion
     // which a builder may change with MD20150 $MC_GCODE_RESET_VALUES (controllers siemens.md 2; D340).
     private const string DefaultMotionCode = "G1";
 
+    // 25.4 mm to the inch, and the decimals a converted feed keeps (D121, D292).
+    private const decimal MillimetresPerInch = 25.4m;
+    private const int FeedDecimals = 6;
+
     // The address words of a motion block that NCX has no word for, kept as RAW words (controllers siemens.md 3, 6;
     // controller-mapping 2 and 9): the feed per tooth, the velocity limits, the override, the accelerations, the
     // smoothing distances, the tolerances of an axis, the contour allowance, the transition circle, the cutting speed
@@ -499,13 +503,66 @@ internal static class SiemensMotion
             return null;
         }
 
+        block.Facts.FeedProgrammed = true;
         Value? value = SiemensExpression.ValueOf(block, word.Text, out string? problem);
         if (value is null)
         {
             block.Draft.KeepAsRaw($"{word.Address}{word.Text} has no NCX value: {problem}");
+            return null;
         }
 
-        return value;
+        return FeedInNcxUnits(block, value, word);
+    }
+
+    /// <summary>
+    /// A feed in the unit of NCX: under G70 or G71 whose unit differs from the basic system of the machine
+    /// (base_units, MD10240), the feed stays in the basic system on the control, so the reader converts it into the
+    /// unit UNITS names, with the WARNING RDR507 naming the code (D292; NC-Programmierung SW4.92 p.164-166,
+    /// cnc-manuals); any other feed as it is.
+    /// </summary>
+    /// <param name="block">The block being read.</param>
+    /// <param name="feed">The feed as the source gives it.</param>
+    /// <param name="word">The feed word, for the WARNING.</param>
+    public static Value FeedInNcxUnits(SiemensBlock block, Value feed, SourceWord word)
+    {
+        string? code = block.Facts.UnitsCode;
+        string? units = code switch
+        {
+            "G70" => "INCH",
+            "G71" => "MM",
+            _ => null,
+        };
+        string? basic = block.Machine.Machine.ResolvedBaseUnits;
+        if (units is null || basic is null || string.Equals(units, basic, StringComparison.OrdinalIgnoreCase))
+        {
+            return feed;
+        }
+
+        Value converted = Converted(block, feed, units == "INCH");
+        block.Draft.Warnings.Add(new SiemensWarning(DiagnosticCodes.SiemensFeedInTheBasicSystem,
+            $"{word.Address}={word.Text} stands under {code}, which leaves the feed in the basic system {basic} of the "
+            + $"machine; the reader converts it into {units}: {converted.ToCanonical()} (D292)."));
+        return converted;
+    }
+
+    /// <summary>
+    /// A feed converted between mm and inch by 25.4: a number to six decimals (D121), an expression divided or
+    /// multiplied (D292).
+    /// </summary>
+    /// <param name="block">The block being read.</param>
+    /// <param name="feed">The feed in the other unit.</param>
+    /// <param name="toInch">True to convert mm into inch, false inch into mm.</param>
+    public static Value Converted(SiemensBlock block, Value feed, bool toInch)
+    {
+        if (SiemensNumbers.NumberOf(feed) is decimal number)
+        {
+            return SiemensNumbers.Of(Math.Round(toInch ? number / MillimetresPerInch : number * MillimetresPerInch,
+                FeedDecimals, MidpointRounding.AwayFromZero));
+        }
+
+        string factor = MillimetresPerInch.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        string text = feed is ExprValue expression ? expression.Text : feed.ToCanonical();
+        return SiemensExpression.Parse(block, $"({text}) {(toInch ? "/" : "*")} {factor}", out _) ?? feed;
     }
 
     // A line ends in its own direction, which a CT after it continues (controllers siemens.md 3).
@@ -523,8 +580,12 @@ internal static class SiemensMotion
         }
     }
 
-    // Twice a value, for the radius an incremental X under DIAM90 gives.
-    private static Value Doubled(SiemensBlock block, Value value)
+    /// <summary>
+    /// Twice a value, for the radius an incremental X under DIAM90 or a frame offset of X under DIAMON gives (D125).
+    /// </summary>
+    /// <param name="block">The block being read.</param>
+    /// <param name="value">The radius.</param>
+    public static Value Doubled(SiemensBlock block, Value value)
     {
         if (SiemensNumbers.NumberOf(value) is decimal number)
         {

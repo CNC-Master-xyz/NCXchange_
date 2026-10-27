@@ -1,4 +1,5 @@
 using System.Globalization;
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 
 namespace Ncx.Readers.Siemens;
@@ -132,9 +133,8 @@ internal static class SiemensFrames
         if (replacing && !chain.TryCut(blocks))
         {
             block.MarkAllRead();
-            block.Draft.KeepAsRaw($"{name} deletes the programmable frame, and the chain holds a tilt of CYCLE800 "
-                + "or is "
-                + "not known here (controllers siemens.md 4; virtual machine 3.9)");
+            block.Draft.KeepAsRaw($"{name} deletes the programmable frame, and an entry of it stands before a tilt "
+                + "of CYCLE800, or the chain is not known here (controllers siemens.md 4; virtual machine 3.9; D333)");
             return;
         }
 
@@ -176,10 +176,35 @@ internal static class SiemensFrames
                 return null;
             }
 
-            shift.Add(SiemensAxes.AxisOf(block, word)!, value);
+            string axis = SiemensAxes.AxisOf(block, word)!;
+            shift.Add(axis, ShiftValue(block, axis, value));
         }
 
         return new SiemensChainEntry("SHIFT", name, shift);
+    }
+
+    // The value of a shift in NCX. A Siemens facing axis keeps its frame offsets as radii, MD20360 bit 3 off
+    // (Funktionshandbuch Grundfunktionen 2012 p.901-903, cnc-manuals), while NCX reads SHIFT X under DIAMETER=ON as a
+    // diameter, so the reader doubles the X of a shift under DIAMON and DIAM90; where [[axis]] frames_in_diameter
+    // says the control keeps them as diameters, X is taken as written (D125, D388).
+    private static Value ShiftValue(SiemensBlock block, string axis, Value value)
+    {
+        return axis == "X" && XInRadius(block) ? SiemensMotion.Doubled(block, value) : value;
+    }
+
+    /// <summary>
+    /// True where the control keeps the frame offsets and the machine position of X as radii while NCX reads X as a
+    /// diameter: under DIAMON or DIAM90, on an X axis whose programming is diameter or switchable and which does not
+    /// set frames_in_diameter (D125, D240, D388).
+    /// </summary>
+    /// <param name="block">The block being read.</param>
+    public static bool XInRadius(SiemensBlock block)
+    {
+        return block.Facts.DiameterMode is "DIAMON" or "DIAM90" && block.Machine.ResolveAxis("X") is
+        {
+            Programming: Programming.Diameter or Programming.Switchable,
+            FramesInDiameter: false,
+        };
     }
 
     // ROT RPL=30 and ROT Z30 under G17 turn about the tool axis, ROTATE=30; ROT X180 turns about another axis, the
@@ -297,7 +322,7 @@ internal static class SiemensFrames
 
             string axis = SiemensAxes.AxisOf(block, word)!;
             shift.Remove(axis);
-            shift.Add(axis, value);
+            shift.Add(axis, ShiftValue(block, axis, value));
         }
 
         // A G59 without an additive shift before it appends one where the shift of TRANS or G58 is the last entry.
@@ -317,11 +342,12 @@ internal static class SiemensFrames
         block.Siemens.ForgetPositions();
     }
 
-    // G74 X1=0 Y1=0 Z1=0 returns the axes to the reference point by their machine names, HOME X Y Z; G75 X0 Z0 FP=2 to
-    // the fixed point FP, HOME X Z POINT=2 (controllers siemens.md 3; controller-mapping 1, HOME).
-    // TODO(question): controller-mapping 1 reads the fixed points of G75 as POINT, 1 to 4, and G74 as HOME, while a
-    // HOME without POINT is the first reference point (virtual machine 3, step 5); G75 without FP, the fixed point 1,
-    // is written HOME with POINT=1.
+    // G74 X1=0 Y1=0 Z1=0 returns the axes to the reference point by their machine names, HOME X Y Z, the counterpart
+    // of Fanuc G28; G75 X0 Z0 FP=2 to FP=4 approaches the fixed point of MD30600 $MA_FIX_POINT_POS, HOME X Z POINT=2,
+    // the counterpart of Fanuc G30 P2 to P4 (D260; controllers siemens.md 3; controller-mapping 1, HOME). G75 FP=1,
+    // and G75 without FP, which the control reads as FP=1, stay RAW with the WARNING RDR509: POINT=1 is the reference
+    // point G74 approaches, so NCX has no POINT for fixed point 1 (840D sl/828D Programmierhandbuch Grundlagen 2013
+    // p.377-378, cnc-manuals; D260).
     private static void ReadHome(SiemensBlock block)
     {
         bool reference = block.TakeCode("G74");
@@ -351,7 +377,16 @@ internal static class SiemensFrames
         {
             SourceWord? point = block.Take("FP");
             int? number = point is null ? 1 : SiemensNumbers.WholeNumber(point.Text);
-            if (number is not int fixedNumber || fixedNumber < 1)
+            if (number is 0 or 1)
+            {
+                block.Draft.ReadingWarnings.Add(new SiemensWarning(DiagnosticCodes.SiemensFixedPoint1HasNoPoint,
+                    "G75 approaches fixed point 1, which NCX has no POINT for, since POINT=1 is the reference point "
+                    + "that G74 approaches; the block is kept as RAW (D260, D5)."));
+                block.Draft.KeepAsRaw("G75 approaches fixed point 1, which NCX has no POINT for (D260)");
+                return;
+            }
+
+            if (number is not int fixedNumber || fixedNumber is < 2 or > 4)
             {
                 block.Draft.KeepAsRaw("FP of G75 names no fixed point 1 to 4 (controllers siemens.md 3)");
                 return;

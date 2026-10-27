@@ -21,12 +21,12 @@ namespace Ncx.Acceptance.Jobs;
 /// wait codes in the same order, the spindle synchronization in the program of path 2, which [spindle_sync] channel = 2
 /// binds it to, and the builder lines kept as RAW verbatim.
 /// </summary>
-// TODO(question): the Fanuc compiler (P3-06) writes G97 of the sub spindle from [spindle.SUB] CSS_OFF, which
-// nakamura-ntjx.toml does not give (the TODO(question) of FanucToolWords.WriteSpindleLines), and G28 B0 only with an
-// incremental letter of B, which it does not give either. D243 settles the reader, where B of system A has no
-// incremental twin and is the absolute intermediate point; how the compiler writes HOME of such an axis it does not
-// say. The job is compiled for the machine with the two filled in, CSS_OFF = "G97" and B as the incremental letter
-// of B, until those are answered.
+// The Fanuc compiler writes G97 of the sub spindle from the family code, since [spindle.SUB] of nakamura-ntjx.toml
+// has no CSS_OFF (D258).
+// TODO(question): the Fanuc compiler writes G28 B0 only with an incremental letter of B, which nakamura-ntjx.toml
+// does not give. D243 settles the reader, where B of system A has no incremental twin and is the absolute
+// intermediate point; how the compiler writes HOME of such an axis it does not say. The job is compiled for the
+// machine with B as the incremental letter of B, until that is answered.
 public sealed partial class NakamuraJobCompileTests
 {
     // The wait marks of the Nakamura, M100 to M199 ([sync] mark_range), and its spindle synchronization, M96, M97 and
@@ -123,14 +123,13 @@ public sealed partial class NakamuraJobCompileTests
         return program;
     }
 
-    // nakamura-ntjx.toml with the two templates of the TODO(question) above.
+    // nakamura-ntjx.toml with the incremental letter of the TODO(question) above.
     private static MachineConfig Machine()
     {
         string text = Fixture.ReadText("machines/nakamura-ntjx.toml");
         string filled = text
-            .Replace("[spindle.SUB]\n", "[spindle.SUB]\nCSS_OFF = \"G97\"\n", StringComparison.Ordinal)
             .Replace("letter = \"B\"\n", "letter = \"B\"\nincremental_letter = \"B\"\n", StringComparison.Ordinal);
-        Assert.Equal(text.Length + "CSS_OFF = \"G97\"\nincremental_letter = \"B\"\n".Length, filled.Length);
+        Assert.Equal(text.Length + "incremental_letter = \"B\"\n".Length, filled.Length);
         var diagnostics = new Diagnostics("nakamura-ntjx.toml");
         MachineConfig? machine = MachineConfigLoader.LoadText(filled, diagnostics);
         Assert.True(machine is not null && !diagnostics.HasErrors, diagnostics.ToText());

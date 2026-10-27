@@ -329,7 +329,7 @@ internal static class SiemensCalls
             SiemensParameter? parameter = parameters?[index];
             if (parameter is { ByReference: true } && value.Length > 0)
             {
-                // TODO(question): D149, a VAR parameter writes back to the caller and is no ARG; the call stays RAW.
+                // A VAR parameter writes back to the caller and is no ARG, so the call stays RAW (D149).
                 block.Draft.KeepAsRaw($"{parameter.Name} of {name} is a VAR parameter, which writes back to the caller "
                     + "and is no ARG (D149)");
                 return false;

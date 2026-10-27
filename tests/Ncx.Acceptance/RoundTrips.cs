@@ -289,7 +289,8 @@ public sealed class RoundTrips : IDisposable
     }
 
     // D163: a cycle 203 whose Q213 is at least the number of infeeds is CHIP_BREAK, whose Q213 the reader does not
-    // keep (RDR301), and the compiler writes the number of infeeds back, ceil(21,732 / 1,2) = 19; BOHREN.h writes 24.
+    // keep (D164: Q213 chose the entry), and the compiler writes the number of infeeds back, ceil(21,732 / 1,2) = 19;
+    // BOHREN.h writes 24.
     // Its Q213=3 is the mixed form, which stays RAW and comes back as it is.
     private static NcException ChipBreaks(string breaks, string written)
     {

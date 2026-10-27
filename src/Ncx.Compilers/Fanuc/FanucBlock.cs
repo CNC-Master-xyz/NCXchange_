@@ -79,6 +79,16 @@ internal sealed class FanucBlock
     public required FanucLabels Labels { get; init; }
 
     /// <summary>
+    /// The O numbers of the programs of the file, NUMBER or the one the compiler generates (D257).
+    /// </summary>
+    public FanucProgramNumbers ProgramNumbers { get; init; } = FanucProgramNumbers.None;
+
+    /// <summary>
+    /// The REPEAT ranges of the file with the counters of their nesting depth (D213, D280).
+    /// </summary>
+    public FanucRepeats Repeats { get; init; } = FanucRepeats.None;
+
+    /// <summary>
     /// Writes one line of the block, CompilerBase.Line.
     /// </summary>
     public required Action<string> Writer { get; init; }
@@ -93,6 +103,12 @@ internal sealed class FanucBlock
     /// program named no point since the TOOL or the mapping gives none (D373, D393; CompilerBase.PointRegistersOf).
     /// </summary>
     public ToolPointRegisters? PointRegisters { get; init; }
+
+    /// <summary>
+    /// What the block writes for STOCK, the [stock] template and its numbers; null for another block and for a
+    /// STOCK that writes nothing (D351; CompilerBase.StockOf).
+    /// </summary>
+    public StockForm? Stock { get; init; }
 
     /// <summary>
     /// The line of the block being composed: the modal codes, the motion, the functions (controllers fanuc.md 1).
@@ -187,9 +203,22 @@ internal sealed class FanucBlock
     }
 
     /// <summary>
-    /// The lines that follow the main line: the further turns of an arc beyond 360 degrees (language 4.3, ANGLE).
+    /// The lines that follow the main line: the further turns of an arc beyond 360 degrees (language 4.3, ANGLE), and
+    /// the function lines that do not fit in a main line without a motion (D339).
     /// </summary>
     public List<string> Following { get; } = [];
+
+    /// <summary>
+    /// The function words of the block in the order they are written, which FanucFunctions.Place puts on the lines
+    /// (D339).
+    /// </summary>
+    public List<string> Functions { get; } = [];
+
+    /// <summary>
+    /// The function lines that stand before a main line with a motion, where the functions do not all fit in it, so
+    /// that the state is set before the motion (language 5 rule 3; D339).
+    /// </summary>
+    public List<string> LinesBefore { get; } = [];
 
     /// <summary>
     /// True once the offsets of the block are written, so that they stand once.
@@ -203,10 +232,16 @@ internal sealed class FanucBlock
     public HashSet<string> SpindleCodesWritten { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Writes the main line when anything stands in it, then the lines that follow it.
+    /// Writes the function lines that stand before the main line, the main line when anything stands in it, then the
+    /// lines that follow it.
     /// </summary>
     public void WriteMain()
     {
+        foreach (string line in LinesBefore)
+        {
+            Write(line);
+        }
+
         if (!Main.IsEmpty)
         {
             Write(Main.Text());

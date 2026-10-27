@@ -173,9 +173,13 @@ public static partial class DrillingFamily
     // 5, D59). D181: the constant PECK is FDPR, the first depth relative to RFP, with _DAM = 0 and FDEP left empty.
     // D356: for PECK and CHIP_BREAK without PECK, or with PECK = 0, the compiler writes FDPR = the whole depth in one
     // infeed, the distance from DEPTH to SURFACE, or to CLEARANCE where the block gives no SURFACE; FDEP stays empty.
+    // D181 (gap closed 2026-10-27, code wave 2): the dwell at the bottom, CYCLE_DWELL, is _DTD, position 16,
+    // "Verweilzeit auf Endbohrtiefe"; DTB of CYCLE83 is the dwell at every drilling depth (SW4.92 p.1086-1087), as on
+    // CYCLE830 (p.1120).
     private static Dictionary<string, string> SiemensPeckParams()
     {
         Dictionary<string, string> parameters = SiemensPlanes();
+        parameters["CYCLE_DWELL"] = "_DTD";
         parameters["PECK"] = "FDPR";
         parameters["AXIS"] = "_AXN";
         parameters["CYCLE_F"] = "F";

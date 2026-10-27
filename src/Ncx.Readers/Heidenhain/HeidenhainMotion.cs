@@ -68,18 +68,16 @@ internal static class HeidenhainMotion
     /// <summary>
     /// Reads LN X Y Z NX NY NZ TX TY TZ F, the 5-axis line with the surface normal and the tool vector under M128
     /// (controllers heidenhain.md 2; controller-mapping 2, tool vectors; language 4.3; D81): LINE with TX TY TZ and NX
-    /// NY NZ, only under TCPM=ON and with the tool vector.
+    /// NY NZ, only under TCPM=ON and with the tool vector; LN with FMAX is RAPID with the same words (D185).
     /// </summary>
     /// <param name="block">The block being read, whose first word is LN.</param>
     public static void ReadVectorLine(HeidenhainBlock block)
     {
         block.MarkLeading(1);
-        if (ReadFeed(block, canBeRapid: true))
-        {
-            block.Draft.KeepAsRaw("LN with FMAX: the tool vector belongs to LINE (language 4.3, D81)");
-            return;
-        }
 
+        // D185: RAPID and LINE carry TX TY TZ (NX NY NZ optional) under TCPM=ON with one meaning, the tool direction
+        // at the end point, so LN with FMAX reads as RAPID with its vector (decisions.md; language 4.3).
+        bool rapid = ReadFeed(block, canBeRapid: true);
         ReadCompensation(block);
         HeidenhainPoint? start = block.Heidenhain.Position();
         List<SourceWord> axes = AxisWords(block, s_axes);
@@ -98,7 +96,7 @@ internal static class HeidenhainMotion
             return;
         }
 
-        HeidenhainDraftBlock main = block.Draft.Main.WithVerb("LINE");
+        HeidenhainDraftBlock main = block.Draft.Main.WithVerb(rapid ? "RAPID" : "LINE");
         if (!AddAxes(block, main, axes))
         {
             return;

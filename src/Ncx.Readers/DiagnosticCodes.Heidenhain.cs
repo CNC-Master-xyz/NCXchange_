@@ -12,9 +12,11 @@ public static partial class DiagnosticCodes
     public const string HeidenhainMCodeNotNamed = "RDR300";
 
     /// <summary>
-    /// RDR301, a WARNING: a Q parameter of a drilling cycle definition that no NCX word of its catalog entry carries is
-    /// not written (controllers heidenhain.md 5, 7 rule 7; machine-config 6).
+    /// RDR301, retired 2026-10-27 (D164): a Q parameter of a drilling cycle definition that no NCX word of its catalog
+    /// entry carries is no longer dropped with a WARNING; the reader takes the named entry only where it holds what the
+    /// compiler writes, and the native cycle otherwise. The number is not reused.
     /// </summary>
+    [Obsolete("Retired by D164: a differing unmapped Q parameter keeps the cycle as CYCLE:HEIDENHAIN=n.")]
     public const string HeidenhainCycleParameterNotCarried = "RDR301";
 
     /// <summary>
@@ -22,4 +24,11 @@ public static partial class DiagnosticCodes
     /// before it; the block is kept as RAW (controllers heidenhain.md 5).
     /// </summary>
     public const string HeidenhainCycleCallWithoutDefinition = "RDR302";
+
+    /// <summary>
+    /// RDR303, a WARNING: an FN 9 to FN 12 jump leaves the part between LBL n and CALL LBL n REP k; NCX ends the
+    /// repeat there and starts it fresh at a later arrival, while the control may keep the remaining REP count, which
+    /// only GOTO 0 or a new program selection resets (D213; language 4.9).
+    /// </summary>
+    public const string HeidenhainJumpLeavesRepeat = "RDR303";
 }

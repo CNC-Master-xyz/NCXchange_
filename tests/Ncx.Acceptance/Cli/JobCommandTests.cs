@@ -165,9 +165,9 @@ public sealed class JobCommandTests : IDisposable
         int exitCode = _cli.Run("compile", "--job", manifest, "--output", folder);
 
         Assert.True(exitCode == 0, _cli.Error);
-        Assert.Equal("%\r\nO1000 (T)\r\nM198\r\nM110\r\nM30\r\n%\r\n",
+        Assert.Equal("%\r\nO1000 (T)\r\nG21\r\nM198\r\nM110\r\nM30\r\n%\r\n",
             File.ReadAllText(Path.Combine(folder, "one.nc")));
-        Assert.Equal("%\r\nO1000 (T)\r\nM198\r\nM110\r\nM30\r\n%\r\n",
+        Assert.Equal("%\r\nO1000 (T)\r\nG21\r\nM198\r\nM110\r\nM30\r\n%\r\n",
             File.ReadAllText(Path.Combine(folder, "two.nc")));
     }
 
@@ -184,9 +184,9 @@ public sealed class JobCommandTests : IDisposable
         int exitCode = _cli.Run("compile", "--job", manifest, "--output", folder);
 
         Assert.True(exitCode == 0, _cli.Error);
-        Assert.Equal("%\r\nO1000 (T)\r\nM198\r\nM110\r\nM111\r\nM30\r\n%\r\n",
+        Assert.Equal("%\r\nO1000 (T)\r\nG21\r\nM198\r\nM110\r\nM111\r\nM30\r\n%\r\n",
             File.ReadAllText(Path.Combine(folder, "one.nc")));
-        Assert.Equal("%\r\nO1000 (T)\r\nM198\r\nM110\r\nM96\r\nM111\r\nM30\r\n%\r\n",
+        Assert.Equal("%\r\nO1000 (T)\r\nG21\r\nM198\r\nM110\r\nM96\r\nM111\r\nM30\r\n%\r\n",
             File.ReadAllText(Path.Combine(folder, "two.nc")));
     }
 

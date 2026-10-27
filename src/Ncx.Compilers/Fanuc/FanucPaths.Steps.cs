@@ -75,7 +75,7 @@ internal static partial class FanucPaths
                 arrivals.Add((step, false));
             }
 
-            if (step.Block.Find("JUMP")?.Value.ToCanonical() == label)
+            if (FanucLabels.JumpTargetOf(step.Block) == label)
             {
                 states.Add(step.After);
                 arrivals.Add((step, true));

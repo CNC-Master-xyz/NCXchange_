@@ -105,6 +105,7 @@ internal static class FanucFrames
         OnOff(write, "POLAR", transform?.PolarOn ?? "G12.1", transform?.PolarOff ?? "G13.1", "POLAR");
         WriteCylinder(write, transform);
         WriteTolerance(write);
+        WritePathMode(write, transform);
         Option(write, "ROTARY_PATH", "SHORTEST", transform?.RotaryPathShortest, transform?.RotaryPathFull);
         Option(write, "ROTARY_FEED", "MM_MIN", transform?.RotaryFeedMmMin, transform?.RotaryFeedDegMin);
         WriteDiameter(write);
@@ -344,7 +345,29 @@ internal static class FanucFrames
         }
     }
 
-    // CYLINDER=r switches on with its reference radius, {r}, and OFF switches off (language 4.2; D96).
+    /// <summary>
+    /// D143: under G7.1 an arc takes R only, never I, J or K, so an ARC with CENTER under CYLINDER has no Fanuc output;
+    /// the block is the ERROR CMP317 and writes nothing else (controller-mapping 1, CYLINDER; Fanuc 0i-TC B-64114GE/01
+    /// p. 78).
+    /// </summary>
+    /// <returns>True where the block is that ERROR.</returns>
+    public static bool CenterUnderCylinder(FanucBlock write)
+    {
+        bool center = write.Block.Words.Any(word => word.Key == "CENTER");
+        if (write.Block.Verb?.Key != "ARC" || !center || write.After.Frame.Cylinder is null)
+        {
+            return false;
+        }
+
+        write.WrittenAll();
+        write.Error(DiagnosticCodes.FanucCenterUnderCylinder,
+            "ARC with CENTER under CYLINDER has no Fanuc output: under G7.1 an arc takes R only, never I, J or K; "
+            + "write the arc with R (D143; controller-mapping 1, CYLINDER).");
+        return true;
+    }
+
+    // CYLINDER=r switches on with its reference radius, {r}, and OFF switches off (language 4.2; D96). D146: without a
+    // template G7.1 names the rotary axis of the workpiece holder by its letter, never the NCX letter C.
     private static void WriteCylinder(FanucBlock write, TransformTable? transform)
     {
         if (write.Block.Find("CYLINDER") is not Word cylinder)
@@ -356,7 +379,10 @@ internal static class FanucFrames
         write.Written(cylinder);
         var values = new TemplateValues();
         bool off = cylinder.Value.ToCanonical() == "OFF";
-        string? template = off ? transform?.CylinderOff ?? "G7.1 C0" : transform?.CylinderOn ?? "G7.1 C{r}";
+        string letter = FanucAxes.CylinderLetter(write);
+        string? template = off
+            ? transform?.CylinderOff ?? "G7.1 " + letter + "0"
+            : transform?.CylinderOn ?? "G7.1 " + letter + "{r}";
         if (!off && FanucFunctions.NumberOf(cylinder.Value) is decimal radius)
         {
             write.SetReal(values, "r", radius, template);
@@ -370,7 +396,9 @@ internal static class FanucFrames
     }
 
     // TOLERANCE through [tolerance]: G5.1 Q1 switches AI contour control on, the tolerance itself sits in a parameter
-    // (controllers fanuc.md 4; controller-mapping 1, TOLERANCE; D85).
+    // (controllers fanuc.md 4; controller-mapping 1, TOLERANCE; D85). ON_ROTARY is written instead of ON while
+    // TOLERANCE:ROTARY is set (D151); the report of a value the template cannot carry, CMP015, is the compiler
+    // framework's, and held_comment adds "(TOL 0.005 ...)" beside the switch (D367).
     private static void WriteTolerance(FanucBlock write)
     {
         if (write.Block.Find("TOLERANCE", null) is not Word tolerance)
@@ -388,9 +416,9 @@ internal static class FanucFrames
         write.Written("TOLERANCE_MODE");
         ToleranceTable? table = write.Machine.Tolerance;
         bool off = tolerance.Value.ToCanonical() == "OFF";
-        string? template = off ? table?.Off : table?.On;
-        var values = new TemplateValues();
         ToleranceState state = write.After.Frame.Tolerance;
+        string? template = off ? table?.Off : ToleranceTemplate.On(table, state);
+        var values = new TemplateValues();
         if (state.Value is decimal value)
         {
             write.SetReal(values, "tol", value, template);
@@ -407,10 +435,33 @@ internal static class FanucFrames
             values.Set("mode", modeValue);
         }
 
-        if (write.Render(template, "[tolerance] (machine-config 5, D85)", values) is string text)
+        string what = off ? "[tolerance] OFF (machine-config 5, D85)" : ToleranceTemplate.What(table, state);
+        if (write.Render(template, what, values) is string text)
         {
-            write.Write(text);
+            string? comment = off ? null : ToleranceTemplate.Comment(table, state);
+            write.Write(comment is null ? text : text + " (" + write.CommentText(comment) + ")");
         }
+    }
+
+    // PATH_MODE after the tolerance words, G61 or G64 through [transform] (D349; 30i-B B-64484EN-2 p.27-28); an empty
+    // or missing template is the WARNING CMP361.
+    private static void WritePathMode(FanucBlock write, TransformTable? transform)
+    {
+        if (write.Block.Find("PATH_MODE") is not Word word)
+        {
+            return;
+        }
+
+        write.Written(word);
+        string? template = PathModeTemplate.Of(transform, write.After.Frame);
+        if (string.IsNullOrEmpty(template))
+        {
+            write.Warning(DiagnosticCodes.FanucOptionNotWritten,
+                PathModeTemplate.NotWritten(word.ToCanonical(), write.After.Frame));
+            return;
+        }
+
+        write.Write(template);
     }
 
     // ROTARY_PATH and ROTARY_FEED through [transform]; without a template the Fanuc roll-over setting decides, a

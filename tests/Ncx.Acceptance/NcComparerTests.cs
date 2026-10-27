@@ -24,6 +24,16 @@ public sealed class NcComparerTests
         Assert.Null(s_fanuc.Compare(Program, Program, []));
     }
 
+    // D283: a units block in the compiled header that the source lacks is not a difference; one in the body is.
+    [Fact]
+    public void Compare_UnitsBlockTheSourceLacks_DoesNotCountInTheHeader()
+    {
+        const string Source = "%\nO0001\nN10 G0 G40\nN20 G0 X10. Y5.\nN30 M30\n%\n";
+
+        Assert.Null(s_fanuc.Compare(Source, "%\nO0001\nG21\nN10 G0 G40\nN20 G0 X10. Y5.\nN30 M30\n%\n", []));
+        Assert.NotNull(s_fanuc.Compare(Source, "%\nO0001\nN10 G0 G40\nN20 G0 X10. Y5.\nG21\nN30 M30\n%\n", []));
+    }
+
     // Comparison rules: block numbers do not count, N10 against N20 and 5 against 7, nor whether a block has one.
     [Fact]
     public void Compare_BlockNumbersThatDiffer_DoNotCount()

@@ -31,17 +31,20 @@ internal static class SiemensGroups
     /// <summary>The group of the feed type and the constant surface speed.</summary>
     public const int FeedType = 15;
 
+    /// <summary>The group of the exact stop and the continuous path.</summary>
+    public const int PathMode = 10;
+
     /// <summary>The group of the diameter programming.</summary>
     public const int Diameter = 29;
 
     // The groups whose commands NCX has no word for, kept as RAW modal words (controllers siemens.md 2;
-    // controller-mapping 9): the block buffer, the exact stop and the continuous path, the corner and approach
-    // behaviour, the acceleration,
+    // controller-mapping 9): the block buffer, the non-modal exact stop G9 and the exact stop windows, the corner and
+    // approach behaviour, the acceleration,
     // the offset types, the feed forward, the orientation, the compressors, the path reference, the point-to-point
     // motion, the frame rotations of the tool and the workpiece, the dynamic mode.
     private static readonly int[] s_rawGroups =
     [
-        4, 10, 11, 12, 16, 17, 18, 21, 22, 24, 25, 30, 45, 49, 50, 51, 52, 53, 59,
+        4, 11, 12, 16, 17, 18, 21, 22, 24, 25, 30, 45, 49, 50, 51, 52, 53, 59,
     ];
 
     // Words outside the table of siemens 2 that NCX has no word for either (controllers siemens.md 3, 6).
@@ -152,6 +155,9 @@ internal static class SiemensGroups
                 // siemens.md 3; controller-mapping 1, FRAME=MACHINE).
                 block.MachineFrame = word;
                 break;
+            case PathMode:
+                ReadPathMode(block, word, command);
+                break;
             case 13:
                 ReadUnits(block, word, command);
                 break;
@@ -202,15 +208,65 @@ internal static class SiemensGroups
         AddModal(block, "WORKPLANE", plane.ToString());
     }
 
-    // G70 and G700 are inch, G71 and G710 metric (controller-mapping 1, UNITS).
-    // TODO(question): controller-mapping 1 has the reader report which pair the source used, G70/G71 for the geometry
-    // only or G700/G710 for everything, so that the compiler keeps it, and no word or key carries it yet (the draft
-    // decision of phase 5); both pairs are read as UNITS, and under G70 on a metric machine the feed stays metric on
-    // the control while NCX reads it in inches.
+    // G60 is PATH_MODE=EXACT_STOP and G64 PATH_MODE=CONTINUOUS, written where the mode changes; G641 to G645, the
+    // continuous path with rounding by ADIS or by tolerances, have no NCX value and stay RAW words, after which the
+    // reader no longer knows that the control runs G64, so the next G60 or G64 is written again (D349; controllers
+    // siemens.md 2; controller-mapping 1, PATH_MODE).
+    private static void ReadPathMode(SiemensBlock block, SourceWord word, string command)
+    {
+        if (command is "G60" or "G64")
+        {
+            block.MarkRead(word);
+            AddModal(block, "PATH_MODE", command == "G60" ? "EXACT_STOP" : "CONTINUOUS");
+            return;
+        }
+
+        block.Facts.Written.Remove("PATH_MODE");
+        block.KeepAsRawWord(word);
+    }
+
+    // G70 and G700 are inch, G71 and G710 metric, UNITS as written (controller-mapping 1, UNITS; D292). G70 and G71
+    // switch only the geometry and leave the feeds in the basic system of MD10240, so where the pair differs from
+    // base_units the reader converts the feeds under it (SiemensMotion.FeedInNcxUnits); G700 and G710 switch the feeds
+    // too (NC-Programmierung SW4.92 p.164-166, cnc-manuals).
+    // The control keeps the physical feed across a switch of group 13 (Funktionshandbuch Grundfunktionen 2012 p.342;
+    // NC-Programmierung SW4.92 p.165), while an NCX F is a number in the active UNITS: where the switch changes UNITS,
+    // the reader converts the modal feed into the new unit and writes it on the next feed motion, with RDR507, and
+    // warns where it does not know the feed (D292).
     private static void ReadUnits(SiemensBlock block, SourceWord word, string command)
     {
         block.MarkRead(word);
-        AddModal(block, "UNITS", command is "G70" or "G700" ? "INCH" : "MM");
+        SiemensFacts facts = block.Facts;
+        string units = command is "G70" or "G700" ? "INCH" : "MM";
+        facts.Written.TryGetValue("UNITS", out string? before);
+        facts.UnitsCode = command;
+        AddModal(block, "UNITS", units);
+        // A block that programs its own F replaces the modal feed.
+        if (before is null || before == units || block.Find("F") is not null)
+        {
+            return;
+        }
+
+        if (facts.ControlFeed is not Value feed)
+        {
+            if (!facts.FeedProgrammed)
+            {
+                return;
+            }
+
+            block.Draft.Warnings.Add(new SiemensWarning(DiagnosticCodes.SiemensFeedInTheBasicSystem,
+                $"{command} switches UNITS to {units}, and the reader does not know the feed of the control here, "
+                + "which the control keeps across the switch; a feed motion without F after it moves at that feed "
+                + "(D292)."));
+            return;
+        }
+
+        Value converted = SiemensMotion.Converted(block, feed, units == "INCH");
+        facts.ControlFeed = converted;
+        facts.WrittenFeed = null;
+        block.Draft.Warnings.Add(new SiemensWarning(DiagnosticCodes.SiemensFeedInTheBasicSystem,
+            $"{command} switches UNITS to {units}, and the control keeps the feed {feed.ToCanonical()} across the "
+            + $"switch; the reader writes it as {converted.ToCanonical()} on the next feed motion (D292)."));
     }
 
     // G94 is feed per minute, G95 per revolution of the master spindle (controller-mapping 2, FEED_MODE); G93, inverse

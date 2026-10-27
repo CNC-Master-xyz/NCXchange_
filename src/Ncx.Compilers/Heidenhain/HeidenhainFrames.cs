@@ -30,6 +30,50 @@ internal static class HeidenhainFrames
         WriteMode(writing, "ROTARY_FEED", "MM_MIN", transform?.RotaryFeedMmMin, "M116", transform?.RotaryFeedDegMin,
             "M117");
         WriteTolerance(writing);
+        WritePathMode(writing, transform);
+        RefuseCylinder(writing);
+    }
+
+    // PATH_MODE after the tolerance words through [transform] (D349); Klartext has no modal switch, so the shipped
+    // file leaves both templates empty, and an empty or missing one is the WARNING CMP120.
+    private static void WritePathMode(HeidenhainBlock writing, TransformTable? transform)
+    {
+        if (writing.Take("PATH_MODE") is not Word word)
+        {
+            return;
+        }
+
+        string? template = PathModeTemplate.Of(transform, writing.After.Frame);
+        if (string.IsNullOrEmpty(template))
+        {
+            writing.Warning(DiagnosticCodes.HeidenhainPathModeNotWritten,
+                PathModeTemplate.NotWritten(word.ToCanonical(), writing.After.Frame));
+            return;
+        }
+
+        writing.Template(template, "[transform] PATH_MODE (machine-config 5, D349)", new TemplateValues());
+    }
+
+    // CYLINDER maps to cycle 27, ZYLINDER-MANTEL (controller-mapping 1, CYLINDER): an SL cycle whose contour stands in
+    // a subprogram that cycle 14 names, with the depth Q1, the infeed Q10, the feeds Q11 and Q12 and the radius Q16
+    // (iTNC 530 Zyklen 670388-12 p. 227-229). D146 fixes the letters of that contour per family: on the TNC 640 always
+    // X and Y, on the iTNC 530 the machine's own rotary letter and the axis parallel to it, never the NCX letter passed
+    // through (decisions.md D146).
+    // TODO(question): NCX CYLINDER is a modal transformation of the motion blocks that follow it, and no decision says
+    // how those blocks become the contour subprogram of cycle 14 nor where cycle 27 takes Q1, Q3, Q6, Q10, Q11, Q12
+    // and Q17 from, which no NCX word carries; CYLINDER is reported (CMP101) and nothing is written for it, so no C
+    // word reaches the output under the NCX letter.
+    private static void RefuseCylinder(HeidenhainBlock writing)
+    {
+        if (writing.Take("CYLINDER") is not Word cylinder)
+        {
+            return;
+        }
+
+        writing.Error(DiagnosticCodes.HeidenhainWordWithoutKlartext,
+            $"{cylinder.ToCanonical()}: Klartext machines a cylinder surface with cycle 27, whose contour stands in a "
+            + "subprogram of cycle 14 in the letters of the control (D146), and the compiler writes no such contour "
+            + "from the motion blocks under CYLINDER; nothing is written for it (controller-mapping 1, CYLINDER).");
     }
 
     /// <summary>
@@ -192,10 +236,10 @@ internal static class HeidenhainFrames
             values.Set("rotary", rotary);
         }
 
-        bool rotaryTemplate = state.Rotary is not null && table?.OnRotary is not null;
-        string what = rotaryTemplate
-            ? "[tolerance] ON_ROTARY (machine-config 5, D151)"
-            : "[tolerance] ON (machine-config 5, D85)";
-        writing.Template(rotaryTemplate ? table?.OnRotary : table?.On, what, values);
+        writing.Template(ToleranceTemplate.On(table, state), ToleranceTemplate.What(table, state), values);
+        if (ToleranceTemplate.Comment(table, state) is string comment)
+        {
+            writing.Line(HeidenhainProgramFrame.CommentLine(writing.CommentText(comment)));
+        }
     }
 }

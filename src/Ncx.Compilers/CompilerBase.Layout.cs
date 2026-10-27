@@ -11,6 +11,9 @@ public abstract partial class CompilerBase
     // What the warning block of D10 names when the machine file names no tool table.
     private const string NoToolTable = "NONE, THE MACHINE FILE NAMES NO TOOL_TABLE";
 
+    // The final file names of the programs under file_per_program, once per compile (D266).
+    private Dictionary<Section, string>? _programFileNames;
+
     // The output files of the compile, per program_layout (machine-config 2, D48).
     // TODO(question): machine-config 2 gives program_layout no default; a machine file that leaves it out writes one
     // file, as "one_file", the first value it lists, until that is answered.
@@ -18,13 +21,13 @@ public abstract partial class CompilerBase
     {
         NcxProgram program = _program ?? throw NotCompiling();
         string stem = Path.GetFileNameWithoutExtension(program.FileName);
-        return Machine.Format?.ProgramLayout == ProgramLayout.FilePerProgram ? FilePerProgram(stem) : OneFile(stem);
+        return Machine.Format?.ProgramLayout == ProgramLayout.FilePerProgram ? FilePerProgram() : OneFile(stem);
     }
 
     // program_layout = "one_file": every program and subprogram of the NCX file in one output file (machine-config 2,
     // D48), the programs in file order, each SUB once, after the first program that calls it (language 4.13, D99).
-    // TODO(question): language 4.13 places a subprogram after the M30 of its caller, and no document says where one
-    // that no program calls goes in one file; it follows the last program, before FILE=END, until that is answered.
+    // D264: every SUB is written at least once; under one_file a SUB that no program calls follows the last program,
+    // before FILE=END.
     private List<CompiledFile> OneFile(string stem)
     {
         NcxProgram source = _program ?? throw NotCompiling();
@@ -63,16 +66,38 @@ public abstract partial class CompilerBase
     }
 
     // program_layout = "file_per_program": one output file per program, the subprograms copied after the M30 of every
-    // program that calls them (machine-config 2, D48; language 4.13, D99).
-    // TODO(question): under "file_per_program" a subprogram is written once per calling program (D99), and no
-    // document says what becomes of one that no program calls; it stands in no file, with a WARNING, until that is
-    // answered.
-    private List<CompiledFile> FilePerProgram(string stem)
+    // program that calls them (machine-config 2, D48; language 4.13, D99). D264: a SUB that no program calls is
+    // written once, into the first program's file, after that program's subprograms and its M30, before its footer.
+    // In a channel program of a job D316 applies instead: the job compiler reports such a SUB, and its library file
+    // holds it, since one channel cannot reach another channel's file.
+    private List<CompiledFile> FilePerProgram()
     {
         NcxProgram source = _program ?? throw NotCompiling();
         var files = new List<CompiledFile>();
-        var names = new List<string>();
         var called = new List<Section>();
+        foreach (ProgramText program in _programs)
+        {
+            foreach (Section sub in source.Subs)
+            {
+                if (program.CalledSubs.Contains(sub) && !called.Contains(sub))
+                {
+                    called.Add(sub);
+                }
+            }
+        }
+
+        var uncalled = new List<Section>();
+        if (Options.Job is null)
+        {
+            foreach (Section sub in source.Subs)
+            {
+                if (!called.Contains(sub))
+                {
+                    uncalled.Add(sub);
+                }
+            }
+        }
+
         foreach (ProgramText program in _programs)
         {
             OutputBuffer output = NewOutput();
@@ -84,26 +109,19 @@ public abstract partial class CompilerBase
                 if (program.CalledSubs.Contains(sub))
                 {
                     subs.Add(sub);
-                    called.Add(sub);
                 }
             }
 
             WriteSubprograms(output, subs);
+            if (ReferenceEquals(program, _programs[0]))
+            {
+                WriteSubprograms(output, uncalled);
+            }
+
             output.Add(program.Footer);
             output.Add(_fileEnd);
-            string name = FileNameOf(program.Program, stem, names) + FileExtension;
+            string name = ProgramFileName(program.Program) + FileExtension;
             files.Add(new CompiledFile { Name = name, Text = output.ToText(Diagnostics) });
-        }
-
-        foreach (Section sub in source.Subs)
-        {
-            if (!called.Contains(sub))
-            {
-                Diagnostics.Warning(source.Blocks[sub.FirstBlock], DiagnosticCodes.UncalledSubprogramNotWritten,
-                    $"SUB {sub.Name} is called by no program, and under program_layout = \"file_per_program\" a "
-                    + "subprogram stands in the file of every program that calls it, so it is in no output file "
-                    + "(machine-config 2, language 4.13, D99).");
-            }
         }
 
         return files;
@@ -181,20 +199,51 @@ public abstract partial class CompilerBase
         return new OutputBuffer(Machine.Format, BlockNumberPrefix, TakesBlockNumber, OwnBlockNumber);
     }
 
-    // TODO(question): under "file_per_program" the file of a program is named after the program, as Klartext names a
-    // file after its program (controllers heidenhain.md 1), and no document names the file of a program without NAME.
-    // It takes the name of the NCX file, and a name that is taken already gets _2, _3 in the order of the programs,
-    // until that is answered.
-    private static string FileNameOf(Section program, string stem, List<string> names)
+    /// <summary>
+    /// The final name of a program's output file under program_layout = "file_per_program", without extension, which
+    /// BEGIN PGM and END PGM carry as well (D266): the NAME of the program, the NCX file stem for a program without
+    /// NAME; names are compared case-insensitively, and a taken name gets _2, _3 in file order with the WARNING CMP005.
+    /// Under one_file the NAME or the stem as they are.
+    /// </summary>
+    /// <param name="program">A program section of the file being compiled.</param>
+    protected string ProgramFileName(Section program)
     {
-        string name = program.Name ?? stem;
-        string candidate = name;
-        for (int suffix = 2; names.Contains(candidate); suffix++)
+        NcxProgram source = _program ?? throw NotCompiling();
+        string stem = Path.GetFileNameWithoutExtension(source.FileName);
+        if (Machine.Format?.ProgramLayout != ProgramLayout.FilePerProgram)
         {
-            candidate = name + "_" + suffix.ToString(CultureInfo.InvariantCulture);
+            return program.Name ?? stem;
         }
 
-        names.Add(candidate);
-        return candidate;
+        _programFileNames ??= ProgramFileNames(source, stem);
+        return _programFileNames.TryGetValue(program, out string? name) ? name : program.Name ?? stem;
+    }
+
+    // The final file names of the programs in file order, each taken name with _2, _3 and the WARNING CMP005 (D266).
+    private Dictionary<Section, string> ProgramFileNames(NcxProgram source, string stem)
+    {
+        var names = new Dictionary<Section, string>();
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (Section program in source.Programs)
+        {
+            string name = program.Name ?? stem;
+            string candidate = name;
+            for (int suffix = 2; taken.Contains(candidate); suffix++)
+            {
+                candidate = name + "_" + suffix.ToString(CultureInfo.InvariantCulture);
+            }
+
+            if (candidate != name)
+            {
+                Diagnostics.Warning(source.Blocks[program.FirstBlock], DiagnosticCodes.ProgramNameTaken,
+                    $"The program name {name} is taken already by an earlier program of the file (names are compared "
+                    + $"case-insensitively), so its file is named {candidate} (machine-config 2, D266).");
+            }
+
+            taken.Add(candidate);
+            names.Add(program, candidate);
+        }
+
+        return names;
     }
 }
