@@ -45,7 +45,24 @@ internal static class HeidenhainCompile
     /// <param name="tables">TOML tables the file does not have.</param>
     public static MachineConfig MillAnd(string tables)
     {
-        return Load(ReadMachineFile() + "\n" + tables + "\n");
+        string toml = tables.Contains("[transform]", StringComparison.Ordinal)
+            ? WithoutTable(ReadMachineFile(), "[transform]")
+            : ReadMachineFile();
+        return Load(toml + "\n" + tables + "\n");
+    }
+
+    // The text of a machine file without one of its tables, from its header to the next table: a test that adds its
+    // own [transform] replaces the path mode table of the file (D349), since TOML defines a table once.
+    private static string WithoutTable(string toml, string header)
+    {
+        int start = toml.IndexOf("\n" + header, StringComparison.Ordinal);
+        if (start < 0)
+        {
+            return toml;
+        }
+
+        int end = toml.IndexOf("\n[", start + 1, StringComparison.Ordinal);
+        return toml.Remove(start, (end < 0 ? toml.Length : end) - start);
     }
 
     /// <summary>

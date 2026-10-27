@@ -233,7 +233,9 @@ internal static class SiemensRead
 
     private static MachineConfig FiveAxisMachine(string transform)
     {
-        string text = File.ReadAllText(Path.Combine(Fixture.RepositoryRoot(), "machines", "siemens-840dsl-mill.toml"));
+        string text = WithoutTable(
+            File.ReadAllText(Path.Combine(Fixture.RepositoryRoot(), "machines", "siemens-840dsl-mill.toml")),
+            "[transform]");
         int positions = text.IndexOf("\n[positions]", StringComparison.Ordinal);
         Assert.True(positions >= 0, "The mill of machines/ has no [positions] table behind its axes.");
         var diagnostics = new Diagnostics("five-axis.toml");
@@ -244,5 +246,19 @@ internal static class SiemensRead
             Path.Combine(Fixture.RepositoryRoot(), "cycles", "siemens.toml"), Controller.Siemens, diagnostics);
         Assert.True(catalog is not null, diagnostics.ToText());
         return CycleCatalogLoader.WithCatalog(machine, catalog);
+    }
+
+    // The text of a machine file without one of its tables, from its header to the next table: a test that adds its
+    // own [transform] replaces the path mode table of the file (D349), since TOML defines a table once.
+    private static string WithoutTable(string toml, string header)
+    {
+        int start = toml.IndexOf("\n" + header, StringComparison.Ordinal);
+        if (start < 0)
+        {
+            return toml;
+        }
+
+        int end = toml.IndexOf("\n[", start + 1, StringComparison.Ordinal);
+        return toml.Remove(start, (end < 0 ? toml.Length : end) - start);
     }
 }

@@ -421,15 +421,13 @@ public sealed class HeidenhainFrameTests
             HeidenhainCompile.Body(result));
     }
 
-    // The TODO(question) D151 of HeidenhainFrames.WriteTolerance: without TOLERANCE:ROTARY the {rotary} of the template
-    // has no value, which leaves the template unusable (machine-config introduction).
+    // D151: without TOLERANCE:ROTARY the ON template is written, cycle 32 without TA, the safe iTNC form.
     [Fact]
-    public void ToleranceWithoutRotaryTolerance_LeavesTheTemplateWithoutAValue()
+    public void ToleranceWithoutRotaryTolerance_IsCycle32WithoutTa()
     {
         CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program("TOLERANCE=0.02"));
 
-        Assert.Empty(result.Files);
-        Assert.Contains(result.Diagnostics.Items, diagnostic => diagnostic.Message.Contains(
-            "{rotary}", StringComparison.Ordinal));
+        Assert.Equal(
+            "CYCL DEF 32.0 TOLERANZ\nCYCL DEF 32.1 T0,02\nCYCL DEF 32.2 HSC-MODE:0", HeidenhainCompile.Body(result));
     }
 }

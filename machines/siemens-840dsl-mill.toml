@@ -2,7 +2,7 @@
 # Written from controllers/siemens.md, sections 1 to 5 and 12, and the Siemens column of spec/controller-mapping.md with the generic words only: no builder cycles, no structure programming, no RAW:BUILDER vocabulary. Schema draft 8. Not verified on a machine.
 # The point of this file: the plain mill of the Siemens reader and compiler of phase 5, next to millturn1.toml (the mill-turn of MILLTURN_TRANSFER, D104). The T word selects the tool and M6 changes it (siemens 5), D selects the cutting edge, the axes home with G74.
 # D100: every number under [[axis]], [positions], [dynamics] and the spindle limits is plausible for a machine of this class and not verified on the machine.
-# The tables of lathes, rotary axes and several channels ([diameter], [spindle_mode], [spindle_sync], [workpiece], [sync], [transform]) have nothing to configure on this machine.
+# The tables of lathes, rotary axes and several channels ([diameter], [spindle_mode], [spindle_sync], [workpiece], [sync]) have nothing to configure on this machine; [transform] holds only the path mode templates G60 and G64 (D349).
 
 [machine]
 name = "Generic 840D sl vertical mill"
@@ -36,7 +36,8 @@ auto_preload = false               # the compiler writes the PRELOAD words the p
 preload_position = "after_change"  # the corpus writes the next T right after M6 (controller-mapping 3)
 offsets_with_change = false        # D from OFFSET, written where OFFSET stands (siemens 12 rule 3)
 tool_name_allowed = true           # T="NAME" under tool management (siemens 5)
-# TODO(question): a named TOOL needs a {name} template (T=\"{name}\" M6, machine-config 3), and change has one form; which template writes TOOL="NAME" on a machine that also takes numbers? (D172)
+change_named = "T=\"{name}\" M6"   # TOOL="NAME" and a bare TOOL after PRELOAD="NAME"; names are case-sensitive and without special characters (D172)
+preload_named = "T=\"{name}\""     # PRELOAD="NAME" (D172)
 # TODO(question): the preload templates of machine-config 3 use {tool}, while its placeholder list defines {tool} as the tool in the spindle after the block and {next} as the preloaded tool; this file follows the table of machine-config 3 (D150).
 
 [home]
@@ -130,10 +131,18 @@ MAX = ""                           # empty: a computed machine-frame move when t
 BY = ""                            # Siemens has no distance retract word (controller-mapping 1)
 
 [tolerance]                        # the TOLERANCE words (D85)
-ON = "CYCLE832({tol},{mode},{rotary})"
+ON = "CYCLE832({tol},{mode},1)"    # the SINUMERIK Operate form: the third parameter is mandatory and 1 on a program without tool orientation (D151; 840D sl/828D Arbeitsvorbereitung 2013 p.714-716, NC-Programmierung SW 4.92 p.1126-1127)
+ON_ROTARY = "CYCLE832({tol},1{mode},{rotary})"   # written instead of ON while TOLERANCE:ROTARY is set: the tens digit 1 puts the orientation tolerance in the third parameter (D151; same pages)
 OFF = "CYCLE832(0,0,1)"
 mode = { FINISH = 1, ROUGH = 3 }   # value of {mode}: 1 finish, 3 rough (siemens 3)
-# TODO(question): {rotary} needs TOLERANCE:ROTARY, which a program may leave out (language 4, D85), and a machine without rotary axes has no orientation tolerance; which value, or which template without it, is written then? (D151)
+
+[stock]                            # the blank of the control's graphic (D351): WORKPIECE("<WP>","<RefP>","<ZeroOffset>","<Type>",bits,Z0,Z1,ZB,...); bits 4 to 7 make X1, Y1, Z1 and ZB absolute (NC-Programmierung SW 4.92 p.1021-1023)
+BOX = "WORKPIECE(,,,\"BOX\",240,{max_z},{z},{z},{x},{y},{max_x},{max_y})"
+CYLINDER = "WORKPIECE(,,,\"CYLINDER\",192,{max_z},{z},{z},{diameter})"   # about the tool axis through the datum; a cylinder off that axis writes nothing (CMP013)
+
+[transform]                        # the path mode, G group 10 (D349; NC-Programmierung SW 4.92 p.1230); G641 to G645, G9 and G601 to G603 stay RAW
+PATH_MODE_EXACT_STOP = "G60"
+PATH_MODE_CONTINUOUS = "G64"
 
 [cycles]
 catalog = "siemens.toml"           # the 840D sl cycle catalog shipped with NCXchange (siemens 7)

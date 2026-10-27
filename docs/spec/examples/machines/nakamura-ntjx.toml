@@ -218,6 +218,7 @@ wait = "M{mark}"
 mark_range = [100, 199]
 paths = "list"                     # two paths: no P needed; NTY3: P12, P13, P23, P123 (or P3, P5, P6, P7 with parameter 8103#1 = 0)
 start_mark = 199                   # M199 program start synchronization, first block of both programs
+reserved_marks = [199]             # the G196 transfer cycle waits at M199, which a generated SYNC never takes (D315)
 
 [coolant]
 STANDARD = { ON = "M8", OFF = "M9" }

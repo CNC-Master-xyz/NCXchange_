@@ -666,11 +666,14 @@ classDiagram
         +Dictionary~string,FunctionTable~ SpindleTables
         +Dictionary~string,FunctionTable~ SpindleModeTables
         +FunctionTable SpindleSync
+        +List~string~ SpindleSyncPair
         +WorkpieceConfig Workpiece
         +SyncConfig Sync
         +Dictionary~string,FunctionTable~ Coolant
         +Dictionary~string,FunctionTable~ Functions
-        +Dictionary~string,string~ Transform
+        +TransformTable Transform
+        +ToleranceTable Tolerance
+        +StockTable Stock
         +RawTable Raw
         +CycleCatalog Cycles
         +VariablesConfig Variables
@@ -679,6 +682,7 @@ classDiagram
         +ResourceDef ResolveRole(string role)
         +AxisDef ResolveAxis(string ncxName)
         +string FindFunction(string name, string state)
+        +List~string~ SpindleSyncRoles()
     }
     class MachineIdentity {
         +string Name
@@ -723,6 +727,7 @@ classDiagram
         +decimal BlockTime
         +PathMode PathMode
         +decimal CornerSpeed
+        +bool RapidExactStop
     }
     class ResourceDef {
         +string Id
@@ -751,8 +756,10 @@ classDiagram
     }
     class ToolChangeConfig {
         +string Change
+        +string ChangeNamed
         +string ChangePreloaded
         +string Preload
+        +string PreloadNamed
         +string Unload
         +ExpansionRule Rule
         +bool AutoPreload
@@ -791,6 +798,14 @@ classDiagram
     class TemplateSet {
         +Template For(string text)
         +string FindFunctionByCode(string nativeCode)
+        +List~FunctionMatch~ FindFunctionsByCode(string nativeCode)
+    }
+    class FunctionMatch {
+        +string Word
+        +string State
+        +FunctionTable Table
+        +TemplateValues Values
+        +string Key
     }
     class MachineConfigLoader {
         +MachineConfig Load(string path)
@@ -810,6 +825,7 @@ classDiagram
     CycleCatalog "1" *-- "*" CycleEntry
     TemplateSet ..> MachineConfig : parses the template text of
     TemplateSet "1" *-- "*" Template
+    TemplateSet ..> FunctionMatch : answers
     Template "1" *-- "*" Placeholder
     MachineConfigLoader ..> MachineConfig
     MachineConfigLoader ..> JobManifest
@@ -919,8 +935,8 @@ sequenceDiagram
     T-->>R: SourceBlocks
     loop every source block
         R->>S: Apply(block) modal groups, G90/G91, cycle, T code, last spindle
-        R->>M: FindFunctionByCode("M88"), cycle catalog, templates
-        M-->>R: FUNC or SPINDLE:TOOL=CW, cycle entry
+        R->>M: FindFunctionsByCode("M88"), cycle catalog, templates
+        M-->>R: every state of FUNC or SPINDLE:TOOL=CW, cycle entry; the reader keeps those its source state allows (D155)
         R->>B: Begin(line).Verb("LINE").Word("X", null, 10.5)...End()
     end
     R-->>CLI: NcxProgram with diagnostics

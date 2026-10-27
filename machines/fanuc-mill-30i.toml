@@ -2,7 +2,7 @@
 # Written from controllers/fanuc.md and the Fanuc column of spec/controller-mapping.md with the generic words only: no builder tables, no RAW:BUILDER vocabulary. Schema draft 8. Not verified on a machine.
 # The point of this file: the machine of the Fanuc reader and compiler of phase 3 (sources/2.5D_FRAESEN.fanuc.nc, BOHREN.fanuc.nc, 3D_FRAESEN.fanuc.nc) and one of the two machines that 2.5D_FRAESEN, PATTERN_LOOP and INCREMENTAL_SUB check with (P2-04).
 # D100: every number under [[axis]], [positions], [dynamics] and the spindle limits is plausible for a machine of this class and not verified on the machine. The reference point is the machine zero, so the G91 G28 Z0 of the Fanuc sources and the M91 moves to Z0 and X0 Y0 of the Heidenhain sources end at the same place (2.5D_FRAESEN note 4).
-# The tables of lathes, rotary axes and several paths ([diameter], [spindle_mode], [spindle_sync], [workpiece], [sync], [transform]) have nothing to configure on this machine.
+# The tables of lathes, rotary axes and several paths ([diameter], [spindle_mode], [spindle_sync], [workpiece], [sync]) have nothing to configure on this machine; [transform] holds only the path mode templates G61 and G64 (D349). No [stock]: the control has no blank form (D351).
 
 [machine]
 name = "Generic Fanuc 30i vertical mill"
@@ -139,8 +139,15 @@ MAX = ""                           # empty: a computed G53 move when the kinemat
 BY = ""
 
 [tolerance]                        # the TOLERANCE words (D85)
-ON = "G5.1 Q1"                     # AI contour control on; the tolerance itself sits in a parameter and stays RAW (fanuc 4)
+ON = "G5.1 Q1"                     # AI contour control on, alone in its block; no per-program form carries the tolerance, so the compiler reports the value (fanuc 4, D367; 30i-B B-64484EN p.635-636)
 OFF = "G5.1 Q0"
+held_in = "the AI contour control parameters; a tolerance value only in nano smoothing parameter 19581"   # not verified on a machine (D100, D367; 30i-B B-64484EN p.128-129)
+# no held_value: the generic file knows no machine's setting, so CMP015 stays a WARNING (D367)
+# no levels table: the precision level R1 to R10 of G5.1 Q1 R_ is no carrier of the TOLERANCE value (D368; fanuc 4)
+
+[transform]                        # the path mode, G group 15 (D349; 30i-B B-64484EN-2 p.27-28); G62, G63 stay RAW and G61.1 stays with TOLERANCE
+PATH_MODE_EXACT_STOP = "G61"
+PATH_MODE_CONTINUOUS = "G64"
 
 [cycles]
 catalog = "fanuc.toml"             # the Fanuc cycle catalog shipped with NCXchange (machine-config 6)

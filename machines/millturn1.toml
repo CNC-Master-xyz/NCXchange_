@@ -236,7 +236,8 @@ MAX = ""                           # empty: computed machine-frame move when the
 BY = ""                            # Siemens has no distance retract word; computed move under TRAORI with the kinematics module
 
 [tolerance]                        # the TOLERANCE words (D85)
-ON = "CYCLE832({tol},{mode},{rotary})"
+ON = "CYCLE832({tol},{mode},1)"    # the SINUMERIK Operate form, the third parameter 1 without tool orientation (D151; 840D sl/828D Arbeitsvorbereitung 2013 p.714-716)
+ON_ROTARY = "CYCLE832({tol},1{mode},{rotary})"   # while TOLERANCE:ROTARY is set: the tens digit 1 puts the orientation tolerance in the third parameter (D151)
 OFF = "CYCLE832(0,0,1)"
 mode = { FINISH = 1, ROUGH = 3 }   # value of {mode}: 1 finish, 3 rough (siemens 3)
 

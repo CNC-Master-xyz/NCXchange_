@@ -2,7 +2,7 @@
 # Written from controllers/heidenhain.md and the Heidenhain column of spec/controller-mapping.md with the generic words only: no builder tables, no RAW:BUILDER vocabulary. Schema draft 8. Not verified on a machine.
 # The point of this file: the machine of the Heidenhain reader and compiler of phase 3 (sources/2.5D_FRAESEN.h, BOHREN.h, 3D_FRAESEN.h) and one of the two machines that 2.5D_FRAESEN, PATTERN_LOOP and INCREMENTAL_SUB check with (P2-04). The control has no reference point command: the compiler writes HOME as L ... FMAX M91 to the home of each axis (heidenhain 8 rule 5), which is why every axis carries one.
 # D100: every number under [[axis]], [positions], [dynamics] and the spindle limits is plausible for a machine of this class and not verified on the machine. The reference point is the machine zero, so the L Z0 FMAX M91 and L X0 Y0 FMAX M91 of the sources are the HOME Z and HOME X Y of the Fanuc sources (2.5D_FRAESEN note 4).
-# The tables of lathes, rotary axes and several channels ([diameter], [spindle_mode], [spindle_sync], [workpiece], [sync], [transform]) have nothing to configure on this machine.
+# The tables of lathes, rotary axes and several channels ([diameter], [spindle_mode], [spindle_sync], [workpiece], [sync]) have nothing to configure on this machine; [transform] holds only the path mode templates, both empty because Klartext has no modal switch for it (D349).
 
 [machine]
 name = "Generic Heidenhain iTNC 530 vertical mill"
@@ -124,10 +124,17 @@ MAX = "M140 MB MAX"                # bare RETRACT: along the tool axis to the li
 BY = "M140 MB{distance}"           # RETRACT=50 as M140 MB50 (heidenhain 2)
 
 [tolerance]                        # the TOLERANCE words (D85)
-ON = "CYCL DEF 32.0 TOLERANZ\nCYCL DEF 32.1 T{tol}\nCYCL DEF 32.2 HSC-MODE:{mode} TA{rotary}"   # cycle 32 (heidenhain 2, machine-config 5)
+ON = "CYCL DEF 32.0 TOLERANZ\nCYCL DEF 32.1 T{tol}\nCYCL DEF 32.2 HSC-MODE:{mode}"   # cycle 32 without TA, the safe iTNC form: the control inserts TA 0 on reading, and alarm 6066 forbids a rotary tolerance with the HSC filter off (heidenhain 2; D151; iTNC530 Zyklen 606420-01 p.310, Parameter-Alarme 2003 p.309)
+ON_ROTARY = "CYCL DEF 32.0 TOLERANZ\nCYCL DEF 32.1 T{tol}\nCYCL DEF 32.2 HSC-MODE:{mode} TA{rotary}"   # written instead of ON while TOLERANCE:ROTARY is set (D151)
 OFF = "CYCL DEF 32.0 TOLERANZ\nCYCL DEF 32.1 T0"
 mode = { FINISH = 0, ROUGH = 1 }   # value of {mode}: HSC-MODE 0 finish, 1 rough (heidenhain 2)
-# TODO(question): TA{rotary} needs TOLERANCE:ROTARY, which a program may leave out (language 4, D85), and a machine without rotary axes has no rotary tolerance; which value, or which template without TA, is written then? (D151)
+
+[stock]                            # the blank of the control's graphic (D351): the iTNC 530 has the cuboid only, by its MIN and MAX point, so no CYLINDER (iTNC530 Klartext 340490 p.114-115)
+BOX = "BLK FORM 0.1 {axis} X{x} Y{y} Z{z}\nBLK FORM 0.2 X{max_x} Y{max_y} Z{max_z}"
+
+[transform]                        # Klartext has no modal switch between exact stop and continuous path: PATH_MODE writes nothing, with a WARNING of the compiler (D349); M90 stays RAW
+PATH_MODE_EXACT_STOP = ""
+PATH_MODE_CONTINUOUS = ""
 
 [cycles]
 catalog = "heidenhain.toml"        # the Heidenhain cycle catalog shipped with NCXchange (machine-config 6)

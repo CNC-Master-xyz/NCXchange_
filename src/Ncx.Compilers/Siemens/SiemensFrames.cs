@@ -512,9 +512,8 @@ internal static partial class SiemensFrames
 
     // TOLERANCE through [tolerance], CYCLE832(tol, mode, otol), OFF as CYCLE832(0,0,1); TOLERANCE:ROTARY and
     // TOLERANCE_MODE write it again while it is on (machine-config 5; controller-mapping 1, TOLERANCE; D85).
-    // TODO(question): D151: the ON template needs {rotary}, which TOLERANCE:ROTARY may leave without a value; the
-    // template is then unusable and the compiler reports it, as machine-config says of a missing placeholder value,
-    // until D151 is answered.
+    // ON_ROTARY is written instead of ON while TOLERANCE:ROTARY is set; a machine without it writes ON (D151). The
+    // report of a value the template cannot carry, CMP015, is the compiler framework's (D367).
     private static void WriteTolerance(SiemensBlock write)
     {
         Block block = write.Block;
@@ -553,7 +552,11 @@ internal static partial class SiemensFrames
             values.Set("mode", modeValue);
         }
 
-        if (write.Render(table?.On, "[tolerance] ON (machine-config 5, D85)", values) is string on)
+        bool rotaryTemplate = state.Rotary is not null && table?.OnRotary is not null;
+        string what = rotaryTemplate
+            ? "[tolerance] ON_ROTARY (machine-config 5, D151)"
+            : "[tolerance] ON (machine-config 5, D85)";
+        if (write.Render(rotaryTemplate ? table?.OnRotary : table?.On, what, values) is string on)
         {
             write.Write(on);
         }
