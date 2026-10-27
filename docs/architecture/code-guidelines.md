@@ -16,7 +16,7 @@ The specification is the design; the code implements it sentence by sentence. Co
 Rules:
 
 - Every non-trivial method or block of logic begins with a comment that says what is being established, in the language of the specification, with the section in brackets: `// A different tool preloaded than called is a WARNING, the magazine cycles twice (virtual machine 3.5).`
-- A comment describes intent and rule, never mechanics. `// Increment i` is forbidden; `// Consume the preload only when it names the tool that arrives` is the point.
+- A comment describes intent and rule, never mechanics. `// Increment i` is forbidden; `// The tool that arrives consumes any preload` is the point.
 - Where a comment would narrate what the code obviously does, the code needs a better name instead of a comment.
 - Public types and members of `Ncx.Core`, `Ncx.Config`, `Ncx.Readers`, `Ncx.Compilers` and `Ncx.Plugins` carry XML documentation comments (`/// <summary>`), because plugins and future front ends are written against them (the four plugin interfaces live in Core, Readers and Compilers, D106). Internal members carry XML comments only when the summary says something the name does not.
 - Microsoft's comment style applies: `//` single-line comments on their own line above the code, one space after the delimiter, first letter uppercase, a full stop at the end; no `/* */` blocks; no comments at the end of a code line except for a table-like sequence of constants.
@@ -34,9 +34,8 @@ namespace Ncx.Core.VirtualMachine;
 /// </summary>
 internal static class ToolChangeRules
 {
-    // TOOL=n puts n into the spindle. The preload is consumed only when it names the
-    // tool that arrives; a different preload is a WARNING because the magazine has to
-    // cycle twice (virtual machine 3.5, row TOOL=n).
+    // TOOL=n puts n into the spindle and consumes any preload; a different preload is
+    // a WARNING because the magazine has to cycle twice (virtual machine 3.5, row TOOL=n).
     public static void ApplyTool(HolderState holder, ToolRef tool, Block block, Diagnostics diagnostics)
     {
         if (holder.Preloaded is ToolRef preloaded && preloaded != tool)
@@ -48,7 +47,7 @@ internal static class ToolChangeRules
         // The change itself: TOOL_END for the old tool, TOOL_BEGIN for the new one, is
         // raised by the caller from the Before and After snapshots.
         holder.SpindleTool = tool;
-        holder.Preloaded = holder.Preloaded == tool ? null : holder.Preloaded;
+        holder.Preloaded = null;
     }
 
     // A bare TOOL changes to the preloaded tool and is an ERROR when nothing is
@@ -97,7 +96,7 @@ We follow the Microsoft conventions as written. The list below is what a reviewe
 ### 3.3 Layout
 
 - Four spaces, no tabs; Allman braces (opening and closing brace on their own line); one statement and one declaration per line; continuation lines indented one level; a blank line between members; parentheses that make clauses apparent; line breaks before binary operators.
-- Line length: the Microsoft page limits doc samples to 65 characters for mobile screens; this project uses 120 and lets the formatter enforce it.
+- Line length: the Microsoft page limits doc samples to 65 characters for mobile screens; this project uses 120 and lets CI enforce it: dotnet format has no line-length rule, so a step of the CI workflow fails on any `*.cs` line over 120 characters in `src/` and `tests/` (D109).
 - One type per file, file name equals type name, folder path equals namespace (`src/Ncx.Core/VirtualMachine/ToolChangeRules.cs` is `Ncx.Core.VirtualMachine.ToolChangeRules`).
 - Member order inside a type: constants and static fields, instance fields, constructors, properties, public methods, private methods.
 
@@ -105,7 +104,7 @@ We follow the Microsoft conventions as written. The list below is what a reviewe
 
 - `async`: the Microsoft page recommends `async`/`await` for I/O-bound work. NCXchange is a batch command that reads one file and writes one file; the code is synchronous by decision, and a server front end that wants asynchrony wraps it later (KISS).
 - Nullable reference types are enabled everywhere and warnings are errors; `?` on a type is a statement that null is a valid value, and every such value is handled at the point of use, not by a null check three calls later.
-- Number parsing and formatting always pass `CultureInfo.InvariantCulture`. An implementation that parses with the OS culture reads `X10.5` as ten thousand five hundred on a German-Swiss machine (this has happened); the analyzer rule CA1305 is an error in this repository.
+- Number parsing and formatting always pass `CultureInfo.InvariantCulture`. An implementation that parses with the OS culture reads `X10.5` as ten thousand five hundred on a German-Swiss machine (this has happened); the analyzer rule CA1305 is an error in this repository and checks every project (D108).
 - `sealed` by default on classes that are not designed for inheritance; `internal` by default with `InternalsVisibleTo` for the test projects; `public` only for what plugins and front ends need.
 - `record` for immutable data (blocks, words, values, options, events), `class` for state that changes (`ChannelState` and its parts), `readonly record struct` for small values such as `Vec3`.
 - Pattern matching (`switch` expressions, `is` patterns) is the way to dispatch on value types and events; no Visitor classes.
@@ -178,7 +177,7 @@ Patterns we do not use, on purpose:
 - Anything the user can cause (a wrong word, an unknown role, an arc that does not close, a missing machine file) is a `Diagnostic`, never an exception. The stage records it and continues where the specification allows (WARNING) or stops the run (ERROR); the CLI prints the list and sets the exit code (0, 1, 2 per D97).
 - Exceptions are for programmer errors (`InvalidOperationException` when a handler is called with a word its catalog entry excludes) and for I/O and environment (`IOException`, `FileNotFoundException`), caught only at the composition root and reported as a diagnostic with the file name.
 - Diagnostic codes are constants in one class per project (`DiagnosticCodes.PreloadMismatch = "VM042"`), stable across versions so that tests can assert on them and users can search for them. A code is an area prefix and three digits: `PAR` (lexer, parser, catalog), `VM`, `CFG`, `RDR`, `CMP`, `ANA`, `PLG`, `CLI`; a diagnostic is rendered as `file(line): ERROR VM042: message`; the severities are ERROR, WARNING and INFO, where INFO carries notes that are neither (`plugin MyShopRules: inserted 2 blocks at line 12`) (D98).
-- Every diagnostic carries the line of the NCX block or source block and, for generated blocks, the line of the originating block (`OriginLine`, D98).
+- Every diagnostic carries the line of the NCX block or source block and, for generated blocks, the line of the originating block (`OriginLine`, D98); a generated block has the line of its origin, and a diagnostic on it starts its message with the rule or rewriter and its reason (D200). The one exception is a diagnostic about the command line, which stands on no line of a file: `Diagnostic.Line` is null and it renders as `ncx: ERROR CLI001: message` (`Diagnostics.CommandLineError`). A diagnostic about a whole file (CLI002, the loaders of `Ncx.Config`) keeps line 1 of that file (D110).
 - No `catch (Exception)` without a filter; no swallowing; no logging framework in 1.0 (the diagnostics list is the log).
 
 ## 7. Types and data
@@ -203,9 +202,9 @@ Patterns we do not use, on purpose:
 
 ## 9. Repository settings
 
-- `Directory.Build.props` at the root: `<TargetFramework>` the current LTS, `<Nullable>enable</Nullable>`, `<ImplicitUsings>enable</ImplicitUsings>`, `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`, `<AnalysisLevel>latest-recommended</AnalysisLevel>`, `<EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>`, `<InvariantGlobalization>true</InvariantGlobalization>`.
+- `Directory.Build.props` at the root: `<TargetFramework>` the current LTS, `<Nullable>enable</Nullable>`, `<ImplicitUsings>enable</ImplicitUsings>`, `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`, `<AnalysisLevel>latest-recommended</AnalysisLevel>`, `<EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>`, and the item `<RuntimeHostConfigurationOption Include="System.Globalization.Invariant" Value="true" />`, which makes every executable run culture-independent without the `InvariantGlobalization` property, under which the analyzers do not report CA1305 at all (D108).
 - `.editorconfig` copied from `dotnet/docs` as the starting point, with the project's additions: 120-character lines, `dotnet_diagnostic.CA1305.severity = error` (specify `IFormatProvider`), `csharp_style_namespace_declarations = file_scoped:error`.
-- `dotnet format --verify-no-changes` and `dotnet test` run in CI on every push; a formatting difference fails the build.
+- `dotnet format --verify-no-changes` and `dotnet test` run in CI on every push; a formatting difference fails the build, and so does a C# line over 120 characters (a grep step, D109).
 - License of the project: MIT (D75). Packages: Tomlyn (TOML), System.CommandLine (CLI), xUnit; each addition gets a line in the decision log with its license.
 - Every source file starts with the file-scoped namespace, no license header (the repository license covers it).
 

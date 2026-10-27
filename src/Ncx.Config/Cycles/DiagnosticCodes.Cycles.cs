@@ -4,11 +4,11 @@ namespace Ncx.Config;
 // renumbered or reused. A catalog file and the [[cycle]] entries of a machine file report the codes of loading as
 // well: a file that is not TOML, an unknown key, a wrong type, a missing name or native (CFG001-CFG004).
 //
-// TODO(question): the documents name no error of a catalog entry. An entry that no program or reader can use is an
-// ERROR (a name written twice in one file, a name or a parameter word NCX cannot write, a contour of more than two
-// words); an entry that can be used but does not hold together is a WARNING (a word of absolute_from_surface without
-// its parameter or without SURFACE, a key that the entries of its controller family leave out), like the unknown
-// keys of P2-01 (D141).
+// D141: an entry that no program or reader can use is an ERROR (CFG150 a name written twice in one file, CFG151 a name
+// or a parameter word NCX cannot write, CFG154 a contour of more than two words); an entry that can be used but does
+// not hold together is a WARNING (CFG152 a word of absolute_from_surface without its parameter, CFG153 one without
+// SURFACE, CFG155 a key that the entries of its controller family leave out), like the unknown keys of P2-01.
+// Machine-config 6 lists the checks and their severities.
 public static partial class DiagnosticCodes
 {
     /// <summary>
@@ -46,4 +46,29 @@ public static partial class DiagnosticCodes
     /// calls are words of their own, a signature on Fanuc, whose parameters are address words (machine-config 6).
     /// </summary>
     public const string CycleKeyOutsideItsFamily = "CFG155";
+
+    /// <summary>
+    /// WARNING: a [cycles] key of the machine holds a distance the control keeps, chip_break_lift or peck_clearance,
+    /// while the defaults of a catalog entry name the same native parameter; the key is the one source the compiler
+    /// writes, and the message names both places (D358).
+    /// </summary>
+    public const string CycleDefaultBesideMachineKey = "CFG156";
+
+    /// <summary>
+    /// WARNING: a catalog file writes channel or available, keys of the [[cycle]] tables of a machine file; the
+    /// loader ignores them (D361, D377).
+    /// </summary>
+    public const string CycleMachineKeyInCatalog = "CFG157";
+
+    /// <summary>
+    /// ERROR: the catalog of a Heidenhain machine writes Q256, the chip-break lift the control holds, and the machine
+    /// sets no [cycles] chip_break_lift, its one source; the loader does not guess a lift (D164, D358).
+    /// </summary>
+    public const string CycleChipBreakLiftMissing = "CFG158";
+
+    /// <summary>
+    /// ERROR: a params word of a catalog entry has the form of a machine axis name, which a program reads as a machine
+    /// axis word of D93 (D114).
+    /// </summary>
+    public const string CycleParameterAxisForm = "CFG159";
 }

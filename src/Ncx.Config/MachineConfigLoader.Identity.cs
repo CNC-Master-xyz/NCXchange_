@@ -10,6 +10,7 @@ public static partial class MachineConfigLoader
     [
         "name", "controller", "dialect", "builder", "gcode_system", "s_binds_to_spindle_word", "limits", "channels",
         "units_default", "default_spindle", "default_holder", "default_workpiece", "tool_table", "kinematics",
+        "arc_tolerance", "arc_radius_tolerance", "dwell_increment", "base_units", "extended_units",
     ];
 
     private static readonly string[] s_controllers = ["fanuc", "heidenhain", "siemens"];
@@ -17,12 +18,21 @@ public static partial class MachineConfigLoader
     private static readonly string[] s_limitPolicies = ["warn", "clamp"];
     private static readonly string[] s_units = ["MM", "INCH"];
 
+    // base_units takes the words of MD10240 in the lower case of the D292 row.
+    private static readonly string[] s_baseUnits = ["mm", "inch"];
+
     private static readonly string[] s_formatKeys =
     [
         "decimal_separator", "decimals", "trailing_zeros", "block_numbers", "line_ending", "program_end", "sub_end",
         "program_layout", "max_line_length", "comment_charset", "external_call", "header",
         "plane_with_first_motion", "motion_code_after_tool_change", "length_offset_with_tool_axis", "channel_files",
+        "label_max", "motion_code", "m_codes_per_block", "m_codes_combinable", "helix_feed",
     ];
+
+    // comment_charset takes these two values; any other is CFG005 (D263).
+    private static readonly string[] s_commentCharsets = ["ASCII", "UTF-8"];
+    private static readonly string[] s_motionCodes = ["change", "arcs", "every_block"];
+    private static readonly string[] s_helixFeeds = ["path", "arc"];
 
     private static readonly string[] s_blockNumberKeys = ["enabled", "start", "step"];
     private static readonly string[] s_lineEndings = ["CRLF", "LF"];
@@ -32,7 +42,7 @@ public static partial class MachineConfigLoader
     private static readonly string[] s_toolChangeKeys =
     [
         "change", "change_preloaded", "preload", "unload", "auto_preload", "preload_position", "offsets_with_change",
-        "tool_name_allowed", "kind_map", "pre", "post", "requires", "restore",
+        "tool_name_allowed", "kind_map", "pre", "post", "requires", "restore", "length_offset_by_macro",
     ];
 
     private static readonly string[] s_preloadPositions = ["after_change", "before_first_motion"];
@@ -74,6 +84,20 @@ public static partial class MachineConfigLoader
             DefaultSpindle = table.Text("default_spindle"),
             DefaultHolder = table.Text("default_holder"),
             DefaultWorkpiece = table.Text("default_workpiece"),
+
+            // The tolerances are lengths in millimetres like rapid and max_feed (D139, D364).
+            ArcTolerance = table.PositiveNumber("arc_tolerance"),
+            ArcRadiusTolerance = table.PositiveNumber("arc_radius_tolerance"),
+            DwellIncrement = table.PositiveNumber("dwell_increment") ?? 0.001m,
+
+            // The basic system and G700/G710 of a Siemens control, MD10240 and MD10260 (D292).
+            BaseUnits = table.Choice("base_units", s_baseUnits) switch
+            {
+                "mm" => "MM",
+                "inch" => "INCH",
+                _ => null,
+            },
+            ExtendedUnits = table.Flag("extended_units"),
         };
     }
 
@@ -119,23 +143,45 @@ public static partial class MachineConfigLoader
                 _ => null,
             },
             MaxLineLength = table.Integer("max_line_length"),
-            CommentCharset = table.Text("comment_charset"),
+            CommentCharset = table.Choice("comment_charset", s_commentCharsets),
             ExternalCall = table.Template("external_call"),
 
-            // TODO(question): the options of the Fanuc output habits that phase 3 asks for (implementation 13, Risks),
-            // which machine-config 2 does not name; the header is a template like program_end (D105).
+            // The options of the Fanuc output habits, adopted as coded; the header is a template like program_end
+            // (D105, D276).
             Header = table.Template("header"),
             PlaneWithFirstMotion = table.Flag("plane_with_first_motion"),
             MotionCodeAfterToolChange = table.Flag("motion_code_after_tool_change"),
             LengthOffsetWithToolAxis = table.Flag("length_offset_with_tool_axis"),
 
-            // TODO(question): the naming of the files of a job's channels, which implementation 16 (P6-02) gives a
-            // [format] key that machine-config 2 does not name.
+            // The naming of the files of a job's channels (D310, machine-config 2).
             ChannelFiles = table.Choice("channel_files", s_channelFiles) switch
             {
                 "path_suffix" => ChannelFiles.PathSuffix,
                 "channel_suffix" => ChannelFiles.ChannelSuffix,
                 "program_name" => ChannelFiles.ProgramName,
+                _ => null,
+            },
+
+            // The label range of a Klartext program, LBL 1 to label_max; 65535 is the largest of the TNC 640 (D271).
+            LabelMax = table.IntegerInRange("label_max", 1, 65535),
+            MotionCode = table.Choice("motion_code", s_motionCodes) switch
+            {
+                "change" => MotionCode.Change,
+                "arcs" => MotionCode.Arcs,
+                "every_block" => MotionCode.EveryBlock,
+                _ => null,
+            },
+
+            // The M codes of one Fanuc block: 1 to 5, and the codes that may join another (D339).
+            MCodesPerBlock = table.IntegerInRange("m_codes_per_block", 1, 5),
+            // Null without the key: no list restricts the codes; an empty list lets no code join another (D339).
+            MCodesCombinable = table.Has("m_codes_combinable")
+                ? table.TextList("m_codes_combinable").Select(FunctionValues.Normalize).ToList()
+                : null,
+            HelixFeed = table.Choice("helix_feed", s_helixFeeds) switch
+            {
+                "path" => HelixFeed.Path,
+                "arc" => HelixFeed.Arc,
                 _ => null,
             },
         };
@@ -152,7 +198,7 @@ public static partial class MachineConfigLoader
         table.WarnUnknownKeys(s_blockNumberKeys);
         return new BlockNumbering
         {
-            Enabled = table.Flag("enabled"),
+            Enabled = table.Has("enabled") ? table.Flag("enabled") : null,
             Start = table.Integer("start"),
             Step = table.Integer("step"),
         };
@@ -182,6 +228,7 @@ public static partial class MachineConfigLoader
                 _ => null,
             },
             OffsetsWithChange = table.Flag("offsets_with_change"),
+            LengthOffsetByMacro = table.Flag("length_offset_by_macro"),
             ToolNameAllowed = table.Flag("tool_name_allowed"),
             KindMap = table.Table("kind_map")?.PlaceholderValues(null) ?? new Dictionary<string, string>(),
             Rule = ReadRule(table),

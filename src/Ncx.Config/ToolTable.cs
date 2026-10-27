@@ -1,3 +1,4 @@
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 
 namespace Ncx.Config;
@@ -15,7 +16,10 @@ public sealed record ToolTable
 {
     // The file is made of [[tool]] tables, each with these keys.
     private static readonly string[] s_tables = ["tool"];
-    private static readonly string[] s_toolKeys = ["number", "name", "kind", "length", "radius"];
+    private static readonly string[] s_toolKeys = ["number", "name", "kind", "length", "radius", "point"];
+
+    // D376: a [[tool]] carries optional [[tool.point]] rows with these keys.
+    private static readonly string[] s_pointKeys = ["k", "tip_offset", "radius", "wear"];
 
     /// <summary>
     /// The tools by number, TOOL=4.
@@ -70,6 +74,7 @@ public sealed record ToolTable
                 Kind = tool.Text("kind"),
                 Length = tool.Number("length"),
                 Radius = tool.Number("radius"),
+                Points = PointsOf(tool),
             };
             if (tool.Integer("number") is int number)
             {
@@ -91,5 +96,53 @@ public sealed record ToolTable
         }
 
         return new ToolTable { Numbered = numbered, Named = named };
+    }
+
+    // D376: the [[tool.point]] rows of a tool, k from 1 and required, tip_offset not negative, radius and wear 0 when
+    // left out; the register radius is not negative either, as POINT_RADIUS is not (D372). A value out of its range is
+    // an ERROR on its line.
+    private static List<ToolPointData> PointsOf(ConfigTable tool)
+    {
+        var points = new List<ToolPointData>();
+        foreach (ConfigTable row in tool.Tables("point"))
+        {
+            row.WarnUnknownKeys(s_pointKeys);
+            int? k = row.RequiredInteger("k");
+            decimal tipOffset = row.Number("tip_offset") ?? 0m;
+            decimal radius = row.Number("radius") ?? 0m;
+            if (k is < 1)
+            {
+                OutOfRange(row, "k", "an integer from 1");
+            }
+
+            if (tipOffset < 0m)
+            {
+                OutOfRange(row, "tip_offset", "not negative");
+            }
+
+            if (radius < 0m)
+            {
+                OutOfRange(row, "radius", "not negative");
+            }
+
+            if (k is int point)
+            {
+                points.Add(new ToolPointData
+                {
+                    K = point,
+                    TipOffset = tipOffset,
+                    Radius = radius,
+                    Wear = row.Number("wear") ?? 0m,
+                });
+            }
+        }
+
+        return points;
+    }
+
+    private static void OutOfRange(ConfigTable row, string key, string range)
+    {
+        row.Diagnostics.Error(row.LineOf(key), DiagnosticCodes.ValueNotAllowed,
+            $"{key} of {row.Name} must be {range} (machine-config 1, D376).");
     }
 }

@@ -28,14 +28,9 @@ namespace Ncx.Cli;
 internal static class Program
 {
     /// <summary>
-    /// The name of the tool, which a diagnostic about the command line names as its file (D98).
+    /// The name of the tool, which a diagnostic about the command line names as its origin, without a line (D110).
     /// </summary>
     internal const string ToolName = "ncx";
-
-    /// <summary>
-    /// The command line is one line.
-    /// </summary>
-    internal const int CommandLine = 1;
 
     public static int Main(string[] args)
     {
@@ -68,16 +63,15 @@ internal static class Program
         };
 
         // A usage error is reported as a diagnostic and decides exit code 2 before the run starts (D97, D98;
-        // architecture 10).
-        // TODO(question): D98 renders a diagnostic as file(line), and a usage error is about the command line, not a
-        // file. It names the tool as its file and line 1, the one line of the command, until that is answered.
+        // architecture 10). It is about the command line, not a file, so it names the tool and no line:
+        // ncx: ERROR CLI001: message (D110).
         ParseResult parseResult = root.Parse(args);
         if (parseResult.Errors.Count > 0)
         {
             var diagnostics = new Diagnostics(ToolName);
             foreach (ParseError parseError in parseResult.Errors)
             {
-                diagnostics.Error(CommandLine, DiagnosticCodes.UsageError,
+                diagnostics.CommandLineError(DiagnosticCodes.UsageError,
                     $"{parseError.Message.TrimEnd('.')} (ncx --help; architecture 10).");
             }
 

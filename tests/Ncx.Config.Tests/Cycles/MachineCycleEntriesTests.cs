@@ -25,6 +25,9 @@ public sealed class MachineCycleEntriesTests
         name = "PECK"
         native = "G83"
         pre = ["FUNC:PECK_MODE=RETRACT"]
+
+        [coolant]
+        STANDARD = { ON = "M8", OFF = "M9" }
         """;
 
     // Machine-config 6: without [[cycle]] a machine has the built-in family of its controller.
@@ -35,6 +38,9 @@ public sealed class MachineCycleEntriesTests
             [machine]
             name = "Test mill"
             controller = "siemens"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.Empty(machine.CycleEntries);
@@ -101,6 +107,9 @@ public sealed class MachineCycleEntriesTests
             name = "PECK"
             native = "G83"
             modal = "yes"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """, diagnostics);
 
         Assert.Null(machine);
@@ -140,6 +149,82 @@ public sealed class MachineCycleEntriesTests
         MachineConfig withCatalog = CycleCatalogLoader.WithCatalog(machine, LoadShippedCatalog(machine));
 
         Assert.Equal("_AXN", withCatalog.CycleCatalog.Find("PECK")?.Axis);
+    }
+
+    // D361, D377: a [[cycle]] table with channel applies to that channel only, the channel-less table being the
+    // fallback; available = false marks a cycle the channel cannot run.
+    [Fact]
+    public void MachineFile_CycleEntryPerChannel_AppliesToItsChannelOnly()
+    {
+        MachineConfig machine = LoadMachine("""
+            [machine]
+            name = "Test lathe"
+            controller = "fanuc"
+            channels = [1, 2]
+
+            [[cycle]]
+            name = "TAP"
+            native = "G84"
+            before = "M329 S{rpm}"
+
+            [[cycle]]
+            name = "TAP"
+            native = "G84"
+            channel = 2
+            available = false
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
+            """);
+
+        CycleCatalog channel1 = machine.CycleCatalog.ForChannel(1);
+        CycleCatalog channel2 = machine.CycleCatalog.ForChannel(2);
+
+        Assert.Equal("M329 S{rpm}", channel1.Find("TAP")?.Before);
+        Assert.True(channel1.Find("TAP")?.Available);
+        Assert.False(channel2.Find("TAP")?.Available);
+        Assert.Equal("M329 S{rpm}", channel2.Find("TAP")?.Before);
+        Assert.True(machine.CycleCatalog.Find("TAP")?.Available);
+    }
+
+    // D377: channel and available describe one machine; in a catalog file they are the WARNING CFG157 and ignored.
+    [Fact]
+    public void CatalogFile_ChannelAndAvailable_WarnAndAreIgnored()
+    {
+        var diagnostics = new Diagnostics("cycles/test.toml");
+
+        CycleCatalog? catalog = CycleCatalogLoader.LoadText("""
+            [[cycle]]
+            name = "TAP"
+            native = "G84"
+            channel = 2
+            available = false
+            """, Controller.Fanuc, diagnostics);
+
+        Assert.NotNull(catalog);
+        Assert.Equal(2, diagnostics.Items.Count);
+        Assert.All(diagnostics.Items, item => Assert.Equal(DiagnosticCodes.CycleMachineKeyInCatalog, item.Code));
+        Assert.True(catalog.Find("TAP")?.Available);
+        Assert.Empty(catalog.ChannelEntries);
+    }
+
+    // D361: the Mori Seiki taps rigidly with M329, the before line of its TAP entries on G84 and G88; the Nakamura
+    // keeps the catalog's M29 on both paths (D377).
+    [Theory]
+    [InlineData("mori-ntx1000-mapps.toml", "M329 S{rpm}")]
+    [InlineData("nakamura-ntjx.toml", "M29 S{rpm}")]
+    public void LatheMachine_TapBeforeLine_IsTheBuildersCode(string machineFile, string before)
+    {
+        var machineDiagnostics = new Diagnostics("machines/" + machineFile);
+        MachineConfig? machine = MachineConfigLoader.Load(
+            Path.Combine(Fixture.RepositoryRoot(), "machines", machineFile), machineDiagnostics);
+        Assert.NotNull(machine);
+
+        MachineConfig withCatalog = CycleCatalogLoader.WithCatalog(machine, LoadShippedCatalog(machine));
+
+        Assert.Equal(before, withCatalog.CycleCatalog.ForChannel(1).Find("TAP", "Z")?.Before);
+        Assert.Equal(before, withCatalog.CycleCatalog.ForChannel(1).Find("TAP", "X")?.Before);
+        Assert.Null(machine.Functions.GetValueOrDefault("SYNC_TAP"));
     }
 
     // Loads a machine file that is expected to be clean; a failure prints the diagnostics.

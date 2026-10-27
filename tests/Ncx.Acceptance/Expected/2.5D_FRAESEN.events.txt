@@ -28,22 +28,22 @@ STATE_CHANGE(20): Y -7.025 -> 2
 STATE_CHANGE(20): COMP OFF -> LEFT
 MOTION(21): LINE X 50.4 -> 7; feed 2387 PER_MIN, comp LEFT, frame WORKPIECE, length 43.4
 STATE_CHANGE(21): X 50.4 -> 7
-MOTION(22): ARC CW X 7 -> 2, Y 2 -> 7; center X=7 Y=7, sweep 90, feed 2387 PER_MIN, comp LEFT, frame WORKPIECE, length 7.854
+MOTION(22): ARC CW X 7 -> 2, Y 2 -> 7; center X=7 Y=7, sweep 90, feed 2387 PER_MIN, comp LEFT, frame WORKPIECE, length 7.853982
 STATE_CHANGE(22): X 7 -> 2
 STATE_CHANGE(22): Y 2 -> 7
 MOTION(23): LINE Y 7 -> 93; feed 2387 PER_MIN, comp LEFT, frame WORKPIECE, length 86
 STATE_CHANGE(23): Y 7 -> 93
-MOTION(24): ARC CW X 2 -> 7, Y 93 -> 98; center X=7 Y=93, sweep 90, feed 2387 PER_MIN, comp LEFT, frame WORKPIECE, length 7.854
+MOTION(24): ARC CW X 2 -> 7, Y 93 -> 98; center X=7 Y=93, sweep 90, feed 2387 PER_MIN, comp LEFT, frame WORKPIECE, length 7.853982
 STATE_CHANGE(24): X 2 -> 7
 STATE_CHANGE(24): Y 93 -> 98
 MOTION(25): LINE X 7 -> 93; feed 2387 PER_MIN, comp LEFT, frame WORKPIECE, length 86
 STATE_CHANGE(25): X 7 -> 93
-MOTION(26): ARC CW X 93 -> 98, Y 98 -> 93; center X=93 Y=93, sweep 90, feed 2387 PER_MIN, comp LEFT, frame WORKPIECE, length 7.854
+MOTION(26): ARC CW X 93 -> 98, Y 98 -> 93; center X=93 Y=93, sweep 90, feed 2387 PER_MIN, comp LEFT, frame WORKPIECE, length 7.853982
 STATE_CHANGE(26): X 93 -> 98
 STATE_CHANGE(26): Y 98 -> 93
 MOTION(27): LINE Y 93 -> 7; feed 2387 PER_MIN, comp LEFT, frame WORKPIECE, length 86
 STATE_CHANGE(27): Y 93 -> 7
-MOTION(28): ARC CW X 98 -> 93, Y 7 -> 2; center X=93 Y=7, sweep 90, feed 2387 PER_MIN, comp LEFT, frame WORKPIECE, length 7.854
+MOTION(28): ARC CW X 98 -> 93, Y 7 -> 2; center X=93 Y=7, sweep 90, feed 2387 PER_MIN, comp LEFT, frame WORKPIECE, length 7.853982
 STATE_CHANGE(28): X 98 -> 93
 STATE_CHANGE(28): Y 7 -> 2
 MOTION(29): LINE X 93 -> 49.6; feed 2387 PER_MIN, comp LEFT, frame WORKPIECE, length 43.4
@@ -55,7 +55,7 @@ MOTION(31): RAPID Z -10 -> 2; comp OFF, frame WORKPIECE, length 12
 STATE_CHANGE(31): Z -10 -> 2
 SECTION(33): "KREISTASCHE"
 STATE_CHANGE(34): FEED_MODE PER_MIN -> PER_REV
-MOTION(35): RAPID X 49.6 -> 51.836, Y -7.025 -> 62.846; comp OFF, frame WORKPIECE, length 69.907
+MOTION(35): RAPID X 49.6 -> 51.836, Y -7.025 -> 62.846; comp OFF, frame WORKPIECE, length 69.906769
 STATE_CHANGE(35): X 49.6 -> 51.836
 STATE_CHANGE(35): Y -7.025 -> 62.846
 MOTION(36): RAPID Z 2 -> -8; comp OFF, frame WORKPIECE, length 10
@@ -63,29 +63,29 @@ STATE_CHANGE(36): Z 2 -> -8
 MOTION(37): LINE Z -8 -> -10; feed 1.5 PER_REV, comp OFF, frame WORKPIECE, length 2
 STATE_CHANGE(37): Z -8 -> -10
 STATE_CHANGE(37): F 2387 -> 1.5
-MOTION(38): LINE X 51.836 -> 56.253, Y 62.846 -> 65.241; feed 1.5 PER_REV, comp LEFT, frame WORKPIECE, length 5.025
+MOTION(38): LINE X 51.836 -> 56.253, Y 62.846 -> 65.241; feed 1.5 PER_REV, comp LEFT, frame WORKPIECE, length 5.024531
 STATE_CHANGE(38): X 51.836 -> 56.253
 STATE_CHANGE(38): Y 62.846 -> 65.241
 STATE_CHANGE(38): COMP OFF -> LEFT
-MOTION(39): LINE X 56.253 -> 55.243, Y 65.241 -> 67.104; feed 1.5 PER_REV, comp LEFT, frame WORKPIECE, length 2.119
+MOTION(39): LINE X 56.253 -> 55.243, Y 65.241 -> 67.104; feed 1.5 PER_REV, comp LEFT, frame WORKPIECE, length 2.119167
 STATE_CHANGE(39): X 56.253 -> 55.243
 STATE_CHANGE(39): Y 65.241 -> 67.104
-MOTION(40): ARC CCW X 55.243 -> 50.534, Y 67.104 -> 69.993; center X=50.386 Y=64.47, sweep 59.995, feed 1.5 PER_REV, comp LEFT, frame WORKPIECE, length 5.785
+MOTION(40): ARC CCW X 55.243 -> 50.534, Y 67.104 -> 69.993; center X=50.3863 Y=64.469975, sweep 59.99499, feed 1.5 PER_REV, comp LEFT, frame WORKPIECE, length 5.785283
 STATE_CHANGE(40): X 55.243 -> 50.534
 STATE_CHANGE(40): Y 67.104 -> 69.993
-MOTION(41): ARC CCW X 50.534 -> 70, Y 69.993 -> 50; center X=50 Y=50, sweep 271.53, feed 1.5 PER_REV, comp LEFT, frame WORKPIECE, length 94.782
+MOTION(41): ARC CCW X 50.534 -> 70, Y 69.993 -> 50; center X=50 Y=50, sweep 271.529969, feed 1.5 PER_REV, comp LEFT, frame WORKPIECE, length 94.782456
 STATE_CHANGE(41): X 50.534 -> 70
 STATE_CHANGE(41): Y 69.993 -> 50
-MOTION(42): ARC CCW X 70 -> 49.466, Y 50 -> 69.993; center X=50 Y=50, sweep 91.53, feed 1.5 PER_REV, comp LEFT, frame WORKPIECE, length 31.95
+MOTION(42): ARC CCW X 70 -> 49.466, Y 50 -> 69.993; center X=50 Y=50.00013, sweep 91.530352, feed 1.5 PER_REV, comp LEFT, frame WORKPIECE, length 31.95012
 STATE_CHANGE(42): X 70 -> 49.466
 STATE_CHANGE(42): Y 50 -> 69.993
-MOTION(43): ARC CCW X 49.466 -> 44.757, Y 69.993 -> 67.104; center X=49.614 Y=64.47, sweep 59.995, feed 1.5 PER_REV, comp LEFT, frame WORKPIECE, length 5.785
+MOTION(43): ARC CCW X 49.466 -> 44.757, Y 69.993 -> 67.104; center X=49.6137 Y=64.469975, sweep 59.99499, feed 1.5 PER_REV, comp LEFT, frame WORKPIECE, length 5.785283
 STATE_CHANGE(43): X 49.466 -> 44.757
 STATE_CHANGE(43): Y 69.993 -> 67.104
-MOTION(44): LINE X 44.757 -> 43.747, Y 67.104 -> 65.241; feed 1.5 PER_REV, comp LEFT, frame WORKPIECE, length 2.119
+MOTION(44): LINE X 44.757 -> 43.747, Y 67.104 -> 65.241; feed 1.5 PER_REV, comp LEFT, frame WORKPIECE, length 2.119167
 STATE_CHANGE(44): X 44.757 -> 43.747
 STATE_CHANGE(44): Y 67.104 -> 65.241
-MOTION(45): LINE X 43.747 -> 48.164, Y 65.241 -> 62.846; feed 1.5 PER_REV, comp OFF, frame WORKPIECE, length 5.025
+MOTION(45): LINE X 43.747 -> 48.164, Y 65.241 -> 62.846; feed 1.5 PER_REV, comp OFF, frame WORKPIECE, length 5.024531
 STATE_CHANGE(45): X 43.747 -> 48.164
 STATE_CHANGE(45): Y 65.241 -> 62.846
 STATE_CHANGE(45): COMP LEFT -> OFF
@@ -101,6 +101,6 @@ STATE_CHANGE(49): Y 62.846 -> 0 (MACHINE)
 STATE_CHANGE(50): SPINDLE:S2 CW -> OFF
 STATE_CHANGE(51): F 1.5 -> ?
 STATE_CHANGE(51): FEED_MODE PER_REV -> PER_MIN
-TOOL_END(51): tool 1, holder H1, rpm 1592, blocks 40, feedDistance 550.856, rapidDistance 113.907, unknownLengthMotions 4, distance 664.763
-PROGRAM_END(51): name "2.5D FRAESEN", number 1, blocks 44, feedDistance 550.856, rapidDistance 113.907, unknownLengthMotions 4, distance 664.763
+TOOL_END(51): tool 1, holder H1, rpm 1592, blocks 40, feedDistance 550.856466, rapidDistance 113.906769, unknownLengthMotions 4, distance 664.763235
+PROGRAM_END(51): name "2.5D FRAESEN", number 1, blocks 44, feedDistance 550.856466, rapidDistance 113.906769, unknownLengthMotions 4, distance 664.763235
 FILE_END(52): file 2.5D_FRAESEN.ncx, programs "2.5D FRAESEN", subprograms none

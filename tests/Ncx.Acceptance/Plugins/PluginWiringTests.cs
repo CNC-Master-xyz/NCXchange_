@@ -174,7 +174,7 @@ public sealed class PluginWiringTests : IDisposable
 
     // Virtual machine 7, architecture 9: the listeners of the plugins read every event of the STATIC run of compile as
     // of any other run; FaultyRules throws on TOOL_BEGIN of line 4 and is reported with its name, and compile writes no
-    // file after the ERROR (implementation 17, P7-01; D205 as recommended).
+    // file after the ERROR (implementation 17, P7-01; D205).
     [Fact]
     public void Compile_ListenerOfAPluginThatThrows_IsReportedByNameAndNoFileIsWritten()
     {

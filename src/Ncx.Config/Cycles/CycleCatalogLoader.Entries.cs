@@ -1,4 +1,6 @@
+using Ncx.Core.Catalog;
 using Ncx.Core.Machine;
+using Ncx.Core.Model;
 
 namespace Ncx.Config.Cycles;
 
@@ -9,9 +11,12 @@ public static partial class CycleCatalogLoader
     private static readonly string[] s_entryKeys =
     [
         "name", "native", "for_axis", "params", "absolute_from_surface", "modal", "contour", "signature",
-        "fixed", "before",
+        "fixed", "before", "defaults", "title", "dwell_native", "channel", "available",
         "pre", "post", "requires", "restore",
     ];
+
+    // The keys only a [[cycle]] table of a machine file takes (D361, D377).
+    private static readonly string[] s_machineOnlyKeys = ["channel", "available"];
 
     // The word that the words of absolute_from_surface are relative to (machine-config 6, language 4.7).
     private const string SurfaceWord = "SURFACE";
@@ -23,14 +28,17 @@ public static partial class CycleCatalogLoader
     /// <param name="tables">The [[cycle]] tables of the file.</param>
     /// <param name="controller">The controller family the entries belong to; null when the machine file names
     /// none.</param>
-    internal static IReadOnlyList<CycleEntry> ReadEntries(IReadOnlyList<ConfigTable> tables, Controller? controller)
+    /// <param name="catalogFile">True for the entries of a catalog file, which take no channel and no available key
+    /// (D377).</param>
+    internal static IReadOnlyList<CycleEntry> ReadEntries(
+        IReadOnlyList<ConfigTable> tables, Controller? controller, bool catalogFile = false)
     {
         var entries = new List<CycleEntry>();
         var names = new List<string>();
         CycleCatalog family = controller is Controller known ? DrillingFamily.Catalog(known) : new CycleCatalog();
         foreach (ConfigTable table in tables)
         {
-            CycleEntry? entry = ReadEntry(table, controller);
+            CycleEntry? entry = ReadEntry(table, controller, catalogFile);
             if (entry is null)
             {
                 continue;
@@ -38,7 +46,7 @@ public static partial class CycleCatalogLoader
 
             // The catalog finds an entry by its name together with its for_axis, so one file names each cycle once
             // per drilling axis (machine-config 6, D160).
-            string key = entry.ForAxis is null ? entry.Name : entry.Name + " " + entry.ForAxis;
+            string key = entry.Name + " " + entry.ForAxis + " " + entry.Channel;
             if (names.Contains(key))
             {
                 string axis = entry.ForAxis is null ? "" : $" for the axis {entry.ForAxis}";
@@ -59,7 +67,7 @@ public static partial class CycleCatalogLoader
     // One entry: name and native are required, every other key is optional, and pre, post, requires and restore make
     // its expansion rule (machine-config 6, 5a). The entry keeps the keys the file wrote, by which it overrides the
     // entry of the same name before it.
-    private static CycleEntry? ReadEntry(ConfigTable table, Controller? controller)
+    private static CycleEntry? ReadEntry(ConfigTable table, Controller? controller, bool catalogFile)
     {
         table.WarnUnknownKeys(s_entryKeys);
         string? name = table.RequiredText("name");
@@ -77,8 +85,16 @@ public static partial class CycleCatalogLoader
         IReadOnlyList<string> signature = table.TextList("signature");
         IReadOnlyDictionary<string, decimal> fixedValues =
             table.Table("fixed")?.Numbers() ?? new Dictionary<string, decimal>();
+        IReadOnlyDictionary<string, string> defaults = ReadDefaults(table);
         ExpansionRule? rule = MachineConfigLoader.ReadRule(table);
         CheckFamilyKeys(table, controller, modal, signature);
+        int? channel = catalogFile ? null : table.Integer("channel");
+        bool available = catalogFile || !table.Has("available") || table.Flag("available");
+        if (catalogFile)
+        {
+            WarnMachineKeys(table);
+        }
+
         if (name is null || native is null)
         {
             return null;
@@ -95,9 +111,15 @@ public static partial class CycleCatalogLoader
             Contour = contour,
             Signature = signature,
             Fixed = fixedValues,
+            Defaults = defaults,
+            Title = table.Text("title"),
+            DwellNative = table.Text("dwell_native"),
+            Channel = channel,
+            Available = available,
             Before = table.Has("before") ? table.Template("before") ?? "" : null,
             Rule = rule,
-            WrittenKeys = WrittenKeys(table),
+            Family = controller,
+            WrittenKeys = WrittenKeys(table, catalogFile),
         };
     }
 
@@ -161,9 +183,43 @@ public static partial class CycleCatalogLoader
                     $"The parameter word {word} in {table.Name} is not an NCX key, a capital followed by capitals, "
                     + "digits and underscores; no cycle block can carry it (language 3, machine-config 6).");
             }
+            else if (WordCatalog.Lookup(word) is null && WordCatalog.TryMachineAxis(word, out _))
+            {
+                // D114: a key of the machine-axis form stays a machine axis word of D93 in every block, so a catalog
+                // parameter of that form would read differently with and without a machine file.
+                table.Diagnostics.Error(parameters.LineOf(word), DiagnosticCodes.CycleParameterAxisForm,
+                    $"The parameter word {word} in {table.Name} has the form of a machine axis name, which a program "
+                    + "reads as a machine axis word (D93); a catalog parameter cannot take that form (D114).");
+            }
         }
 
         return parameters.Strings(null);
+    }
+
+    // defaults: a native name and the value the compiler writes for it, a number or the control's literal such as
+    // MAX, kept as its text (D164); a literal stands only on the native side (D115).
+    private static Dictionary<string, string> ReadDefaults(ConfigTable table)
+    {
+        var defaults = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (table.Table("defaults") is not ConfigTable values)
+        {
+            return defaults;
+        }
+
+        foreach (string native in values.Keys)
+        {
+            switch (values.NumberOrString(native))
+            {
+                case StringValue text:
+                    defaults[native] = text.Content;
+                    break;
+                case Value number:
+                    defaults[native] = number.ToCanonical();
+                    break;
+            }
+        }
+
+        return defaults;
     }
 
     // contour: two words are the first and the last block of the contour range, one names the contour subprogram
@@ -201,6 +257,21 @@ public static partial class CycleCatalogLoader
         }
     }
 
+    // D377: channel and available describe one machine, so a catalog file that writes them gets CFG157 and the loader
+    // ignores them.
+    private static void WarnMachineKeys(ConfigTable table)
+    {
+        foreach (string key in s_machineOnlyKeys)
+        {
+            if (table.Has(key))
+            {
+                table.Diagnostics.Warning(table.LineOf(key), DiagnosticCodes.CycleMachineKeyInCatalog,
+                    $"{key} in {table.Name} is a key of the [[cycle]] tables of a machine file; a catalog file "
+                    + "serves every machine of its family, so it is ignored (machine-config 6, D377).");
+            }
+        }
+    }
+
     // A word of absolute_from_surface is converted with the surface, NCX = SURFACE + native, so the entry maps the word
     // and SURFACE (machine-config 6). Checked on what the entry holds over the built-in entry of its name; an entry
     // that writes no params and overrides a catalog entry the file cannot see is left to that catalog.
@@ -234,12 +305,12 @@ public static partial class CycleCatalogLoader
     }
 
     // The keys of machine-config 6 and 5a that the file wrote, in file order.
-    private static List<string> WrittenKeys(ConfigTable table)
+    private static List<string> WrittenKeys(ConfigTable table, bool catalogFile)
     {
         var keys = new List<string>();
         foreach (string key in table.Keys)
         {
-            if (s_entryKeys.Contains(key))
+            if (s_entryKeys.Contains(key) && !(catalogFile && s_machineOnlyKeys.Contains(key)))
             {
                 keys.Add(key);
             }

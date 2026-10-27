@@ -22,9 +22,10 @@ public sealed class ToolListAnalyticTests
     // names are 1 and the preloaded 0, which is no tool (language 4.4), so the list has one row, tool 1. By hand from
     // the example: cutting, the LINE and ARC moves of lines 19 to 30, 2 + 9.025 + 43.4 + 7.854 + 86 + 7.854 + 86 +
     // 7.854 + 86 + 7.854 + 43.4 + 9.025 = 396.266, and of lines 37 to 45, 2 + 5.025 + 2.119 + 5.785 + 94.782 + 31.95 +
-    // 5.785 + 2.119 + 5.025 = 154.59, 550.856 in all; rapid, lines 18, 31, 35, 36 and 46: 10 + 12 + 69.907 + 10 + 12
-    // = 113.907; unknown: the RAPIDs of lines 15 and 16 from the unknown start and the machine-frame moves of lines 48
-    // and 49; blocks: lines 10 to 51 without the blank lines 13 and 32, 40.
+    // 5.785 + 2.119 + 5.025 = 154.59, 550.856 in all, 550.856466 at the six decimals of the VM (D121); rapid, lines
+    // 18, 31, 35, 36 and 46: 10 + 12 + 69.906769 + 10 + 12 = 113.906769; unknown: the RAPIDs of lines 15 and 16
+    // from the unknown start and the machine-frame moves of lines 48 and 49; blocks: lines 10 to 51 without the blank
+    // lines 13 and 32, 40.
     [Fact]
     public void ToolList_Fraesen25D_NamesToolOneWithTheDistancesOfTheExample()
     {
@@ -34,8 +35,8 @@ public sealed class ToolListAnalyticTests
         Assert.Equal(new ToolRef(1), use.Tool);
         Assert.Equal("H1", use.Holder);
         Assert.False(use.Preloaded);
-        Assert.Equal(550.856, use.Cutting, Precision);
-        Assert.Equal(113.907, use.Rapid, Precision);
+        Assert.Equal(550.856466, use.Cutting, Precision);
+        Assert.Equal(113.906769, use.Rapid, Precision);
         Assert.Equal(4, use.Unknown);
         Assert.Equal(40, use.Blocks);
         Assert.Equal("1592", use.RpmText());
@@ -44,11 +45,11 @@ public sealed class ToolListAnalyticTests
     }
 
     // P4-02 test first: the tool list of INCREMENTAL_SUB names tools 2 and 3. Tool 2 cuts 4 * (5 + 30) = 140 mm in the
-    // four passes of the subprogram and rapids 4 * (5 + 33.541) mm there and 48 mm up to Z=50, 202.164; its first two
-    // RAPIDs start from the unknown position; its blocks are lines 7 to 13, the four passes of lines 29 to 34 and lines
-    // 14 and 15, 33. Tool 3 comes in by the bare TOOL on line 16, preloaded by PRELOAD=3 on line 8; its HOME moves find
-    // no reference point on the default machine (D100) and have no length; its blocks are lines 16, 17, 18, 22, 23, 24,
-    // 25, 26, 19, 20 and 27, 11, the LABEL and COMMENT blocks among them.
+    // four passes of the subprogram and rapids 4 * (5 + 33.54102) mm there and 48 mm up to Z=50, 202.16408; its first
+    // two RAPIDs start from the unknown position; its blocks are lines 7 to 13, the four passes of lines 29 to 34 and
+    // lines 14 and 15, 33. Tool 3 comes in by the bare TOOL on line 16, preloaded by PRELOAD=3 on line 8; its HOME
+    // moves find no reference point on the default machine (D100) and have no length; its blocks are lines 16, 17, 18,
+    // 22, 23, 24, 25, 26, 19, 20 and 27, 11, the LABEL and COMMENT blocks among them.
     [Fact]
     public void ToolList_IncrementalSub_NamesToolsTwoAndThree()
     {
@@ -59,7 +60,7 @@ public sealed class ToolListAnalyticTests
         Assert.Equal(new ToolRef(2), rows[0].Tool);
         Assert.False(rows[0].Preloaded);
         Assert.Equal(140, rows[0].Cutting, Precision);
-        Assert.Equal(202.164, rows[0].Rapid, Precision);
+        Assert.Equal(202.16408, rows[0].Rapid, Precision);
         Assert.Equal(2, rows[0].Unknown);
         Assert.Equal(33, rows[0].Blocks);
         Assert.Equal("200-800 PER_MIN", rows[0].FeedsText());
@@ -95,8 +96,8 @@ public sealed class ToolListAnalyticTests
         AnalyticRuns.RunExample("2.5D_FRAESEN.ncx", tools);
 
         ToolUse use = Assert.Single(Rows(tools));
-        Assert.Equal(154.59, use.Cutting, Precision);
-        Assert.Equal(91.907, use.Rapid, Precision);
+        Assert.Equal(154.590538, use.Cutting, Precision);
+        Assert.Equal(91.906769, use.Rapid, Precision);
         Assert.Equal(2, use.Unknown);
         Assert.Equal(19, use.Blocks);
     }
@@ -124,7 +125,8 @@ public sealed class ToolListAnalyticTests
     }
 
     // Implementation 14, P4-02: the estimated time of a tool is the time the runtime estimate charges under it; without
-    // a machine file distance over feed: 396.266 mm at 2387 mm/min and 154.59 mm at 1.5 mm/rev times 1592 rpm.
+    // a machine file distance over feed: 396.265928 mm at 2387 mm/min and 154.590538 mm at 1.5 mm/rev times 1592 rpm
+    // (six decimals, D121).
     [Fact]
     public void ToolList_EstimatedTime_IsTheTimeOfTheRuntimeEstimateUnderTheTool()
     {
@@ -133,7 +135,7 @@ public sealed class ToolListAnalyticTests
         AnalyticRuns.RunExample("2.5D_FRAESEN.ncx", runtime);
 
         ToolUse use = Assert.Single(Rows(tools));
-        Assert.Equal((396.266 / 2387 * 60) + (154.59 / (1.5 * 1592) * 60), use.Seconds, Precision);
+        Assert.Equal((396.265928 / 2387 * 60) + (154.590538 / (1.5 * 1592) * 60), use.Seconds, Precision);
         Assert.Equal(runtime.SecondsOfTool("1"), use.Seconds, Precision);
     }
 

@@ -151,6 +151,7 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
             File = _file,
             Writer = Line,
             CommentText = CommentText,
+            PointRegisters = PointRegistersOf(after),
         };
         _file.MeetJumpsOverCalls(write);
         if (!SiemensProgramFrame.WriteBegin(write, fileStem))

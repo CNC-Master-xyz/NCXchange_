@@ -7,8 +7,8 @@ namespace Ncx.Core.Machine;
 public sealed record CyclesConfig
 {
     /// <summary>
-    /// catalog: the catalog file, "heidenhain-cycles.toml", shipped with NCXchange and user-extendable; null when left
-    /// out.
+    /// catalog: the catalog file, "heidenhain.toml", shipped with NCXchange as &lt;family&gt;.toml and
+    /// user-extendable, a shop catalog under any name (D156); null when left out.
     /// </summary>
     public string? CatalogFile { get; init; }
 

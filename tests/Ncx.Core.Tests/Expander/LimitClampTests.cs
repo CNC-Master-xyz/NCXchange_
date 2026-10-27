@@ -121,6 +121,52 @@ public sealed class LimitClampTests
         Assert.Single(expanded.Diagnostics.Items);
     }
 
+    // D192: the literal clamp compares F with the smallest max_feed of the linear axes its block names; the swivel B
+    // (max_feed 3600 deg/min) does not count, so F=5000 with X and B stays as written.
+    [Fact]
+    public void D192_FeedWithARotaryAxisWord_IsComparedWithTheLinearAxesOnly()
+    {
+        string text = ExpanderHarness.File("UNITS=MM", "LINE X=10 B=30 F=5000");
+
+        NcxProgram expanded = ExpanderHarness.Expand(text, ExpanderMachines.ClampWithSwivel());
+
+        Assert.Equal(text, ExpanderHarness.WriteWithGenerated(expanded));
+        Assert.Empty(expanded.Diagnostics.Items);
+    }
+
+    // D137, D203: the X of a switchable axis is a diameter or a radius by DIAMETER, which the expander does not see,
+    // so its machine-frame target is not clamped; Z still is.
+    [Fact]
+    public void D137_MachineFrameTargetOfASwitchableAxis_IsNotRewritten()
+    {
+        MachineConfig clamp = ExpanderMachines.Clamp();
+        var axes = new List<AxisDef>();
+        foreach (AxisDef axis in clamp.Axes)
+        {
+            axes.Add(axis.NcxName == "X" ? axis with { Programming = Programming.Switchable } : axis);
+        }
+
+        NcxProgram expanded = ExpanderHarness.Expand(
+            ExpanderHarness.File("UNITS=MM", "RAPID X=700 Z=-300 FRAME=MACHINE"), clamp with { Axes = axes });
+
+        Assert.Equal(
+            ExpanderHarness.File("UNITS=MM", "RAPID X=700 Z=-200 FRAME=MACHINE"),
+            ExpanderHarness.WriteWithGenerated(expanded));
+    }
+
+    // D203: under "clamp" only absolute axis words of RAPID and LINE under FRAME=MACHINE are rewritten; an ARC is no
+    // clamped verb, and the virtual machine reports its target instead.
+    [Fact]
+    public void D203_MachineFrameArcBeyondTheLimits_IsNotRewritten()
+    {
+        string text = ExpanderHarness.File("UNITS=MM", "ARC=CW X=700 Z=-5 R=400 F=100 FRAME=MACHINE");
+
+        NcxProgram expanded = ExpanderHarness.Expand(text, ExpanderMachines.Clamp());
+
+        Assert.Equal(text, ExpanderHarness.WriteWithGenerated(expanded));
+        Assert.Empty(expanded.Diagnostics.Items);
+    }
+
     // The clamp applies to every block the VM executes for a block, a generated one as well, which keeps its place and
     // names both sources.
     [Fact]

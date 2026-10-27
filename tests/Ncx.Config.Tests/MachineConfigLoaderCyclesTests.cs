@@ -6,7 +6,7 @@ namespace Ncx.Config.Tests;
 /// <summary>
 /// The keys of [cycles] beside the catalog (machine-config 6): surface_clearance (D158), chip_break_lift and
 /// peck_clearance (D357), ream_feed_out (D378), contour_type_ii and peck_rigid_tapping (D388 item 11); and the
-/// repeat_counters of [variables] (machine-config 7, D280).
+/// repeat_counters of [variables] (machine-config 7, D280). Every machine carries [coolant] STANDARD (D130).
 /// </summary>
 public sealed class MachineConfigLoaderCyclesTests
 {
@@ -27,6 +27,9 @@ public sealed class MachineConfigLoaderCyclesTests
             ream_feed_out = "SAFE"
             contour_type_ii = true
             peck_rigid_tapping = true
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         CyclesConfig cycles = Assert.IsType<CyclesConfig>(machine.Cycles);
@@ -49,6 +52,9 @@ public sealed class MachineConfigLoaderCyclesTests
 
             [cycles]
             catalog = "siemens.toml"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         CyclesConfig cycles = Assert.IsType<CyclesConfig>(machine.Cycles);
@@ -67,13 +73,16 @@ public sealed class MachineConfigLoaderCyclesTests
     [InlineData("surface_clearance")]
     public void Cycles_NegativeDistance_IsCfg005OnItsLine(string key)
     {
-        Diagnostics diagnostics = Report($"""
+        Diagnostics diagnostics = Report($$"""
             [machine]
             name = "Test mill"
             controller = "fanuc"
 
             [cycles]
-            {key} = -1
+            {{key}} = -1
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Diagnostic error = Assert.Single(diagnostics.Items);
@@ -94,6 +103,9 @@ public sealed class MachineConfigLoaderCyclesTests
 
             [cycles]
             ream_feed_out = "DEPTH"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Diagnostic error = Assert.Single(diagnostics.Items);
@@ -112,6 +124,9 @@ public sealed class MachineConfigLoaderCyclesTests
 
             [variables]
             repeat_counters = ["#149", "#148"]
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.Equal(["#149", "#148"], machine.Variables.RepeatCounters);
