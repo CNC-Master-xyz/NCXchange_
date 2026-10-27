@@ -79,8 +79,8 @@ internal static class FanucToolWords
 
     /// <summary>
     /// After the change of [tool_change]: a combined OFFSET stands in the change command where its template has
-    /// {offset} (machine-config 3), and under motion_code_after_tool_change the next motion writes its code (the
-    /// TODO(question) of OutputFormat).
+    /// {offset} (machine-config 3), and under motion_code_after_tool_change the next motion writes its code (D276,
+    /// machine-config 2).
     /// </summary>
     public static void AfterChange(FanucBlock write)
     {
@@ -134,9 +134,8 @@ internal static class FanucToolWords
     /// A length offset that still waits for the tool axis, in a line of its own without a skip mark, before a block
     /// after which a path could run without it: a LABEL, JUMP, CALL or RAW block, a skipped block that moves the tool
     /// axis or sets the length offset, the end of the program or subprogram; and before the line of a SETPOS of the
-    /// tool axis, which declares
-    /// the position with the offset active (language 4.2, SETPOS; 4.4, OFFSET:LEN is modal; language 2 rule 8; the
-    /// TODO(question) of OutputFormat).
+    /// tool axis, which declares the position with the offset active (language 4.2, SETPOS; 4.4, OFFSET:LEN is modal;
+    /// language 2 rule 8; D276: the waiting G43 H keeps its coded places).
     /// </summary>
     public static void WriteWaitingLength(FanucBlock write)
     {
@@ -230,8 +229,8 @@ internal static class FanucToolWords
 
         // SETPOS declares the position of the tool axis with the length offset active, the offset of an earlier block
         // and the one its own OFFSET:LEN sets first (language 4.2, SETPOS; 4.4, OFFSET:LEN is modal; 5 rule 3), so an
-        // offset that waits for the tool axis stands in a line of its own before the line of G92 (the TODO(question)
-        // of OutputFormat).
+        // offset that waits for the tool axis stands in a line of its own before the line of G92 (D276: the waiting
+        // G43 H keeps its coded places).
         if (FanucMotion.DeclaresToolAxis(write))
         {
             WriteWaitingLength(write);
@@ -279,9 +278,7 @@ internal static class FanucToolWords
     /// SPINDLE_MODE, SPINDLE_SYNC with PHASE, each from the machine's table of its role (controllers fanuc.md 4;
     /// controller-mapping 4; machine-config 5; language 4.5, 4.11).
     /// </summary>
-    // TODO(question): the reader takes G96 and G97 as codes of the control for any spindle, while CSS is written from
-    // VC and CSS_OFF of the role's table (machine-config 5, D154), which [spindle.SUB] of nakamura-ntjx.toml lacks; a
-    // table without them is CMP010, until it is answered whether the compiler falls back to G96 S and G97.
+    // D258: where the role's table lacks the key, the compiler falls back to the family codes (FamilyCode).
     public static void WriteSpindleLines(FanucBlock write)
     {
         Block block = write.Block;
@@ -533,8 +530,8 @@ internal static class FanucToolWords
         }
 
         string what = $"[spindle.{tableRole}]";
-        if (write.Render(table?.States.GetValueOrDefault(state), $"{what} {state} (machine-config 5)",
-            values) is not string text)
+        string? template = table?.States.GetValueOrDefault(state) ?? FamilyCode(write, state);
+        if (write.Render(template, $"{what} {state} (machine-config 5)", values) is not string text)
         {
             return;
         }
@@ -602,6 +599,20 @@ internal static class FanucToolWords
         {
             write.Target.Set(cssKey, state == "VC" ? "G96" : "G97");
         }
+    }
+
+    // D258: the family codes where the table of the role lacks the key, which a key of the table overrides: VC is G96
+    // S{value} and CSS_OFF G97, RPM_MAX is G50 S{value} in G-code system A and G92 S{value} in systems B and C and on
+    // a mill (controllers fanuc.md 3, 4; machine-config 5).
+    private static string? FamilyCode(FanucBlock write, string state)
+    {
+        return state switch
+        {
+            "VC" => "G96 S{value}",
+            "CSS_OFF" => "G97",
+            "RPM_MAX" => write.System == GcodeSystem.A ? "G50 S{value}" : "G92 S{value}",
+            _ => null,
+        };
     }
 
     // The S that G97 carries: the RPM of the spindle where it runs after the block and the block states no RPM of its
