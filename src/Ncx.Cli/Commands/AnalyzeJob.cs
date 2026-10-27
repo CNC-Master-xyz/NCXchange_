@@ -64,9 +64,9 @@ internal static class AnalyzeJob
         // The reports cover the blocks the channels executed, after a line that says so when an ERROR stopped the job,
         // and nothing is written when the job stopped before its first round, as for one file (the TODO(question) of
         // AnalyzeCommand.Run, wave-2 question #42).
-        // D302: for each channel, in manifest order, the line 'Channel n: <file>[, program <name>]', then its reports in
-        // --analytic order; the 'run stopped' line stands once before all channels. In CSV the heading is a one-field
-        // row (TextTable.Line).
+        // D302: for each channel, in manifest order, the line 'Channel n: <file>[, program <name>]', then its reports
+        // in --analytic order; the 'run stopped' line stands once before all channels. In CSV the heading is a
+        // one-field row (TextTable.Line).
         if (result.Result is JobResult { Rounds: > 0 } job)
         {
             if (job.Stopped)

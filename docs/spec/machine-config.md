@@ -210,9 +210,9 @@ letter = "X"                       # address written in the output; extended axi
 incremental_letter = "U"           # Fanuc lathes: U/W/H/V are the incremental forms of X/Z/C/Y; empty when the control uses G91
 kind = "linear"                    # linear | rotary
 limits = [-10, 650]                # min and max in machine coordinates (the G53 / M91 frame), for the travel-limit analytics (D100)
-rapid = 30000                      # mm/min, for the runtime estimate
+rapid = 30000                      # mm/min (deg/min on a rotary axis), for the runtime estimate (D290)
 max_feed = 10000                   # mm/min (deg/min on a rotary axis), the F this axis can follow; VM441 compares the path feed of the axes a block moves, the expander warns or clamps (D64, D192)
-acceleration = 3000                # mm/s^2, for the trapezoidal profile of the runtime estimate
+acceleration = 3000                # mm/s^2 (deg/s^2 on a rotary axis), for the trapezoidal profile of the runtime estimate (D290)
 programming = "diameter"           # X axis of a lathe: diameter | radius | switchable (D60); the reader interprets the source with it, the compiler writes it
 home = 0                           # reference point 1 in machine coordinates (the G53 / M91 frame), for HOME (D100)
 home2 = -50                        # reference point 2 (G30 P2), optional
@@ -244,7 +244,7 @@ program_end = { X = 0, Z = -120 }  # optional
 ```toml
 [dynamics]                         # control behaviour for the runtime estimate (D64)
 block_time = 0.001                 # seconds the control needs per block; a short segment cannot be faster than this
-path_mode = "continuous"           # continuous | exact_stop
+path_mode = "continuous"           # continuous | exact_stop: the start value of the PATH_MODE state (VM 2.1); left out, exact stop (D350)
 corner_speed = 2000                # mm/min carried through a corner in continuous mode
 # rapid_exact_stop = true          # optional: whether the end of a RAPID is a rest point of the path; left out, true on a Fanuc-family machine (G00 in-position check) and false otherwise (D286)
 
@@ -252,6 +252,10 @@ corner_speed = 2000                # mm/min carried through a corner in continuo
 ON = "DIAMON"                      # Siemens; Mori Seiki radius mode: ON = "M583", OFF = "M582"; Fanuc: none, the parameter decides
 OFF = "DIAMOF"
 ```
+
+The units of `rapid`, `max_feed` and `acceleration` follow the axis kind, in every plane: mm/min and mm/s^2 on a linear axis, deg/min and deg/s^2 on a rotary axis. The runtime estimate uses a rotary axis only where its word is a length: under `CYLINDER=r` its values convert at r (1 deg = pi r / 180 mm); under `POLAR=ON` at L, the closest approach of the tool centre to the centre of rotation along the block (the perpendicular distance of the segment from the centre, or the nearer end when the foot lies outside it), so the C limit gives F <= L x max_feed x pi / 180 and the X limits apply as well; acceleration converts the same way. Where L is 0, a block through the centre, the estimate takes the X limits alone and its report says "C clamp near centre not estimated". A `RAPID` there is estimated with the rapids of the linear axes (D290).
+
+`path_mode` is only the start value of the path-control state (virtual machine 2.1); `PATH_MODE` in the program changes it, `PATH_MODE=DEFAULT` and `PROGRAM=END` restore it, and the runtime estimate reads the state of each motion. A `[dynamics]` without `path_mode` starts at exact stop; a machine file without `[dynamics]` keeps the estimate at distance over feed. Where the program asks for a mode the machine has no `[transform]` template for, the state still rules the estimate and the report says so (D350). Under `CONTINUOUS` the path comes to rest at the rest points of D286 (virtual machine 8), among them the end of a `RAPID` on a Fanuc-family machine, which `rapid_exact_stop` overrides.
 
 ## 5. Functions and coolant
 
@@ -268,7 +272,7 @@ CSS_OFF = "G97"
 RPM_MAX = "G50 S{value}"
 rpm_min = 45                       # machine limits, not the program's RPM_MAX clamp: the expander warns or clamps (D64)
 rpm_max = 6000
-accel_time = 2.5                   # seconds from stop to rpm_max, for the runtime estimate of starts and stops
+accel_time = 2.5                   # seconds from stop to rpm_max, for the runtime estimate of starts, stops and speed changes (D323)
 
 [spindle.SUB]                      # Nakamura: +50, Mori Seiki: +200, Doosan: P suffix, Siemens: spindle number
 CW = "M53"

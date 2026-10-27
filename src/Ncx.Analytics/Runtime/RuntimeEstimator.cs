@@ -7,19 +7,34 @@ namespace Ncx.Analytics.Runtime;
 
 /// <summary>
 /// The runtime estimate of virtual machine 8 and D64 as a stream: it reads the events of a run one by one and hands
-/// every time it charges, of a motion, a dwell, a cycle dwell or a spindle start or stop, to the analytic that owns it.
-/// It keeps nothing but the one motion whose exit speed waits for the next motion, so that it runs over a point list of
-/// millions of blocks (implementation 14, risks).
+/// every time it charges, of a motion, a dwell, a cycle dwell or a spindle start, stop or speed change, to the analytic
+/// that owns it. It keeps nothing but the one motion whose exit speed waits for the next motion, so that it runs over a
+/// point list of millions of blocks (implementation 14, risks).
 /// </summary>
-// TODO(question): virtual machine 8 lets path_mode = "continuous" carry the speed through corners up to corner_speed
-// without saying where the path comes to rest. It comes to rest at a dwell, a spindle start or stop, a tool change, a
-// STOP, the end of a program and a motion that is not timed; between two timed motions every junction is a corner, a
-// block without a motion between them and a reversal of the direction included, until that is answered.
+// D286: the path rests, while the programmed PATH_MODE state is CONTINUOUS, at DWELL, a spindle start or stop,
+// TOOL_BEGIN/END, STOP, program and file events, a motion not timed, a direction reversal, CYCLE_DWELL, a cycle call
+// not timed, every SYNC, and every block without path motion that the control executes (COOLANT, FUNC, MFUNC,
+// PATH_MODE, TOLERANCE and the other machine-function and state blocks); comments, variable computations, LABEL, JUMP
+// and CALL are transparent corners. The end of a RAPID is a rest point on a Fanuc-family machine and a corner
+// otherwise, [dynamics] rapid_exact_stop overriding that. Under EXACT_STOP every block rests (D350). A block without
+// path motion is seen through the events it raises: one that raises none, a state word repeating its value or a SYNC
+// of a run of one channel, stays invisible and is taken as a corner (gap closed 2026-10-27, delegated).
 internal sealed class RuntimeEstimator
 {
     private const double SecondsPerMinute = 60d;
     private const string SpindlePrefix = "SPINDLE:";
+    private const string RpmPrefix = "RPM:";
+    private const string PathModeVariable = "PATH_MODE";
     private const string CycleDwellKey = "CYCLE_DWELL";
+    private const string PeckKey = "PECK";
+    private const string ChipBreakCycle = "CHIP_BREAK";
+    private const string PeckClearanceKey = "peck_clearance";
+    private const string ChipBreakLiftKey = "chip_break_lift";
+
+    // The verbs of a block with path motion (language 4.3, 4.7); every other block that raises an event, but the
+    // transparent ones, is a rest point under CONTINUOUS (D286).
+    private static readonly HashSet<string> s_pathMotionVerbs =
+        new(StringComparer.Ordinal) { "RAPID", "LINE", "ARC", "RETRACT", "HOME", "CYCLE_CALL" };
 
     private readonly MachineConfig _machine;
     private readonly RangeFilter _range;
@@ -29,6 +44,11 @@ internal sealed class RuntimeEstimator
     private CycleCallEvent? _openCycle;
     private bool _openCycleMoved;
     private string? _section;
+
+    // The block and the spindle of the last spindle change charged: a block raises one STATE_CHANGE per changed
+    // variable, SPINDLE: and RPM: of one spindle among them, and its time is charged once (D323).
+    private Block? _spindleBlock;
+    private string? _spindleCharged;
 
     /// <summary>
     /// An estimate over one run.
@@ -79,6 +99,38 @@ internal sealed class RuntimeEstimator
     public int RotaryMoves { get; private set; }
 
     /// <summary>
+    /// The motions of the polar plane through its centre, L = 0, timed with the X limits alone (D290).
+    /// </summary>
+    public int ThroughCentre { get; private set; }
+
+    /// <summary>
+    /// The corners between two timed motions under PATH_MODE=CONTINUOUS (D350).
+    /// </summary>
+    public int ContinuousCorners { get; private set; }
+
+    /// <summary>
+    /// The corners between two timed motions under PATH_MODE=EXACT_STOP (D350).
+    /// </summary>
+    public int ExactStopCorners { get; private set; }
+
+    /// <summary>
+    /// The corners timed in a mode other than the start value for which the machine has no [transform] template, so
+    /// that it cannot express it there (D350), by mode.
+    /// </summary>
+    public Dictionary<PathMode, int> UnexpressedCorners { get; } = [];
+
+    /// <summary>
+    /// True when the run changed PATH_MODE (D350).
+    /// </summary>
+    public bool PathModeChanged { get; private set; }
+
+    /// <summary>
+    /// The [cycles] keys the expanded cycles of the range needed and the machine file leaves out, where the family's
+    /// behaviour is 0: chip_break_lift, peck_clearance (D357).
+    /// </summary>
+    public SortedSet<string> DefaultedCycleKeys { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// Reads one event of the run.
     /// </summary>
     public void On(VmEvent vmEvent)
@@ -97,7 +149,9 @@ internal sealed class RuntimeEstimator
                 AddDwell(dwell);
                 break;
             case StateChangeEvent change:
+                PathModeChanged |= change.Variable == PathModeVariable;
                 AddSpindleChange(change);
+                RestAtBlock(change);
                 break;
             case SectionEvent section:
                 _section = section.Text;
@@ -106,8 +160,11 @@ internal sealed class RuntimeEstimator
                 Stop();
                 _section = program.Phase == EventPhase.Begin ? null : _section;
                 break;
-            case ToolEvent or StopEvent or FileEvent:
+            case ToolEvent or StopEvent or FileEvent or SyncEvent:
                 Stop();
+                break;
+            case FunctionEvent or PreloadEvent:
+                RestAtBlock(vmEvent);
                 break;
         }
     }
@@ -136,6 +193,7 @@ internal sealed class RuntimeEstimator
         double millimetres = (double)length * CommandedFeed.MillimetresPerUnit(motion);
         MovingAxes axes = MovingAxes.Of(motion, Dynamics);
         RotaryMoves += axes.TurnsRotary ? InRange(motion) : 0;
+        ThroughCentre += axes.ThroughCentre ? InRange(motion) : 0;
         double? speed = SpeedOf(motion, axes);
         if (millimetres > 0 && speed is null)
         {
@@ -156,7 +214,8 @@ internal sealed class RuntimeEstimator
         double entry = 0;
         if (_pending is not null)
         {
-            entry = CornerSpeed(_pending, velocity);
+            CountCorner(_pending.Motion);
+            entry = CornerSpeed(_pending, motion, velocity);
             Complete(_pending, entry);
         }
 
@@ -172,7 +231,7 @@ internal sealed class RuntimeEstimator
     }
 
     // The speed of a motion in mm/s: RAPID and HOME use the rapid rate, the smallest of the moving axes (virtual
-    // machine 8; HOME is a MOTION, wave-2 question #25); every other motion the commanded feed, which the profile
+    // machine 8; HOME is a MOTION, virtual machine 7; D287); every other motion the commanded feed, which the profile
     // limits by the max_feed of every axis that moves. The fallback is distance over the feed as commanded.
     // D287: a RETRACT takes no feed of its own (virtual machine 3.1a: "A RETRACT with a feed ... ERROR"), and M140 MB
     // without a feed traverses at rapid, so RETRACT is timed at the rapid rate of its moving axes with the same
@@ -197,12 +256,15 @@ internal sealed class RuntimeEstimator
         return perMinute / SecondsPerMinute;
     }
 
-    // path_mode = "exact_stop" brakes to zero in every block, "continuous" carries the speed through corners up to the
-    // configured corner_speed (virtual machine 8), and never faster than either motion travels, nor faster than the
-    // motion before the corner can reach by its end.
-    private double CornerSpeed(PendingMotion before, double nextSpeed)
+    // D350: the estimate reads the PATH_MODE state of the motion before the corner: EXACT_STOP brakes to zero in every
+    // block, CONTINUOUS carries the speed through corners up to the configured corner_speed (virtual machine 8), and
+    // never faster than either motion travels, nor faster than the motion before the corner can reach by its end. D286:
+    // the end of a RAPID on a machine whose rapids stop, and a direction reversal, are rest points.
+    private double CornerSpeed(PendingMotion before, MotionEvent next, double nextSpeed)
     {
-        if (!Dynamics.Continuous)
+        if (before.Motion.After.Frame.PathMode != PathMode.Continuous
+            || (before.Motion.Verb == Verb.Rapid && Dynamics.RapidRests)
+            || PathDirection.Reverses(before.Motion, next, Dynamics))
         {
             return 0;
         }
@@ -211,6 +273,44 @@ internal sealed class RuntimeEstimator
             ? Math.Sqrt((before.Entry * before.Entry) + (2 * acceleration * before.Length))
             : double.PositiveInfinity;
         return Math.Min(Math.Min(before.Speed, nextSpeed), Math.Min(Dynamics.CornerSpeed, reachable));
+    }
+
+    // D350: the report counts the corners timed in each mode, and those in a mode the program asked for that the
+    // machine has no template for.
+    private void CountCorner(MotionEvent before)
+    {
+        if (!_range.Contains(before))
+        {
+            return;
+        }
+
+        PathMode mode = before.After.Frame.PathMode;
+        if (mode == PathMode.Continuous)
+        {
+            ContinuousCorners++;
+        }
+        else
+        {
+            ExactStopCorners++;
+        }
+
+        if (mode != Dynamics.StartPathMode && !Dynamics.CanExpress(mode))
+        {
+            UnexpressedCorners[mode] = UnexpressedCorners.GetValueOrDefault(mode) + 1;
+        }
+    }
+
+    // D286: a block without path motion that the control executes is a rest point; the events of a block with a
+    // motion verb are not, and comments, variable computations, LABEL, JUMP and CALL raise none of the events that call
+    // this.
+    private void RestAtBlock(VmEvent vmEvent)
+    {
+        if (vmEvent.Block.Verb?.Key is string verb && s_pathMotionVerbs.Contains(verb))
+        {
+            return;
+        }
+
+        Stop();
     }
 
     // The time of a motion under its profile; a block can never be shorter than the control's block_time, which is what
@@ -250,54 +350,75 @@ internal sealed class RuntimeEstimator
     }
 
     // A spindle start or stop adds accel_time of that spindle (virtual machine 8; machine-config 5), read from the
-    // STATE_CHANGE of SPINDLE (architecture 9); the spindles of generated blocks count as well (virtual machine 3.10,
-    // machine-config 5a).
-    // TODO(question): machine-config 5 gives accel_time as "seconds from stop to rpm_max" and virtual machine 8 says a
-    // start or stop "adds accel_time"; a start to less than rpm_max adds the whole accel_time, and a change from CW to
-    // CCW counts as a stop and a start, until that is answered.
+    // STATE_CHANGE of SPINDLE and RPM (architecture 9); the spindles of generated blocks count as well (virtual machine
+    // 3.10, machine-config 5a). D323: where rpm_max and both speeds are known, the linear ramp from stop to rpm_max in
+    // accel_time: a start adds accel_time x rpm_new / rpm_max, a stop accel_time x rpm_old / rpm_max, a speed change
+    // while turning accel_time x |rpm_new - rpm_old| / rpm_max, a reversal accel_time x (rpm_old + rpm_new) / rpm_max.
+    // Where rpm_max is missing or a speed unknown (CSS, no S yet), the whole accel_time per start and per stop, a
+    // reversal twice, and nothing for a speed change. The path rests at a start or a stop (D286).
     private void AddSpindleChange(StateChangeEvent change)
     {
-        if (!change.Variable.StartsWith(SpindlePrefix, StringComparison.Ordinal))
+        string? spindle = SpindleOf(change.Variable);
+        if (spindle is null
+            || (ReferenceEquals(change.Block, _spindleBlock) && spindle == _spindleCharged)
+            || !change.Before.Spindles.TryGetValue(spindle, out SpindleSnapshot? before)
+            || !change.After.Spindles.TryGetValue(spindle, out SpindleSnapshot? after))
         {
             return;
         }
 
-        int startsAndStops = StartsAndStops(change.OldValue, change.NewValue);
-        if (startsAndStops == 0)
+        _spindleBlock = change.Block;
+        _spindleCharged = spindle;
+        bool turned = before.Direction != SpindleDirection.Off;
+        bool turns = after.Direction != SpindleDirection.Off;
+        if (turned != turns || (turned && before.Direction != after.Direction))
+        {
+            Stop();
+        }
+
+        if (Dynamics.AccelTime(spindle) is not double accelTime)
         {
             return;
         }
 
-        Stop();
-        string spindle = change.Variable.Substring(SpindlePrefix.Length);
-        if (Dynamics.AccelTime(spindle) is double accelTime)
+        double? rpmMax = Dynamics.RpmMax(spindle);
+        double? oldRpm = KnownRpm(change.Before, spindle, before, rpmMax);
+        double? newRpm = KnownRpm(change.After, spindle, after, rpmMax);
+        double seconds = SpindleRamp.Seconds(turned ? before.Direction : null, turns ? after.Direction : null, oldRpm,
+            newRpm, accelTime, rpmMax);
+        if (seconds > 0)
         {
-            Charge(change, startsAndStops * accelTime, _section);
+            Charge(change, seconds, _section);
         }
     }
 
-    // OFF to CW or CCW is a start, CW or CCW to OFF a stop, CW to CCW a stop and a start (language 4.5); a value
-    // that is unknown, written empty, is neither.
-    private static int StartsAndStops(string oldValue, string newValue)
+    // The spindle a STATE_CHANGE of SPINDLE:S1 or RPM:S1 names; null for another variable.
+    private static string? SpindleOf(string variable)
     {
-        bool turned = oldValue is "CW" or "CCW";
-        bool turns = newValue is "CW" or "CCW";
-        if (oldValue == "OFF" && turns)
+        if (variable.StartsWith(SpindlePrefix, StringComparison.Ordinal))
         {
-            return 1;
+            return variable.Substring(SpindlePrefix.Length);
         }
 
-        if (turned && newValue == "OFF")
-        {
-            return 1;
-        }
-
-        return turned && turns && oldValue != newValue ? 2 : 0;
+        return variable.StartsWith(RpmPrefix, StringComparison.Ordinal) ? variable.Substring(RpmPrefix.Length) : null;
     }
 
-    // The motions of an expanded CYCLE_CALL follow it in its block (virtual machine 3.3, D37; wave-2 question #27) and
+    // The rpm of a turning spindle where it is known, capped by rpm_max: not under CSS, whose rpm follows the radius
+    // during the motions, and not while RPM is unknown (D323).
+    private static double? KnownRpm(ChannelSnapshot state, string spindle, SpindleSnapshot speed, double? rpmMax)
+    {
+        if (speed.Css || state.Unknown.Contains(RpmPrefix + spindle))
+        {
+            return null;
+        }
+
+        double rpm = (double)speed.Rpm;
+        return rpmMax is double cap ? Math.Min(rpm, cap) : rpm;
+    }
+
+    // The motions of an expanded CYCLE_CALL follow it in its block (virtual machine 3.3, D37, D234) and
     // are timed as motions; cycle plunges and dwells add their times (virtual machine 8). The dwell of CYCLE_DWELL is
-    // charged once per call, at the depth, and moves nothing (virtual machine 3.3; wave-2 question #11). A call without
+    // charged once per call, at the depth, and moves nothing (virtual machine 3.3, D190). A call without
     // motions is a cycle whose sequence the virtual machine does not know (virtual machine 3.3, D94): not timed.
     private void CloseCycleCall(VmEvent? next)
     {
@@ -312,16 +433,58 @@ internal sealed class RuntimeEstimator
             return;
         }
 
+        // D286: a cycle call not timed and a CYCLE_DWELL are rest points.
         if (!_openCycleMoved)
         {
             UnknownCycles += InRange(_openCycle);
+            Stop();
         }
-        else if (_openCycle.Parameters.Count > 0)
+        else
         {
             ChargeCycleDwell(_openCycle);
+            NoteDefaultedKeys(_openCycle);
         }
 
         _openCycle = null;
+    }
+
+    // D357: on Fanuc, and on Heidenhain for chip_break_lift and in a run without a machine family, a [cycles] key left
+    // out is 0, and the report names the key it defaulted: peck_clearance for the pecks of a cycle, chip_break_lift for
+    // those of CHIP_BREAK (CycleDistances of the virtual machine; gap closed 2026-10-27 by code wave 1).
+    private void NoteDefaultedKeys(CycleCallEvent cycleCall)
+    {
+        if (!_range.Contains(cycleCall) || !Pecks(cycleCall))
+        {
+            return;
+        }
+
+        Controller? family = _machine.Machine.Controller;
+        CyclesConfig cycles = _machine.Cycles ?? new CyclesConfig();
+        if (cycleCall.Cycle == ChipBreakCycle)
+        {
+            if (cycles.ChipBreakLift is null && family is not Controller.Siemens)
+            {
+                DefaultedCycleKeys.Add(ChipBreakLiftKey);
+            }
+        }
+        else if (cycles.PeckClearance is null && family is not (Controller.Siemens or Controller.Heidenhain))
+        {
+            DefaultedCycleKeys.Add(PeckClearanceKey);
+        }
+    }
+
+    // A cycle call whose PECK is a number above 0 splits its feed into steps (D190, D355).
+    private static bool Pecks(CycleCallEvent cycleCall)
+    {
+        foreach (Word word in cycleCall.Parameters)
+        {
+            if (word.Key == PeckKey && word.Value is DecimalValue { Number: > 0 } or IntegerValue { Number: > 0 })
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void ChargeCycleDwell(CycleCallEvent cycleCall)
@@ -333,6 +496,7 @@ internal sealed class RuntimeEstimator
                 continue;
             }
 
+            Stop();
             switch (word.Value)
             {
                 case DecimalValue seconds:

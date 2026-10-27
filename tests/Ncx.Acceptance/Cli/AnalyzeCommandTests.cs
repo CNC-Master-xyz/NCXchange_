@@ -48,7 +48,7 @@ public sealed class AnalyzeCommandTests : IDisposable
 
     // P4-02 done when: the runtime of 3D_FRAESEN.fanuc.nc, converted with fanuc-mill-30i, is within 10 percent of the
     // cycle time the maintainer measured on the machine. That time is not known yet, so the computed report is the
-    // reference, unverified (implementation 14, P4-02): 191.5 s with the dynamics of fanuc-mill-30i.toml, which are
+    // reference, unverified (implementation 14, P4-02): 191.6 s with the dynamics of fanuc-mill-30i.toml, which are
     // plausible values and not verified on a machine either (D100).
     // TODO: when the maintainer's measured cycle time of 3D_FRAESEN is known, assert the estimated time within 10
     // percent of it (P4-02 done when), and correct the dynamics of fanuc-mill-30i.toml rather than the code where it is
@@ -200,8 +200,9 @@ public sealed class AnalyzeCommandTests : IDisposable
         Assert.True(exitCode == 0, _cli.Error);
         Assert.StartsWith("Runtime estimate: 2.5D_FRAESEN.ncx, the whole file, on fanuc-mill-30i.toml, INTERPRETED run",
             _cli.Output, StringComparison.Ordinal);
-        Assert.Contains("Motions: trapezoidal profile (virtual machine 8, D64), path_mode continuous, "
-            + "corner_speed 2000 mm/min, block_time 0.001 s.", _cli.Output, StringComparison.Ordinal);
+        Assert.Contains("Motions: trapezoidal profile (virtual machine 8, D64), path_mode continuous (the start value "
+            + "of PATH_MODE, D350), corner_speed 2000 mm/min, block_time 0.001 s.", _cli.Output,
+            StringComparison.Ordinal);
     }
 
     // D97: a file that cannot be read exits 2 before the run starts, and no report is written.

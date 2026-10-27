@@ -79,9 +79,9 @@ public sealed class ToolVectorAnalyticTests
         Assert.Equal(30, vectors.Largest[1].Value, Precision);
     }
 
-    // P4-03, D325: a head axis turns the tool (its owner is a tool holder, here a swivel head): B=30 turns 0 0 1 about Y to 0.5 0 0.866, 30
-    // degrees (line 5); the C table then turns the workpiece under the tilted tool, and a quarter turn swings the
-    // vector about Z to 0 -0.5 0.866 (line 6).
+    // P4-03, D325: a head axis turns the tool (its owner is a tool holder, here a swivel head): B=30 turns 0 0 1 about
+    // Y to 0.5 0 0.866, 30 degrees (line 5); the C table then turns the workpiece under the tilted tool, and a quarter
+    // turn swings the vector about Z to 0 -0.5 0.866 (line 6).
     [Fact]
     public void RotaryAxes_BHeadAndCTable_TurnTheToolAndTheWorkpiece()
     {

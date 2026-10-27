@@ -341,8 +341,8 @@ public sealed class RuntimeAnalyticTests
         Assert.Equal(4.0, runtime.TotalSeconds, Precision);
     }
 
-    // The reading of the TODO(question) in RuntimeEstimator: a start to less than rpm_max adds the whole accel_time,
-    // and a change from CW to CCW counts as a stop and a start; CW, CCW, OFF: 2 + 4 + 2 s.
+    // D323: without rpm_max a start adds the whole accel_time, and a change from CW to CCW counts as a stop and a
+    // start; CW, CCW, OFF: 2 + 4 + 2 s.
     [Fact]
     public void SpindleAccelTime_Reversal_CountsAsAStopAndAStart()
     {
@@ -455,17 +455,18 @@ public sealed class RuntimeAnalyticTests
         Assert.StartsWith("Runtime estimate: test.ncx, the whole file, on test.toml, INTERPRETED run\n", report,
             StringComparison.Ordinal);
         Assert.Contains("An estimate from the values of the machine file", report, StringComparison.Ordinal);
-        Assert.Contains("path_mode exact_stop, corner_speed none mm/min, block_time 0.001 s", report,
+        Assert.Contains("path_mode exact_stop (the start value of PATH_MODE, D350), corner_speed none mm/min, "
+            + "block_time 0.001 s", report,
             StringComparison.Ordinal);
         Assert.Contains("X     6000            6000               1000", report, StringComparison.Ordinal);
         Assert.Contains("Estimated time: 1.1 s (0:00:01), the longest channel.", report, StringComparison.Ordinal);
     }
 
-    // Third review of P4-02 (implementation 14, risks: the report carries "every value it used"): in the polar plane
-    // the C word is a length (VM 3.1, D102), so a motion of C limits its feed by the max_feed of C and accelerates with
-    // the acceleration of C (VM 8): LINE C=10 at F=6000 with max_feed 1200 (20 mm/s) and 100 mm/s^2, exact stop, takes
-    // 0.2 s and 2 mm to reach 20 mm/s, 0.2 s and 2 mm to stop, 6 mm at 20 mm/s; 0.7 s. The report names those values
-    // of C in the table of the rotary axes, in the units of the example files, and says how the estimate reads them.
+    // D290: in the polar plane the C word is a length (VM 3.1, D102), and the deg/min and deg/s^2 of C convert at L,
+    // the closest approach of the block to the centre of rotation: LINE C=10 from X=10 C=0 passes the centre at 10 mm
+    // (the foot of the perpendicular is its start), so max_feed 1200 deg/min of C is 1200 * 10 * pi / 180 mm/min and
+    // its 100 deg/s^2 are 100 * 10 * pi / 180 mm/s^2, below the 6000 mm/min and 1000 mm/s^2 of X, which limit the
+    // block as well. The report names those values of C in the table of the rotary axes and says how it reads them.
     [Fact]
     public void Report_MotionInThePolarPlane_NamesTheValuesOfTheRotaryAxisItUsed()
     {
@@ -475,14 +476,248 @@ public sealed class RuntimeAnalyticTests
             Program(["SPINDLE_MODE:MAIN=AXIS", "RAPID Z=2", "POLAR=ON", "LINE X=10 C=0 F=6000"], "LINE C=10"),
             lathe, runtime);
 
-        Assert.Equal(0.7, runtime.TotalSeconds, Precision);
-        Assert.Contains("\nRotary axes: they limit and accelerate a motion only in the polar or cylinder plane, where "
-            + "their word is a length (virtual machine 3.1, D102); the estimate then reads their numbers as mm/min "
-            + "and mm/s^2.\n"
+        double atL = 10 * Math.PI / 180;
+        Assert.Equal(FromRestToRest(10, 1200 * atL / 60, 100 * atL), runtime.TotalSeconds, Precision);
+        Assert.Contains("\nRotary axes: deg/min and deg/s^2 (machine-config 4); they limit and accelerate a motion "
+            + "only in the polar or cylinder plane, where their word is a length (virtual machine 3.1, D102): under "
+            + "CYLINDER=r at r, 1 deg = pi r / 180 mm, under POLAR=ON at L, the closest approach of the block to the "
+            + "centre of rotation; a RAPID there takes the rapid of the linear axes (D290).\n"
             + "axis  rapid (deg/min)  max_feed (deg/min)  acceleration (deg/s^2)\n"
             + "C     3600             1200                100\n", report, StringComparison.Ordinal);
         Assert.Contains("Not in the estimate: the travel of rotary axes outside the polar and cylinder plane (0 "
             + "motions turned one;", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("C clamp near centre not estimated", report, StringComparison.Ordinal);
+    }
+
+    // D290: a block through the centre of the polar plane has L = 0. The estimate does not divide by zero: it takes
+    // the X limits alone for that block, 6000 mm/min and 1000 mm/s^2 over the 20 mm from X=10 to X=-10 (1.1 s less
+    // the 80 mm at 100 mm/s, 0.3 s), and the report lines it.
+    [Fact]
+    public void PolarPlane_BlockThroughTheCentre_TakesTheXLimitAloneAndSaysSo()
+    {
+        MachineConfig lathe = AnalyticMachines.PolarLathe();
+        var runtime = new RuntimeAnalytic(AnalyticRuns.Options(lathe));
+        string report = AnalyticRuns.Run(
+            Program(["SPINDLE_MODE:MAIN=AXIS", "RAPID Z=2", "POLAR=ON", "LINE X=10 C=0 F=6000"], "LINE X=-10"),
+            lathe, runtime);
+
+        Assert.Equal(FromRestToRest(20, 100, 1000), runtime.TotalSeconds, Precision);
+        Assert.Contains("C clamp near centre not estimated: 1 motions through the centre of the polar plane took the "
+            + "limits of X alone (D290).", report, StringComparison.Ordinal);
+    }
+
+    // D290: under CYLINDER=r the rotary values convert at r: on the circumference of radius 30, LINE C=10 at F=6000
+    // is limited by 1200 deg/min of C, 1200 * 30 * pi / 180 mm/min, and accelerates with 100 * 30 * pi / 180 mm/s^2.
+    [Fact]
+    public void CylinderPlane_MotionOfC_ConvertsTheRotaryValuesAtTheRadius()
+    {
+        MachineConfig lathe = AnalyticMachines.PolarLathe();
+        var runtime = new RuntimeAnalytic(AnalyticRuns.Options(lathe));
+        AnalyticRuns.Run(
+            Program(["SPINDLE_MODE:MAIN=AXIS", "RAPID X=30 Z=-10", "CYLINDER=30", "LINE Z=-10 C=0 F=6000"],
+                "LINE C=10"),
+            lathe, runtime);
+
+        double atR = 30 * Math.PI / 180;
+        Assert.Equal(FromRestToRest(10, 1200 * atR / 60, 100 * atR), runtime.TotalSeconds, Precision);
+    }
+
+    // D350: [dynamics] path_mode is only the start value; PATH_MODE=CONTINUOUS in the program carries the corner speed
+    // of 3000 mm/min (50 mm/s) through the corner on a machine that starts at exact stop. LINE X=100 brakes to 50 mm/s
+    // in the corner, 1.0625 s as above; LINE Y=100 accelerates with the 500 mm/s^2 of Y from 50 mm/s in 0.1 s over
+    // 7.5 mm and brakes to rest before the PATH_MODE block in 0.2 s over 10 mm, 82.5 mm at 100 mm/s: 1.125 s. Under
+    // EXACT_STOP the next two lines take 1.1 s and 1.2 s. The report counts the corners in each mode and says that the
+    // machine has no template to write the mode the program asks for.
+    [Fact]
+    public void PathMode_ProgramSwitchesToContinuous_TheStateRulesTheEstimate()
+    {
+        var dynamics = new DynamicsConfig { BlockTime = 0.001m, PathMode = PathMode.ExactStop, CornerSpeed = 3000m };
+        MachineConfig machine = AnalyticMachines.Mill(dynamics);
+        var runtime = new RuntimeAnalytic(AnalyticRuns.Options(machine));
+        string report = AnalyticRuns.Run(
+            Program(["RAPID X=0 Y=0 Z=0", "PATH_MODE=CONTINUOUS"], "LINE X=100 F=6000", "LINE Y=100",
+                "PATH_MODE=EXACT_STOP", "LINE X=0", "LINE Y=0"),
+            machine, runtime);
+
+        Assert.Equal(1.0625 + 1.125 + 1.1 + 1.2, runtime.TotalSeconds, Precision);
+        Assert.Contains("path_mode exact_stop (the start value of PATH_MODE, D350)", report, StringComparison.Ordinal);
+        Assert.Contains("Corners: 1 timed under CONTINUOUS, 1 under EXACT_STOP; the program changes PATH_MODE "
+            + "(D350).", report, StringComparison.Ordinal);
+        Assert.Contains("The machine has no [transform] template for PATH_MODE=CONTINUOUS: 1 corners are timed in a "
+            + "mode it cannot express (D350).", report, StringComparison.Ordinal);
+    }
+
+    // D350: PATH_MODE=EXACT_STOP brakes every block on a machine whose start value is continuous: 2.2 s.
+    [Fact]
+    public void PathMode_ProgramSwitchesToExactStop_BrakesInTheCorner()
+    {
+        RuntimeAnalytic runtime = Run(AnalyticMachines.Mill(AnalyticMachines.Continuous(3000m)),
+            ["RAPID X=0 Y=0 Z=0", "PATH_MODE=EXACT_STOP"],
+            "LINE X=100 F=6000",
+            "LINE X=200");
+
+        Assert.Equal(2.2, runtime.TotalSeconds, Precision);
+    }
+
+    // D286: under CONTINUOUS the path rests at every block without path motion that the control executes, COOLANT
+    // here: the two lines take 1.1 s each, as under exact stop.
+    [Fact]
+    public void RestPoints_CoolantBlockBetweenTwoLines_IsARestPoint()
+    {
+        RuntimeAnalytic runtime = Run(AnalyticMachines.Mill(AnalyticMachines.Continuous(3000m)),
+            "LINE X=100 F=6000",
+            "COOLANT=ON",
+            "LINE X=200");
+
+        Assert.Equal(2.2, runtime.TotalSeconds, Precision);
+    }
+
+    // D286: a variable computation, a comment and a JUMP are transparent: the corner speed carries through, 2.125 s.
+    [Fact]
+    public void RestPoints_VariableAndJumpBetweenTwoLines_AreTransparentCorners()
+    {
+        RuntimeAnalytic runtime = Run(AnalyticMachines.Mill(AnalyticMachines.Continuous(3000m)),
+            "LINE X=100 F=6000",
+            "VAR:Q1=5 ; a comment",
+            "JUMP=GO",
+            "LABEL=GO",
+            "LINE X=200");
+
+        Assert.Equal(2.125, runtime.TotalSeconds, Precision);
+    }
+
+    // D286: a direction reversal is a rest point: LINE X=100 and back to X=0 take 1.1 s each.
+    [Fact]
+    public void RestPoints_DirectionReversal_IsARestPoint()
+    {
+        RuntimeAnalytic runtime = Run(AnalyticMachines.Mill(AnalyticMachines.Continuous(3000m)),
+            "LINE X=100 F=6000",
+            "LINE X=0");
+
+        Assert.Equal(2.2, runtime.TotalSeconds, Precision);
+    }
+
+    // D286 with VM 3.2: the direction at the end of an ARC is its tangent. The quarter circle CCW from X=10 Y=0 to
+    // X=0 Y=10 about the origin ends travelling in -X: a LINE on to X=-10 carries the corner speed (faster than the
+    // same program under exact stop), a LINE back to X=10 reverses and rests (as fast as under exact stop).
+    [Theory]
+    [InlineData("LINE X=-10", false)]
+    [InlineData("LINE X=10", true)]
+    public void RestPoints_LineAfterAnArc_RestsOnlyWhereItReversesTheTangent(string line, bool rests)
+    {
+        string[] setUp = ["RAPID X=10 Y=0 Z=0"];
+        string[] blocks = ["ARC=CCW X=0 Y=10 CENTER:X=0 CENTER:Y=0 F=6000", line];
+        double continuous = Run(AnalyticMachines.Mill(AnalyticMachines.Continuous(3000m)), setUp, blocks)
+            .TotalSeconds;
+        double exactStop = Run(AnalyticMachines.Mill(AnalyticMachines.ExactStop), setUp, blocks).TotalSeconds;
+
+        Assert.Equal(rests, Math.Abs(continuous - exactStop) < 1e-9);
+    }
+
+    // D286: the end of a RAPID is a rest point on a Fanuc-family machine (G00 in-position check), the test mill: RAPID
+    // X=100 and LINE X=200 take 1.1 s each.
+    [Fact]
+    public void RestPoints_EndOfARapidOnFanuc_IsARestPoint()
+    {
+        RuntimeAnalytic runtime = Run(AnalyticMachines.Mill(AnalyticMachines.Continuous(3000m)),
+            "RAPID X=100",
+            "LINE X=200 F=6000");
+
+        Assert.Equal(2.2, runtime.TotalSeconds, Precision);
+    }
+
+    // D286: on another family the end of a RAPID is a corner, 2.125 s; and [dynamics] rapid_exact_stop overrides the
+    // family default either way.
+    [Theory]
+    [InlineData(Controller.Siemens, null, 2.125)]
+    [InlineData(Controller.Heidenhain, true, 2.2)]
+    [InlineData(Controller.Fanuc, false, 2.125)]
+    public void RestPoints_EndOfARapid_FollowsTheFamilyAndRapidExactStop(Controller family, bool? rapidExactStop,
+        double seconds)
+    {
+        MachineConfig mill = AnalyticMachines.Mill(
+            AnalyticMachines.Continuous(3000m) with { RapidExactStop = rapidExactStop });
+        MachineConfig machine = mill with { Machine = mill.Machine with { Controller = family } };
+
+        RuntimeAnalytic runtime = Run(machine, "RAPID X=100", "LINE X=200 F=6000");
+
+        Assert.Equal(seconds, runtime.TotalSeconds, Precision);
+    }
+
+    // D286: the report names the rest points and what the end of a RAPID is on the machine.
+    [Fact]
+    public void Report_Profile_NamesTheRestPoints()
+    {
+        var runtime = new RuntimeAnalytic(AnalyticRuns.Options(AnalyticMachines.Mill(AnalyticMachines.Continuous(0m))));
+        string report = AnalyticRuns.Run(Program(["RAPID X=0 Y=0 Z=0"], "LINE X=100 F=6000"),
+            AnalyticMachines.Mill(AnalyticMachines.Continuous(0m)), runtime);
+
+        Assert.Contains("Rest points under CONTINUOUS (D286): DWELL, a spindle start or stop, TOOL_BEGIN and TOOL_END, "
+            + "STOP, program and file events, a motion not timed, a direction reversal, CYCLE_DWELL, a cycle call not "
+            + "timed, every SYNC and every block without path motion except comments, variable computations, LABEL, "
+            + "JUMP and CALL; the end of a RAPID is a rest point (Fanuc family, G00 in-position check).", report,
+            StringComparison.Ordinal);
+    }
+
+    // D357: on Fanuc a [cycles] key left out is 0, and the runtime report names the key it defaulted, a report line and
+    // no diagnostic.
+    [Fact]
+    public void Report_PeckOnFanucWithoutPeckClearance_NamesTheKeyItDefaulted()
+    {
+        MachineConfig machine = AnalyticMachines.Mill(AnalyticMachines.ExactStop);
+        var runtime = new RuntimeAnalytic(AnalyticRuns.Options(machine));
+        string report = AnalyticRuns.Run(
+            Program(["RAPID X=0 Y=0 Z=10"],
+                "CYCLE=PECK DEPTH=-10 CLEARANCE=2 PECK=4 CYCLE_F=600 CYCLE_RETRACT=CLEARANCE",
+                "CYCLE_CALL X=10",
+                "CYCLE=OFF"),
+            machine, runtime);
+
+        Assert.Contains("[cycles] peck_clearance is not in the machine file: the expanded cycles took 0 mm, the "
+            + "default of the family (D357).", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("chip_break_lift", report, StringComparison.Ordinal);
+    }
+
+    // D323: where rpm_max and both speeds are known, a start adds accel_time x rpm_new / rpm_max, a stop accel_time x
+    // rpm_old / rpm_max, a speed change while turning accel_time x |rpm_new - rpm_old| / rpm_max and a reversal
+    // accel_time x (rpm_old + rpm_new) / rpm_max: with 2 s to 1000 rpm, a start to 500 (1 s), a change to 750
+    // (0.5 s), a reversal at 750 (3 s) and a stop from 750 (1.5 s).
+    [Fact]
+    public void SpindleAccelTime_RpmMaxKnown_IsTheLinearRamp()
+    {
+        RuntimeAnalytic runtime = Run(SpindleMill(rpmMax: 1000m),
+            [],
+            "RPM=500 SPINDLE=CW",
+            "RPM=750",
+            "SPINDLE=CCW",
+            "SPINDLE=OFF");
+
+        Assert.Equal(1 + 0.5 + 3 + 1.5, runtime.TotalSeconds, Precision);
+    }
+
+    // D323: without rpm_max a start and a stop add the whole accel_time and a speed change adds nothing.
+    [Fact]
+    public void SpindleAccelTime_WithoutRpmMax_SpeedChangeAddsNothing()
+    {
+        RuntimeAnalytic runtime = Run(SpindleMill(rpmMax: null),
+            [],
+            "RPM=500 SPINDLE=CW",
+            "RPM=1000",
+            "SPINDLE=OFF");
+
+        Assert.Equal(4.0, runtime.TotalSeconds, Precision);
+    }
+
+    // D323: a speed that is unknown, under CSS here, falls back to the whole accel_time per start and stop.
+    [Fact]
+    public void SpindleAccelTime_CssStart_TakesTheWholeAccelTime()
+    {
+        RuntimeAnalytic runtime = Run(SpindleMill(rpmMax: 1000m),
+            [],
+            "VC=100 RPM_MAX=800 CSS=ON SPINDLE=CW",
+            "SPINDLE=OFF");
+
+        Assert.Equal(4.0, runtime.TotalSeconds, Precision);
     }
 
     // VM 8, D103: 2.5D_FRAESEN without a machine file: the default machine has neither [dynamics] nor a rapid rate, so
@@ -496,6 +731,25 @@ public sealed class RuntimeAnalyticTests
 
         Assert.Contains("Not timed: 4 motions of unknown length, 5 motions without a known feed or rapid rate, ",
             report, StringComparison.Ordinal);
+    }
+
+    // The seconds of a motion of the given length from rest to rest at the given speed and acceleration (VM 8, D64).
+    private static double FromRestToRest(double length, double speed, double acceleration)
+    {
+        return MotionProfile.Seconds(length, speed, 0, 0, acceleration);
+    }
+
+    // The test mill whose spindle table TOOL gives accel_time 2 s and the rpm_max given (machine-config 5).
+    private static MachineConfig SpindleMill(decimal? rpmMax)
+    {
+        MachineConfig mill = AnalyticMachines.Mill(AnalyticMachines.ExactStop, accelTime: 2m);
+        return mill with
+        {
+            SpindleTables = new Dictionary<string, FunctionTable>
+            {
+                ["TOOL"] = new FunctionTable { AccelTime = 2m, RpmMax = rpmMax },
+            },
+        };
     }
 
     // A program of the given blocks after UNITS=MM and the RAPID from the unknown start position.

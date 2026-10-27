@@ -4,8 +4,9 @@ namespace Ncx.Analytics.Runtime;
 
 /// <summary>
 /// The values of the machine file the runtime estimate uses (virtual machine 8, D64): rapid, max_feed and
-/// acceleration of every [[axis]], linear and rotary (machine-config 4), block_time, path_mode and corner_speed of
-/// [dynamics] (machine-config 4), accel_time of every spindle table (machine-config 5). The report lists every one of
+/// acceleration of every [[axis]], linear and rotary (machine-config 4), block_time, the start value path_mode,
+/// corner_speed and rapid_exact_stop of [dynamics] (machine-config 4; D286, D350), accel_time and rpm_max of every
+/// spindle table (machine-config 5, D323). The report lists every one of
 /// them, so that the maintainer corrects the file instead of the code (implementation 14, risks).
 /// </summary>
 internal sealed class MachineDynamics
@@ -34,10 +35,16 @@ internal sealed class MachineDynamics
     public double? BlockTime => _machine.Dynamics?.BlockTime is decimal seconds ? (double)seconds : null;
 
     /// <summary>
-    /// True for path_mode = "continuous", which carries the speed through corners; "exact_stop", and a [dynamics]
-    /// without path_mode, brakes to zero in every block (virtual machine 8).
+    /// The start value of the path-control state of virtual machine 2.1 that [dynamics] path_mode gives; a [dynamics]
+    /// without path_mode starts at exact stop (D350). The estimate reads the state of each motion, not this value.
     /// </summary>
-    public bool Continuous => _machine.Dynamics?.PathMode == PathMode.Continuous;
+    public PathMode StartPathMode => _machine.Dynamics?.PathMode ?? PathMode.ExactStop;
+
+    /// <summary>
+    /// True when the end of a RAPID is a rest point of the path: [dynamics] rapid_exact_stop, else the family default,
+    /// a rest point on a Fanuc-family machine (G00 in-position check) and a corner otherwise (D286).
+    /// </summary>
+    public bool RapidRests => _machine.Dynamics?.RapidExactStop ?? _machine.Machine.Controller == Controller.Fanuc;
 
     /// <summary>
     /// corner_speed in mm/s, from the mm/min of the file (machine-config 4); 0 without one, which stops in every
@@ -62,17 +69,28 @@ internal sealed class MachineDynamics
     /// <param name="spindle">The resource id of the spindle, S1.</param>
     public double? AccelTime(string spindle)
     {
-        foreach (KeyValuePair<string, string> role in _machine.Roles)
-        {
-            if (role.Value == spindle
-                && _machine.SpindleTables.TryGetValue(role.Key, out FunctionTable? table)
-                && table.AccelTime is decimal seconds)
-            {
-                return (double)seconds;
-            }
-        }
+        return SpindleValue(spindle, table => table.AccelTime);
+    }
 
-        return null;
+    /// <summary>
+    /// rpm_max of a spindle, from the [spindle.ROLE] table of a role that names it (machine-config 5), the speed its
+    /// accel_time reaches (D323); null when no table gives one.
+    /// </summary>
+    /// <param name="spindle">The resource id of the spindle, S1.</param>
+    public double? RpmMax(string spindle)
+    {
+        return SpindleValue(spindle, table => table.RpmMax);
+    }
+
+    /// <summary>
+    /// True when the machine file gives a [transform] template for the path-control mode, the form a compiler writes
+    /// for PATH_MODE (D349); the estimate still follows a mode without one, and the report says so (D350).
+    /// </summary>
+    public bool CanExpress(PathMode mode)
+    {
+        return mode == PathMode.Continuous
+            ? _machine.Transform?.PathModeContinuous is not null
+            : _machine.Transform?.PathModeExactStop is not null;
     }
 
     /// <summary>
@@ -86,15 +104,34 @@ internal sealed class MachineDynamics
                 + "no [dynamics] (virtual machine 8).";
         }
 
+        // D350: path_mode is the start value of PATH_MODE; without it the state starts at exact stop.
         string pathMode = dynamics.PathMode switch
         {
             PathMode.Continuous => "continuous",
             PathMode.ExactStop => "exact_stop",
-            _ => "none (exact stop)",
+            _ => "none, so exact_stop",
         };
-        return $"Motions: trapezoidal profile (virtual machine 8, D64), path_mode {pathMode}, corner_speed "
-            + $"{ReportText.Number(dynamics.CornerSpeed)} mm/min, "
+        return $"Motions: trapezoidal profile (virtual machine 8, D64), path_mode {pathMode} (the start value of "
+            + $"PATH_MODE, D350), corner_speed {ReportText.Number(dynamics.CornerSpeed)} mm/min, "
             + $"block_time {ReportText.Number(dynamics.BlockTime)} s.";
+    }
+
+    /// <summary>
+    /// The line of the report that names where the path comes to rest under CONTINUOUS (D286).
+    /// </summary>
+    public string RestPointLine()
+    {
+        string rapid = _machine.Dynamics?.RapidExactStop switch
+        {
+            true => "a rest point ([dynamics] rapid_exact_stop = true)",
+            false => "a corner ([dynamics] rapid_exact_stop = false)",
+            _ when RapidRests => "a rest point (Fanuc family, G00 in-position check)",
+            _ => "a corner (no Fanuc family)",
+        };
+        return "Rest points under CONTINUOUS (D286): DWELL, a spindle start or stop, TOOL_BEGIN and TOOL_END, STOP, "
+            + "program and file events, a motion not timed, a direction reversal, CYCLE_DWELL, a cycle call not timed, "
+            + "every SYNC and every block without path motion except comments, variable computations, LABEL, JUMP "
+            + $"and CALL; the end of a RAPID is {rapid}.";
     }
 
     /// <summary>
@@ -107,18 +144,20 @@ internal sealed class MachineDynamics
     }
 
     /// <summary>
-    /// The line of the report above the table of the rotary axes: where the estimate uses their values and how it reads
-    /// them.
+    /// The line of the report above the table of the rotary axes: where the estimate uses their values and how it
+    /// converts them (D290).
     /// </summary>
     public static string RotaryAxisLine()
     {
-        return "Rotary axes: they limit and accelerate a motion only in the polar or cylinder plane, where their word "
-            + "is a length (virtual machine 3.1, D102); the estimate then reads their numbers as mm/min and mm/s^2.";
+        return "Rotary axes: deg/min and deg/s^2 (machine-config 4); they limit and accelerate a motion only in the "
+            + "polar or cylinder plane, where their word is a length (virtual machine 3.1, D102): under CYLINDER=r at "
+            + "r, 1 deg = pi r / 180 mm, under POLAR=ON at L, the closest approach of the block to the centre of "
+            + "rotation; a RAPID there takes the rapid of the linear axes (D290).";
     }
 
     /// <summary>
-    /// The values of every rotary axis of the machine, in the units the example machine files give a rotary axis
-    /// (deg/min, deg/s^2): a motion in the polar or cylinder plane limits and accelerates by them (MovingAxes).
+    /// The values of every rotary axis of the machine in deg/min and deg/s^2 (machine-config 4, D290): a motion in the
+    /// polar or cylinder plane limits and accelerates by them, converted to the length of the plane (MovingAxes).
     /// </summary>
     public TextTable RotaryAxisTable()
     {
@@ -130,21 +169,39 @@ internal sealed class MachineDynamics
     }
 
     /// <summary>
-    /// accel_time of every spindle of the machine, which a spindle start or stop adds.
+    /// accel_time and rpm_max of every spindle of the machine, which a spindle start, stop or speed change adds
+    /// (machine-config 5, D323).
     /// </summary>
     public TextTable SpindleTable()
     {
-        var table = new TextTable("spindle", "accel_time (s)");
+        var table = new TextTable("spindle", "accel_time (s)", "rpm_max");
         foreach (ResourceDef resource in _machine.Resources)
         {
             if (resource.IsSpindle)
             {
                 decimal? accelTime = AccelTime(resource.Id) is double seconds ? (decimal)seconds : null;
-                table.Add(resource.Id, ReportText.Number(accelTime));
+                decimal? rpmMax = RpmMax(resource.Id) is double rpm ? (decimal)rpm : null;
+                table.Add(resource.Id, ReportText.Number(accelTime), ReportText.Number(rpmMax));
             }
         }
 
         return table;
+    }
+
+    // The value of the first [spindle.ROLE] table of a role that names the spindle and gives it.
+    private double? SpindleValue(string spindle, Func<FunctionTable, decimal?> value)
+    {
+        foreach (KeyValuePair<string, string> role in _machine.Roles)
+        {
+            if (role.Value == spindle
+                && _machine.SpindleTables.TryGetValue(role.Key, out FunctionTable? table)
+                && value(table) is decimal number)
+            {
+                return (double)number;
+            }
+        }
+
+        return null;
     }
 
     // The axes of one kind in the order of the machine file, each with its rapid, max_feed and acceleration as the

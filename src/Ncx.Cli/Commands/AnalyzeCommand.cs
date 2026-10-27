@@ -12,9 +12,9 @@ namespace Ncx.Cli.Commands;
 /// [--analytic tools,runtime] [--static] [--format text|csv] [--segment-bins mm] [--vector-bins degrees]
 /// [--skip-blocks none|all|0,3] [--strict]: parse, expand, run the virtual machine INTERPRETED, or STATIC under
 /// --static, with the analytics subscribed, and write their reports over the block range on the standard output, the
-/// diagnostics on the standard error (architecture 10; virtual machine 1, 8; D67, D324; implementation 14, P4-02). Without --machine the built-in default machine (D103). With
-/// --job &lt;name.ncxjob.toml&gt; in place of the file the channel programs of a job run as one job (AnalyzeJob). Exit
-/// codes of D97, as ncx check.
+/// diagnostics on the standard error (architecture 10; virtual machine 1, 8; D67, D324; implementation 14, P4-02).
+/// Without --machine the built-in default machine (D103). With --job &lt;name.ncxjob.toml&gt; in place of the file the
+/// channel programs of a job run as one job (AnalyzeJob). Exit codes of D97, as ncx check.
 /// </summary>
 internal static class AnalyzeCommand
 {
