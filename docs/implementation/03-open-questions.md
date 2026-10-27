@@ -42,7 +42,7 @@ The tasks of wave 1 (P0-01 to P0-06, P2-01 to P2-04a, P1-01 to P1-03a and P4-01a
 | 32 | P0-03 | CENTER:IX before CENTER:X by address text, against bucket 5; CENTER:C and CENTER:IC have no rank | D143 | `src/Ncx.Core/Catalog/CanonicalRanks.cs:50` |
 | 33 | P0-03 | @SAVE and @RESTORE have no bucket | D167 | `src/Ncx.Core/Catalog/CanonicalRanks.cs:161` |
 | 34 | P0-03 | What kind of address is ROTARY in TOLERANCE:ROTARY? | implementation (as 30): AddrKind.ToleranceKind; accepting only ROTARY and refusing OFF on it follows from the 4.1 rows (PAR152, PAR153); applied 2026-09-14 | `src/Ncx.Core/Catalog/AddrKind.cs:3` |
-| 35 | P0-03 | Is the role address of SPINDLE_MODE required? | D113 | `src/Ncx.Core/Catalog/SpindleWords.cs:38` |
+| 35 | P0-03 | Is the role address of SPINDLE_MODE required? | settled 2026-10-27 (D113) | `src/Ncx.Core/Catalog/SpindleWords.cs:38` |
 | 36 | P0-03 | How does the parser accept the parameter names of a catalog cycle (LENGTH, WIDTH)? | D114 | `src/Ncx.Core/Catalog/WordCatalog.cs:111` |
 | 37 | P0-05 | How does NOT appear in the canonical text? | settled 2026-10-27 (D112) | `src/Ncx.Core/Expressions/UnaryNode.cs:22` |
 | 38 | P0-05 | Does the canonical text keep parentheses the grammar does not need? | settled 2026-10-27 (D112) | `src/Ncx.Core/Expressions/ParenthesesNode.cs:15` |

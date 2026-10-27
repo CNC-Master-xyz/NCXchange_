@@ -72,7 +72,7 @@ variable) sort under their rank by the address text. The ten verbs share one ran
 | 500 | `CSS` | `ON`, `OFF` |  |  | role, optional | modal | 4.11 | Constant surface speed (G96, G97): the spindle follows VC while it is on. |
 | 510 | `VC` | number, expression |  |  | role, optional | modal | 4.11 | Cutting speed for CSS in m/min or ft/min (the S of G96 S140). |
 | 520 | `RPM_MAX` | number, expression |  |  | role, optional | modal | 4.11 | Speed limit under CSS (G50 S, LIMS). |
-| 530 | `SPINDLE_MODE` | `SPINDLE`, `AXIS` |  |  | role, optional | modal | 4.5 | Work spindle as rotating spindle or as positioning C axis (M70, SPOS); in AXIS mode its axis is driven with C. |
+| 530 | `SPINDLE_MODE` | `SPINDLE`, `AXIS` |  |  | role, required | modal | 4.5 | Work spindle as rotating spindle or as positioning C axis (M70, SPOS); in AXIS mode its axis is driven with C. |
 | 540 | `ORIENT` | number, expression |  |  | role, optional | block | 4.5 | Oriented spindle stop in degrees (M19, SPOS=); the spindle is stopped afterwards. |
 | 550 | `SPINDLE_SYNC` | list, `OFF` |  |  |  | modal | 4.5 | Synchronous spindles, a list of two spindle roles of which the second follows the first; OFF ends it (D56). |
 | 560 | `PHASE` | number, expression |  |  |  | with partner | 4.5 | Angular offset in degrees of a phase-synchronous run; only with SPINDLE_SYNC. |

@@ -101,6 +101,7 @@ public sealed class WordCheckTests
     [InlineData("CENTER=5", DiagnosticCodes.WordNeedsAddress)]
     [InlineData("VAR=1", DiagnosticCodes.WordNeedsAddress)]
     [InlineData("FUNC=ON", DiagnosticCodes.WordNeedsAddress)]
+    [InlineData("SPINDLE_MODE=AXIS", DiagnosticCodes.WordNeedsAddress)]
     [InlineData("OFFSET:LENGTH=1", DiagnosticCodes.WordAddressNotAccepted)]
     [InlineData("CENTER:A=1", DiagnosticCodes.WordAddressNotAccepted)]
     [InlineData("TOLERANCE:LINEAR=0.01", DiagnosticCodes.WordAddressNotAccepted)]
