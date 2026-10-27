@@ -69,6 +69,32 @@ public sealed class FanucToolPointTests
         Assert.Equal(Body(Blocks, ""), Body(Blocks, StepRule));
     }
 
+    // D392: an OFFSET word after a named point replaces the register of the mapping, which it writes, with CMP033.
+    [Fact]
+    public void OffsetWordAfterANamedPoint_WritesItsRegisterAndWarns()
+    {
+        CompileResult result = FanucCompile.Run(
+            FanucCompile.Program("TOOL=5 TOOL_POINT=2", "RAPID X=0 Y=0", "RAPID Z=2 OFFSET:LEN=7"),
+            FanucCompile.Mill(extra: StepRule));
+
+        Assert.Contains("G43 Z2. H7\n", FanucCompile.TextOf(result), StringComparison.Ordinal);
+        Diagnostic warning = Assert.Single(FanucCompile.CompilerDiagnostics(result));
+        Assert.Equal(DiagnosticCodes.OffsetReplacesPointRegister, warning.Code);
+        Assert.Equal(Severity.Warning, warning.Severity);
+        Assert.Contains("TOOL_POINT=2", warning.Message, StringComparison.Ordinal);
+    }
+
+    // D392: an OFFSET word of a tool whose program named no point warns nothing, as before.
+    [Fact]
+    public void OffsetWordWithoutANamedPoint_DoesNotWarn()
+    {
+        CompileResult result = FanucCompile.Run(
+            FanucCompile.Program("TOOL=5", "RAPID X=0 Y=0", "RAPID Z=2 OFFSET:LEN=5"),
+            FanucCompile.Mill(extra: StepRule));
+
+        Assert.Empty(FanucCompile.CompilerDiagnostics(result));
+    }
+
     // D373 (4), CMP341: point 2 on a managed machine without a row has no register, an ERROR.
     [Fact]
     public void PointTwoOnAManagedMachineWithoutARow_IsCmp341()

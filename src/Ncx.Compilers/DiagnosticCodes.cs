@@ -55,6 +55,12 @@ public static partial class DiagnosticCodes
     public const string ToolPointDiffersFromTable = "CMP032";
 
     /// <summary>
+    /// CMP033, a WARNING: an OFFSET word on a holder whose tool named its measurement point replaces the register of
+    /// the [tool_points] mapping with its own (D392).
+    /// </summary>
+    public const string OffsetReplacesPointRegister = "CMP033";
+
+    /// <summary>
     /// CMP010: a word of the program needs a template that the machine file does not give, so nothing can be written
     /// for it (machine-config 2, 3).
     /// </summary>

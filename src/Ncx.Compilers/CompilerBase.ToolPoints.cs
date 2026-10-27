@@ -51,7 +51,7 @@ public abstract partial class CompilerBase
             _pointWithoutFormReported = false;
         }
 
-        if (!HasPointWord(block) && !block.Has("TOOL"))
+        if (!HasPointWord(block) && !block.Has("TOOL") && !block.Has("OFFSET"))
         {
             return;
         }
@@ -66,7 +66,33 @@ public abstract partial class CompilerBase
             CheckMapping(block, holder);
         }
 
+        CheckOffsetAfterPoint(step, id);
         CompareWithToolTable(step, holder);
+    }
+
+    // D392: an OFFSET word is the hand-written form of the registers; on a holder whose tool named its point it
+    // replaces the register of the mapping, which it writes, and says so.
+    private void CheckOffsetAfterPoint(BlockStep step, string id)
+    {
+        Block block = step.Block;
+        if (block.Find("OFFSET") is not Word offset)
+        {
+            return;
+        }
+
+        bool namedBefore = !block.Has("TOOL")
+            && step.Before.Holders.TryGetValue(id, out HolderSnapshot? before) && before.PointNamed;
+        if (!namedBefore && !block.Has("TOOL_POINT"))
+        {
+            return;
+        }
+
+        HolderSnapshot holder = step.After.Holders[id];
+        Diagnostics.Warning(block, DiagnosticCodes.OffsetReplacesPointRegister,
+            string.Create(CultureInfo.InvariantCulture,
+                $"{offset.ToCanonical()} on tool {holder.SpindleTool}, whose program named TOOL_POINT="
+                + $"{(namedBefore ? step.Before.Holders[id].ToolPoint : holder.ToolPoint)}, replaces the register of "
+                + $"[tool_points] with its own (D392)."));
     }
 
     private void CheckMapping(Block block, HolderSnapshot holder)

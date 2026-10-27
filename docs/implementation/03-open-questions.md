@@ -466,7 +466,7 @@ The twelve requests of opencam, the first client of NCXchange, for its release 1
 | 230 | P3-06 Fanuc compiler, follow-up on branch cam-tool-point | Does the Fanuc compiler replace ( and ) in a comment text, or refuse them, and is there a comment length limit? | settled 2026-10-27 (D389): `[` `]` with the WARNING CMP312 in `FanucProgramFrame.WithSquareBrackets`; the 30i-B manual check for an alarm on `[ ]` stays open before release, marked with a TODO there and in controllers/fanuc.md 10 rule 5 | R1-14 |
 | 231 | CAM-tool-point, P1-01 and P1-02 | Which holder does a point word without a role address, and which do TIP_OFFSET and POINT_RADIUS follow? | settled 2026-10-27 (D390, as coded in `VirtualMachine.ResolvePointWords`) | R1-11 |
 | 232 | CAM-tool-point, P0-04 | What may a block of the point words carry beside them? | settled 2026-10-27 (D391, as coded: PAR017 in `BlockRules.CheckPointWords`) | R1-11 |
-| 233 | CAM-tool-point, P3-03 with the three family compilers | Does an explicit TOOL_POINT=1 write the register of the mapping? | D392 (open); coded as recommended, `HolderState.PointNamed` and `CompilerBase.PointRegistersOf` | R1-11, R1-13 |
+| 233 | CAM-tool-point, P3-03 with the three family compilers | Does an explicit TOOL_POINT=1 write the register of the mapping? | settled 2026-10-27 (D392, as coded: `HolderState.PointNamed` and `CompilerBase.PointRegistersOf`, with the WARNING CMP033 of `CompilerBase.CheckOffsetAfterPoint`) | R1-11, R1-13 |
 
 ## Manual audit 2026-10-26
 
