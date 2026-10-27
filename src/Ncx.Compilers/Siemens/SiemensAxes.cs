@@ -52,7 +52,43 @@ internal static partial class SiemensAxes
     /// </summary>
     public static string LetterOf(SiemensBlock write, string axis)
     {
-        return Resolve(write, axis)?.Letter ?? axis;
+        return CylinderLetter(write, axis) ?? Resolve(write, axis)?.Letter ?? axis;
+    }
+
+    /// <summary>
+    /// True for the rotary word of the cylinder plane under CYLINDER=n, which TRACYL writes as the linear Y, a length
+    /// on the circumference (D146).
+    /// </summary>
+    public static bool IsCylinderLength(SiemensBlock write, string axis)
+    {
+        return write.After.Frame.Cylinder is not null && axis is "A" or "B" or "C";
+    }
+
+    // D146: under TRACYL the control takes the developed surface in the axes of the transformation: Y around the
+    // circumference, Z along the cylinder axis and X the infeed perpendicular to it (840D sl/828D Arbeitsvorbereitung
+    // 2013, connector p.352-353; the example writes N100 G1 Y10 for a groove parallel to the circumference). The NCX
+    // C word, a length on the circumference (D102), is Y; on a cylinder about X or Y (a table axis with [[axis]]
+    // parallel) the cylinder axis is written as Z and the radial Z as X. A compiler never passes the NCX letter
+    // through.
+    private static string? CylinderLetter(SiemensBlock write, string axis)
+    {
+        if (write.After.Frame.Cylinder is null)
+        {
+            return null;
+        }
+
+        if (IsCylinderLength(write, axis))
+        {
+            return "Y";
+        }
+
+        string cylinderAxis = write.After.Frame.CylinderAxis;
+        if (cylinderAxis == "Z")
+        {
+            return null;
+        }
+
+        return axis == cylinderAxis ? "Z" : axis == "Z" ? "X" : null;
     }
 
     /// <summary>
@@ -202,6 +238,7 @@ internal static partial class SiemensAxes
         // DC() takes the shortest way of a rotary axis where ROTARY_PATH=SHORTEST is active: "rotary axes with DC() by
         // the compiler" (machine-config 5, ROTARY_PATH_SHORTEST; controller-mapping 1, D86).
         bool shortest = !axis.Incremental
+            && !IsCylinderLength(write, axis.Axis)
             && write.After.Frame.RotaryPath == RotaryPath.Shortest
             && Resolve(write, axis.Axis)?.Kind == AxisKind.Rotary;
         string function = axis.Incremental ? "IC" : shortest ? "DC" : "";

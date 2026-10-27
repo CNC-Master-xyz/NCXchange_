@@ -260,6 +260,18 @@ public sealed class SiemensFrameTests
             MillTurnBody("DIAMETER=OFF", "RAPID X=20", "DIAMETER=ON", "RAPID X=40"));
     }
 
+    // D146: under TRACYL the C word, a length on the circumference, is written as the Y of the transformation and Z
+    // stays along the cylinder (840D sl/828D Arbeitsvorbereitung 2013 p.352-353); the NCX letter C is never written.
+    [Fact]
+    public void Cylinder_TheCWord_IsTheYOfTracyl()
+    {
+        string body = MillTurnBody("SPINDLE_MODE:MAIN=AXIS", "CYLINDER=20", "LINE X=30 F=100", "LINE Z=-10 C=15",
+            "ARC=CW Z=-20 C=25 R=10", "LINE IC=5", "CYLINDER=OFF", "RAPID C=0");
+
+        Assert.Equal(Lines("M70", "TRACYL(40)", "G1 X30 F100", "G1 Z-10 Y15", "G2 Z-20 Y25 CR=10", "G1 Y=IC(5)",
+            "TRAFOOF", "G0 C0"), body);
+    }
+
     // D125: under DIAMETER=ON the VM stores the X of SHIFT X=20 as the radius 10; the TRANS that MIRROR=OFF rewrites
     // from the chain entry writes the same radius 10 as the SHIFT block did, since a frame of the control on a facing
     // axis is a radius (Funktionshandbuch Grundfunktionen 2012 p.901-903).

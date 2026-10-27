@@ -151,6 +151,7 @@ internal sealed class FrameState
                 .AsReadOnly(),
             Diameter = Diameter,
             Cylinder = Cylinder,
+            CylinderAxis = CylinderAxis,
             Polar = Polar,
             Tcpm = Tcpm,
             RotaryPath = RotaryPath,
