@@ -105,6 +105,12 @@ public static partial class DiagnosticCodes
     public const string FanucMFuncWritten = "CMP340";
 
     /// <summary>
+    /// CMP341: a measurement point that the registers form cannot map: no [[tool_point]] row, no step rule, or a point
+    /// above 1 under tool management (machine-config 3, D373).
+    /// </summary>
+    public const string FanucToolPointNotMapped = "CMP341";
+
+    /// <summary>
     /// CMP360: the transform chain of the block cannot be written with the one G52, G68, G51.1 and G68.2 of a Fanuc
     /// control in program order (D31).
     /// </summary>

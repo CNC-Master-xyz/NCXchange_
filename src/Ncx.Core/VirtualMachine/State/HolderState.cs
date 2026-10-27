@@ -56,6 +56,12 @@ internal sealed class HolderState
     public decimal PointRadius { get; set; }
 
     /// <summary>
+    /// True when the program named the point of the tool with TOOL_POINT since its TOOL, and no OFFSET word replaced
+    /// the registers since; only then does a compiler write the registers of the [tool_points] mapping (D392).
+    /// </summary>
+    public bool PointNamed { get; set; }
+
+    /// <summary>
     /// Point 1 with a = 0 and r = 0: the start of a holder and what a TOOL without point words leaves (D372).
     /// </summary>
     public void ResetPoint()
@@ -63,6 +69,7 @@ internal sealed class HolderState
         ToolPoint = 1;
         TipOffset = 0m;
         PointRadius = 0m;
+        PointNamed = false;
     }
 
     /// <summary>
@@ -99,6 +106,7 @@ internal sealed class HolderState
             ToolPoint = ToolPoint,
             TipOffset = TipOffset,
             PointRadius = PointRadius,
+            PointNamed = PointNamed,
             ToolChange = ToolChange,
         };
     }

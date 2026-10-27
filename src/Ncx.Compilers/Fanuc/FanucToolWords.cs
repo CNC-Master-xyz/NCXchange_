@@ -123,7 +123,7 @@ internal static class FanucToolWords
     /// </summary>
     public static void RestoreLength(FanucBlock write)
     {
-        int register = HolderOf(write)?.OffsetLen ?? 0;
+        int register = write.PointRegisters?.Length ?? HolderOf(write)?.OffsetLen ?? 0;
         if (register == 0 || write.Block.Find("OFFSET", "LEN") is not null)
         {
             return;
@@ -154,10 +154,21 @@ internal static class FanucToolWords
 
         write.OffsetsAdded = true;
         HolderSnapshot? holder = HolderOf(write);
-        if (write.Block.Find("OFFSET", "LEN") is Word length)
+
+        // D375: TIP_OFFSET and POINT_RADIUS are never written to the control, no G10 and no macro variable; the point
+        // selects its registers, which the mapping of [tool_points] gives (D373, D392).
+        write.Written("TOOL_POINT");
+        write.Written("TIP_OFFSET");
+        write.Written("POINT_RADIUS");
+        int? pointLength = write.Block.Has("TOOL_POINT") ? write.PointRegisters?.Length : null;
+        if (write.Block.Find("OFFSET", "LEN") is Word || pointLength is not null)
         {
-            write.Written(length);
-            int register = holder?.OffsetLen ?? 0;
+            if (write.Block.Find("OFFSET", "LEN") is Word length)
+            {
+                write.Written(length);
+            }
+
+            int register = pointLength ?? holder?.OffsetLen ?? 0;
 
             // The offset of a skipped block stands in its own lines, which run only where the block runs
             // (controller-mapping 1, SKIP).
@@ -194,10 +205,13 @@ internal static class FanucToolWords
         // D stands with G41 or G42 (controller-mapping 2, COMP: G41/G42/G40 with D; controllers fanuc.md 4). A register
         // the block does not state is the one of the state before it, which the control holds where it differs by
         // path (FanucBlock.NeedsValueOfTheWalk); one it states without G41 or G42 stands with the next of them.
-        bool stated = write.Block.Find("OFFSET", "RAD") is not null;
-        if (write.After.Motion.Comp != Compensation.Off && holder is not null && holder.OffsetRad != 0)
+        // The radius register of a named point is the one of the mapping (D373, D392).
+        int radiusRegister = write.PointRegisters?.Radius ?? holder?.OffsetRad ?? 0;
+        bool stated = write.Block.Find("OFFSET", "RAD") is not null
+            || (write.Block.Has("TOOL_POINT") && write.PointRegisters?.Radius is not null);
+        if (write.After.Motion.Comp != Compensation.Off && holder is not null && radiusRegister != 0)
         {
-            string register = holder.OffsetRad.ToString(CultureInfo.InvariantCulture);
+            string register = radiusRegister.ToString(CultureInfo.InvariantCulture);
             if (stated ? write.Target.Changes("D", register) : write.NeedsValueOfTheWalk("D", register, "OFFSET:RAD"))
             {
                 write.Main.Word("D" + register);

@@ -38,6 +38,25 @@ public sealed class TipDerivationTests
         Assert.Equal(8m, motion.PointRadius);
     }
 
+    // R1-11, D374: tool 5 written in point 1 at Z=10 and in point 2 (a = 2) at Z=12 puts the tip at the same place,
+    // on a compensated wall as well.
+    [Fact]
+    public void Motion_TwoPointsOfOneTool_PutTheTipAtTheSamePlace()
+    {
+        var harness = new VmHarness(VmMachines.Default());
+        var listener = new FakeListener();
+        harness.Vm.Subscribe(listener);
+
+        harness.Execute("UNITS=MM F=100", "TOOL=5 TOOL_POINT=1", "LINE X=0 Y=0 Z=10 COMP=LEFT", "LINE Y=0 COMP=OFF",
+            "TOOL_POINT=2 TIP_OFFSET=2 POINT_RADIUS=8", "LINE X=0 Y=0 Z=12 COMP=LEFT");
+
+        List<MotionEvent> motions = listener.Of<MotionEvent>();
+        Assert.Equal(10m, motions[0].Tip?["Z"].Value);
+        Assert.Equal(10m, motions[^1].Tip?["Z"].Value);
+        Assert.Equal(Compensation.Left, motions[^1].Comp);
+        Assert.Equal(8m, motions[^1].PointRadius);
+    }
+
     // D374: under WORKPLANE=ZX the tool axis is Y.
     [Fact]
     public void Motion_WorkplaneZX_TipIsShiftedInY()

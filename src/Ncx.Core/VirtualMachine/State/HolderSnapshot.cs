@@ -49,6 +49,12 @@ public sealed record HolderSnapshot
     public decimal PointRadius { get; init; }
 
     /// <summary>
+    /// True when the program named the point with TOOL_POINT since the TOOL of the holder and no OFFSET word replaced
+    /// the registers since (D392).
+    /// </summary>
+    public bool PointNamed { get; init; }
+
+    /// <summary>
     /// Where the holder stood in the tool change states of architecture 5.2.
     /// </summary>
     public required ToolChangeState ToolChange { get; init; }
