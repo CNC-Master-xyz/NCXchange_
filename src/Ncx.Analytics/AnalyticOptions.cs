@@ -5,7 +5,8 @@ namespace Ncx.Analytics;
 
 /// <summary>
 /// What an analytic is created with, passed explicitly (code-guidelines 5, Options): the machine of the run, the names
-/// its report gives the file and the machine, the block range of D67, the table format and the mode of the run.
+/// its report gives the file and the machine, the block range of D67, the table format, the mode of the run and the
+/// bounds of the histograms (D324).
 /// </summary>
 public sealed record AnalyticOptions
 {
@@ -41,4 +42,16 @@ public sealed record AnalyticOptions
     /// machine 1).
     /// </summary>
     public ExecutionMode Mode { get; init; } = ExecutionMode.Interpreted;
+
+    /// <summary>
+    /// --segment-bins: the bounds between the bins of the segment histogram in mm, rising from above 0 (D324); null
+    /// for the default bounds of SegmentAnalytic.DefaultBins.
+    /// </summary>
+    public IReadOnlyList<decimal>? SegmentBins { get; init; }
+
+    /// <summary>
+    /// --vector-bins: the bounds between the bins of the tool-vector histogram in degrees, rising from above 0 (D324);
+    /// null for the default bounds of ToolVectorAnalytic.DefaultBins.
+    /// </summary>
+    public IReadOnlyList<decimal>? VectorBins { get; init; }
 }
