@@ -117,6 +117,35 @@ public sealed class ProjectFoldersTests : IDisposable
         Assert.Equal(2, exitCode);
         Assert.StartsWith("nowhere(1): ERROR CLI200: --machine nowhere names no file at that path and no machine file "
             + "nowhere.toml in the machine folders machines, ", _project.Error, StringComparison.Ordinal);
+        Assert.Contains(" and no built-in machine file of that name (", _project.Error, StringComparison.Ordinal);
+    }
+
+    // D371: a shipped machine that none of the machine folders holds is the copy built into ncx, the fourth and last
+    // place of the lookup, and it is named as built-in machines/<name>.toml, never by a path.
+    [Fact]
+    public void MachineByName_ShippedMachineInNoFolder_IsTheBuiltInCopy()
+    {
+        var folders = new ProjectFolders(_project.WorkingDirectory, _project.ToolFolder, null);
+
+        int exitCode = _project.Check(_program, "fanuc-mill-30i");
+        FoundFile? found = folders.FindMachine("fanuc-mill-30i");
+
+        Assert.True(exitCode == 0, _project.Error);
+        Assert.NotNull(found);
+        Assert.Equal("built-in machines/fanuc-mill-30i.toml", found.Name);
+        Assert.Equal(Ncx.Config.BuiltInFiles.Machine("fanuc-mill-30i.toml"), found.Text);
+    }
+
+    // D206, D371: a shop's own file of a shipped name wins over the built-in copy, in the tool's own folder as well.
+    [Fact]
+    public void MachineByName_ShopFileOfAShippedName_WinsOverTheBuiltInCopy()
+    {
+        _project.WriteInToolFolder("machines/fanuc-mill-30i.toml", Marked("found_in_tool"));
+
+        int exitCode = _project.Check(_program, "fanuc-mill-30i");
+
+        Assert.True(exitCode == 0, _project.Error);
+        Assert.Contains("found_in_tool", _project.Error, StringComparison.Ordinal);
     }
 
     // P1-07, P2-04: a file at the path given is that file, before a machine of that name in the machine folders.

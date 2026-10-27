@@ -228,13 +228,19 @@ internal static class CompileCommand
     }
 
     // The tool table that [machine] tool_table names lies next to the machine file (D10), and the warning block of D10
-    // names it as the user finds it. Null when it is there and cannot be read.
+    // names it as the user finds it. Null when it is there and cannot be read. A built-in machine file lies in no
+    // folder, so no tool table lies next to it (D371).
     internal static CompileOptions? OptionsWithToolTable(MachineConfig machine, FoundFile? machineFile,
         Diagnostics diagnostics)
     {
         if (machine.ToolTable is not string toolTable || machineFile is null)
         {
             return new CompileOptions();
+        }
+
+        if (machineFile.Text is not null)
+        {
+            return new CompileOptions { ToolTableFile = toolTable };
         }
 
         string path = Path.Combine(Path.GetDirectoryName(machineFile.FullPath) ?? "", toolTable);
