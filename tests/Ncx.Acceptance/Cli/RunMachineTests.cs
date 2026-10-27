@@ -165,6 +165,35 @@ public sealed class RunMachineTests : IDisposable
         Assert.StartsWith("nowhere.toml(1): ERROR CLI202: The cycle catalog nowhere.toml that [cycles] catalog of "
             + Path.Combine("machines", "mill.toml") + " names is in none of the cycle folders cycles, ",
             _project.Error, StringComparison.Ordinal);
+        Assert.Contains(" and no built-in catalog of that name (", _project.Error, StringComparison.Ordinal);
+    }
+
+    // D207, D371: a shipped catalog that none of the cycle folders holds is the copy built into ncx, the fourth and
+    // last place of the lookup.
+    [Fact]
+    public void CycleCatalog_ShippedCatalogInNoCycleFolder_IsTheBuiltInCopy()
+    {
+        _project.WriteInWorkingDirectory("machines/mill.toml", MillWithCatalog("fanuc.toml"));
+        string program = _project.WriteInWorkingDirectory("part.ncx", CliHarness.OneProgram("UNITS=MM"));
+
+        int exitCode = _project.Check(program, "mill");
+
+        Assert.True(exitCode == 0, _project.Error);
+    }
+
+    // D207, D371: a shop's own catalog of a shipped name wins over the built-in copy.
+    [Fact]
+    public void CycleCatalog_ShopFileOfAShippedName_WinsOverTheBuiltInCopy()
+    {
+        _project.WriteInWorkingDirectory("machines/mill.toml", MillWithCatalog("fanuc.toml"));
+        _project.WriteInWorkingDirectory("cycles/fanuc.toml", "[[cycle]\n");
+        string program = _project.WriteInWorkingDirectory("part.ncx", CliHarness.OneProgram("UNITS=MM"));
+
+        int exitCode = _project.Check(program, "mill");
+
+        Assert.Equal(1, exitCode);
+        Assert.StartsWith(Path.Combine("cycles", "fanuc.toml") + "(1): ERROR CFG001: ", _project.Error,
+            StringComparison.Ordinal);
     }
 
     // Machine-config 6, 10: the catalog is a file of a cycle folder and never a file of the working directory itself,

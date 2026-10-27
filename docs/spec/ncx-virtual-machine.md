@@ -114,7 +114,7 @@ A new `CYCLE` replaces all parameters; nothing is inherited from the previous cy
 
 ### 2.9 Diagnostics
 
-`block.index` (1-based line in the file, plus the file name for called programs) and a diagnostics list of (severity, code, file, line, message), where a diagnostic on a generated block also carries the line of the block it was generated for (`OriginLine`); a diagnostic is rendered as `file(line): ERROR VM042: message`, on a generated block as `file(line, from 12): ...` (D98). ERROR stops the run; WARNING is reported and the run continues; INFO carries notes that are neither (a plugin's inserted blocks) and never changes the outcome or the exit code.
+`block.index` (1-based line in the file, plus the file name for called programs) and a diagnostics list of (severity, code, file, line, message), where a diagnostic on a generated block also carries the line of the block it was generated for (`OriginLine`); a diagnostic is rendered as `file(line): ERROR VM042: message`, on a generated block as `file(line, from 12): ...` (D98). A block the expander generates has the line of its origin, so a diagnostic on it reads `file(12, from 12)`, and its message starts with the rule or rewriter that made the block and its reason, `[tool_change] (pre): ...` (D200). ERROR stops the run; WARNING is reported and the run continues; INFO carries notes that are neither (a plugin's inserted blocks) and never changes the outcome or the exit code.
 
 ## 3. Block execution
 
@@ -182,6 +182,7 @@ Readers produce these words from the source (see `controller-mapping.md`): Fanuc
 - `$SYS_*` variables are read from the VM state through the configuration's mapping (position, active tool, offsets). A `$SYS_*` name the configuration does not map, or a state that is unknown, evaluates to UNKNOWN in STATIC mode and is an ERROR in INTERPRETED mode.
 - `REPEAT` re-executes the section from the label to the current block `TIMES` times, once without `TIMES` (D212); nested repeats and calls up to the configured depth (default 8).
 - Block cap from the configuration (default 1 000 000): ERROR "possible endless loop".
+- `CALL="name"` loads `<name>.ncx` from the working directory and no other file: the name is the program's file name without folder and extension, and a missing target is the ERROR that names the file it looked for (D215).
 - An external program must have its own `PROGRAM` frame and must not contradict the caller's `UNITS` and `WORKPLANE`: ERROR. A source file of subprograms only therefore reads as a program as well (D210). The file still checks on its own (section 1), where its `PROGRAM=END` ends its channel as any other program's does.
 
 ### 3.7 Channels and the job scheduler
@@ -237,7 +238,7 @@ Suppressed inside a subprogram that no program of the file calls (its entry stat
 
 ## 6. Trace and annotate
 
-The VM never stores history in the program. Two derived outputs give it instead: `ncx trace` writes one row per changed state variable per executed block (`channel, block, variable, old, new`, old empty when unknown), the measurement point of a holder as `TOOL_POINT:H1`, `TIP_OFFSET:H1`, `POINT_RADIUS:H1` and, where a tip offset stands, the derived tip on the tool axis as `TIP:Z` (D372, D374); `ncx annotate` writes a copy of the program through the canonical writer with the previous values appended to each block's trailing comment (`LINE X=55.44` becomes `LINE X=55.44` followed by the comment `; X 33.22 -> 55.44` in the canonical column, D92; an existing comment is kept and the values follow it after one space), which the parser keeps as the block's comment and the VM ignores. A block of a subprogram that STATIC mode walks at several calls (D99) appears in `trace` once per walk; `annotate` writes the values of its first walk. Both are regenerated at will and read by nothing.
+The VM never stores history in the program. Two derived outputs give it instead: `ncx trace` writes one row per changed state variable per executed block (`channel, block, variable, old, new`, old empty when unknown), the measurement point of a holder as `TOOL_POINT:H1`, `TIP_OFFSET:H1`, `POINT_RADIUS:H1` and, where a tip offset stands, the derived tip on the tool axis as `TIP:Z` (D372, D374); `ncx annotate` writes a copy of the program through the canonical writer with the previous values appended to each block's trailing comment (`LINE X=55.44` becomes `LINE X=55.44` followed by the comment `; X 33.22 -> 55.44` in the canonical column, D92; an existing comment is kept and the values follow it after one space), which the parser keeps as the block's comment and the VM ignores. A block of a subprogram that STATIC mode walks at several calls (D99) appears in `trace` once per walk; `annotate` writes the values of its first walk. Both are regenerated at will and read by nothing. When an ERROR stops the run, `trace` writes the rows of the blocks executed before it and `annotate` the whole copy, the blocks not executed without values; each exits 1, and neither writes anything when the run does not start, for a parser or expander ERROR among others (architecture 10, D205).
 
 ## 7. Events
 

@@ -358,7 +358,7 @@ A named function is written as `FUNC:SUB_CHUCK=OPEN` in NCX and compiles to the 
 
 ```toml
 [cycles]
-catalog = "heidenhain-cycles.toml"  # controller family catalog, shipped with NCXchange, user-extendable
+catalog = "heidenhain-cycles.toml"  # controller family catalog, shipped with NCXchange, user-extendable; looked up in the cycle folders (D207)
 
 # excerpt of a catalog file
 [[cycle]]
@@ -373,6 +373,8 @@ name = "ROUGH_TURN"
 native = "G71"
 contour = ["P", "Q"]                # first and last block of the contour, the SUB section of CONTOUR=name (D65)
 ```
+
+The `catalog` value is looked up in the cycle folders alone, in this order: the folder `ncx.toml` names, `cycles/` of the working directory (the project), `cycles/` of the tool's own folder, and as the fourth and last place the catalogs built into `ncx` (D371). A value with a folder in it counts from each of them; a full path, or one that climbs out with `..`, names no file. A catalog found nowhere or unreadable is CLI202, exit code 2 (D97); one that loads with an ERROR exits 1. A shop's own catalog may override a shipped one on purpose; the CAM's bundle is protected by the schema version of D348 (D207).
 
 The built-in drilling family (`DRILL`, `DRILL_DWELL`, `PECK`, `CHIP_BREAK`, `TAP`, `REAM`, `BORE`) is defined in the same way inside NCXchange and can be overridden per machine. Four catalog files ship with `ncx`: `cycles/fanuc.toml` with the mill codes of the Fanuc family, `cycles/fanuc-lathe.toml` with the lathe drilling cycles along Z and along X and the turning cycles, which a Fanuc lathe names instead of the mill file, and `cycles/heidenhain.toml` and `cycles/siemens.toml` (D160). A catalog file is written in the numbers of Fanuc G-code system A, and the reader and the compiler translate them to the system of the machine through `gcode_system`, so no entry key ties an entry to a G-code system (`../controllers/fanuc.md` 3, D174). The `native` of an entry is the native cycle as the control writes it, a number for Heidenhain (`251`) and a string for Siemens and Fanuc (`"CYCLE952"`, `"G71"`, `"G83.5"`); a program that writes the cycle natively gives exactly that text after the controller address of its `CYCLE` word (`CYCLE:FANUC=G71`, `CYCLE:FANUC="G83.5"`; language 4.7, D144).
 
@@ -411,7 +413,7 @@ Every entry of `map` is a template of the variable's number with `{index}`, like
 # shaft.ncxjob.toml
 [job]
 name = "SHAFT"
-machine = "nakamura-ntjx.toml"
+machine = "nakamura-ntjx.toml"      # looked for next to the manifest first, then as --machine takes it (D303)
 
 [[channel]]
 id = 1
@@ -494,6 +496,8 @@ my-shop/
 ```
 
 `ncx.toml` names the plugin assemblies (`plugins = ["MyShop.NcxPlugins.dll"]`) that subscribe to VM events (`ncx-virtual-machine.md`, section 7).
+
+A machine named without a path is looked up in `machines/` of the folder `ncx.toml` names, of the working directory and of the tool's own folder, in that order, and a catalog in the `cycles/` folders in the same order; a value that names an existing file, or has a folder in it, is a path (D206, D207). The installation of `ncx` holds the shipped machine files and catalogs twice: loose in `machines/` and `cycles/` beside the binary, to read and copy, and built into the binary as the fourth and last place of both lookups, so that a single-file `ncx` run on its own finds them (D371). A shop's own file of a shipped name wins; a shop that wants a shipped machine gone shadows it with its own file of that name, since deleting the loose copy falls back to the built-in one. A built-in file is named in a diagnostic as `built-in machines/<name>.toml`. The plugin template is no built-in file: `ncx plugin new` from a lone binary reports CLI552.
 
 ## 11. Example machine files
 

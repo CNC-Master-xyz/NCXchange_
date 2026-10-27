@@ -80,7 +80,7 @@ public sealed class ExampleRunTests
         VmHarness vm = Run("MILLTURN_TRANSFER.ncx");
 
         List<string> messages = vm.Messages(DiagnosticCodes.NotCheckedNoMachineFile);
-        var spindleOffLines = new List<int>();
+        var spindleOffLines = new List<int?>();
         foreach (Diagnostic diagnostic in vm.Diagnostics.Items)
         {
             if (diagnostic.Code == DiagnosticCodes.SpindleOffBeforeLine)
@@ -91,7 +91,7 @@ public sealed class ExampleRunTests
 
         Assert.Equal(7, vm.Codes().Count);
         Assert.Equal(5, messages.Count);
-        Assert.Equal([13, 14], spindleOffLines);
+        Assert.Equal<int?>([13, 14], spindleOffLines);
         string[] names = ["role TURRET1", "role SUB", "function SUB_CHUCK", "axis Z2", "function MAIN_CHUCK"];
         for (int index = 0; index < names.Length; index++)
         {

@@ -41,7 +41,7 @@ public sealed partial class CompileCommandTests : IDisposable
         int exitCode = RunCompile(file, null, Registry(new RecordingCompiler(Controller.Fanuc)));
 
         Assert.Equal(2, exitCode);
-        Assert.StartsWith("ncx(1): ERROR CLI400: ", _error, StringComparison.Ordinal);
+        Assert.StartsWith("ncx: ERROR CLI400: ", _error, StringComparison.Ordinal);
         Assert.False(Directory.Exists(Path.Combine(_project.WorkingDirectory, "out")));
     }
 
@@ -210,7 +210,7 @@ public sealed partial class CompileCommandTests : IDisposable
         int exitCode = harness.Run("compile", file);
 
         Assert.Equal(2, exitCode);
-        Assert.StartsWith("ncx(1): ERROR CLI400: ", harness.Error, StringComparison.Ordinal);
+        Assert.StartsWith("ncx: ERROR CLI400: ", harness.Error, StringComparison.Ordinal);
     }
 
     // The clutch mill of the CLI tests with a tool table next to it (machine-config 1, D10).

@@ -13,6 +13,9 @@ namespace Ncx.Compilers;
 // SYNCs the job compiler generated.
 public sealed partial class JobCompiler
 {
+    // The deadlock ERROR of the virtual machine starts its own words with this (virtual machine 3.7).
+    private const string DeadlockStart = "Deadlock: ";
+
     // The rules of the job scheduler (virtual machine 3.7, 5; machine-config 8), which the compile of one channel
     // program cannot report, since it runs one channel.
     private static readonly string[] s_jobRules =
@@ -160,12 +163,14 @@ public sealed partial class JobCompiler
         bool reported = false;
         for (int index = 0; index < channels.Count; index++)
         {
-            if (waits[index].WaitingAt is Block { Generated: { Source: Writer } generated } sync)
+            // The message starts with the job compiler and the key it writes the SYNC for (D200), and ends with the
+            // deadlock as the virtual machine words it, without the rule its own message starts with.
+            if (waits[index].WaitingAt is Block { Generated.Source: Writer } sync)
             {
                 var report = new Diagnostics(channels[index].File.FileName);
                 report.Error(sync, DiagnosticCodes.GeneratedSyncDeadlocks,
-                    $"{sync.Find("SYNC")?.ToCanonical()}, which the job compiler writes for {generated.Reason}, can "
-                    + $"never be released in the job as written (machine-config 5, D56). {deadlock.Message}");
+                    $"{sync.Find("SYNC")?.ToCanonical()} can never be released in the job as written "
+                    + $"(machine-config 5, D56). {DeadlockText(deadlock)}");
                 AddAll(diagnostics, report);
                 reported = true;
             }
@@ -177,6 +182,14 @@ public sealed partial class JobCompiler
         }
 
         return true;
+    }
+
+    // The deadlock as the virtual machine words it, from "Deadlock:" on: on a generated SYNC its message starts with
+    // the rule that wrote the block (D200), which the ERROR of the job compiler names already.
+    private static string DeadlockText(Diagnostic deadlock)
+    {
+        int start = deadlock.Message.IndexOf(DeadlockStart, StringComparison.Ordinal);
+        return start < 0 ? deadlock.Message : deadlock.Message[start..];
     }
 
     // The deadlock ERROR of a run of the job, where the job scheduler reported it: on the block the first waiting

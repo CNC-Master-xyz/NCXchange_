@@ -1,0 +1,5 @@
+# The tool table of the sample machine, built in beside it (D10, D371).
+[[tool]]
+number = 1
+length = 100
+radius = 5
