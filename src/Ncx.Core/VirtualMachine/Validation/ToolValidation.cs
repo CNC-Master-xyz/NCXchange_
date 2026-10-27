@@ -67,16 +67,20 @@ internal static class ToolValidation
         if (!MotionRules.IsMotion(context.Block)
             || state.LastHolder is not string holderId
             || !state.Holders.TryGetValue(holderId, out HolderState? holder)
-            || holder.TipOffset == 0m
+            || holder.ActiveTipOffset == 0m
             || !TipRules.ToolAxisTilted(state.Frame.Chain, state.Frame.Tcpm))
         {
             return false;
         }
 
+        // The TIP_OFFSET in effect (language 4.4, D372); an UNKNOWN one may be other than 0 and warns as well. The tip
+        // comes back once the tool axis is a machine axis again, after TILT=RESET or TCPM=OFF.
+        string offset = holder.ActiveTipOffset is decimal known
+            ? known.ToString(CultureInfo.InvariantCulture)
+            : "?";
         context.Diagnostics.Warning(context.Block, DiagnosticCodes.TipOffsetUnderTilt,
-            string.Create(CultureInfo.InvariantCulture,
-                $"TIP_OFFSET={holder.TipOffset} under a tilted tool axis (TILT, TILT_AXIS or TCPM=ON): the tool axis "
-                + $"is no machine axis, so the virtual machine derives no tip in this program (D374)."));
+            $"TIP_OFFSET={offset} under a tilted tool axis (TILT, TILT_AXIS or TCPM=ON): the tool axis is no machine "
+            + "axis, so the virtual machine derives no tip while the tool axis is turned (D374).");
         return true;
     }
 

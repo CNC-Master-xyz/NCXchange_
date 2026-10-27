@@ -14,6 +14,7 @@ internal sealed class ToolUse
     private readonly List<int> _lengthOffsets = [];
     private readonly List<int> _radiusOffsets = [];
     private readonly List<int> _combinedOffsets = [];
+    private readonly List<string> _points = [];
     private decimal? _perMinuteLowest;
     private decimal? _perMinuteHighest;
     private decimal? _perRevolutionLowest;
@@ -95,6 +96,7 @@ internal sealed class ToolUse
         AddRegister(_lengthOffsets, holder.OffsetLen);
         AddRegister(_radiusOffsets, holder.OffsetRad);
         AddRegister(_combinedOffsets, holder.OffsetCombined);
+        AddPoint(holder);
     }
 
     /// <summary>
@@ -132,7 +134,8 @@ internal sealed class ToolUse
     }
 
     /// <summary>
-    /// The offset registers used, by the words that set them: "LEN 1, RAD 1", "OFFSET 5"; "-" without one.
+    /// The offset registers used, by the words that set them, and the measurement points in effect other than point 1
+    /// with a = r = 0: "LEN 1, RAD 1", "OFFSET 5", "LEN 2, POINT 2 TIP 1 RAD 5"; "-" without one (D374).
     /// </summary>
     public string OffsetsText()
     {
@@ -140,7 +143,26 @@ internal sealed class ToolUse
         AddText(offsets, "LEN", _lengthOffsets);
         AddText(offsets, "RAD", _radiusOffsets);
         AddText(offsets, "OFFSET", _combinedOffsets);
+        offsets.AddRange(_points);
         return offsets.Count == 0 ? "-" : string.Join(", ", offsets);
+    }
+
+    // D374: the tool list prints the point, the tip offset and the register radius in effect during the tool's
+    // motions (language 4.4, D372), ? for a value UNKNOWN in STATIC mode (virtual machine 1), not the value held
+    // before; point 1 with a = r = 0 is every tool before the point words and prints nothing.
+    private void AddPoint(HolderSnapshot holder)
+    {
+        if (holder.ActiveToolPoint == 1 && holder.ActiveTipOffset == 0m && holder.ActivePointRadius == 0m)
+        {
+            return;
+        }
+
+        string point = "POINT " + holder.ActiveToolPoint.ToString(CultureInfo.InvariantCulture) + " TIP "
+            + KnownOrUnknown(holder.ActiveTipOffset) + " RAD " + KnownOrUnknown(holder.ActivePointRadius);
+        if (!_points.Contains(point))
+        {
+            _points.Add(point);
+        }
     }
 
     private static void AddRegister(List<int> registers, int register)
@@ -172,5 +194,10 @@ internal sealed class ToolUse
         string low = ReportText.Number(lowest);
         string high = ReportText.Number(highest);
         return low == high ? low : low + "-" + high;
+    }
+
+    private static string KnownOrUnknown(decimal? value)
+    {
+        return value is null ? "?" : ReportText.Number(value);
     }
 }

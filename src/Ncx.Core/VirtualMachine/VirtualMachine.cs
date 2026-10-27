@@ -157,6 +157,7 @@ public sealed partial class VirtualMachine
 
         // 5. If the verb is a motion verb, resolve the target and execute it.
         ExecuteMotion(context);
+        TipRules.Activate(context);
 
         // The rules of virtual machine 5 that read the state the block leaves (Validation/RunValidation).
         _validation.AfterBlock(context);

@@ -125,11 +125,13 @@ internal sealed class StateChanges
     // TIP:axis, the tip on the tool axis, derived and never stored (D374); a row only where a tip offset stands
     // before or after the block, so that a trace written before the point words keeps its rows, and none where the
     // tool axis is tilted and no tip is derived.
+    // Only a motion reports it, from the TIP_OFFSET in effect: the point words take effect with the next tool-axis
+    // motion (language 4.4, D372).
     private void CompareTip()
     {
-        decimal offsetBefore = TipRules.ActiveHolder(_before)?.TipOffset ?? 0m;
-        decimal offsetAfter = TipRules.ActiveHolder(_after)?.TipOffset ?? 0m;
-        if (offsetBefore == 0m && offsetAfter == 0m)
+        decimal? offsetBefore = TipRules.ActiveHolder(_before)?.ActiveTipOffset ?? 0m;
+        decimal? offsetAfter = TipRules.ActiveHolder(_after)?.ActiveTipOffset ?? 0m;
+        if (!MotionRules.IsMotion(_block) || (offsetBefore == 0m && offsetAfter == 0m))
         {
             return;
         }

@@ -157,6 +157,31 @@ public sealed class ToolListAnalyticTests
         Assert.Equal("637-3000", use.RpmText());
     }
 
+    // D374: the tool list prints the points a tool cut in beside its offsets, with the values in effect; the TOOL=3
+    // that follows starts at point 1 with a = r = 0, which prints nothing, and keeps the registers.
+    [Fact]
+    public void ToolList_PointWords_ArePrintedBesideTheOffsets()
+    {
+        ToolListAnalytic tools = Run("UNITS=MM", "TOOL=2 OFFSET:LEN=2", "RAPID X=0 Y=0 Z=10",
+            "TOOL_POINT=2 TIP_OFFSET=1 POINT_RADIUS=5", "RAPID Z=5", "TOOL=3", "RAPID Z=20");
+
+        List<ToolUse> rows = Rows(tools);
+        Assert.Equal("LEN 2, POINT 2 TIP 1 RAD 5", rows[0].OffsetsText());
+        Assert.Equal("LEN 2", rows[1].OffsetsText());
+    }
+
+    // D374, virtual machine 1: a TIP_OFFSET from an expression is UNKNOWN in STATIC mode, and the tool list prints it
+    // as ?, not the value held before.
+    [Fact]
+    public void ToolList_UnknownTipOffset_IsPrintedUnknown()
+    {
+        var tools = new ToolListAnalytic(AnalyticRuns.Options(DefaultMachine.Create(), mode: ExecutionMode.Static));
+        AnalyticRuns.Run(CliHarness.OneProgram("UNITS=MM", "TOOL=2 TIP_OFFSET=1", "TIP_OFFSET={$Q1 * 2}",
+            "RAPID X=0 Y=0 Z=10"), DefaultMachine.Create(), tools, ExecutionMode.Static);
+
+        Assert.Equal("POINT 1 TIP ? RAD 0", Assert.Single(Rows(tools)).OffsetsText());
+    }
+
     // The rows of the report: the uses with a block in the range.
     private static List<ToolUse> Rows(ToolListAnalytic tools)
     {

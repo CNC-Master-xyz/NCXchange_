@@ -56,6 +56,23 @@ internal sealed class HolderState
     public decimal PointRadius { get; set; }
 
     /// <summary>
+    /// The point in effect: the point words take effect with the next tool-axis motion (language 4.4, D372), and the
+    /// tip, the reported radius and the tool list follow these; TipRules.Activate takes them over from ToolPoint,
+    /// TipOffset and PointRadius. 1 initially.
+    /// </summary>
+    public int ActiveToolPoint { get; set; } = 1;
+
+    /// <summary>
+    /// The TIP_OFFSET in effect since the last tool-axis motion; null while UNKNOWN (virtual machine 1). 0 initially.
+    /// </summary>
+    public decimal? ActiveTipOffset { get; set; } = 0m;
+
+    /// <summary>
+    /// The POINT_RADIUS in effect since the last tool-axis motion; null while UNKNOWN (virtual machine 1). 0 initially.
+    /// </summary>
+    public decimal? ActivePointRadius { get; set; } = 0m;
+
+    /// <summary>
     /// True when the program named the point of the tool with TOOL_POINT since its TOOL, and no OFFSET word replaced
     /// the registers since; only then does a compiler write the registers of the [tool_points] mapping (D393).
     /// </summary>
@@ -106,6 +123,9 @@ internal sealed class HolderState
             ToolPoint = ToolPoint,
             TipOffset = TipOffset,
             PointRadius = PointRadius,
+            ActiveToolPoint = ActiveToolPoint,
+            ActiveTipOffset = ActiveTipOffset,
+            ActivePointRadius = ActivePointRadius,
             PointNamed = PointNamed,
             ToolChange = ToolChange,
         };

@@ -79,13 +79,15 @@ internal static class MotionEvents
             return motion with { Tip = TipRules.Tip(after, motion.To) };
         }
 
-        decimal wear = context.MeasuredPoint?.Invoke(holder.SpindleTool, holder.ToolPoint)?.Wear ?? 0m;
-        bool radiusUnknown = after.LastHolder is string id && after.Unknown.Contains("POINT_RADIUS:" + id);
+        // The point in effect since the last tool-axis motion (language 4.4, D372); the wear of the tool table is in
+        // the machine's units_default and joins the radius in the program's UNITS (machine-config 1, D376).
+        decimal wear = context.MeasuredPoint?.Invoke(holder.SpindleTool, holder.ActiveToolPoint)?.Wear ?? 0m;
+        wear = TipRules.InProgramUnits(wear, context.Machine.Machine.UnitsDefault, after.Frame.Units);
         return motion with
         {
-            ToolPoint = holder.ToolPoint,
-            PointRadius = radiusUnknown ? null : holder.PointRadius + wear,
-            TipOffset = holder.TipOffset,
+            ToolPoint = holder.ActiveToolPoint,
+            PointRadius = holder.ActivePointRadius + wear,
+            TipOffset = holder.ActiveTipOffset ?? 0m,
             Tip = TipRules.Tip(after, motion.To),
         };
     }
