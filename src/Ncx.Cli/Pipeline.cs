@@ -188,21 +188,15 @@ internal static class Pipeline
     // The external program of CALL="name" in an INTERPRETED run, searched in the working directory (virtual machine
     // 3.6), parsed and expanded like the file itself (virtual machine 1), with what reading it found under its own file
     // name (2.9). Null when the working directory holds none that can be read as UTF-8 text, which the virtual machine
-    // reports on the CALL.
-    // TODO(question): language 4.9 calls an external program by its file name (CALL="O9010") and virtual machine 3.6
-    // searches the working directory, and neither says whether the name carries the extension of the NCX file; the name
-    // is taken as written, and with .ncx when the working directory holds no file of that name, until D215 is answered.
+    // reports on the CALL. The name is the program's file name without folder and extension, and the file is
+    // <name>.ncx of the working directory and no other, so a source O9010 next to its converted O9010.ncx is never
+    // read as NCX (language 4.9, virtual machine 3.6; D215).
     // TODO: the program rewriters of the plugins expand the external program like the file itself, but what a plugin
     // reports about a block of it names the file of the run, whose diagnostics the plugins report into.
     internal static NcxProgram? LoadExternalProgram(string name, string workingDirectory, MachineConfig machine,
         IReadOnlyList<IProgramRewriter> rewriters)
     {
-        string path = Path.Combine(workingDirectory, name);
-        if (!File.Exists(path) && File.Exists(path + NcxExtension))
-        {
-            path += NcxExtension;
-        }
-
+        string path = Path.Combine(workingDirectory, name + NcxExtension);
         string fileName = Path.GetFileName(path);
         var reading = new Diagnostics(fileName);
         if (!File.Exists(path)

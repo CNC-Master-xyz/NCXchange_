@@ -176,7 +176,7 @@ The tasks of wave 2 (P1-03 to P1-07, P2-04, P3-01, P3-02 with its part P3-02c, P
 | 48 | P4-01 | What does a REPEAT without TIMES do? | settled 2026-10-01 (D212): it repeats the blocks once more | `src/Ncx.Core/VirtualMachine/VirtualMachine.Interpreted.cs:269` |
 | 49 | P4-01 | What becomes of a repeat that a JUMP leaves before its passes are used? | D213 | `src/Ncx.Core/VirtualMachine/VirtualMachine.Interpreted.cs:310` |
 | 50 | P4-01 | What do PROGRAM=BEGIN and PROGRAM=END of an external program do when a CALL runs it? | settled 2026-10-01 (D214) | `src/Ncx.Core/VirtualMachine/VirtualMachine.Calls.cs:105` |
-| 51 | P4-01 | Does the name of CALL="O9010" carry .ncx, and which file does the VM open? | D215 | `src/Ncx.Cli/Pipeline.cs:192` |
+| 51 | P4-01 | Does the name of CALL="O9010" carry .ncx, and which file does the VM open? | settled 2026-10-27 (D215) | `src/Ncx.Cli/Pipeline.cs:192` |
 | 52 | P4-01 | Do $SYS_POS_X and $SYS_MPOS_X read the diameter or the radius under DIAMETER=ON? | D216 (the NCX names); D240 (what the controller variables read) | `src/Ncx.Core/VirtualMachine/State/VariableStore.cs:260` |
 | 53 | P3-02 | Which blocks of 2.5D_FRAESEN are the Fanuc acceptance, given the example's own notes and the reader rules? | D217 | `tests/Ncx.Acceptance/Examples/FanucReaderTests.cs:29`; pointer in `tests/Ncx.Acceptance/Examples/ConvertExampleTests.cs:58` |
 | 54 | P3-02 | Fanuc I J K: absolute CENTER or CENTER:IX, and when? | settled 2026-10-01 (D208): `CENTER:X` from a known start under `G90`, else `CENTER:IX` | `src/Ncx.Readers/Fanuc/FanucMotion.cs` (no marker left) |

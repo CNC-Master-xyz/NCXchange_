@@ -180,6 +180,7 @@ Readers produce these words from the source (see `controller-mapping.md`): Fanuc
 - `$SYS_*` variables are read from the VM state through the configuration's mapping (position, active tool, offsets). A `$SYS_*` name the configuration does not map, or a state that is unknown, evaluates to UNKNOWN in STATIC mode and is an ERROR in INTERPRETED mode.
 - `REPEAT` re-executes the section from the label to the current block `TIMES` times, once without `TIMES` (D212); nested repeats and calls up to the configured depth (default 8).
 - Block cap from the configuration (default 1 000 000): ERROR "possible endless loop".
+- `CALL="name"` loads `<name>.ncx` from the working directory and no other file: the name is the program's file name without folder and extension, and a missing target is the ERROR that names the file it looked for (D215).
 - An external program must have its own `PROGRAM` frame and must not contradict the caller's `UNITS` and `WORKPLANE`: ERROR. A source file of subprograms only therefore reads as a program as well (D210). The file still checks on its own (section 1), where its `PROGRAM=END` ends its channel as any other program's does.
 
 ### 3.7 Channels and the job scheduler

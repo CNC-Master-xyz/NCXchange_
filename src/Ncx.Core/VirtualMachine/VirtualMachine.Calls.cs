@@ -114,8 +114,8 @@ public sealed partial class VirtualMachine
             if (external is null)
             {
                 Diagnostics.Error(callBlock, DiagnosticCodes.ExternalProgramNotFound,
-                    $"CALL=\"{name}\": the working directory holds no external program {name} that can be read "
-                    + "(virtual machine 3.6, missing call target).");
+                    $"CALL=\"{name}\": the working directory holds no external program {name}.ncx that can be read "
+                    + "(virtual machine 3.6, missing call target; D215).");
                 end.Exit = SectionExit.Stopped;
                 yield break;
             }

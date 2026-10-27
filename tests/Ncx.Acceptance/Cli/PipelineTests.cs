@@ -1,4 +1,5 @@
 using Ncx.Cli;
+using Ncx.Config;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.Events;
 
@@ -93,6 +94,36 @@ public sealed class PipelineTests : IDisposable
         Assert.Null(run.Program);
         Assert.Equal(2, run.ExitCode(strict: false));
         Assert.Equal(["CLI002", "CLI100"], [run.Diagnostics.Items[0].Code, run.Diagnostics.Items[1].Code]);
+    }
+
+    // D215: CALL="O9010" opens O9010.ncx of the working directory and no other file, so a Fanuc source O9010 without
+    // extension that stands next to its converted O9010.ncx is never parsed as NCX.
+    [Fact]
+    public void LoadExternalProgram_SourceOfTheBareNameNextToItsNcxFile_ReadsTheNcxFile()
+    {
+        _cli.WriteFile("O9010", "%\nO9010\nG0 X0\nM99\n%\n");
+        _cli.WriteFile("O9010.ncx", CliHarness.OneProgram("UNITS=MM"));
+
+        NcxProgram? program = Pipeline.LoadExternalProgram("O9010", WorkingDirectory(), DefaultMachine.Create(), []);
+
+        Assert.NotNull(program);
+        Assert.Equal("O9010.ncx", program.FileName);
+        Assert.False(program.Diagnostics.HasErrors, program.Diagnostics.ToText());
+    }
+
+    // D215: a file of the bare name alone is no external program: the virtual machine reports the missing target.
+    [Fact]
+    public void LoadExternalProgram_FileOfTheBareNameAlone_IsNoExternalProgram()
+    {
+        _cli.WriteFile("O9011", CliHarness.OneProgram("UNITS=MM"));
+
+        Assert.Null(Pipeline.LoadExternalProgram("O9011", WorkingDirectory(), DefaultMachine.Create(), []));
+    }
+
+    // The temporary folder of the test, the working directory of an external program.
+    private string WorkingDirectory()
+    {
+        return Path.GetDirectoryName(_cli.PathOf("any")) ?? "";
     }
 
     // A listener that counts the MOTION events of each line (code-guidelines 8: a small hand-written fake).
