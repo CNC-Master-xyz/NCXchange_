@@ -284,6 +284,16 @@ public sealed class HeidenhainCycleTests
             StringComparison.Ordinal);
     }
 
+    // D338: a formula in a Q parameter of a native cycle is spilled into a QL parameter before the CYCL DEF.
+    [Fact]
+    public void Rule7_NativeCycleWithAFormula_SpillsItIntoAQlParameter()
+    {
+        CompileResult result = Run("CYCLE:HEIDENHAIN=251 Q218={$Q1 * 2} Q215=0 Q219=40");
+
+        Assert.EndsWith("QL499 = Q1 * 2\nCYCL DEF 251 ~\n    Q218=+QL499 ~\n    Q215=+0 ~\n    Q219=+40",
+            HeidenhainCompile.Body(result), StringComparison.Ordinal);
+    }
+
     // Controller-mapping 1, DWELL: cycle 9 with the seconds.
     [Fact]
     public void Dwell_IsCycle9WithTheSeconds()

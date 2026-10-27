@@ -1,3 +1,5 @@
+using Ncx.Core.Model;
+
 namespace Ncx.Compilers.Tests.Heidenhain;
 
 /// <summary>
@@ -429,5 +431,28 @@ public sealed class HeidenhainFrameTests
 
         Assert.Equal(
             "CYCL DEF 32.0 TOLERANZ\nCYCL DEF 32.1 T0,02\nCYCL DEF 32.2 HSC-MODE:0", HeidenhainCompile.Body(result));
+    }
+
+    // D146; controller-mapping 1, CYLINDER: cycle 27 takes its contour from a subprogram in the letters of the control,
+    // which the compiler does not write; CYLINDER is CMP101, and no C word is written under the NCX letter.
+    [Fact]
+    public void Cylinder_IsTheErrorCmp101()
+    {
+        var mill = HeidenhainCompile.MillAnd("""
+            [[axis]]
+            id = "C1"
+            ncx = "C"
+            letter = "C"
+            kind = "rotary"
+            owner = "TABLE1"
+            """);
+
+        CompileResult result = HeidenhainCompile.Run(
+            HeidenhainCompile.Program("CYLINDER=30", "CYLINDER=OFF"), mill);
+
+        Assert.Empty(result.Files);
+        Diagnostic error = Assert.Single(result.Diagnostics.Items,
+            diagnostic => diagnostic.Code == DiagnosticCodes.HeidenhainWordWithoutKlartext && diagnostic.Line == 4);
+        Assert.Contains("cycle 27", error.Message, StringComparison.Ordinal);
     }
 }

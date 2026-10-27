@@ -42,7 +42,9 @@ public sealed partial class HeidenhainCompilerTests : IDisposable
     {
         string compiled = Compile("2.5D_FRAESEN.ncx", Fixture.ReadText("2.5D_FRAESEN.ncx"), "2.5D FRAESEN.h");
 
-        Assert.Equal("", _error);
+        // D266: the name "2.5D FRAESEN" of the source has a dot and a space, outside A-Z a-z 0-9 _ -, so the
+        // compiler warns (CMP127) and writes it all the same.
+        Assert.Equal(["CMP127"], Codes(_error));
         string? difference = new NcComparer(Mill()).Compare(Fixture.ReadText("sources/2.5D_FRAESEN.h"), compiled,
             Differences25DFraesen());
         Assert.True(difference is null, difference);

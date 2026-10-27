@@ -29,6 +29,7 @@ sub_end = "LBL 0"                  # written for SUB=END and RETURN: the label s
 program_layout = "file_per_program"   # one program per file, subprograms as LBL sections after the M30 of every caller (heidenhain 8 rule 6, D48)
 max_line_length = 0                # 0 = unlimited
 comment_charset = "ASCII"
+counter_registers = ["QL90", "QL99"]   # the Q parameters a REPEAT that a JUMP leaves counts in (D213, D388 (12)); QL is local to the program (iTNC 530 Klartext 340490-05 p. 282-283: QL0 to QL499), so this needs NC software that has QL parameters
 
 [tool_change]
 change = "TOOL CALL {tool} {axis} S{rpm}"   # TOOL, the tool axis of WORKPLANE and the RPM of the same or the next block in one call (heidenhain 8 rule 3)

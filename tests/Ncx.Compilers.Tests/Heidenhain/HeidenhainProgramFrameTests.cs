@@ -1,3 +1,5 @@
+using Ncx.Core.Model;
+
 namespace Ncx.Compilers.Tests.Heidenhain;
 
 /// <summary>
@@ -188,5 +190,45 @@ public sealed class HeidenhainProgramFrameTests
             "RAPID X=0 Y=0", "SKIP LINE X=5 F=100 COOLANT=ON"));
 
         Assert.Equal("L X+0 Y+0 R0 FMAX\n/M8\n/L X+5 F100", HeidenhainCompile.Body(result));
+    }
+
+    // D266: names compare case-insensitively, and a taken name gets _2 in file order; BEGIN PGM and END PGM carry the
+    // file's final name.
+    [Fact]
+    public void ProgramName_TakenCaseInsensitively_GetsTheSuffixInBeginAndEndPgm()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"OP\"", "UNITS=MM", "RAPID Z=5", "PROGRAM=END",
+            "PROGRAM=BEGIN NAME=\"op\"", "UNITS=MM", "RAPID Z=10", "PROGRAM=END",
+            "FILE=END"));
+
+        List<string> second = HeidenhainCompile.LinesOf(result.Files[1].Text);
+        Assert.Equal("BEGIN PGM op_2 MM", second[0]);
+        Assert.Equal("END PGM op_2 MM", second[^1]);
+    }
+
+    // D266: a name with characters outside A-Z a-z 0-9 _ -, or longer than 25 characters on the iTNC 530, is the
+    // WARNING CMP127.
+    [Theory]
+    [InlineData("A B")]
+    [InlineData("ABCDEFGHIJKLMNOPQRSTUVWXYZ")]
+    public void ProgramName_BeyondTheLimitsOfTheControl_IsTheWarningCmp127(string name)
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Lines(
+            "FILE=BEGIN NCX=1", $"PROGRAM=BEGIN NAME=\"{name}\"", "UNITS=MM", "PROGRAM=END", "FILE=END"));
+
+        Assert.Equal(Severity.Warning,
+            HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainProgramNameLimits).Severity);
+    }
+
+    // D266: a name within the limits reports nothing.
+    [Fact]
+    public void ProgramName_WithinTheLimits_ReportsNothing()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Lines(
+            "FILE=BEGIN NCX=1", "PROGRAM=BEGIN NAME=\"OP_1-A\"", "UNITS=MM", "PROGRAM=END", "FILE=END"));
+
+        Assert.DoesNotContain(DiagnosticCodes.HeidenhainProgramNameLimits, HeidenhainCompile.Codes(result));
     }
 }

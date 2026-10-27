@@ -86,12 +86,22 @@ public sealed class HeidenhainFrameTests
             Body("1 PLANE SPATIAL SPA+0 SPB+45 SPC+0 TURN FMAX TABLE ROT"));
     }
 
+    // D269: a PLANE SPATIAL that names neither TABLE ROT nor COORD ROT is ROT=COORD, the default of the TNC 640,
+    // assumed for the iTNC 530 by family continuity; NCX itself defaults to TABLE (language 4.2).
+    [Fact]
+    public void PlaneSpatial_WithoutRot_IsRotCoord()
+    {
+        Assert.Equal(Lines("TILT A=0 B=45 C=0 MOVE=STAY ROT=COORD"),
+            Body("1 PLANE SPATIAL SPA+0 SPB+45 SPC+0 STAY"));
+    }
+
     // PLANE AXIAL is TILT_AXIS; a new PLANE replaces the earlier one, PLANE RESET STAY removes it (heidenhain 3, 7 rule
     // 6; language 6; D82).
     [Fact]
     public void PlaneAxial_IsTiltAxisAndANewPlaneReplacesIt()
     {
-        Assert.Equal(Lines("TILT_AXIS A=-90 C=180 MOVE=STAY", "TILT_AXIS=RESET", "TILT A=0 B=0 C=0 MOVE=STAY",
+        Assert.Equal(Lines("TILT_AXIS A=-90 C=180 MOVE=STAY", "TILT_AXIS=RESET",
+            "TILT A=0 B=0 C=0 MOVE=STAY ROT=COORD",
             "TILT=RESET"),
             Body("1 PLANE AXIAL A-90 C+180 STAY\n2 PLANE SPATIAL SPA+0 SPB+0 SPC+0 STAY\n3 PLANE RESET STAY"));
     }

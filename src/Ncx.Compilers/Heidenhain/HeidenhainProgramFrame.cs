@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Ncx.Config.Templates;
 using Ncx.Core.Machine;
@@ -18,6 +19,9 @@ internal static partial class HeidenhainProgramFrame
     // SECTION).
     private const string CommentMark = "; ";
     private const string SectionMark = "* - ";
+
+    // The longest program name of the iTNC 530 (D266).
+    private const int MaxNameLength = 25;
 
     /// <summary>
     /// A comment block of Klartext: ; text.
@@ -41,7 +45,9 @@ internal static partial class HeidenhainProgramFrame
             return;
         }
 
-        writing.Line("BEGIN PGM " + NameOf(writing, program) + " " + units);
+        string name = NameOf(writing, program);
+        CheckName(writing, name);
+        writing.Line("BEGIN PGM " + name + " " + units);
     }
 
     /// <summary>
@@ -95,10 +101,9 @@ internal static partial class HeidenhainProgramFrame
         if (writing.Block.Has("PROGRAM", null, "END"))
         {
             writing.Take("PROGRAM");
-            if (HeidenhainFlow.JumpsToTheEnd(writing))
+            if (writing.Step.Section is Section program && writing.LabelNumbers.EndOf(program) is string end)
             {
-                writing.Line("LBL " + HeidenhainFlow.EndLabel(writing).ToString(
-                    System.Globalization.CultureInfo.InvariantCulture));
+                writing.Line("LBL " + end);
             }
 
             writing.Template(writing.Machine.Format?.ProgramEnd, "[format] program_end (machine-config 2, D49)",
@@ -107,12 +112,20 @@ internal static partial class HeidenhainProgramFrame
         else if (writing.Block.Has("SUB", null, "END"))
         {
             writing.Take("SUB");
+
+            // D272: the LBL m that a RETURN before the end jumps to stands directly before the one LBL 0.
+            if (writing.Step.Section is Section sub && writing.LabelNumbers.ReturnOf(sub) is string back)
+            {
+                writing.Line("LBL " + back);
+            }
+
             WriteSubEnd(writing);
         }
     }
 
     /// <summary>
-    /// Writes sub_end, "written for SUB=END and RETURN", LBL 0 on Heidenhain (machine-config 2).
+    /// Writes sub_end, LBL 0 on Heidenhain, once per section at its SUB=END; a RETURN before the end jumps to the LBL
+    /// before it (machine-config 2; D272).
     /// </summary>
     public static void WriteSubEnd(HeidenhainBlock writing)
     {
@@ -144,7 +157,7 @@ internal static partial class HeidenhainProgramFrame
     // order (architecture 8, D99). The walk of a subprogram that no program calls follows the PROGRAM=END of the last
     // program: under file_per_program it stands in the first program's file (D264, CompilerBase.FilePerProgram), under
     // one_file it belongs to none, and its UNITS has no BEGIN PGM to be compared with.
-    private static Section? ProgramOf(HeidenhainBlock writing)
+    internal static Section? ProgramOf(HeidenhainBlock writing)
     {
         if (writing.Step.Section is Section { Kind: SectionKind.Program } own)
         {
@@ -234,6 +247,26 @@ internal static partial class HeidenhainProgramFrame
     private static string NameOf(HeidenhainBlock writing, Section program)
     {
         return writing.ProgramName(program);
+    }
+
+    // D266: a WARNING when the name breaks the control's limits: a character outside A-Z a-z 0-9 _ -, or more than 25
+    // characters on the iTNC 530 (decisions.md D266).
+    private static void CheckName(HeidenhainBlock writing, string name)
+    {
+        bool characters = name.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-');
+        bool itnc530 = string.Equals(writing.Machine.Machine.Dialect, "iTNC530", StringComparison.OrdinalIgnoreCase);
+        bool length = !itnc530 || name.Length <= MaxNameLength;
+        if (characters && length)
+        {
+            return;
+        }
+
+        writing.Warning(DiagnosticCodes.HeidenhainProgramNameLimits,
+            $"The program name \"{name}\" breaks the limits of the control: "
+            + (characters ? "" : "it has characters outside A-Z a-z 0-9 _ -")
+            + (characters || length ? "" : ", and ")
+            + (length ? "" : $"it is longer than the {MaxNameLength} characters of the iTNC 530")
+            + " (controllers heidenhain.md 1; D266).");
     }
 
     // The block number in front of a Klartext block, 2 of "2 BLK FORM 0.1 Z X0 Y0 Z-20".

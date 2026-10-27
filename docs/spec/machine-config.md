@@ -73,7 +73,7 @@ trailing_zeros = false
 block_numbers = { enabled = true, start = 10, step = 10 }   # Heidenhain: consecutive from 0
 line_ending = "CRLF"
 program_end = "M30"                # M30 | M2 (Siemens also M17), written for PROGRAM=END (D48, D49)
-sub_end = "M99"                    # written for SUB=END and RETURN; Heidenhain "LBL 0", Siemens "RET"
+sub_end = "M99"                    # written for SUB=END, and for RETURN where the family has no jump to it; Heidenhain "LBL 0", once per section: a RETURN before the end jumps to an LBL directly before it (D272); Siemens "RET"
 program_layout = "one_file"        # one_file: all programs and subprograms of an NCX file into one output file (Fanuc O programs, Siemens %_N_ units)
                                    # file_per_program: one output file per program, subprograms copied after the M30 of every caller (Heidenhain)
                                    # a subprogram no program calls goes after the last program, or into the first program's file (D264); a file is named
@@ -81,6 +81,7 @@ program_layout = "one_file"        # one_file: all programs and subprograms of a
 max_line_length = 0                # 0 = unlimited; Siemens family value 512 (D263)
 comment_charset = "ASCII"          # "ASCII" | "UTF-8", any other value is the ERROR CFG005; under ASCII umlauts are transliterated before writing (D263)
 label_max = 999                    # optional: the largest label number; the Heidenhain compiler numbers labels from 1 to it (D271)
+counter_registers = ["QL90", "QL99"]   # optional, Heidenhain: the first and the last Q parameter (Q, QL or QR, one kind) the compiler counts a REPEAT in when a JUMP leaves its section; without it such a REPEAT is an ERROR, never a guessed register (D213, D388 (12))
 motion_code = "arcs"               # optional, every compiler: "change" | "arcs" | "every_block", when the verb G0..G3, L, C is written (D299)
 m_codes_per_block = 1              # optional, Fanuc: 1 to 5 M codes per block; 3 needs parameter 3404#7 M3B, 5 needs 11630#5 M5B (D339)
 # m_codes_combinable = ["M10", "M11"]   # optional, Fanuc: only these may be the second and later M code of a block (D339)

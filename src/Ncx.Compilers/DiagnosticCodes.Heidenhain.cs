@@ -58,8 +58,9 @@ public static partial class DiagnosticCodes
     public const string HeidenhainWordNeedsKinematics = "CMP107";
 
     /// <summary>
-    /// CMP108, a WARNING: ROT=COORD of a tilt is not written, since the templates of the machine have no placeholder
-    /// for it (language 4.2, D82; machine-config 5).
+    /// CMP108, a WARNING: the ROT of a tilt is not written, since the machine has no [transform] rot map or its
+    /// TILT_ON no {rot}, and a target without the option ignores ROT with a WARNING (language 4.2; machine-config 5;
+    /// D191, D269).
     /// </summary>
     public const string HeidenhainRotNotWritten = "CMP108";
 
@@ -114,10 +115,11 @@ public static partial class DiagnosticCodes
     public const string HeidenhainCompensationWithoutLine = "CMP115";
 
     /// <summary>
-    /// CMP116: two labels or subprograms of one output file would be written as the same LBL, which Klartext has once
-    /// per program, its LBL sections included, or a label as LBL 0, the end of a subprogram (controllers heidenhain.md
-    /// 1; language 4.9, 4.13).
+    /// CMP116, retired 2026-10-27 (D271): two labels of one output file that would be written as the same LBL, or a
+    /// label as LBL 0. The compiler numbers the labels of each Klartext program now, and only a range without a free
+    /// number is an ERROR, CMP129. The number is not reused.
     /// </summary>
+    [Obsolete("Retired by D271: the compiler renumbers the labels; a full label range is CMP129.")]
     public const string HeidenhainLabelNotUnique = "CMP116";
 
     /// <summary>
@@ -174,6 +176,46 @@ public static partial class DiagnosticCodes
     /// (machine-config 3, D373).
     /// </summary>
     public const string HeidenhainToolPoint = "CMP123";
+
+    /// <summary>
+    /// CMP125: the caller reads, after a CALL, a name that an ARG of the call assigns. In NCX the ARG is a local of the
+    /// call and the caller reads its own value again after it, while Klartext sets the Q parameter before the call and
+    /// Q parameters survive CALL PGM and CALL LBL on the control (language 4.9; controller-mapping 6, CALL + ARG;
+    /// D149, D274).
+    /// </summary>
+    public const string HeidenhainArgumentReadAfterCall = "CMP125";
+
+    /// <summary>
+    /// CMP126: a comparison of two strings has no Klartext form in this place: FN 9 and FN 10 compare numbers, and
+    /// only the string parameters QS compare, through STRCOMP into a QL parameter, which a block of its own sets
+    /// before the jump (language 4.12; controllers heidenhain.md 6; D169).
+    /// </summary>
+    public const string HeidenhainStringComparison = "CMP126";
+
+    /// <summary>
+    /// CMP127, a WARNING: the name of the program breaks the limits of the control: a character outside A-Z a-z 0-9
+    /// _ -, or more than 25 characters on the iTNC 530 (controllers heidenhain.md 1; D266).
+    /// </summary>
+    public const string HeidenhainProgramNameLimits = "CMP127";
+
+    /// <summary>
+    /// CMP128, an INFO: a ROT has no effect and is not written: on a TILT_AXIS block (PLANE AXIAL), or on a machine
+    /// without any rotary axis, where no tilt frees one (language 4.2; D191, D269).
+    /// </summary>
+    public const string HeidenhainRotWithoutEffect = "CMP128";
+
+    /// <summary>
+    /// CMP129: a label or subprogram needs a new LBL number, and no number of the label range 1 to [format] label_max
+    /// is free in its Klartext program (controllers heidenhain.md 1; machine-config 2; D271).
+    /// </summary>
+    public const string HeidenhainNoFreeLabel = "CMP129";
+
+    /// <summary>
+    /// CMP130: a REPEAT that a JUMP leaves is written as a Q-parameter counter loop, and the machine names no counter
+    /// registers, [format] counter_registers, or none of them is free; the compiler never guesses a register (D213,
+    /// D388 (12)).
+    /// </summary>
+    public const string HeidenhainRepeatWithoutCounter = "CMP130";
 
     /// <summary>
     /// CMP140, a WARNING: CYCLE_RETRACT=SAFE with a SAFE at or below CLEARANCE; the control uses the second set-up
