@@ -143,7 +143,7 @@ When `change` contains `{next}`, a `PRELOAD` word that follows the `TOOL` block 
 ```toml
 [tool_points]
 form = "registers"                 # indexed_tool (Klartext) | edge (Siemens) | registers (Fanuc); any other value is an ERROR
-# indexed_tool: point k is the index k-1 of the called tool, TOOL CALL 5.1 for point 2; at most nine indices, so k <= 10 (CMP123 beyond).
+# indexed_tool: point k is the index k-1 of the called tool, TOOL CALL 5.1 for point 2; at most nine indices, so k <= 10 (the ERROR CMP124 beyond, D388).
 #   An indexed call carries a tool number, so the TNC 640 runs its change macro (Klartext 892903-18 p. 123), and on the iTNC 530 it depends on
 #   MP7480.0 and the builder's macro; a point change of the tool in the spindle is the WARNING CMP123 unless:
 point_change = "call"              # indexed_tool: the builder's macro accepts an indexed call of the tool in the spindle
@@ -164,7 +164,7 @@ radius = 12                        # registers: the D of the point
 # edge = 20                        # edge: the D of the point
 ```
 
-A machine file without `[tool_points]` writes nothing for a point other than 1 and reports the INFO CMP016 once per program, because a control that cannot select a point is doing nothing wrong; a point the form cannot map is the ERROR of its family, CMP123 Heidenhain, CMP341 Fanuc, CMP514 Siemens, naming the tool and k, because another point's registers would cut with the wrong offsets (D373). A compiler writes only the register the mapping gives, never `TIP_OFFSET` or `POINT_RADIUS` as a control value, and a tool whose program names no point compiles as before (D375, D393). An `OFFSET` word on a holder whose tool named its point writes its own register in place of the mapped one, with the WARNING CMP033 (D393).
+A machine file without `[tool_points]` writes nothing for a point other than 1 and reports the INFO CMP016 once per program, because a control that cannot select a point is doing nothing wrong; a point the form cannot map is the ERROR of its family, CMP124 Heidenhain (D388), CMP341 Fanuc, CMP514 Siemens, naming the tool and k, because another point's registers would cut with the wrong offsets (D373). A compiler writes only the register the mapping gives, never `TIP_OFFSET` or `POINT_RADIUS` as a control value, and a tool whose program names no point compiles as before (D375, D393). An `OFFSET` word on a holder whose tool named its point writes its own register in place of the mapped one, with the WARNING CMP033 (D393).
 
 ```toml
 [home]
@@ -210,9 +210,9 @@ letter = "X"                       # address written in the output; extended axi
 incremental_letter = "U"           # Fanuc lathes: U/W/H/V are the incremental forms of X/Z/C/Y; empty when the control uses G91
 kind = "linear"                    # linear | rotary
 limits = [-10, 650]                # min and max in machine coordinates (the G53 / M91 frame), for the travel-limit analytics (D100)
-rapid = 30000                      # mm/min, for the runtime estimate
+rapid = 30000                      # mm/min (deg/min on a rotary axis), for the runtime estimate (D290)
 max_feed = 10000                   # mm/min (deg/min on a rotary axis), the F this axis can follow; VM441 compares the path feed of the axes a block moves, the expander warns or clamps (D64, D192)
-acceleration = 3000                # mm/s^2, for the trapezoidal profile of the runtime estimate
+acceleration = 3000                # mm/s^2 (deg/s^2 on a rotary axis), for the trapezoidal profile of the runtime estimate (D290)
 programming = "diameter"           # X axis of a lathe: diameter | radius | switchable (D60); the reader interprets the source with it, the compiler writes it
 home = 0                           # reference point 1 in machine coordinates (the G53 / M91 frame), for HOME (D100)
 home2 = -50                        # reference point 2 (G30 P2), optional
@@ -244,7 +244,7 @@ program_end = { X = 0, Z = -120 }  # optional
 ```toml
 [dynamics]                         # control behaviour for the runtime estimate (D64)
 block_time = 0.001                 # seconds the control needs per block; a short segment cannot be faster than this
-path_mode = "continuous"           # continuous | exact_stop
+path_mode = "continuous"           # continuous | exact_stop: the start value of the PATH_MODE state (VM 2.1); left out, exact stop (D350)
 corner_speed = 2000                # mm/min carried through a corner in continuous mode
 # rapid_exact_stop = true          # optional: whether the end of a RAPID is a rest point of the path; left out, true on a Fanuc-family machine (G00 in-position check) and false otherwise (D286)
 
@@ -252,6 +252,10 @@ corner_speed = 2000                # mm/min carried through a corner in continuo
 ON = "DIAMON"                      # Siemens; Mori Seiki radius mode: ON = "M583", OFF = "M582"; Fanuc: none, the parameter decides
 OFF = "DIAMOF"
 ```
+
+The units of `rapid`, `max_feed` and `acceleration` follow the axis kind, in every plane: mm/min and mm/s^2 on a linear axis, deg/min and deg/s^2 on a rotary axis. The runtime estimate uses a rotary axis only where its word is a length: under `CYLINDER=r` its values convert at r (1 deg = pi r / 180 mm); under `POLAR=ON` at L, the closest approach of the tool centre to the centre of rotation along the block, refined for a line to the exact bound F <= max_feed x pi / 180 x r_min^2 / p, r_min its nearest distance from the centre and p the distance of its line (a radial line, p = 0, is not limited by C), and the X limits apply as well; acceleration converts the same way. Where L is 0, a block through the centre, the estimate takes the X limits alone and its report says "C clamp near centre not estimated"; a motion of C at an unknown or zero cylinder radius has a line of its own. A `RAPID` under `POLAR` is estimated with the rapid of X; under `CYLINDER` the rapid of C converts at r (D290; gap closed 2026-10-28, delegated).
+
+`path_mode` is only the start value of the path-control state (virtual machine 2.1); `PATH_MODE` in the program changes it, `PATH_MODE=DEFAULT` and `PROGRAM=END` restore it, and the runtime estimate reads the state of each motion. A `[dynamics]` without `path_mode` starts at exact stop; a machine file without `[dynamics]` keeps the estimate at distance over feed. Where the program asks for a mode the machine has no `[transform]` template for, the state still rules the estimate and the report says so (D350). Under `CONTINUOUS` the path comes to rest at the rest points of D286 (virtual machine 8), among them the end of a `RAPID` on a Fanuc-family machine, which `rapid_exact_stop` overrides.
 
 ## 5. Functions and coolant
 
@@ -268,7 +272,7 @@ CSS_OFF = "G97"
 RPM_MAX = "G50 S{value}"
 rpm_min = 45                       # machine limits, not the program's RPM_MAX clamp: the expander warns or clamps (D64)
 rpm_max = 6000
-accel_time = 2.5                   # seconds from stop to rpm_max, for the runtime estimate of starts and stops
+accel_time = 2.5                   # seconds from stop to rpm_max, for the runtime estimate of starts, stops and speed changes (D323)
 
 [spindle.SUB]                      # Nakamura: +50, Mori Seiki: +200, Doosan: P suffix, Siemens: spindle number
 CW = "M53"

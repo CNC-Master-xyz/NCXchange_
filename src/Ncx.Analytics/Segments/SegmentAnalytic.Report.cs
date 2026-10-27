@@ -12,9 +12,9 @@ public sealed partial class SegmentAnalytic
         var text = new StringBuilder();
         text.Append(TextTable.Line(ReportText.Title("Segment length", _options), format));
         text.Append(TextTable.Line(
-            "Per MOTION the distance in mm between its start and its end point, the arc length for an ARC (virtual "
-            + "machine 8), over the motions of the workpiece frame whose positions are known (implementation 14, "
-            + "P4-03).",
+            "Per MOTION the length in mm of the path it describes, the distance between its start and its end point, "
+            + "the arc length with the travel of a helix for an ARC (virtual machine 8, D353), over the motions of the "
+            + "workpiece frame whose positions are known (implementation 14, P4-03).",
             format));
         text.Append(TextTable.Line(
             "A bin of the histogram holds the lengths from its lower bound up to, not including, its upper bound.",

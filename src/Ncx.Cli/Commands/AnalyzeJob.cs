@@ -44,6 +44,8 @@ internal static class AnalyzeJob
                 Range = analyze.Range,
                 Format = analyze.Format,
                 Mode = run.Interpreted ? ExecutionMode.Interpreted : ExecutionMode.Static,
+                SegmentBins = analyze.SegmentBins,
+                VectorBins = analyze.VectorBins,
             };
             var subscribed = new List<IAnalytic>();
             foreach (string name in analyze.Analytics)
@@ -62,9 +64,9 @@ internal static class AnalyzeJob
         // The reports cover the blocks the channels executed, after a line that says so when an ERROR stopped the job,
         // and nothing is written when the job stopped before its first round, as for one file (the TODO(question) of
         // AnalyzeCommand.Run, wave-2 question #42).
-        // TODO(question): virtual machine 8 and architecture 10 do not say how ncx analyze --job lays out the reports
-        // of several channels; the reports of each channel follow a line that names the channel, its file and the
-        // program the manifest names, channel by channel in the order of the manifest, until that is answered.
+        // D302: for each channel, in manifest order, the line 'Channel n: <file>[, program <name>]', then its reports
+        // in --analytic order; the 'run stopped' line stands once before all channels. In CSV the heading is a
+        // one-field row (TextTable.Line).
         if (result.Result is JobResult { Rounds: > 0 } job)
         {
             if (job.Stopped)

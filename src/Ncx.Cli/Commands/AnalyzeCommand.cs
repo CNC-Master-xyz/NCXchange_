@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Globalization;
 using Ncx.Analytics;
 using Ncx.Core.Machine;
 using Ncx.Core.VirtualMachine;
@@ -8,18 +9,20 @@ namespace Ncx.Cli.Commands;
 
 /// <summary>
 /// ncx analyze &lt;file&gt; [--machine &lt;toml&gt;] [--vars &lt;toml&gt;] [--from &lt;line&gt;] [--to &lt;line&gt;]
-/// [--analytic tools,runtime] [--static] [--format text|csv] [--skip-blocks none|all|0,3] [--strict]: parse, expand,
-/// run the virtual machine INTERPRETED, or STATIC under --static, with the analytics subscribed, and write their
-/// reports over the block range on the standard output, the diagnostics on the standard error (architecture 10;
-/// virtual machine 1, 8; D67; implementation 14, P4-02). Without --machine the built-in default machine (D103). With
-/// --job &lt;name.ncxjob.toml&gt; in place of the file the channel programs of a job run as one job (AnalyzeJob). Exit
-/// codes of D97, as ncx check.
+/// [--analytic tools,runtime] [--static] [--format text|csv] [--segment-bins mm] [--vector-bins degrees]
+/// [--skip-blocks none|all|0,3] [--strict]: parse, expand, run the virtual machine INTERPRETED, or STATIC under
+/// --static, with the analytics subscribed, and write their reports over the block range on the standard output, the
+/// diagnostics on the standard error (architecture 10; virtual machine 1, 8; D67, D324; implementation 14, P4-02).
+/// Without --machine the built-in default machine (D103). With --job &lt;name.ncxjob.toml&gt; in place of the file the
+/// channel programs of a job run as one job (AnalyzeJob). Exit codes of D97, as ncx check.
 /// </summary>
 internal static class AnalyzeCommand
 {
     private const string TextFormat = "text";
     private const string CsvFormat = "csv";
     private const char NameSeparator = ',';
+    private const string SegmentBinsName = "--segment-bins";
+    private const string VectorBinsName = "--vector-bins";
 
     // The name a report gives the built-in default machine (D103).
     private const string DefaultMachineName = "the built-in default machine";
@@ -73,6 +76,20 @@ internal static class AnalyzeCommand
         };
         formatOption.AcceptOnlyFromAmong(TextFormat, CsvFormat);
 
+        // D324: the bounds of the two histograms of implementation 14, P4-03.
+        var segmentBinsOption = new Option<string>(SegmentBinsName)
+        {
+            Description = "The bounds between the bins of the segment-length histogram in mm, separated by commas, "
+                + "rising and greater than 0. Without it: 0.01,0.1,0.5,1,5,10,50,100.",
+            HelpName = "mm",
+        };
+        var vectorBinsOption = new Option<string>(VectorBinsName)
+        {
+            Description = "The bounds between the bins of the tool-vector histogram in degrees, separated by commas, "
+                + "rising and greater than 0. Without it: 0.01,0.1,0.5,1,2,5,10,45,90.",
+            HelpName = "degrees",
+        };
+
         // --skip-blocks and --strict as check has them (D53, D97).
         Option<SkipBlocks> skipBlocksOption = RunOptions.SkipBlocksOption();
         Option<bool> strictOption = RunOptions.StrictOption();
@@ -89,6 +106,8 @@ internal static class AnalyzeCommand
             analyticOption,
             staticOption,
             formatOption,
+            segmentBinsOption,
+            vectorBinsOption,
             skipBlocksOption,
             strictOption,
         };
@@ -128,6 +147,16 @@ internal static class AnalyzeCommand
                     + "(virtual machine 3.6)");
             }
 
+            // D324: a list of bounds that is not rising or not positive is a usage error, CLI001.
+            foreach (Option<string> bins in new[] { segmentBinsOption, vectorBinsOption })
+            {
+                if (result.GetValue(bins) is string value && BinsOf(value) is null)
+                {
+                    result.AddError($"{bins.Name} takes comma-separated rising bounds greater than 0, "
+                        + $"not '{value}' (D324)");
+                }
+            }
+
             if (UnknownAnalytic(result.GetValue(analyticOption), analytics) is string unknown)
             {
                 result.AddError($"--analytic names {unknown}, which is no analytic of ncx analyze; the analytics are "
@@ -151,6 +180,10 @@ internal static class AnalyzeCommand
                 Analytics = NamesOf(parseResult.GetValue(analyticOption), analytics),
                 Range = new BlockRange { From = parseResult.GetValue(fromOption), To = parseResult.GetValue(toOption) },
                 Format = parseResult.GetValue(formatOption) == CsvFormat ? TableFormat.Csv : TableFormat.Text,
+                SegmentBins = parseResult.GetValue(segmentBinsOption) is string segmentBins
+                    ? BinsOf(segmentBins)
+                    : null,
+                VectorBins = parseResult.GetValue(vectorBinsOption) is string vectorBins ? BinsOf(vectorBins) : null,
             };
             return parseResult.GetValue(jobOption) is string job
                 ? AnalyzeJob.Run(job, settings, analyze, analytics, output, error)
@@ -186,6 +219,8 @@ internal static class AnalyzeCommand
                 Range = analyze.Range,
                 Format = analyze.Format,
                 Mode = run.Interpreted ? ExecutionMode.Interpreted : ExecutionMode.Static,
+                SegmentBins = analyze.SegmentBins,
+                VectorBins = analyze.VectorBins,
             };
             foreach (string name in analyze.Analytics)
             {
@@ -244,6 +279,26 @@ internal static class AnalyzeCommand
         }
 
         return names;
+    }
+
+    // The bounds of --segment-bins or --vector-bins, comma-separated decimals each greater than 0 and than the one
+    // before it (D324); null for a list that is not.
+    private static List<decimal>? BinsOf(string value)
+    {
+        var bounds = new List<decimal>();
+        foreach (string part in value.Split(NameSeparator))
+        {
+            if (!decimal.TryParse(part.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out decimal bound)
+                || bound <= 0
+                || (bounds.Count > 0 && bound <= bounds[^1]))
+            {
+                return null;
+            }
+
+            bounds.Add(bound);
+        }
+
+        return bounds;
     }
 
     // The first name of --analytic that no analytic is registered under, or the empty value when it names none; null

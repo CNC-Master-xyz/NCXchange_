@@ -1,6 +1,7 @@
 Tool vector change: 3D_FRAESEN.ncx, the whole file, on fanuc-mill-30i.toml, INTERPRETED run
 Per MOTION the angle in degrees between the tool vector at its start and at its end (virtual machine 8): TX TY TZ where the program gives them (D81), else the rotary axes of [[axis]] applied to the tool axis.
 The convention until the kinematics module exists (implementation 14, P4-03), not a pose: the tool axis is the normal of the WORKPLANE; a rotary axis named A, B or C turns it about the machine X, Y or Z axis, in the order of [[axis]]; a head axis turns the tool, a table axis the workpiece, and with it the tool vector the other way, while its owner holds the workpiece.
+The owner of an axis says what it turns (machine-config 4, D325): a tool holder the tool, a work spindle or a table the workpiece, a tool spindle nothing (its own rotation).
 A bin of the histogram holds the changes from its lower bound up to, not including, its upper bound.
 
 Rotary axes: none named A, B or C in [[axis]]; only TX TY TZ change the tool vector, which is otherwise the normal of the WORKPLANE.
