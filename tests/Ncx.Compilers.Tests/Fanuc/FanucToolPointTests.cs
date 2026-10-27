@@ -7,7 +7,7 @@ using Ncx.Core.Parsing;
 namespace Ncx.Compilers.Tests.Fanuc;
 
 /// <summary>
-/// The measurement points on Fanuc (D373 registers, D375, D376, D392): a named point writes the H and D the mapping
+/// The measurement points on Fanuc (D373 registers, D375, D376, D393): a named point writes the H and D the mapping
 /// gives, never TIP_OFFSET or POINT_RADIUS; a program without point words compiles as before.
 /// </summary>
 public sealed class FanucToolPointTests
@@ -29,7 +29,7 @@ public sealed class FanucToolPointTests
         Assert.Equal("T5 M6\nG0 G17 X0. Y0.\nG43 Z2. H105\n", body);
     }
 
-    // D392, R1-13: an explicit point 1 writes the length register of the mapping, so the CAM's TOOL_POINT=1 gets the
+    // D393, R1-13: an explicit point 1 writes the length register of the mapping, so the CAM's TOOL_POINT=1 gets the
     // G43 H that TOOL alone does not write.
     [Fact]
     public void PointOneNamed_WritesTheLengthRegisterOfTheMapping()
@@ -69,7 +69,7 @@ public sealed class FanucToolPointTests
         Assert.Equal(Body(Blocks, ""), Body(Blocks, StepRule));
     }
 
-    // D392: an OFFSET word after a named point replaces the register of the mapping, which it writes, with CMP033.
+    // D393: an OFFSET word after a named point replaces the register of the mapping, which it writes, with CMP033.
     [Fact]
     public void OffsetWordAfterANamedPoint_WritesItsRegisterAndWarns()
     {
@@ -84,7 +84,7 @@ public sealed class FanucToolPointTests
         Assert.Contains("TOOL_POINT=2", warning.Message, StringComparison.Ordinal);
     }
 
-    // D392: an OFFSET word of a tool whose program named no point warns nothing, as before.
+    // D393: an OFFSET word of a tool whose program named no point warns nothing, as before.
     [Fact]
     public void OffsetWordWithoutANamedPoint_DoesNotWarn()
     {

@@ -301,7 +301,7 @@ public sealed class WordCatalogTests
     }
 
     // TOOL_POINT=k is an integer with the holder role as an optional address, TIP_OFFSET=a and POINT_RADIUS=r are
-    // numbers or expressions without an address; all three are modal per holder (language 4.4, D372, D390).
+    // numbers or expressions without an address; all three are modal per holder (language 4.4, D372, D391).
     [Theory]
     [InlineData("TOOL_POINT", ValueKinds.Integer, AddrKind.Role, CanonicalRanks.ToolPoint)]
     [InlineData("TIP_OFFSET", ValueKinds.NumberOrExpr, AddrKind.None, CanonicalRanks.TipOffset)]

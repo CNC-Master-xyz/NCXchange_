@@ -76,9 +76,9 @@ internal static class FanucProgramFrame
         }
     }
 
-    // D389: the first ) ends a Fanuc comment and the rest of the line runs as code, so ( is written as [ and ) as ],
-    // with a WARNING per comment that names the replacement (decisions.md D389, R1-14).
-    // TODO: D389 asks for the 30i-B manual to be checked for an alarm on [ ] inside a comment before release, and for
+    // D390: the first ) ends a Fanuc comment and the rest of the line runs as code, so ( is written as [ and ) as ],
+    // with a WARNING per comment that names the replacement (decisions.md D390, R1-14).
+    // TODO: D390 asks for the 30i-B manual to be checked for an alarm on [ ] inside a comment before release, and for
     // the page to be noted here and in controllers/fanuc.md 10 rule 5; the manual library was not reachable.
     private static string WithSquareBrackets(FanucBlock write, string text)
     {
@@ -90,7 +90,7 @@ internal static class FanucProgramFrame
         string written = text.Replace('(', '[').Replace(')', ']');
         write.Warning(DiagnosticCodes.FanucBracketInComment,
             $"The comment text \"{text}\" is written \"{written}\": the first ) would end the Fanuc comment and leave "
-            + "the rest of the line to run as code (controllers fanuc.md 10 rule 5; D389).");
+            + "the rest of the line to run as code (controllers fanuc.md 10 rule 5; D390).");
         return written;
     }
 

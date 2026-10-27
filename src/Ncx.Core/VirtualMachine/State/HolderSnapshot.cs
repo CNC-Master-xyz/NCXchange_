@@ -50,7 +50,7 @@ public sealed record HolderSnapshot
 
     /// <summary>
     /// True when the program named the point with TOOL_POINT since the TOOL of the holder and no OFFSET word replaced
-    /// the registers since (D392).
+    /// the registers since (D393).
     /// </summary>
     public bool PointNamed { get; init; }
 

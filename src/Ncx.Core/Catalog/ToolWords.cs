@@ -61,7 +61,7 @@ internal static class ToolWords
         // The measurement point of the tool: its number k with the holder role as an optional address, its axial
         // offset a from the tip and its register radius r, each modal per holder, valid in a TOOL block or in a block
         // of their own, taking effect with the next tool-axis motion (D372). TIP_OFFSET and POINT_RADIUS carry no
-        // address and follow the holder of the block (D390).
+        // address and follow the holder of the block (D391).
         new WordDefinition
         {
             Key = "TOOL_POINT",

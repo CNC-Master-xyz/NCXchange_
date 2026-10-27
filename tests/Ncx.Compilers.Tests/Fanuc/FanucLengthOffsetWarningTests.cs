@@ -3,13 +3,13 @@ using Ncx.Core.Model;
 namespace Ncx.Compilers.Tests.Fanuc;
 
 /// <summary>
-/// D388 (R1-13): a Fanuc tool change applies no length offset of its own, so the first tool-axis motion after a TOOL
+/// D389 (R1-13): a Fanuc tool change applies no length offset of its own, so the first tool-axis motion after a TOOL
 /// without OFFSET:LEN, OFFSET or the register of a named point is a WARNING, once per tool change and naming the tool;
 /// no G43 H is written by default, and [tool_change] length_offset_by_macro = true silences it.
 /// </summary>
 public sealed class FanucLengthOffsetWarningTests
 {
-    // D388: TOOL=1 then a Z move without a length offset warns once, at the Z move, and writes no G43.
+    // D389: TOOL=1 then a Z move without a length offset warns once, at the Z move, and writes no G43.
     [Fact]
     public void ToolAxisMotionWithoutLengthOffset_WarnsOnceNamingTheTool()
     {
@@ -25,7 +25,7 @@ public sealed class FanucLengthOffsetWarningTests
         Assert.Contains("tool 1", warning.Message, StringComparison.Ordinal);
     }
 
-    // D388: once per tool change: two changes without an offset warn twice.
+    // D389: once per tool change: two changes without an offset warn twice.
     [Fact]
     public void TwoToolChangesWithoutLengthOffset_WarnTwice()
     {
@@ -35,7 +35,7 @@ public sealed class FanucLengthOffsetWarningTests
         Assert.Equal(2, FanucCompile.CompilerDiagnostics(result).Count);
     }
 
-    // D388: OFFSET:LEN, a combined OFFSET or the register of a named point is a length offset, and nothing warns.
+    // D389: OFFSET:LEN, a combined OFFSET or the register of a named point is a length offset, and nothing warns.
     [Theory]
     [InlineData("TOOL=1 OFFSET:LEN=1")]
     [InlineData("TOOL=1 OFFSET=1")]
@@ -46,7 +46,7 @@ public sealed class FanucLengthOffsetWarningTests
         Assert.DoesNotContain(DiagnosticCodes.FanucToolWithoutLengthOffset, Codes(result));
     }
 
-    // D388, D392: a named point whose mapping gives H is a length offset.
+    // D389, D393: a named point whose mapping gives H is a length offset.
     [Fact]
     public void ToolWithANamedPoint_DoesNotWarn()
     {
@@ -56,7 +56,7 @@ public sealed class FanucLengthOffsetWarningTests
         Assert.Empty(FanucCompile.CompilerDiagnostics(result));
     }
 
-    // D388: length_offset_by_macro = true says the builder's change macro applies the length.
+    // D389: length_offset_by_macro = true says the builder's change macro applies the length.
     [Fact]
     public void LengthOffsetByMacro_DoesNotWarn()
     {
@@ -68,7 +68,7 @@ public sealed class FanucLengthOffsetWarningTests
         Assert.Empty(FanucCompile.CompilerDiagnostics(result));
     }
 
-    // D388: an empty spindle has no length to apply.
+    // D389: an empty spindle has no length to apply.
     [Fact]
     public void EmptySpindle_DoesNotWarn()
     {

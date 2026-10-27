@@ -38,7 +38,7 @@ internal static class HeidenhainToolCall
     }
 
     // The called tool with the index of its named point: TOOL CALL 5.1 for point 2, the plain number for point 1 and
-    // for a tool whose program named no point (D373 improvement 1, D392; iTNC 530 Klartext 2010 p. 165-166).
+    // for a tool whose program named no point (D373 improvement 1, D393; iTNC 530 Klartext 2010 p. 165-166).
     private static void SetIndexedTool(HeidenhainBlock writing, TemplateValues values)
     {
         if (writing.PointRegisters?.Index is int index and > 0

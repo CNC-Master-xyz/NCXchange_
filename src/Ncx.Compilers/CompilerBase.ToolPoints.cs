@@ -5,7 +5,7 @@ using Ncx.Core.VirtualMachine.State;
 
 namespace Ncx.Compilers;
 
-// The measurement points of a tool (D372 to D376, D392): what selects a point is the register of the [tool_points]
+// The measurement points of a tool (D372 to D376, D393): what selects a point is the register of the [tool_points]
 // mapping, and a compiler never writes TIP_OFFSET or POINT_RADIUS as a control value (D375).
 public abstract partial class CompilerBase
 {
@@ -22,7 +22,7 @@ public abstract partial class CompilerBase
 
     /// <summary>
     /// What selects the point of the tool of the holder of the last TOOL after a step: the index, the edge or the
-    /// registers of the [tool_points] mapping; null where the program named no point since the TOOL (D392), the machine
+    /// registers of the [tool_points] mapping; null where the program named no point since the TOOL (D393), the machine
     /// has no mapping (CMP016) or the mapping cannot map the point (the ERROR CheckPoint reports).
     /// </summary>
     /// <param name="snapshot">The state after the step.</param>
@@ -70,7 +70,7 @@ public abstract partial class CompilerBase
         CompareWithToolTable(step, holder);
     }
 
-    // D392: an OFFSET word is the hand-written form of the registers; on a holder whose tool named its point it
+    // D393: an OFFSET word is the hand-written form of the registers; on a holder whose tool named its point it
     // replaces the register of the mapping, which it writes, and says so.
     private void CheckOffsetAfterPoint(BlockStep step, string id)
     {
@@ -92,7 +92,7 @@ public abstract partial class CompilerBase
             string.Create(CultureInfo.InvariantCulture,
                 $"{offset.ToCanonical()} on tool {holder.SpindleTool}, whose program named TOOL_POINT="
                 + $"{(namedBefore ? step.Before.Holders[id].ToolPoint : holder.ToolPoint)}, replaces the register of "
-                + $"[tool_points] with its own (D392)."));
+                + $"[tool_points] with its own (D393)."));
     }
 
     private void CheckMapping(Block block, HolderSnapshot holder)

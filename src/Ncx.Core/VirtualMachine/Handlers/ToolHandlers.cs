@@ -77,7 +77,7 @@ internal static class ToolHandlers
         if (context.ResourceOf.TryGetValue(word, out string? holderId)
             && BlockContext.IntegerOf(word) is int point)
         {
-            // D392: a named point makes the compilers write the registers of the mapping, until the next TOOL or an
+            // D393: a named point makes the compilers write the registers of the mapping, until the next TOOL or an
             // OFFSET word on the holder.
             context.State.Holders[holderId].ToolPoint = point;
             context.State.Holders[holderId].PointNamed = true;
@@ -114,7 +114,7 @@ internal static class ToolHandlers
             return;
         }
 
-        // D392: an OFFSET word is the hand-written form of the registers and replaces those of a named point.
+        // D393: an OFFSET word is the hand-written form of the registers and replaces those of a named point.
         HolderState holder = context.State.Holders[holderId];
         holder.PointNamed = false;
         switch (word.Addr)

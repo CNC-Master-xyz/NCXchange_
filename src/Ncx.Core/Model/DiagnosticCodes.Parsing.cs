@@ -91,7 +91,7 @@ public static partial class DiagnosticCodes
 
     /// <summary>
     /// PAR017: TOOL_POINT, TIP_OFFSET or POINT_RADIUS in a block that is neither a TOOL block nor a block of their own
-    /// (language 4.4, D372, D391).
+    /// (language 4.4, D372, D392).
     /// </summary>
     public const string PointWordOutsideToolBlock = "PAR017";
 

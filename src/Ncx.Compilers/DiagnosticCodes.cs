@@ -56,7 +56,7 @@ public static partial class DiagnosticCodes
 
     /// <summary>
     /// CMP033, a WARNING: an OFFSET word on a holder whose tool named its measurement point replaces the register of
-    /// the [tool_points] mapping with its own (D392).
+    /// the [tool_points] mapping with its own (D393).
     /// </summary>
     public const string OffsetReplacesPointRegister = "CMP033";
 

@@ -20,7 +20,7 @@ internal static class FanucToolWords
     /// </summary>
     public const string PendingLength = "PENDING:H";
 
-    // The tool whose change still waits for the length check of its first tool-axis motion (D388).
+    // The tool whose change still waits for the length check of its first tool-axis motion (D389).
     private const string LengthCheck = "CHECK:H";
 
     // The spindle whose M code the control saw last, which a bare S belongs to (controllers fanuc.md 5).
@@ -96,7 +96,7 @@ internal static class FanucToolWords
             write.MakeUnknown(FanucCodes.Motion);
         }
 
-        // D388: the change applies no length offset of its own, so the first tool-axis motion after it is checked,
+        // D389: the change applies no length offset of its own, so the first tool-axis motion after it is checked,
         // unless the builder's change macro applies the length (length_offset_by_macro) or the spindle is empty.
         HolderSnapshot? holder = HolderOf(write);
         if (write.Machine.ToolChange?.LengthOffsetByMacro != true && holder is not null
@@ -106,7 +106,7 @@ internal static class FanucToolWords
         }
     }
 
-    // D388: the first tool-axis motion after a change without OFFSET:LEN, OFFSET or the register of a named point runs
+    // D389: the first tool-axis motion after a change without OFFSET:LEN, OFFSET or the register of a named point runs
     // without a length offset, and the tip one tool length below the programmed point: a WARNING naming the tool,
     // once per tool change. No G43 H is written by default, since the M-series T has no relation to H (D373 audit).
     private static void CheckLengthAfterChange(FanucBlock write)
@@ -127,7 +127,7 @@ internal static class FanucToolWords
         write.Warning(DiagnosticCodes.FanucToolWithoutLengthOffset,
             $"The first tool-axis motion after the change to tool {tool} runs without a length offset: the block has "
             + "no G43 H, since the program gives no OFFSET:LEN, OFFSET or TOOL_POINT with a register; "
-            + "length_offset_by_macro = true says the builder's change macro applies it (D388).");
+            + "length_offset_by_macro = true says the builder's change macro applies it (D389).");
     }
 
     /// <summary>
@@ -196,7 +196,7 @@ internal static class FanucToolWords
         }
 
         // D375: TIP_OFFSET and POINT_RADIUS are never written to the control, no G10 and no macro variable; the point
-        // selects its registers, which the mapping of [tool_points] gives (D373, D392).
+        // selects its registers, which the mapping of [tool_points] gives (D373, D393).
         write.Written("TOOL_POINT");
         write.Written("TIP_OFFSET");
         write.Written("POINT_RADIUS");
@@ -245,7 +245,7 @@ internal static class FanucToolWords
         // D stands with G41 or G42 (controller-mapping 2, COMP: G41/G42/G40 with D; controllers fanuc.md 4). A register
         // the block does not state is the one of the state before it, which the control holds where it differs by
         // path (FanucBlock.NeedsValueOfTheWalk); one it states without G41 or G42 stands with the next of them.
-        // The radius register of a named point is the one of the mapping (D373, D392).
+        // The radius register of a named point is the one of the mapping (D373, D393).
         int radiusRegister = write.PointRegisters?.Radius ?? holder?.OffsetRad ?? 0;
         bool stated = write.Block.Find("OFFSET", "RAD") is not null
             || (write.Block.Has("TOOL_POINT") && write.PointRegisters?.Radius is not null);

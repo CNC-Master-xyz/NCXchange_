@@ -51,7 +51,7 @@ internal static class BlockRules
     // The words of the measurement point, valid in a TOOL block or in a block of their own (language 4.4, D372).
     private static readonly string[] s_pointWords = ["TOOL_POINT", "TIP_OFFSET", "POINT_RADIUS"];
 
-    // What a block of the point words may carry beside them: the block skip and a comment, which run nothing (D391).
+    // What a block of the point words may carry beside them: the block skip and a comment, which run nothing (D392).
     private static readonly string[] s_besidePointWords = ["SKIP", "COMMENT"];
 
     /// <summary>
@@ -269,7 +269,7 @@ internal static class BlockRules
     }
 
     // TOOL_POINT, TIP_OFFSET and POINT_RADIUS are valid in a TOOL block or in a block of their own (language 4.4,
-    // D372). A block of their own carries nothing but the point words, SKIP and a COMMENT (decisions.md D391), because
+    // D372). A block of their own carries nothing but the point words, SKIP and a COMMENT (decisions.md D392), because
     // a point change takes effect with the next tool-axis motion and a block that moves or switches something else
     // would hide where it starts.
     private static void CheckPointWords(Block block, Diagnostics diagnostics)

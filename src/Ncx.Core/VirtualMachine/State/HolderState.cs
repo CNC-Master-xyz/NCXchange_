@@ -57,7 +57,7 @@ internal sealed class HolderState
 
     /// <summary>
     /// True when the program named the point of the tool with TOOL_POINT since its TOOL, and no OFFSET word replaced
-    /// the registers since; only then does a compiler write the registers of the [tool_points] mapping (D392).
+    /// the registers since; only then does a compiler write the registers of the [tool_points] mapping (D393).
     /// </summary>
     public bool PointNamed { get; set; }
 

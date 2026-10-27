@@ -63,7 +63,7 @@ public static partial class DiagnosticCodes
 
     /// <summary>
     /// CMP312, a WARNING: a comment text with ( or ), whose first ) would end the Fanuc comment and leave the rest of
-    /// the line to run as code, is written with [ and ] (D389, R1-14).
+    /// the line to run as code, is written with [ and ] (D390, R1-14).
     /// </summary>
     public const string FanucBracketInComment = "CMP312";
 
@@ -119,7 +119,7 @@ public static partial class DiagnosticCodes
     /// <summary>
     /// CMP342, a WARNING: the first tool-axis motion after a TOOL runs without a length offset, since the holder has
     /// neither OFFSET:LEN, OFFSET nor the register of a named point and the change applies none; once per tool change
-    /// (D388, R1-13).
+    /// (D389, R1-13).
     /// </summary>
     public const string FanucToolWithoutLengthOffset = "CMP342";
 

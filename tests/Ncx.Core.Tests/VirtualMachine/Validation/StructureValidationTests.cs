@@ -230,7 +230,7 @@ public sealed class StructureValidationTests
         RuleAssert.Only(RuleAssert.ParseProgram(word).Diagnostics, DiagnosticCodes.PartnerWordMissing);
     }
 
-    // VM 5: a point word outside a TOOL block and outside a block of its own (language 4.4, D372, D391).
+    // VM 5: a point word outside a TOOL block and outside a block of its own (language 4.4, D372, D392).
     [Fact]
     public void PointWord_InAMotionBlock_IsAnError()
     {

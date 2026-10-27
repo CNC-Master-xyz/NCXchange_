@@ -3,12 +3,12 @@ using Ncx.Core.Model;
 namespace Ncx.Compilers.Tests.Fanuc;
 
 /// <summary>
-/// D389 (R1-14): the first ) ends a Fanuc comment and the rest of the line runs as code, so the compiler writes ( as
+/// D390 (R1-14): the first ) ends a Fanuc comment and the rest of the line runs as code, so the compiler writes ( as
 /// [ and ) as ] in comment text, with a WARNING per comment that names the replacement.
 /// </summary>
 public sealed class FanucCommentBracketTests
 {
-    // D389: SECTION="PROFIL (D10)" is written (PROFIL [D10]), with CMP312.
+    // D390: SECTION="PROFIL (D10)" is written (PROFIL [D10]), with CMP312.
     [Theory]
     [InlineData("SECTION=\"PROFIL (D10)\"", "(PROFIL [D10])")]
     [InlineData("COMMENT=\"ROUGH)\"", "(ROUGH])")]
@@ -24,7 +24,7 @@ public sealed class FanucCommentBracketTests
         Assert.Contains(line.Substring(1, line.Length - 2), warning.Message, StringComparison.Ordinal);
     }
 
-    // D389: the program name stands in parentheses after the O number as well.
+    // D390: the program name stands in parentheses after the O number as well.
     [Fact]
     public void ProgramNameWithABracket_IsWrittenWithSquareBrackets()
     {

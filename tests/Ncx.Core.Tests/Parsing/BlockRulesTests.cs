@@ -301,7 +301,7 @@ public sealed class BlockRulesTests
     }
 
     // TOOL_POINT, TIP_OFFSET and POINT_RADIUS are valid in a TOOL block or in a block of their own (language 4.4,
-    // D372); a block of their own carries nothing else but SKIP and a COMMENT (D391).
+    // D372); a block of their own carries nothing else but SKIP and a COMMENT (D392).
     [Theory]
     [InlineData("TOOL=5 TOOL_POINT=2 TIP_OFFSET=2 POINT_RADIUS=8")]
     [InlineData("TOOL=5 RPM=6000 SPINDLE=CW TOOL_POINT=2")]
@@ -315,7 +315,7 @@ public sealed class BlockRulesTests
     }
 
     // Beside any other word than TOOL they are an ERROR, the block being neither a TOOL block nor a block of their
-    // own (language 4.4, D372, D391).
+    // own (language 4.4, D372, D392).
     [Theory]
     [InlineData("RAPID Z=50 TOOL_POINT=2")]
     [InlineData("TIP_OFFSET=2 RPM=6000")]

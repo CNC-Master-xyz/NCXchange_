@@ -46,7 +46,7 @@ public sealed record ToolChangeConfig
 
     /// <summary>
     /// length_offset_by_macro: the builder's change macro applies the length offset, so a Fanuc tool change without
-    /// OFFSET:LEN is no WARNING (D388); false when left out.
+    /// OFFSET:LEN is no WARNING (D389); false when left out.
     /// </summary>
     public bool LengthOffsetByMacro { get; init; }
 

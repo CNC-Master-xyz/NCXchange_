@@ -3,7 +3,7 @@ using Ncx.Core.Model;
 namespace Ncx.Compilers.Tests.Heidenhain;
 
 /// <summary>
-/// The measurement points in Klartext (D373 indexed_tool, D375, D392): point k is the index k-1 of the called tool,
+/// The measurement points in Klartext (D373 indexed_tool, D375, D393): point k is the index k-1 of the called tool,
 /// TOOL CALL 5.1, never DL, DR or DR2; a point change of the tool in the spindle is an indexed TOOL CALL with the
 /// WARNING CMP123 unless point_change = "call"; a program without point words compiles as before.
 /// </summary>

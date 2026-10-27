@@ -63,7 +63,7 @@ public sealed class ToolPointTests
         Assert.Equal(8m, holder.PointRadius);
     }
 
-    // D390: without an address the words address the holder of the last TOOL, as OFFSET does (VM 3.8 rule 2).
+    // D391: without an address the words address the holder of the last TOOL, as OFFSET does (VM 3.8 rule 2).
     [Fact]
     public void PointWords_WithoutAnAddress_GoToTheHolderOfTheLastTool()
     {
@@ -74,7 +74,7 @@ public sealed class ToolPointTests
         Assert.Equal(1, vm.State.Holders["H1"].ToolPoint);
     }
 
-    // D372, D390: TOOL_POINT with a role addresses that holder, and the tip offset of its block follows it.
+    // D372, D391: TOOL_POINT with a role addresses that holder, and the tip offset of its block follows it.
     [Fact]
     public void ToolPointWithARole_AddressesThatHolderAndTakesTheTipOffsetWithIt()
     {

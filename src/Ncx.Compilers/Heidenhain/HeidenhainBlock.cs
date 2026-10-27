@@ -88,7 +88,7 @@ internal sealed class HeidenhainBlock
 
     /// <summary>
     /// The index of the named measurement point of the holder after the block, from [tool_points]; null where the
-    /// program named no point since the TOOL or the mapping gives none (D373, D392; CompilerBase.PointRegistersOf).
+    /// program named no point since the TOOL or the mapping gives none (D373, D393; CompilerBase.PointRegistersOf).
     /// </summary>
     public ToolPointRegisters? PointRegisters { get; init; }
 

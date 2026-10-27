@@ -5,7 +5,7 @@ using static Ncx.Compilers.Tests.Siemens.SiemensCompile;
 namespace Ncx.Compilers.Tests.Siemens;
 
 /// <summary>
-/// The measurement points on SINUMERIK (D373 edge, D375, D392): a named point writes the cutting edge D k or the edge
+/// The measurement points on SINUMERIK (D373 edge, D375, D393): a named point writes the cutting edge D k or the edge
 /// of its row, never TOFFL, TOFF, TOFFR or DL; a program without point words compiles as before.
 /// </summary>
 public sealed class SiemensToolPointTests
