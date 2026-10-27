@@ -17,7 +17,7 @@ public static partial class MachineConfigLoader
     [
         "machine", "format", "tool_change", "home", "setpos", "roles", "resource", "axis", "positions", "dynamics",
         "diameter", "spindle", "spindle_mode", "spindle_sync", "workpiece", "sync", "coolant", "func", "func_meta",
-        "transform", "retract", "tolerance", "raw", "cycles", "cycle", "variables", "system_variables", "node",
+        "transform", "retract", "tolerance", "stock", "raw", "cycles", "cycle", "variables", "system_variables", "node",
     ];
 
     // The tables the file writes [[name]], one per entry.
@@ -96,6 +96,7 @@ public static partial class MachineConfigLoader
                 root.Table("spindle_mode", section: "machine-config 5"), "spindle_mode", s_spindleModeStates,
                 spindleLimits: false),
             SpindleSync = ReadSpindleSync(root.Table("spindle_sync", section: "machine-config 5")),
+            SpindleSyncPair = ReadSpindleSyncPair(root.Table("spindle_sync", section: "machine-config 5")),
             Workpiece = ReadWorkpiece(root.Table("workpiece", section: "machine-config 5")),
             Sync = ReadSync(root.Table("sync", section: "machine-config 5")),
             Coolant = ReadNamedTables(root.Table("coolant", section: "machine-config 5"), s_coolantStates),
@@ -104,6 +105,7 @@ public static partial class MachineConfigLoader
             Transform = ReadTransform(root.Table("transform", section: "machine-config 5")),
             Retract = ReadRetract(root.Table("retract", section: "machine-config 5")),
             Tolerance = ReadTolerance(root.Table("tolerance", section: "machine-config 5")),
+            Stock = ReadStock(root.Table("stock", section: "machine-config 5")),
             Raw = ReadRaw(root.Table("raw", section: "machine-config 5")),
             Cycles = ReadCycles(root.Table("cycles", section: "machine-config 6")),
             CycleEntries = cycleEntries,
@@ -114,6 +116,7 @@ public static partial class MachineConfigLoader
         };
 
         CheckDefaults(machine, machineTable?.Line ?? 1, diagnostics);
+        CheckSpindleSyncPair(machine, root.Table("spindle_sync", section: "machine-config 5"), diagnostics);
         return TomlDocument.ErrorCount(diagnostics) > errorsBefore ? null : machine;
     }
 }

@@ -31,7 +31,8 @@ public static partial class MachineConfigLoader
 
     private static readonly string[] s_toolChangeKeys =
     [
-        "change", "change_preloaded", "preload", "unload", "auto_preload", "preload_position", "offsets_with_change",
+        "change", "change_named", "change_preloaded", "preload", "preload_named", "unload",
+        "auto_preload", "preload_position", "offsets_with_change",
         "tool_name_allowed", "kind_map", "pre", "post", "requires", "restore",
     ];
 
@@ -171,8 +172,10 @@ public static partial class MachineConfigLoader
         return new ToolChangeConfig
         {
             Change = table.Template("change"),
+            ChangeNamed = table.Template("change_named"),
             ChangePreloaded = table.Template("change_preloaded"),
             Preload = table.Template("preload"),
+            PreloadNamed = table.Template("preload_named"),
             Unload = table.Template("unload"),
             AutoPreload = table.Flag("auto_preload"),
             PreloadPosition = table.Choice("preload_position", s_preloadPositions) switch

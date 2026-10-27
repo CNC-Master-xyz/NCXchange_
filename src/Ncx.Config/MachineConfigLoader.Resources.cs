@@ -18,7 +18,7 @@ public static partial class MachineConfigLoader
 
     private static readonly string[] s_axisKinds = ["linear", "rotary"];
     private static readonly string[] s_programmings = ["diameter", "radius", "switchable"];
-    private static readonly string[] s_dynamicsKeys = ["block_time", "path_mode", "corner_speed"];
+    private static readonly string[] s_dynamicsKeys = ["block_time", "path_mode", "corner_speed", "rapid_exact_stop"];
     private static readonly string[] s_pathModes = ["continuous", "exact_stop"];
     private static readonly string[] s_onOff = ["ON", "OFF"];
 
@@ -175,6 +175,9 @@ public static partial class MachineConfigLoader
                 _ => null,
             },
             CornerSpeed = table.Number("corner_speed"),
+
+            // rapid_exact_stop overrides the family default of the end of a RAPID as a rest point (D286).
+            RapidExactStop = table.Has("rapid_exact_stop") ? table.Flag("rapid_exact_stop") : null,
         };
     }
 

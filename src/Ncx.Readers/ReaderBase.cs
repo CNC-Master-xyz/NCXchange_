@@ -233,9 +233,24 @@ public abstract class ReaderBase : IReader
     protected string? FindFunction(string nativeCode)
     {
         // The state names the word of its table, COOLANT:STANDARD=ON; the word of the language, COOLANT=ON for the
-        // default channel, is the family's to write (wave-1 question #62), and of a code several states write the
-        // first is named (wave-1 question #63).
+        // default channel, is the family's to write (wave-1 question #62, D154), and of a code several states write the
+        // first is named; FindFunctions chooses among them with the source state (D155).
         return (_templates ?? throw NotReading()).FindFunctionByCode(nativeCode);
+    }
+
+    /// <summary>
+    /// The states of the machine to write for a native code: every state that writes it, less those the source state
+    /// rules out and those that already hold, or the first in file order, with the [workpiece] selection first
+    /// (machine-config 5, architecture 7, D155).
+    /// </summary>
+    /// <param name="block">The source block being read.</param>
+    /// <param name="nativeCode">The native text of the function, "M9", "M03 P11".</param>
+    /// <param name="context">What the source state of the family says about the code.</param>
+    /// <returns>The states to write; empty when no state of the machine writes the code.</returns>
+    protected IReadOnlyList<FunctionMatch> FindFunctions(SourceBlock block, string nativeCode, FunctionContext context)
+    {
+        IReadOnlyList<FunctionMatch> matches = (_templates ?? throw NotReading()).FindFunctionsByCode(nativeCode);
+        return FunctionChoice.Choose(matches, context, block.Line, nativeCode, Diagnostics);
     }
 
     /// <summary>

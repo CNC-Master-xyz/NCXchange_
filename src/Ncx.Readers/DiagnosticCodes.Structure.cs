@@ -1,6 +1,6 @@
 namespace Ncx.Readers;
 
-// The codes of the reader's structure pass, RDR010-RDR029 (the ranges in DiagnosticCodes.cs, D98).
+// The codes of the reader's structure pass, RDR010-RDR019 (the ranges in DiagnosticCodes.cs, D98).
 public static partial class DiagnosticCodes
 {
     /// <summary>

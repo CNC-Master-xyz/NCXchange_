@@ -12,6 +12,12 @@ public sealed record ToolChangeConfig
     public string? Change { get; init; }
 
     /// <summary>
+    /// change_named: written instead of change when the tool is a name, the TOOL value or the preloaded tool of a bare
+    /// TOOL, "T=\"{name}\" M6" (D172); null when left out, and then a named tool is a compile ERROR.
+    /// </summary>
+    public string? ChangeNamed { get; init; }
+
+    /// <summary>
     /// change_preloaded: written instead of change when the tool is already preloaded, "M6"; null when left out.
     /// </summary>
     public string? ChangePreloaded { get; init; }
@@ -21,6 +27,11 @@ public sealed record ToolChangeConfig
     /// WARNING.
     /// </summary>
     public string? Preload { get; init; }
+
+    /// <summary>
+    /// preload_named: written instead of preload for PRELOAD="NAME", "T=\"{name}\"" (D172); null when left out.
+    /// </summary>
+    public string? PreloadNamed { get; init; }
 
     /// <summary>
     /// unload: written for TOOL=0, "T0 M6"; null when left out.
