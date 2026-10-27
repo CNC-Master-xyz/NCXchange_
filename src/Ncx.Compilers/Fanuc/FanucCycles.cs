@@ -169,8 +169,21 @@ internal static class FanucCycles
                 continue;
             }
 
+            if (entry is not null && key == "PECK" && entry.NativeOf("PECK") is null && !IsZero(word.Value)
+                && !TakesPeckRigidTapping(write, entry))
+            {
+                // D279: PECK maps to Q only on G73/G83, and on G74/G84 where the machine declares peck rigid tapping.
+                write.Error(DiagnosticCodes.FanucPeckWithoutQ,
+                    $"{word.ToCanonical()} of CYCLE={entry.Name}: {entry.Native} takes no peck Q on this machine; G74 "
+                    + "and G84 take one only where [cycles] peck_rigid_tapping declares peck rigid tapping, G76, "
+                    + "G87, G88 and G89 never (controllers fanuc.md 6; D279).");
+                continue;
+            }
+
+            // D362: PECK=0 on a cycle without that motion is the behaviour the control has anyway, dropped silently.
             bool carried = entry is null
                 || (key == "CYCLE_DWELL" && (IsZero(word.Value) || entry.CycleDwell is null))
+                || (key == "PECK" && (IsZero(word.Value) || TakesPeckRigidTapping(write, entry)))
                 || (entry.Words.Contains(key)
                     && (key != "PITCH" || entry.CycleF is not null || entry.NativeOf(key) is not null));
             if (!carried)
@@ -181,6 +194,43 @@ internal static class FanucCycles
                     + "(machine-config 6; controller-mapping 5; language 2 rule 8).");
             }
         }
+
+        if (entry is not null && entry.NativeOf("PECK") == "Q")
+        {
+            CheckPeck(write, entry);
+        }
+    }
+
+    // D279: Q is modal data the native cycles share, so a G73 or G83 is never written relying on an inherited Q.
+    // D355: the control counts Q from its own R plane and NCX counts PECK from SURFACE, so Q = PECK unchanged and the
+    // shift stands once, at the block that defines the cycle, as an INFO; none where the gap is zero or the block
+    // gives no SURFACE.
+    private static void CheckPeck(FanucBlock write, CycleEntry entry)
+    {
+        if (write.Block.Find("PECK") is null)
+        {
+            write.Error(DiagnosticCodes.FanucPeckNotGiven,
+                $"CYCLE={entry.Name} gives no PECK, and {entry.Native} would peck with the Q another cycle left, since "
+                + "Q is modal data the Fanuc cycles share (controllers fanuc.md 6; D279).");
+            return;
+        }
+
+        if (write.Block.Find("SURFACE") is Word surface && write.Block.Find("CLEARANCE") is Word clearance
+            && FanucFunctions.NumberOf(surface.Value) is decimal top && FanucFunctions.NumberOf(clearance.Value)
+                is decimal plane && top != plane)
+        {
+            write.Diagnostics.Info(write.Block, DiagnosticCodes.FanucPeckCountsFromR,
+                $"{entry.Native} counts the peck Q from its R plane, CLEARANCE={clearance.Value.ToCanonical()}, while "
+                + $"NCX counts PECK from SURFACE={surface.Value.ToCanonical()}: every peck ends "
+                + $"{Math.Abs(plane - top).ToString(CultureInfo.InvariantCulture)} away from where NCX puts it, and "
+                + "the hole bottom DEPTH does not move (language 4.7, PECK; D355).");
+        }
+    }
+
+    // D279, D388 item 11: peck rigid tapping, Q on G74 and G84, where [cycles] peck_rigid_tapping declares it.
+    private static bool TakesPeckRigidTapping(FanucBlock write, CycleEntry entry)
+    {
+        return entry.Native is "G74" or "G84" && write.Machine.Cycles?.PeckRigidTapping == true;
     }
 
     // D177: the entry that writes a DRILL with a dwell other than 0, the DRILL_DWELL of the catalog where it maps
@@ -569,6 +619,12 @@ internal static class FanucCycles
         }
 
         AddMapped(write, entry, cycle, "PECK", "Q", address, 1m);
+        if (entry.NativeOf("PECK") is null && TakesPeckRigidTapping(write, entry) && Parameter(cycle, "PECK") is Value
+            peck && !IsZero(peck) && FanucExpressions.WordValue(write, address, peck, 1m) is string q)
+        {
+            // D279: peck rigid tapping, Q on G84 where the machine declares it.
+            write.Main.Word("Q" + q);
+        }
         foreach (string parameter in CatalogParameters(entry))
         {
             // D114: a parameter name of the catalog entry, TAPER of G90 as R (D175).
@@ -847,6 +903,16 @@ internal static class FanucCycles
     {
         foreach (Word parameter in cycle.Parameters)
         {
+            if (parameter.Definition is null
+                && !(parameter.Key.Length == 1 && char.IsAsciiLetterUpper(parameter.Key[0])))
+            {
+                // D279: a native Fanuc parameter key is one letter A..Z.
+                write.Error(DiagnosticCodes.FanucNativeParameterNotALetter,
+                    $"{parameter.ToCanonical()} of CYCLE:FANUC={cycle.Name}: a native Fanuc cycle parameter is one "
+                    + "address letter A..Z (controllers fanuc.md 6; D279).");
+                continue;
+            }
+
             if (parameter.Definition is null
                 && FanucExpressions.WordValue(write, parameter.Key, parameter.Value, 1m) is string value)
             {

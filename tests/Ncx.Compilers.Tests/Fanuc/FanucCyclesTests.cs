@@ -595,4 +595,84 @@ public sealed class FanucCyclesTests
             diagnostic => diagnostic.Code == DiagnosticCodes.FanucCycleDwellDropped);
         Assert.Equal(Severity.Warning, warning.Severity);
     }
+
+    // D355: the control counts Q from its own R plane while NCX counts PECK from SURFACE, so the compiler writes Q =
+    // PECK and reports the shift once, at the block that defines the cycle, as the INFO CMP387.
+    [Fact]
+    public void Peck_WithAGapBetweenSurfaceAndClearance_IsTheInfoCmp387Once()
+    {
+        CompileResult result = FanucCompile.Run(FanucCompile.Program((Approach
+            + "\nCYCLE=PECK SURFACE=0 CLEARANCE=2 DEPTH=-20 PECK=3 CYCLE_F=100\nCYCLE_CALL\nCYCLE_CALL X=30")
+                .Split('\n')),
+            FanucCompile.Mill());
+
+        Diagnostic info = Assert.Single(FanucCompile.CompilerDiagnostics(result),
+            diagnostic => diagnostic.Code == DiagnosticCodes.FanucPeckCountsFromR);
+        Assert.Equal(Severity.Info, info.Severity);
+        Assert.Contains("G83 G99 Z-20. R2. Q3. F100.\n", FanucCompile.TextOf(result), StringComparison.Ordinal);
+    }
+
+    // D355: where SURFACE and CLEARANCE coincide, or the block gives no SURFACE, there is no shift and no INFO.
+    [Theory]
+    [InlineData(" SURFACE=2")]
+    [InlineData("")]
+    public void Peck_WithoutAGap_IsNoInfo(string surface)
+    {
+        CompileResult result = FanucCompile.Run(FanucCompile.Program((Approach
+            + $"\nCYCLE=PECK{surface} CLEARANCE=2 DEPTH=-20 PECK=3 CYCLE_F=100\nCYCLE_CALL").Split('\n')),
+            FanucCompile.Mill());
+
+        Assert.DoesNotContain(FanucCompile.CompilerDiagnostics(result),
+            diagnostic => diagnostic.Code == DiagnosticCodes.FanucPeckCountsFromR);
+    }
+
+    // D362: PECK=0 on a cycle without that motion is the behaviour the control has anyway and is dropped silently.
+    [Fact]
+    public void Drill_WithPeckZero_DropsItSilently()
+    {
+        CompileResult result = FanucCompile.Run(FanucCompile.Program((Approach
+            + "\nCYCLE=DRILL CLEARANCE=2 DEPTH=-20 PECK=0 CYCLE_F=100\nCYCLE_CALL").Split('\n')), FanucCompile.Mill());
+
+        Assert.DoesNotContain(FanucCompile.CompilerDiagnostics(result),
+            diagnostic => diagnostic.Code == DiagnosticCodes.FanucCycleWordNotMapped);
+        Assert.Contains("G81 G99 Z-20. R2. F100.\n", FanucCompile.TextOf(result), StringComparison.Ordinal);
+    }
+
+    // D279: PECK on G84 is Q only where the machine declares peck rigid tapping ([cycles] peck_rigid_tapping, D388);
+    // elsewhere it is the ERROR CMP393.
+    [Fact]
+    public void Tap_WithPeck_IsQOnlyWithPeckRigidTapping()
+    {
+        string blocks = "TOOL=1\nSPINDLE=CW RPM=500\nRAPID X=10 Y=10\nRAPID Z=5"
+            + "\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 PECK=2 CYCLE_F=750\nCYCLE_CALL";
+        CompileResult without = FanucCompile.Run(FanucCompile.Program(blocks.Split('\n')), FanucCompile.Mill());
+        string with = FanucCompile.Body(blocks, "[cycles]\npeck_rigid_tapping = true");
+
+        Assert.Contains(FanucCompile.CompilerDiagnostics(without),
+            diagnostic => diagnostic.Code == DiagnosticCodes.FanucPeckWithoutQ);
+        Assert.EndsWith("M29 S500\nG84 G99 Z-20. R5. Q2. F750.\n", with, StringComparison.Ordinal);
+    }
+
+    // D279: Q is modal data the native cycles share, so a G73 or G83 without PECK would take the Q another cycle
+    // left: the ERROR CMP394.
+    [Fact]
+    public void Peck_WithoutPeck_IsTheErrorCmp394()
+    {
+        CompileResult result = FanucCompile.Run(FanucCompile.Program((Approach
+            + "\nCYCLE=PECK CLEARANCE=2 DEPTH=-20 CYCLE_F=100\nCYCLE_CALL").Split('\n')), FanucCompile.Mill());
+
+        Assert.Contains(FanucCompile.CompilerDiagnostics(result),
+            diagnostic => diagnostic.Code == DiagnosticCodes.FanucPeckNotGiven);
+    }
+
+    // D279: a native Fanuc parameter key is one letter A..Z, so Q215=1 on CYCLE:FANUC is the ERROR CMP395.
+    [Fact]
+    public void NativeCycle_WithAParameterOfMoreThanOneLetter_IsTheErrorCmp395()
+    {
+        CompileResult result = FanucCompile.Run(FanucCompile.Program((Approach
+            + "\nCYCLE:FANUC=G83 Q215=1\nCYCLE_CALL").Split('\n')), FanucCompile.Mill());
+
+        Assert.Contains(FanucCompile.CompilerDiagnostics(result),
+            diagnostic => diagnostic.Code == DiagnosticCodes.FanucNativeParameterNotALetter);
+    }
 }
