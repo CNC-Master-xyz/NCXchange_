@@ -256,6 +256,7 @@ internal static partial class SiemensCycles
             feed = write.Format("F", known);
         }
 
+        feed = SiemensFeedUnits.InBaseUnits(write, feed);
         if (feed is not null && write.Target.Changes("F", feed))
         {
             write.Write(SiemensAxes.Address("F", feed, "", Parameter(cycle, "CYCLE_F") is ExprValue));

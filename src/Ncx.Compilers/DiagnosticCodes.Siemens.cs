@@ -104,6 +104,14 @@ public static partial class DiagnosticCodes
     public const string SiemensArcNotWritable = "CMP550";
 
     /// <summary>
+    /// CMP551, an INFO: UNITS differs from the basic system of the machine (base_units, MD10240) and the machine has no
+    /// G700/G710 (extended_units, MD10260), so G70 or G71 is written and every feed under it converted into the basic
+    /// system, which the control keeps feeds in under G70/G71 (840D sl NC-Programmierung SW4.92 p.115, p.164-166;
+    /// D292).
+    /// </summary>
+    public const string SiemensFeedConverted = "CMP551";
+
+    /// <summary>
     /// CMP570: a cycle the cycle catalog of the machine has no entry for (language 4.7.1; machine-config 6).
     /// </summary>
     public const string SiemensCycleNotInCatalog = "CMP570";
