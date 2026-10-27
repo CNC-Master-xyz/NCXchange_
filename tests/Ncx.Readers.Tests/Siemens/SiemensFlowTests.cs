@@ -205,11 +205,24 @@ public sealed class SiemensFlowTests
             CheckedBody("R1=3 DIV 4\nR2=7 DIV 4.1\nR3=1+7 DIV 2\nR4=10-7 DIV 2*2\nR5=MAXVAL(1,9 DIV 2)"));
     }
 
-    // D346 with the manual audit of 2026-10-26: how DIV rounds a negative operand, towards zero or towards minus
-    // infinity, is not documented, so a negative literal keeps the block RAW with the WARNING RDR506 (D5).
+    // D382: a DIV of two integer-valued literals of either sign whose quotient is exact converts too, since the
+    // control's rounding, towards zero or towards minus infinity, gives the same quotient there: -8 DIV 2 = -4.
+    [Fact]
+    public void Div_OfIntegerLiteralsWithAnExactQuotient_ConvertsWhateverTheSign()
+    {
+        Assert.Equal(Lines("VAR:R1={-INT(8 / 2)}", "VAR:R2={INT(8 / -2)}", "VAR:R3={-INT(8 / -2)}",
+                "VAR:R4={MAX(1, -INT(9 / 3))}", "VAR:R5={-INT(8 / 2) + 1}"),
+            CheckedBody("R1=-8 DIV 2\nR2=8 DIV -2\nR3=-8 DIV -2\nR4=MAXVAL(1,-9 DIV 3)\nR5=-8 DIV 2+1"));
+    }
+
+    // D346 with the manual audit of 2026-10-26 and D382: how DIV rounds a negative operand, towards zero or towards
+    // minus infinity, is not documented, so a negative literal keeps the block RAW with the WARNING RDR506 (D5)
+    // unless both operands are integer-valued and the quotient is exact.
     [Theory]
     [InlineData("R1=-7 DIV 2")]
     [InlineData("R1=7 DIV -2")]
+    [InlineData("R1=-7.5 DIV 2.5")]
+    [InlineData("R1=-8 DIV 0")]
     [InlineData("R1=MAXVAL(1,-7 DIV 2)")]
     public void Div_WithANegativeLiteral_StaysRawWithTheWarning(string source)
     {

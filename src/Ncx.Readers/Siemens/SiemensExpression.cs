@@ -171,11 +171,11 @@ internal static partial class SiemensExpression
         divisions = 1;
     }
 
-    // TODO(question): the manuals show DIV only for operands that are not negative (840D sl NC-Programmierung SW4.92
-    // p.449: 7 DIV 4.1 = 1; HLL training 2010 p.242: 3 DIV 4 = 0), and none says whether -7 DIV 2 is -3 or -4 (manual
-    // audit 2026-10-26, D346). Until one does, DIV converts only where both operands are number literals of 0 or more,
-    // and any other DIV keeps the block RAW with the WARNING RDR506 (D5). Row 2 of "Manual audit 2026-10-26" in
-    // docs/implementation/03-open-questions.md.
+    // The manuals show DIV only for operands that are not negative (840D sl NC-Programmierung SW4.92 p.449: 7 DIV 4.1
+    // = 1; HLL training 2010 p.242: 3 DIV 4 = 0), and none says whether -7 DIV 2 is -3 or -4 (manual audit
+    // 2026-10-26, D346). D382 keeps that: DIV converts where both operands are number literals of 0 or more, or
+    // integer-valued literals of either sign whose quotient is exact, where both roundings agree; any other DIV keeps
+    // the block RAW with the WARNING RDR506 (D5), a visible RAW rather than a guess at the rounding (D382).
     private static string DivisionRounding(SiemensBlock block, string text)
     {
         var warning = new SiemensWarning(DiagnosticCodes.SiemensDivisionRoundingUnknown,
@@ -190,37 +190,60 @@ internal static partial class SiemensExpression
         return $"the rounding of DIV for a negative operand is not documented, so {text.Trim()} has no NCX form (D346)";
     }
 
-    // True when both operands of a DIV are number literals of 0 or more: the left one is the product chain at the end
-    // of the translated text, no unary minus in front of it, the right one the number that follows DIV in the source.
-    private static bool OperandsNotNegative(string translated, string text, int afterDiv)
+    // True when a DIV converts (D346, D382): both operands are number literals, the left one the product chain at
+    // the end of the translated text, the right one the number that follows DIV in the source, and either both are
+    // of 0 or more, or a unary minus stands in front of one or both, both are integer-valued and the divisor divides
+    // the dividend exactly.
+    private static bool DivisionConverts(string translated, string text, int afterDiv)
     {
         int start = ProductStart(translated);
-        if (!NonNegativeLiteral().IsMatch(translated.Substring(start).Trim()))
+        string left = translated.Substring(start).Trim();
+        if (!NonNegativeLiteral().IsMatch(left))
         {
             return false;
         }
 
+        bool negative = false;
         string before = translated.Substring(0, start).TrimEnd();
         if (before.EndsWith('-'))
         {
             string rest = before.Substring(0, before.Length - 1).TrimEnd();
             string last = rest.Length == 0 ? "" : rest.Substring(rest.LastIndexOf(' ') + 1);
-            bool binary = last.Length > 0 && Array.IndexOf(s_belowProduct, last) < 0
-                && last is not ("*" or "/" or "MOD") && !last.EndsWith('(') && !last.EndsWith(',');
-            if (!binary)
-            {
-                return false;
-            }
+            negative = !(last.Length > 0 && Array.IndexOf(s_belowProduct, last) < 0
+                && last is not ("*" or "/" or "MOD") && !last.EndsWith('(') && !last.EndsWith(','));
         }
 
-        int right = SiemensScanner.SkipBlanks(text, afterDiv);
+        int minus = DivisorMinus(text, afterDiv);
+        int right = SiemensScanner.SkipBlanks(text, minus < 0 ? afterDiv : minus + 1);
         if (right >= text.Length || !(char.IsAsciiDigit(text[right]) || text[right] == '.'))
         {
             return false;
         }
 
         int end = SiemensScanner.ReadNumber(text, right);
-        return end > right && SiemensNumbers.Parse(text.Substring(right, end - right)) is not null;
+        decimal? divisor = end > right ? SiemensNumbers.NumberOf(SiemensNumbers.Parse(text[right..end])) : null;
+        if (divisor is null)
+        {
+            return false;
+        }
+
+        if (!negative && minus < 0)
+        {
+            return true;
+        }
+
+        decimal? dividend = SiemensNumbers.NumberOf(SiemensNumbers.Parse(left));
+        decimal by = divisor.Value;
+        return dividend is { } whole && whole == decimal.Truncate(whole) && by == decimal.Truncate(by) && by != 0
+            && whole % by == 0;
+    }
+
+    // Where the unary minus of the divisor stands in the source, the first character after DIV other than a blank;
+    // -1 when the divisor has none.
+    private static int DivisorMinus(string text, int afterDiv)
+    {
+        int index = SiemensScanner.SkipBlanks(text, afterDiv);
+        return index < text.Length && text[index] == '-' ? index : -1;
     }
 
     // Where the product chain at the end of the translated text begins: after the last operator of lower precedence
@@ -326,14 +349,22 @@ internal static partial class SiemensExpression
             // 4.12 truncates towards zero (decisions.md; controller-mapping 6, functions).
             case "DIV":
                 CloseDivisions(output, ref divisions);
-                if (!OperandsNotNegative(output.ToString(), text, end))
+                int divisor = DivisorMinus(text, end);
+                if (!DivisionConverts(output.ToString(), text, end))
                 {
                     problem = DivisionRounding(block, text);
                     return end;
                 }
 
                 OpenDivision(output, ref divisions);
-                return end;
+                if (divisor < 0)
+                {
+                    return end;
+                }
+
+                // D382: the minus of a negative divisor belongs to the divisor, not to the chain after it.
+                output.Append('-');
+                return divisor + 1;
 
             case "XOR" or "B_AND" or "B_OR" or "B_NOT" or "B_XOR" or "TRUE" or "FALSE":
                 problem = $"{name} has no NCX form (language 4.12; controller-mapping 6)";
