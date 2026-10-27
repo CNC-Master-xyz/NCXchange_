@@ -13,7 +13,7 @@ Start with `PluginLoader.cs`: `Files(workingDirectory, listed)` gives the DLLs o
 | `PluginSourceRule.cs`, `ClaimedBlocks.cs` | a reader rule in a reader: its blocks reach the program only when it claimed the block without failing (D5) |
 | `PluginListener.cs`, `PluginBlockWriter.cs` | a listener on the events of the virtual machine, a block writer on BLOCK_WRITE; the lines of a writer that fails stay as it found them |
 | `PluginRewriteContext.cs` | the concrete `RewriteContext`: machine name, channel, line and the plugin's own `[plugins.<name>]` settings, no VM (D61, D80) |
-| `PluginDiagnostics.cs`, `PluginFaults.cs`, `DiagnosticCodes.cs` | what the plugins report, every message beginning with the plugin's name, `PLG001` to `PLG005` (D98) |
+| `PluginDiagnostics.cs`, `PluginFaults.cs`, `DiagnosticCodes.cs` | what the plugins report, every message beginning with the plugin's name, `PLG001` to `PLG006` (D98, D167) |
 
 The template that `ncx plugin new` copies is `templates/ncx-plugin/` at the repository root (P7-02, code-guidelines 11). The tests are in `../../tests/Ncx.Acceptance/Plugins/`, with the two plugins they load.
 

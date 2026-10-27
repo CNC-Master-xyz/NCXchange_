@@ -77,6 +77,15 @@ public sealed class PluginDiagnostics
             + "(code-guidelines 10.3, D95).");
     }
 
+    // D167: a pseudo-word stands in a block of its own; a block of a rewriter's answer that mixes one with other words
+    // leaves the whole answer out, reported on the line of the block it was for.
+    internal void PseudoWordNotAlone(string plugin, string text, int line)
+    {
+        _diagnostics.Error(line, DiagnosticCodes.PseudoWordNotAlone,
+            $"plugin {plugin}: the block \"{text}\" of its answer mixes a pseudo-word with other words, so the answer "
+            + "is left out: @SAVE and @RESTORE stand in blocks of their own (language 4.15, D167).");
+    }
+
     // A diagnostic about a whole file stands on its first line, as the loaders of Ncx.Config report one.
     private void Add(Severity severity, string file, string code, string message)
     {

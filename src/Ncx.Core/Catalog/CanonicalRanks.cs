@@ -160,8 +160,8 @@ internal static class CanonicalRanks
     public const int Section = 1120;
     public const int Message = 1130;
 
-    // TODO(question): D90 gives the pseudo-words @SAVE and @RESTORE of generated blocks no bucket, and every word has a
-    // rank. They stand last until D167 is answered; ncx format never writes a generated block (language 4.15).
+    // Bucket 18: the pseudo-words of generated blocks, @SAVE then @RESTORE, which stand in blocks of their own; ncx
+    // format never writes a generated block (language 4.15, 5 rule 6; D167, D388).
     public const int Save = 1140;
     public const int Restore = 1150;
 }

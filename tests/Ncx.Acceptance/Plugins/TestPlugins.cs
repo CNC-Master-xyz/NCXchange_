@@ -18,7 +18,7 @@ internal static class TestPlugins
 
     /// <summary>
     /// The plugin whose classes fail: ThrowingRule throws on COOLANT, BrokenTextRule inserts FOO=1 before DWELL,
-    /// ThrowingSourceRule throws on M457 with a block begun, ThrowingListener throws on TOOL_BEGIN, ThrowingWriter
+    /// MixedPseudoWordRule inserts a block mixing @SAVE with another word before SECTION, ThrowingSourceRule throws on M457 with a block begun, ThrowingListener throws on TOOL_BEGIN, ThrowingWriter
     /// edits the lines of a RAPID block and throws.
     /// </summary>
     public const string FaultyRules = "FaultyRules";

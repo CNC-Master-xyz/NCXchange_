@@ -167,7 +167,7 @@ The whole writer is `../samples/plugins/ZOnItsOwnLine/ZOnItsOwnLine.cs`, with it
 - Reach the state through the output. A block writer changes the lines of the NC file and nothing else; what it does to `Words` is not written.
 - Do what the machine file does. Limits of the machine (`rpm_max`, `max_feed`, travel limits) are configuration, applied by the expander.
 
-A plugin that fails is reported with its name and left out for the rest of the run, which goes on without it: a DLL that does not load is the ERROR `PLG002`, a class that throws in its method the ERROR `PLG003`, a text that does not parse the ERROR `PLG004`, a DLL without a class of the four interfaces the WARNING `PLG005`. `ncx compile` writes no NC file after an ERROR of a plugin, because a program the plugin did not see must not reach the machine.
+A plugin that fails is reported with its name and left out for the rest of the run, which goes on without it: a DLL that does not load is the ERROR `PLG002`, a class that throws in its method the ERROR `PLG003`, a text that does not parse the ERROR `PLG004`, a block that mixes a pseudo-word with other words the ERROR `PLG006` (pseudo-words stand in blocks of their own, D167), a DLL without a class of the four interfaces the WARNING `PLG005`. `ncx compile` writes no NC file after an ERROR of a plugin, because a program the plugin did not see must not reach the machine.
 
 ## Settings
 

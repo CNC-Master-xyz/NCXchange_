@@ -157,6 +157,26 @@ public sealed class FailingPluginTests : IDisposable
             StringComparison.Ordinal);
     }
 
+    // D167: a pseudo-word stands in a block of its own; a rewriter block that mixes @SAVE with another word is an
+    // ERROR on the plugin, on the line of the block the answer was for, and the expander inserts nothing.
+    [Fact]
+    public void D167_RewriterBlockMixingAPseudoWordWithOtherWords_IsAnErrorOnThePlugin()
+    {
+        var diagnostics = new Diagnostics("part.ncx");
+        PluginSet plugins = TestPlugins.Load(_folder.FullName, diagnostics, TestPlugins.FaultyRules);
+        string program = CliHarness.OneProgram("UNITS=MM", "SECTION=\"ROUGH\"");
+
+        NcxProgram expanded = PluginMachines.Expand(program, PluginMachines.PlainMill, plugins.Rewriters);
+
+        Assert.Equal(program, PluginMachines.WriteWithGenerated(expanded));
+        Diagnostic error = Assert.Single(diagnostics.Items);
+        Assert.Equal(Ncx.Plugins.DiagnosticCodes.PseudoWordNotAlone, error.Code);
+        Assert.Equal(Severity.Error, error.Severity);
+        Assert.Equal(4, error.Line);
+        Assert.StartsWith("plugin FaultyRules: the block \"@SAVE=SPINDLE:MAIN SPINDLE:MAIN=OFF\" ", error.Message,
+            StringComparison.Ordinal);
+    }
+
     private string PluginsFolder => Path.Combine(_project.WorkingDirectory, PluginLoader.PluginsFolder);
 
     private RunSettings Settings(string file, string? machine)

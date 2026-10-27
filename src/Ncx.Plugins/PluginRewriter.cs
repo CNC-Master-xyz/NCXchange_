@@ -1,3 +1,4 @@
+using Ncx.Core.Catalog;
 using Ncx.Core.Expander;
 using Ncx.Core.Model;
 using Ncx.Core.Parsing;
@@ -7,7 +8,7 @@ namespace Ncx.Plugins;
 /// <summary>
 /// Stands in the expander for a program rewriter of a plugin (architecture 5.5, 9): it gives the rewriter the context
 /// with the plugin's own settings (D80), lets through only an answer whose every block parses under the option of
-/// generated text (D95), says how many blocks the rewriter inserted, and reports and leaves out a plugin that throws,
+/// generated text (D95) and holds a pseudo-word only alone (D167), says how many blocks the rewriter inserted, and reports and leaves out a plugin that throws,
 /// so that the expansion goes on without it (implementation 17, P7-01). The blocks of its answers carry the name of
 /// the plugin (architecture 9: trace shows the plugin's name).
 /// </summary>
@@ -130,7 +131,7 @@ internal sealed class PluginRewriter : INamedRewriter
             }
 
             var parsing = new Diagnostics(_plugin.Name);
-            Parser.ParseBlock(text, line, s_generatedText, parsing);
+            Block? block = Parser.ParseBlock(text, line, s_generatedText, parsing);
             foreach (Diagnostic diagnostic in parsing.Items)
             {
                 if (diagnostic.Severity == Severity.Error)
@@ -139,9 +140,29 @@ internal sealed class PluginRewriter : INamedRewriter
                     parses = false;
                 }
             }
+
+            // Pseudo-words stand in blocks of their own; a block that mixes one with other words is an ERROR on the
+            // plugin (D167).
+            if (block is not null && MixesAPseudoWord(block))
+            {
+                _diagnostics.PseudoWordNotAlone(_plugin.Name, text, line);
+                parses = false;
+            }
         }
 
         return parses;
+    }
+
+    // A block with a pseudo-word, @SAVE or @RESTORE, and any other word (language 4.15, D95, D167).
+    private static bool MixesAPseudoWord(Block block)
+    {
+        bool pseudoWord = false;
+        foreach (Word word in block.Words)
+        {
+            pseudoWord |= word.Definition is { Group: WordKind.Pseudo };
+        }
+
+        return pseudoWord && block.Words.Count > 1;
     }
 
     // Implementation 17, P7-01: a plugin whose rewriter fails is reported, left out for the rest of the run, and the

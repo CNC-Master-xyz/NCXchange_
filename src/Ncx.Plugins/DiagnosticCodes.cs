@@ -45,4 +45,11 @@ public static class DiagnosticCodes
     /// interfaces, so it does nothing (architecture 9, D106).
     /// </summary>
     public const string NoPluginClass = "PLG005";
+
+    /// <summary>
+    /// PLG006: a block of a program rewriter's answer mixes a pseudo-word, @SAVE or @RESTORE, with other words;
+    /// pseudo-words stand in blocks of their own, and the answer is left out (language 4.15, virtual machine 3.10,
+    /// D167).
+    /// </summary>
+    public const string PseudoWordNotAlone = "PLG006";
 }
