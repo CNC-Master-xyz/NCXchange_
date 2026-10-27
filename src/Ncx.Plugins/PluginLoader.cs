@@ -73,11 +73,20 @@ public static class PluginLoader
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> settings, PluginDiagnostics diagnostics)
     {
         var plugins = new PluginSet();
+        var loaded = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (string file in files)
         {
             // A plugin is named after its DLL, MyShopRules.dll is MyShopRules: the name of its section of ncx.toml
-            // (D80) and of every diagnostic about it (implementation 17, P7-01).
+            // (D80) and of every diagnostic about it (implementation 17, P7-01). A name loads once, from its first DLL
+            // in load order; another DLL of that name is a WARNING (D317, D330; gap closed 2026-10-28, delegated).
             string name = Path.GetFileNameWithoutExtension(file);
+            if (loaded.TryGetValue(name, out string? first))
+            {
+                diagnostics.DuplicateName(name, file, first);
+                continue;
+            }
+
+            loaded[name] = file;
             List<object>? classes = PluginClasses.Load(name, file, FullPath(workingDirectory, file), diagnostics);
             if (classes is null)
             {

@@ -8,8 +8,8 @@ namespace Ncx.Plugins;
 /// <summary>
 /// Stands in a reader for a reader rule of a plugin (architecture 7, 9; D40, D66, D231, D232): it offers the rule the
 /// source block, and hands the rule's blocks to the program only when the rule claimed a run without failing; a plugin
-/// that throws, or claims fewer than none or more blocks than it was shown, is reported and left out, and the reader
-/// reads the block as it would without the plugin (implementation 17, P7-01).
+/// that throws, claims fewer than none or more blocks than it was shown, or claims blocks and writes nothing, is
+/// reported and left out, and the reader reads the block as it would without the plugin (implementation 17, P7-01).
 /// </summary>
 internal sealed class PluginSourceRule : ISourceRule
 {
@@ -68,6 +68,18 @@ internal sealed class PluginSourceRule : ISourceRule
             _diagnostics.Failed(_plugin.Name,
                 string.Create(CultureInfo.InvariantCulture,
                     $"{nameof(Read)} claimed {count} source blocks where it was shown {most}"),
+                block.Line, null);
+            _plugin.Drop();
+            return 0;
+        }
+
+        // A claim stands for its source blocks: a rule that claims blocks and writes nothing for them would drop them
+        // without a trace (D5, D232), a fault reported like a throw (gap closed 2026-10-28, delegated).
+        if (claimed.Blocks.Count == 0)
+        {
+            _diagnostics.Failed(_plugin.Name,
+                string.Create(CultureInfo.InvariantCulture,
+                    $"{nameof(Read)} claimed {count} source blocks and wrote no NCX block for them"),
                 block.Line, null);
             _plugin.Drop();
             return 0;

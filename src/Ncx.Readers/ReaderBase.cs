@@ -32,9 +32,12 @@ public abstract class ReaderBase : IReader
     // The comment of the source block being read, until an NCX block takes it (controller-mapping 1).
     private string? _pendingComment;
 
-    // The source blocks of the file with a role in its structure, the frame, a section begin, a program end, a return
-    // (language 4.13): a reader rule's look-ahead stops in front of them (D232).
-    private readonly HashSet<SourceBlock> _structureBlocks = new(ReferenceEqualityComparer.Instance);
+    // The source blocks of the file structure and of the control flow, the frame, a section begin, a program end, a
+    // return, a jump, a call, a repeat (language 4.13): a reader rule's look-ahead stops in front of them (D232).
+    private readonly HashSet<SourceBlock> _flowBlocks = new(ReferenceEqualityComparer.Instance);
+
+    // The look-ahead of the Read steps of the file being read (D232).
+    private ReadLookAhead? _lookAhead;
 
     // The contour sections the structure pass made of the file being read (language 4.7.1, D65).
     private ContourLayout _contours = ContourLayout.None;
@@ -101,14 +104,15 @@ public abstract class ReaderBase : IReader
         {
             SourceStructure structure = block.IsTrivia ? SourceStructure.None : StructureOf(block);
             structures.Add(structure);
-            if (structure.Role != StructureRole.None)
+            if (IsFlow(structure))
             {
-                _structureBlocks.Add(block);
+                _flowBlocks.Add(block);
             }
         }
 
         SourceBlock? current = null;
         List<ReadStep> plan = StructurePass.Plan(blocks, structures, Diagnostics, out _contours);
+        _lookAhead = _rules.Count > 0 ? new ReadLookAhead(plan, _flowBlocks) : null;
 
         // The last step of the run a reader rule claimed (D232); the claimed blocks after the offered one are not read.
         int claimedThrough = -1;
@@ -298,7 +302,8 @@ public abstract class ReaderBase : IReader
         _options = options;
         _pendingComment = null;
         _contours = ContourLayout.None;
-        _structureBlocks.Clear();
+        _flowBlocks.Clear();
+        _lookAhead = null;
 
         // The templates of the machine, which the tables are matched through (architecture 6). A template the machine
         // file cannot use is an ERROR of the machine file; the machine record keeps neither its file nor the lines of
@@ -337,13 +342,12 @@ public abstract class ReaderBase : IReader
         // Every block goes to the reader rules first, in the order the plugins are loaded; a block no rule claims is
         // read as without a plugin, with the tables and then the words of the family (D231, D317). The order of the
         // built-in mechanisms, the [workpiece] table before the chuck function rule, is the family's (D40).
-        if (_rules.Count > 0)
+        if (_lookAhead is not null)
         {
-            List<int> following = FollowingReads(plan, index);
-            int claimed = ClaimedByRule(block, plan, following);
+            int claimed = ClaimedByRule(block, _lookAhead.Following(index));
             if (claimed > 0)
             {
-                return claimed == 1 ? index : following[claimed - 2];
+                return _lookAhead.LastStep(index, claimed);
             }
         }
 
@@ -351,46 +355,28 @@ public abstract class ReaderBase : IReader
         return index;
     }
 
-    // The Read steps after a step, up to the next block of the file structure (O, M30, M99, a jump target), which
-    // stays with the structure pass: a step that writes the structure, or the source block of one; trivia lines are
-    // passed over (D232).
-    private List<int> FollowingReads(List<ReadStep> plan, int index)
+    // A block of the file structure or of the control flow, which ends a reader rule's look-ahead in front of it: a
+    // role in the structure (O, M30, M99, the frame), a jump, a call, a repeat, a contour or a lifted subprogram, so
+    // that a rule never swallows control flow (D232; gap closed 2026-10-28, delegated).
+    private static bool IsFlow(SourceStructure structure)
     {
-        var following = new List<int>();
-        for (int next = index + 1; next < plan.Count; next++)
-        {
-            if (plan[next].Kind == ReadStepKind.Write || _structureBlocks.Contains(plan[next].Source))
-            {
-                break;
-            }
-
-            if (plan[next].Kind == ReadStepKind.Read)
-            {
-                following.Add(next);
-            }
-        }
-
-        return following;
+        return structure.Role != StructureRole.None || structure.LabelsUsed.Count > 0 || structure.Calls.Count > 0
+            || structure.Repeat is not null || structure.Contour is not null || structure.LiftsSub is not null
+            || structure.LiftsSubEnd || structure.ReturnsToABlock;
     }
 
     // The first rule that claims the block reads it, and the run it claims (D231, D232); 0 when no rule claims it. A
     // rule shown n following blocks claims at most n + 1: a larger count takes the blocks it was shown and no more,
     // so that the structure after them is still written (gap closed 2026-10-27, delegated).
-    private int ClaimedByRule(SourceBlock block, List<ReadStep> plan, List<int> following)
+    private int ClaimedByRule(SourceBlock block, IReadOnlyList<SourceBlock> following)
     {
-        var shown = new List<SourceBlock>(following.Count);
-        foreach (int next in following)
-        {
-            shown.Add(plan[next].Source);
-        }
-
-        SourceBlock offered = block with { Following = shown.AsReadOnly() };
+        SourceBlock offered = block with { Following = following };
         foreach (ISourceRule rule in _rules)
         {
             int claimed = rule.Read(offered, State, Builder);
             if (claimed > 0)
             {
-                return Math.Min(claimed, shown.Count + 1);
+                return Math.Min(claimed, following.Count + 1);
             }
         }
 

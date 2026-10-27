@@ -29,8 +29,10 @@ public static class DiagnosticCodes
     public const string PluginNotLoaded = "PLG002";
 
     /// <summary>
-    /// PLG003: a class of a plugin threw in its method, Rewrite, Read, On or Write, or gave no answer; the plugin is
-    /// left out for the rest of the run, which goes on without it (implementation 17, P7-01).
+    /// PLG003: a class of a plugin threw in its method, Rewrite, Read, On or Write, or gave no answer; or a reader rule
+    /// claimed fewer than none or more source blocks than it was shown, or claimed blocks and wrote no NCX block for
+    /// them (D232, D5); the plugin is left out for the rest of the run, which goes on without it (implementation 17,
+    /// P7-01).
     /// </summary>
     public const string PluginFailed = "PLG003";
 
@@ -52,4 +54,11 @@ public static class DiagnosticCodes
     /// D167).
     /// </summary>
     public const string PseudoWordNotAlone = "PLG006";
+
+    /// <summary>
+    /// PLG007, a WARNING: two plugin DLLs have one name, MyShopRules.dll in plugins/ and in a build output listed in
+    /// [plugins] assemblies; the first in load order loads and the other is left out, since a name has one section of
+    /// settings and is the name of every diagnostic (D317, D330, D80).
+    /// </summary>
+    public const string DuplicatePluginName = "PLG007";
 }

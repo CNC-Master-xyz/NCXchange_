@@ -73,4 +73,10 @@ public static partial class DiagnosticCodes
     /// it stays as it is and the plugin does not load (D330, D238).
     /// </summary>
     public const string PluginPathNotAdded = "CLI560";
+
+    /// <summary>
+    /// CLI561, an INFO: the plugin brings assemblies and loads from its build output, so ncx plugin build removes the
+    /// copy in plugins/ that an earlier build put there, which would load without them (D330).
+    /// </summary>
+    public const string PluginStaleCopyRemoved = "CLI561";
 }

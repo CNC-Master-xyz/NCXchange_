@@ -63,6 +63,14 @@ public sealed class PluginDiagnostics
             + "or IBlockWriter, so the plugin does nothing (architecture 9, D106).");
     }
 
+    // D317, D330: a plugin name loads once, from the first of its DLLs in load order.
+    internal void DuplicateName(string plugin, string file, string first)
+    {
+        Add(Severity.Warning, file, DiagnosticCodes.DuplicatePluginName,
+            $"plugin {plugin}: {file} has the name of the plugin loaded from {first}, so it is left out; remove one of "
+            + "them (D317, D330).");
+    }
+
     // Implementation 17, P7-01: a class of a plugin that fails in its method is reported with the plugin's name on the
     // block it failed at, and the plugin is left out for the rest of the run.
     internal void Failed(string plugin, string what, int line, int? originLine)

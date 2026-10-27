@@ -94,6 +94,7 @@ internal static class PluginBuild
         if (BroughtAssemblies(buildFolder, project.Name).Count > 0)
         {
             string entry = Path.GetRelativePath(settings.WorkingDirectory, dll).Replace('\\', '/');
+            RemoveStaleCopy(settings.WorkingDirectory, project.Name, diagnostics);
             output.Write(entry + "\n");
             AddLine(ncxToml, entry, ncxTomlPath, inPluginsFolder: false, output, diagnostics);
             error.Write(diagnostics.ToText());
@@ -168,6 +169,34 @@ internal static class PluginBuild
         return brought;
     }
 
+    // A copy of the plugin in plugins/ from a build before it brought assemblies would load without them, ahead of the
+    // build output (D317), so it goes, with its symbols, and an INFO names it (D330; gap closed 2026-10-28, delegated).
+    // A copy that cannot be removed is an ERROR of the run (D97).
+    internal static void RemoveStaleCopy(string workingDirectory, string name, Diagnostics diagnostics)
+    {
+        string stale = Path.Combine(PluginLoader.PluginsFolder, name + DllExtension);
+        string path = Path.Combine(workingDirectory, stale);
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        try
+        {
+            File.Delete(path);
+            File.Delete(Path.ChangeExtension(path, SymbolsExtension));
+            Report(diagnostics, Severity.Info, stale, DiagnosticCodes.PluginStaleCopyRemoved,
+                $"The plugin brings assemblies and now loads from its build output, so its earlier copy {stale} is "
+                + "removed (D330).");
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            Report(diagnostics, Severity.Error, stale, DiagnosticCodes.OutputUnwritable,
+                $"The earlier copy of the plugin cannot be removed: {exception.Message.TrimEnd('.')}; it would load "
+                + "without the assemblies the plugin brings (architecture 10; D330).");
+        }
+    }
+
     // The DLL, and its symbols when the build left them, into plugins/, for a plugin that brings no assemblies (D330);
     // a file that cannot be written is an ERROR of the run, which has started (D97).
     private static bool CopyIntoPlugins(string dll, string target, string plugin, Diagnostics diagnostics)
@@ -197,7 +226,7 @@ internal static class PluginBuild
     // entry cannot join stays as it is: with an INFO when the DLL lies in plugins/, which loads without the entry
     // (implementation 17, P7-01), with a WARNING when the entry is the path of a build output, which nothing else
     // loads (D330).
-    private static void AddLine(string? ncxToml, string dll, string path, bool inPluginsFolder, TextWriter output,
+    internal static void AddLine(string? ncxToml, string dll, string path, bool inPluginsFolder, TextWriter output,
         Diagnostics diagnostics)
     {
         bool hasByteOrderMark = ncxToml is not null
@@ -268,7 +297,7 @@ internal static class PluginBuild
         });
     }
 
-    // A byte order mark is no part of the text the TOML loader reads (wave-1 question #80).
+    // A byte order mark is no part of the text the TOML loader reads; ncx.toml keeps it when it is written (D111).
     private static string WithoutByteOrderMark(string text)
     {
         return text.StartsWith(InputFile.ByteOrderMark, StringComparison.Ordinal)

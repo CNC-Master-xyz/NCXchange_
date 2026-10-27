@@ -46,3 +46,14 @@ The ten decisions of package W3-2 of the code-wave plan (`.worktrees/codewave/PL
     - The job files (`JobPipeline.cs`, `CompileJob.cs`, W3-1's) still strip the byte order mark before the parser; harmless, left to W3-1.
     - `ConfigTable.Table` (not in the W3-2 file list) gained an optional `expected` text for the CFG003 message of D238.
     - The reader families' files (`FanucReader`, `FanucBuilder`, `HeidenhainReader`, `HeidenhainFunctions`, `SiemensReader`, `SiemensFunctions`) lose only the dead `LeavesUndecided`/`Names` code.
+- Claude (agent), 2026-10-28, review fixes of W3-2 (orchestrator review), after merging main (W3-3, W3-4; conflicts in architecture 13 and 03-open-questions rows 85-87 resolved by taking both sides):
+  - Blocking: the look-ahead was quadratic with any rule loaded (40k blocks 52 s). `ReadLookAhead` works out the Read steps and the end of each look-ahead once, in one backward pass; `SourceBlock.Following` is a constant-time `SourceBlockSlice` over one shared list, and a claim maps through the index. New `Convert_LongProgramWithADecliningRule_TakesWellUnderASecond` (20k blocks: 7.3 s against 0.33 s on the old code, failed there) and `Convert_3DFraesenWithADecliningRule_TakesWellUnderASecond`.
+  - A plugin rule that claims blocks and writes no NCX block is PLG003 and dropped; the PLG003 summary names the out-of-range count and this case. Tests for a negative count and for a claim without writing.
+  - The look-ahead ends in front of a block of the control flow too: a jump (`LabelsUsed`), a call (`Calls`), a repeat, a contour, a lifted subprogram, a return to a block (`ReaderBase.IsFlow`). Test `Rules_Offered_LookAheadStopsAtACall`; plugins.md updated.
+  - `ncx plugin build` removes the stale `plugins/<name>.dll` and `.pdb` when a plugin moves to its build output (INFO CLI561); `PluginLoader` loads a plugin name once and warns about a second DLL of that name (WARNING PLG007). Tests for CLI560, CLI561 and PLG007.
+  - Stale text: `ISourceRule` summary, `PluginBuild` BOM comment (D111), code-guidelines 6 "inserted 3 blocks".
+  - Gaps closed 2026-10-28 (delegated):
+    - D232: a block the family reads as control flow (a jump, a return, a call, a repeat, a contour, a lifted subprogram) ends the look-ahead in front of it, as a structure block does. Such a block is still offered itself (D231: every block).
+    - D232, D5: a claim with no NCX block written is PLG003, and the plugin is dropped.
+    - D330: build removes the stale copy in `plugins/` with the INFO CLI561 (`PluginStaleCopyRemoved`); one that cannot be removed is CLI004 (ERROR).
+    - D317, D330: a plugin name loads once, from its first DLL in load order; another DLL of the name is the WARNING PLG007 (`DuplicatePluginName`).

@@ -118,6 +118,33 @@ public sealed class FailingPluginTests : IDisposable
             StringComparison.Ordinal);
     }
 
+    // D232: a negative count is no claim the reader can take; the rule is reported like one that throws and dropped.
+    [Fact]
+    public void Read_ReaderRuleClaimingANegativeCount_IsReportedAndClaimsNothing()
+    {
+        Diagnostic failure = ReadWith(new CountingSourceRule(-1, writes: true), out int claimed, out Plugin plugin);
+
+        Assert.Equal(0, claimed);
+        Assert.True(plugin.IsDropped);
+        Assert.Equal("PLG003", failure.Code);
+        Assert.StartsWith("plugin Counting: Read claimed -1 source blocks where it was shown 1", failure.Message,
+            StringComparison.Ordinal);
+    }
+
+    // D232, D5: a rule that claims blocks writes NCX for them; a claim with nothing written would drop the blocks
+    // without a trace, so it is reported and the rule dropped (gap closed 2026-10-28, delegated).
+    [Fact]
+    public void Read_ReaderRuleClaimingWithoutWriting_IsReportedAndClaimsNothing()
+    {
+        Diagnostic failure = ReadWith(new CountingSourceRule(1, writes: false), out int claimed, out Plugin plugin);
+
+        Assert.Equal(0, claimed);
+        Assert.True(plugin.IsDropped);
+        Assert.Equal("PLG003", failure.Code);
+        Assert.StartsWith("plugin Counting: Read claimed 1 source blocks and wrote no NCX block for them",
+            failure.Message, StringComparison.Ordinal);
+    }
+
     // Implementation 17, P7-01: a block writer that edits the lines of the RAPID of line 4 and throws is reported and
     // dropped, and the lines stay as the compiler wrote them; the RAPID of line 5 is no longer handed to it.
     [Fact]
@@ -253,5 +280,20 @@ public sealed class FailingPluginTests : IDisposable
         var compilers = new CompilerRegistry();
         compilers.Register(Controller.Fanuc, () => new EchoCompiler());
         return compilers;
+    }
+
+    // Offers the block M5 of line 4, with nothing after it, to a rule wrapped as a plugin "Counting".
+    private static Diagnostic ReadWith(Ncx.Readers.ISourceRule inner, out int claimed, out Plugin plugin)
+    {
+        var diagnostics = new Diagnostics("part.nc");
+        plugin = new Plugin("Counting", new Dictionary<string, string>());
+        var rule = new PluginSourceRule(plugin, inner, new PluginDiagnostics(diagnostics));
+        var builder = new Ncx.Core.Writing.NcxBuilder(new Diagnostics("part.nc"));
+        var block = new Ncx.Readers.SourceBlock { Line = 4, Text = "M5" };
+
+        claimed = rule.Read(block, new Ncx.Readers.SourceState(null, new Dictionary<string, int>()), builder);
+
+        Assert.Empty(builder.Build().Blocks);
+        return Assert.Single(diagnostics.Items);
     }
 }

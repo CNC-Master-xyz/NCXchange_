@@ -17,8 +17,11 @@ public interface ISourceRule
     /// it sees in block.Following; it writes the NCX blocks for the whole run with the builder, Begin(block.Line)...
     /// End(), before it returns the number of source blocks it claimed, the offered one among them. The reader then
     /// reads nothing more of the claimed blocks: it applies them to the source state and keeps their comments as
-    /// comment-only lines after the rule's blocks (D5). The reader offers every block once, in the order it reads them,
-    /// and calls nothing after the last one, so a claim is complete when Read returns.
+    /// comment-only lines after the rule's blocks (D5). The reader offers each block it reads, in the order it reads
+    /// them, except the blocks of a run already claimed, and calls nothing after the last one, so a claim is complete
+    /// when Read returns. The look-ahead ends in front of a block of the file structure or of the control flow (a
+    /// jump, a return, a call), so that a run never takes control flow (gap closed 2026-10-28, delegated). A rule that
+    /// claims blocks writes NCX for them: a claim with nothing written is a fault of the plugin (D5).
     /// </summary>
     /// <param name="block">The source block as the tokenizer read it, with the following blocks of its section.</param>
     /// <param name="state">The source-side state after the modal codes of the block, read only.</param>

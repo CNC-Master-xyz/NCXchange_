@@ -177,4 +177,17 @@ public sealed class ReaderRulesTests
 
         Assert.Contains("\nCOOLANT:THROUGH=ON\nPROGRAM=END\n", text, StringComparison.Ordinal);
     }
+
+    // A call is control flow: the look-ahead stops in front of the M98 block, so a rule cannot swallow it (D232; gap
+    // closed 2026-10-28, delegated).
+    [Fact]
+    public void Rules_Offered_LookAheadStopsAtACall()
+    {
+        var run = new RunRule(5, 3);
+
+        Program(Lines("%", "O0001", "M5", "M98 P100", "M51", "M30", "%"), run);
+
+        Assert.Empty(run.Shown[1]);
+        Assert.Equal([5], run.Shown[2]);
+    }
 }

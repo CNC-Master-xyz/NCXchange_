@@ -150,6 +150,26 @@ public sealed class PluginLoaderTests : IDisposable
         Assert.Equal(["lib/C.dll", Path.Combine("plugins", "B.dll"), Path.Combine("plugins", "A.dll")], files);
     }
 
+    // D317, D330: a plugin name loads once; a second DLL of the name, here the copy in plugins/ after the listed one,
+    // is the WARNING PLG007 and is left out (gap closed 2026-10-28, delegated).
+    [Fact]
+    public void Load_TwoDllsOfOneName_LoadsTheFirstAndWarnsAboutTheOther()
+    {
+        TestPlugins.CopyInto(Path.Combine(_folder.FullName, "lib"), TestPlugins.ShopRules);
+        TestPlugins.CopyInto(Path.Combine(_folder.FullName, "plugins"), TestPlugins.ShopRules);
+        IReadOnlyList<string> files = PluginLoader.Files(_folder.FullName, ["lib/ShopRules.dll"]);
+
+        PluginSet plugins = PluginLoader.Load(_folder.FullName, files,
+            new Dictionary<string, IReadOnlyDictionary<string, string>>(), new PluginDiagnostics(_diagnostics));
+
+        Assert.Equal(["ShopCoolantCode"], TestPlugins.ClassNames(plugins.SourceRules));
+        Diagnostic warning = Assert.Single(_diagnostics.Items);
+        Assert.Equal("PLG007", warning.Code);
+        Assert.Equal(Severity.Warning, warning.Severity);
+        Assert.StartsWith("plugin ShopRules: " + Path.Combine("plugins", "ShopRules.dll"), warning.Message,
+            StringComparison.Ordinal);
+    }
+
     // Implementation 17, P7-01: without a plugins/ folder and without a list there is no plugin to load.
     [Fact]
     public void Files_NoListAndNoPluginsFolder_AreNone()
