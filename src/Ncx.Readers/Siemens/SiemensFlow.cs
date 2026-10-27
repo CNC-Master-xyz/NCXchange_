@@ -311,9 +311,8 @@ internal static class SiemensFlow
     }
 
     // DEFINE NAME AS text defines a macro, which the reader expands in the blocks after it (controller-mapping 6,
-    // macros).
-    // TODO(question): the documents say the reader expands DEFINE macros but not what it writes for the DEFINE block
-    // itself; it is kept as a comment line, so that its text stays in the file.
+    // macros); the DEFINE block itself, whose instructions run only where the name is called, is a comment-only line
+    // holding its text (D291, D92).
     private static void ReadDefine(SiemensBlock block)
     {
         block.MarkAllRead();

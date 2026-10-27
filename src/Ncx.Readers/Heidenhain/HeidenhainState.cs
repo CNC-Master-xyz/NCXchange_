@@ -132,6 +132,11 @@ internal sealed class HeidenhainState
     public bool? Tcpm { get; set; } = false;
 
     /// <summary>
+    /// Whether the program being read is in inches, from BEGIN PGM or units_default (controller-mapping 1, UNITS).
+    /// </summary>
+    public bool Inch { get; set; }
+
+    /// <summary>
     /// The machining positions of the last PATTERN DEF, which CYCL CALL PAT calls at, each with the workpiece surface
     /// it starts at (D254); null while no pattern is known (controllers heidenhain.md 5).
     /// </summary>

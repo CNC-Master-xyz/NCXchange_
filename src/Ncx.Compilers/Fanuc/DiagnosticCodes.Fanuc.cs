@@ -6,8 +6,10 @@ namespace Ncx.Compilers;
 public static partial class DiagnosticCodes
 {
     /// <summary>
-    /// CMP300: a program without NUMBER has no O number, which names a Fanuc program (controllers fanuc.md 1).
+    /// CMP300, retired 2026-10-27 (D257, D388 3): a program without NUMBER takes a NAME of digits or the lowest free O
+    /// number with the WARNING CMP310. The number is not reused.
     /// </summary>
+    [Obsolete("Retired by D257: a program without NUMBER takes a generated O number, CMP310.")]
     public const string FanucProgramWithoutNumber = "CMP300";
 
     /// <summary>
@@ -28,8 +30,10 @@ public static partial class DiagnosticCodes
     public const string FanucConditionalCall = "CMP303";
 
     /// <summary>
-    /// CMP304: REPEAT is not written, since the counter variable of controller-mapping 6 is named nowhere.
+    /// CMP304, retired 2026-10-27 (D280): REPEAT is written with the counters of [variables] repeat_counters, CMP314
+    /// and CMP315. The number is not reused.
     /// </summary>
+    [Obsolete("Retired by D280: REPEAT is written with [variables] repeat_counters, CMP314 and CMP315.")]
     public const string FanucRepeatNotWritten = "CMP304";
 
     /// <summary>
@@ -62,15 +66,12 @@ public static partial class DiagnosticCodes
     public const string FanucModalValueNotHeld = "CMP309";
 
     /// <summary>
-    /// CMP312, a WARNING: a comment text with ( or ), whose first ) would end the Fanuc comment and leave the rest of
-    /// the line to run as code, is written with [ and ] (D390, R1-14).
+    /// CMP310, a WARNING: a program without NUMBER whose NAME is no O number takes the lowest number from 1 that the
+    /// output file does not use, 8000 to 9999 left to the builder, and the WARNING names it (D257, D388 3).
     /// </summary>
-    public const string FanucBracketInComment = "CMP312";
-
-    // CMP310 was the ERROR of a CALL that carries both a pass-through ARG:Vn={$Vn} and an argument value. The
-    // documents settle that block: D148's evidence has it that only a macro call can take arguments, and
-    // controller-mapping 6 maps a CALL with ARG to G65 Pnnnn A1 B2, so it is the macro call and is written as one.
-    // The code is retired and, by D98, given to no other rule.
+    // CMP310 was first the ERROR of a CALL that carries both a pass-through ARG:Vn={$Vn} and an argument value, retired
+    // when D148 settled that block as the macro call; D388 (3) gives the number to the O-number WARNING of D257.
+    public const string FanucProgramNumberGenerated = "CMP310";
 
     /// <summary>
     /// CMP311, a WARNING: a CALL whose ARG words are the pass-through of a caller's locals, ARG:Vn={$Vn}, is written
@@ -80,6 +81,47 @@ public static partial class DiagnosticCodes
     /// ../../../docs/implementation/03-open-questions.md).
     /// </summary>
     public const string FanucCallFormOfTheSharedLocals = "CMP311";
+
+    /// <summary>
+    /// CMP312, a WARNING: a comment text with ( or ), whose first ) would end the Fanuc comment and leave the rest of
+    /// the line to run as code, is written with [ and ] (D390, R1-14).
+    /// </summary>
+    public const string FanucBracketInComment = "CMP312";
+
+    /// <summary>
+    /// CMP313: UNITS changes the units after the first motion of a program, which a Fanuc control forbids while the
+    /// program runs; the units stand in a block of their own at the start of the program (D283).
+    /// </summary>
+    public const string FanucUnitsChangeInProgram = "CMP313";
+
+    /// <summary>
+    /// CMP314: a REPEAT needs a counter of [variables] repeat_counters for its nesting depth, and the machine file has
+    /// none or too few; no variable is guessed (D280, machine-config 7).
+    /// </summary>
+    public const string FanucRepeatCounterMissing = "CMP314";
+
+    /// <summary>
+    /// CMP315: a counter of [variables] repeat_counters is a variable the program uses itself, so the count of the
+    /// REPEAT would change it (D280, machine-config 7).
+    /// </summary>
+    public const string FanucRepeatCounterInUse = "CMP315";
+
+    /// <summary>
+    /// CMP316: == or != compares two strings, and custom macro B has numbers only (D169; controllers fanuc.md 7).
+    /// </summary>
+    public const string FanucStringComparison = "CMP316";
+
+    /// <summary>
+    /// CMP317: an ARC with CENTER under CYLINDER, where G7.1 takes R only and never I, J or K, so the arc has no Fanuc
+    /// output (D143; controller-mapping 1, CYLINDER).
+    /// </summary>
+    public const string FanucCenterUnderCylinder = "CMP317";
+
+    /// <summary>
+    /// CMP318: a block number N stands twice in one O program, so a GOTO to it would be ambiguous (D277; controllers
+    /// fanuc.md 10 rule 6).
+    /// </summary>
+    public const string FanucBlockNumberTwice = "CMP318";
 
     /// <summary>
     /// CMP320: LINE or ARC with FRAME=MACHINE, which G53 would move at rapid (D242).
@@ -131,7 +173,8 @@ public static partial class DiagnosticCodes
 
     /// <summary>
     /// CMP361, a WARNING: a word the Fanuc control has no option for is not written: ROT, ROTARY_PATH and ROTARY_FEED
-    /// without a template (controller-mapping 1, machine-config 5).
+    /// without a template, PATH_MODE with an empty or missing PATH_MODE template (controller-mapping 1, machine-config
+    /// 5, D349).
     /// </summary>
     public const string FanucOptionNotWritten = "CMP361";
 

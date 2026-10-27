@@ -225,14 +225,15 @@ internal static class SiemensMotion
             return;
         }
 
-        // Every motion block writes its motion code, G0 Z2=-58 as the comments of MILLTURN_TRANSFER write it (phase 5,
-        // P5-02 acceptance; language 2 rule 2: every block that moves says how it moves).
-        // TODO(question): P3-03 writes a modal word only on change, and the acceptance of P5-02 wants G0 Z2=-58 after a
-        // G0; no document says whether a SINUMERIK program repeats G0 to G3 on every motion block. The motion code is
-        // written on every motion block, until that is answered.
+        // The motion code is written as [format] motion_code says, "every_block" by default, G0 Z2=-58 as the comments
+        // of MILLTURN_TRANSFER write it (D299; controllers siemens.md 12 rule 2; P5-02 acceptance).
         write.Written(verb);
         string code = MotionCode(write, verb);
-        write.Main.Code(SiemensLine.MotionRank, code);
+        if (MotionCodeRule.Writes(write.Machine.Format, verb == "ARC", write.ActiveOf(MotionGroup), code))
+        {
+            write.Main.Code(SiemensLine.MotionRank, code);
+        }
+
         write.Target.Set(MotionGroup, code);
         if (block.Has("FRAME", null, "MACHINE"))
         {

@@ -463,6 +463,15 @@ public sealed class SiemensReader : ReaderBase
                 if (reading.Source.Words.Any(word => word.Address == "F"))
                 {
                     facts.ControlFeed = null;
+                    facts.FeedProgrammed = true;
+                }
+
+                // A CYCLE800 of the RAW block swivels a system frame the chain does not hold, so the reader no longer
+                // knows the chain, and a later frame block that depends on it stays RAW rather than being written
+                // without that swivel (D5, D333).
+                if (reading.Source.Words.Any(word => word.Address == "CYCLE800"))
+                {
+                    facts.MakeUnknown(SiemensFacts.Frames);
                 }
             }
 

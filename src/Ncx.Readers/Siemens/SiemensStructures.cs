@@ -286,10 +286,9 @@ internal static class SiemensStructures
     // A structure whose condition, or whose FOR, has no NCX form opens as a RAW structure: NCX cannot branch on it, so
     // the structure is kept as RAW as a whole, and its ELSE and its end stay RAW with it, without the ERROR of an end
     // that no structure opened (D5; controllers siemens.md 8). The block that opens it is RAW already.
-    // TODO(question): controller-mapping 6 keeps only the system variables of IF $P_SEARCH OR $P_SIM GOTOF BEGINN as
-    // RAW, so the blocks such a jump skips stay NCX blocks, and does not say what becomes of the blocks of a structure
-    // whose condition has no NCX form; they are kept as RAW with it, the least committal reading, since NCX cannot make
-    // their execution depend on the condition.
+    // The whole structure stays RAW, its blocks with it, since NCX cannot make their execution depend on the
+    // condition; the GOTOF form of IF $P_SEARCH OR $P_SIM GOTOF BEGINN, whose skipped blocks stay NCX blocks, is the
+    // documented exception (D295; controller-mapping 6).
     private static void OpenRaw(SiemensBlock block, string kind)
     {
         block.Siemens.Structures.Add(new SiemensStructure

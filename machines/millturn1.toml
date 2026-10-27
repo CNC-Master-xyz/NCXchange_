@@ -35,7 +35,7 @@ tool_name_allowed = true           # T="NAME" is accepted by the control under t
 
 [home]
 template = "G74 {axes}"            # reference point approach with machine axis names, own block, no transformation active (siemens 3)
-point = "G75 {axes} FP={point}"    # fixed points 1..4 for the second and further reference points
+point = "G75 {axes} FP={point}"    # fixed points 2..4 for POINT=2 and further; FP=1 is not written (D260)
 
 [setpos]
 template = "PRESETON({axis},{value})"   # declares the current position of one axis; one call per axis of the SETPOS block

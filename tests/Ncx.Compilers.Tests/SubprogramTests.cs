@@ -127,28 +127,64 @@ public sealed class SubprogramTests
         Assert.Equal("%\nO1 (T)\nN10 G0 X0. Y0. Z5.\nN20 M30\nO200\nN30 G0 Z50.\nN40 M99\n%\n", text);
     }
 
-    // D99 and the TODO(question) of FilePerProgram: under "file_per_program" a subprogram that no program calls stands
-    // in no file, with a WARNING.
+    // D264: under "file_per_program" a subprogram that no program calls is written once, into the first program's
+    // file, after that program's subprograms and its M30; nothing is reported.
     [Fact]
-    public void FilePerProgram_SubThatNoProgramCalls_IsTheWarningCmp003()
+    public void FilePerProgram_SubThatNoProgramCalls_StandsInTheFirstProgramsFile()
     {
         string program = FakeCompile.Lines(
             "FILE=BEGIN NCX=1",
             "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
             "UNITS=MM WORKPLANE=XY FEED_MODE=PER_MIN",
+            "CALL=100",
             "PROGRAM=END",
+            "PROGRAM=BEGIN NAME=\"U\" NUMBER=2",
+            "UNITS=MM WORKPLANE=XY FEED_MODE=PER_MIN",
+            "PROGRAM=END",
+            "SUB=BEGIN NAME=100",
+            "RAPID Z=40",
+            "SUB=END",
             "SUB=BEGIN NAME=200",
             "RAPID Z=50",
             "SUB=END",
             "FILE=END");
-        string machine = FakeMachines.Mill(format: FakeMachines.PointFormat.Replace(
+
+        CompileResult result = FakeCompile.Run(program, FilePerProgramMill());
+
+        Assert.Equal(2, result.Files.Count);
+        Assert.Equal("%\nO1 (T)\nN10 M98 P100\nN20 M30\nO100\nN30 G0 Z40.\nN40 M99\nO200\nN50 G0 Z50.\nN60 M99\n%\n",
+            result.Files[0].Text);
+        Assert.Equal("%\nO2 (U)\nN10 M30\n%\n", result.Files[1].Text);
+        Assert.Empty(FakeCompile.CompilerDiagnostics(result));
+    }
+
+    // D266: program names are compared case-insensitively, and a taken name gets _2 in file order with the WARNING
+    // CMP005 on the PROGRAM=BEGIN of the renamed program; a program without NAME takes the NCX file stem.
+    [Fact]
+    public void FilePerProgram_NameTakenInAnotherCase_GetsTheSuffixAndTheWarningCmp005()
+    {
+        string program = FakeCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"t\" NUMBER=1",
+            "PROGRAM=END",
+            "PROGRAM=BEGIN NAME=\"T\" NUMBER=2",
+            "PROGRAM=END",
+            "PROGRAM=BEGIN NUMBER=3",
+            "PROGRAM=END",
+            "FILE=END");
+
+        CompileResult result = FakeCompile.Run(program, FilePerProgramMill());
+
+        Assert.Equal(["t.nc", "T_2.nc", "T_3.nc"], result.Files.Select(file => file.Name));
+        List<Diagnostic> warnings = FakeCompile.CompilerDiagnostics(result);
+        Assert.Equal(2, warnings.Count);
+        Assert.All(warnings, warning => Assert.Equal(DiagnosticCodes.ProgramNameTaken, warning.Code));
+        Assert.Equal(4, warnings[0].Line);
+    }
+
+    private static string FilePerProgramMill()
+    {
+        return FakeMachines.Mill(format: FakeMachines.PointFormat.Replace(
             "\"one_file\"", "\"file_per_program\"", StringComparison.Ordinal));
-
-        CompileResult result = FakeCompile.Run(program, machine);
-
-        Assert.Equal("%\nO1 (T)\nN10 M30\n%\n", Assert.Single(result.Files).Text);
-        Diagnostic warning = Assert.Single(FakeCompile.CompilerDiagnostics(result));
-        Assert.Equal(DiagnosticCodes.UncalledSubprogramNotWritten, warning.Code);
-        Assert.Equal(5, warning.Line);
     }
 }

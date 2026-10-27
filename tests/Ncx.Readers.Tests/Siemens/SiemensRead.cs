@@ -226,6 +226,28 @@ internal static class SiemensRead
         return FiveAxisMachine(transform);
     }
 
+    /// <summary>
+    /// The mill-turn of machines/ with its text changed: each pair of the replacements replaces its first string by the
+    /// second throughout the file.
+    /// </summary>
+    /// <param name="replacements">Pairs of the text to replace and the text to put in its place.</param>
+    public static MachineConfig MillTurnWith(params string[] replacements)
+    {
+        string text = File.ReadAllText(Path.Combine(Fixture.RepositoryRoot(), "machines", "millturn1.toml"));
+        for (int index = 0; index + 1 < replacements.Length; index += 2)
+        {
+            text = text.Replace(replacements[index], replacements[index + 1], StringComparison.Ordinal);
+        }
+
+        var diagnostics = new Diagnostics("millturn.toml");
+        MachineConfig? machine = MachineConfigLoader.LoadText(text, diagnostics);
+        Assert.True(machine is not null && !diagnostics.HasErrors, diagnostics.ToText());
+        CycleCatalog? catalog = CycleCatalogLoader.Load(
+            Path.Combine(Fixture.RepositoryRoot(), "cycles", "siemens.toml"), Controller.Siemens, diagnostics);
+        Assert.True(catalog is not null, diagnostics.ToText());
+        return CycleCatalogLoader.WithCatalog(machine, catalog);
+    }
+
     private static MachineConfig FiveAxisMachine()
     {
         return FiveAxisMachine(RotaryTransform);

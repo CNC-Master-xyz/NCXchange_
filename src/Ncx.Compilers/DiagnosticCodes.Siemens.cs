@@ -86,8 +86,9 @@ public static partial class DiagnosticCodes
     public const string SiemensTiltNotWritable = "CMP532";
 
     /// <summary>
-    /// CMP533, a WARNING: an option the control or the machine has no form for is not written, ROT of a tilt or a
-    /// rotary option without its template (controller-mapping 1, MOVE and ROT; machine-config 5; D82, D86).
+    /// CMP533, a WARNING: an option the control or the machine has no form for is not written, ROT of a tilt, a
+    /// rotary option without its template, or PATH_MODE with an empty or missing PATH_MODE template (controller-mapping
+    /// 1, MOVE and ROT; machine-config 5; D82, D86, D349).
     /// </summary>
     public const string SiemensOptionNotWritten = "CMP533";
 
@@ -154,6 +155,25 @@ public static partial class DiagnosticCodes
     /// the reference plane towards the retract plane (controller-mapping 5; D334).
     /// </summary>
     public const string SiemensCycleClearanceOnTheWrongSide = "CMP573";
+
+    /// <summary>
+    /// CMP574, a WARNING: a word of the cycle that its entry maps to no position while the native cycle reaches the
+    /// same value from another word of the block, the CYCLE_F of TAP and TAP_COMPENSATING, which tap with the feed of
+    /// PITCH; it is not written (D362, D181; controller-mapping 5).
+    /// </summary>
+    public const string SiemensCycleWordDerived = "CMP574";
+
+    /// <summary>
+    /// CMP575, an ERROR: a native cycle of CYCLE:SIEMENS=n whose signature the cycle catalog does not know, whose
+    /// parameters are not written positionally (D279; language 4.7.1, D94).
+    /// </summary>
+    public const string SiemensNativeCycleSignatureUnknown = "CMP575";
+
+    /// <summary>
+    /// CMP576, a WARNING: a position the control needs for the cycle stays empty because no NCX word carries it, the
+    /// length, width, feed and VARI of SLOT1, the spindle of CYCLE830 (D379, D380; SW4.92 p.1053, 1121).
+    /// </summary>
+    public const string SiemensCycleRequiredPositionEmpty = "CMP576";
 
     /// <summary>
     /// CMP590: an expression holds an operator or a function the SINUMERIK language has no form for (controllers

@@ -24,6 +24,9 @@ internal sealed class HeidenhainBlock
 
     private readonly HashSet<Word> _written = [];
 
+    // The formulas of the block spilled into QL parameters, by formula (D338).
+    private readonly Dictionary<string, string> _spilled = new(StringComparer.Ordinal);
+
     /// <summary>
     /// The block with its state before and after it and its events (architecture 8).
     /// </summary>
@@ -66,6 +69,21 @@ internal sealed class HeidenhainBlock
     public required HeidenhainLabelWays Labels { get; init; }
 
     /// <summary>
+    /// The LBL numbers of the compile (D271, D272).
+    /// </summary>
+    public required HeidenhainLabelNumbers LabelNumbers { get; init; }
+
+    /// <summary>
+    /// The REPEAT blocks written as counter loops, with their counters (D213).
+    /// </summary>
+    public required HeidenhainRepeats Repeats { get; init; }
+
+    /// <summary>
+    /// The QL parameters free for the formulas of a block (D338).
+    /// </summary>
+    public required HeidenhainSpills Spills { get; init; }
+
+    /// <summary>
     /// Writes one line of the block (CompilerBase.Line).
     /// </summary>
     public required Action<string> WriteLine { get; init; }
@@ -87,10 +105,21 @@ internal sealed class HeidenhainBlock
     public required Func<string, string> CommentText { get; init; }
 
     /// <summary>
+    /// The final name of a program's file, which BEGIN PGM and END PGM carry (CompilerBase.ProgramFileName, D266).
+    /// </summary>
+    public required Func<Section, string> ProgramName { get; init; }
+
+    /// <summary>
     /// The index of the named measurement point of the holder after the block, from [tool_points]; null where the
     /// program named no point since the TOOL or the mapping gives none (D373, D393; CompilerBase.PointRegistersOf).
     /// </summary>
     public ToolPointRegisters? PointRegisters { get; init; }
+
+    /// <summary>
+    /// What the block writes for STOCK, the [stock] template and its numbers; null for another block and for a
+    /// STOCK that writes nothing (D351; CompilerBase.StockOf).
+    /// </summary>
+    public StockForm? Stock { get; init; }
 
     /// <summary>
     /// The block.
@@ -234,8 +263,10 @@ internal sealed class HeidenhainBlock
     /// <param name="text">The template text as the record of the machine keeps it; null when the file has none.</param>
     /// <param name="what">The template as a message names it: "[spindle.TOOL] CW (machine-config 5)".</param>
     /// <param name="values">The values of its placeholders.</param>
+    /// <param name="collapseSpaces">True where a placeholder may be empty, {rot} of a ROT without effect: the runs of
+    /// spaces it leaves become one, and a space at the end of a line goes (D269).</param>
     /// <returns>True when it was written.</returns>
-    public bool Template(string? text, string what, TemplateValues values)
+    public bool Template(string? text, string what, TemplateValues values, bool collapseSpaces = false)
     {
         // A word whose template the machine does not give cannot be written (machine-config introduction).
         if (text is null)
@@ -253,12 +284,39 @@ internal sealed class HeidenhainBlock
             return false;
         }
 
+        if (collapseSpaces)
+        {
+            rendered = string.Join("\n", rendered.Split('\n').Select(CollapseSpaces));
+        }
+
         if (rendered.Length > 0)
         {
             Line(rendered);
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// The QL parameter that holds a formula of the block, set in a block of its own written now, before the line that
+    /// reads it: QL499 = Q1 + 5 (D338); the same formula twice in a block takes one parameter. Null when no QL is free.
+    /// </summary>
+    /// <param name="formula">The Klartext formula.</param>
+    public string? Spill(string formula)
+    {
+        if (_spilled.TryGetValue(formula, out string? held))
+        {
+            return held;
+        }
+
+        if (Spills.Free(_spilled.Count) is not string register)
+        {
+            return null;
+        }
+
+        Line(register + " = " + formula);
+        _spilled.Add(formula, register);
+        return register;
     }
 
     /// <summary>
@@ -289,5 +347,13 @@ internal sealed class HeidenhainBlock
         }
 
         return string.Join(" ", texts);
+    }
+
+    // The line with each run of spaces as one space and none at its end.
+    private static string CollapseSpaces(string line)
+    {
+        string[] parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        string leading = line.Length - line.TrimStart(' ').Length > 0 ? " " : "";
+        return leading + string.Join(' ', parts);
     }
 }

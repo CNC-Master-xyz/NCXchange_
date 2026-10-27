@@ -31,6 +31,11 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
     protected override string FileExtension => ".mpf";
 
     /// <summary>
+    /// An ARC with a tool vector is the ERROR CMP017: a G2 or G3 with A3= B3= C3= is not checked yet (D185).
+    /// </summary>
+    protected override bool WritesVectorArcs => false;
+
+    /// <summary>
     /// Compiles one NCX file: under program_layout = "one_file" into one archive with the %_N_ headers, else into one
     /// file per unit (controllers siemens.md 12 rule 1; machine-config 2, D48).
     /// </summary>
@@ -152,6 +157,7 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
             Writer = Line,
             CommentText = CommentText,
             PointRegisters = PointRegistersOf(after),
+            Stock = StockOf(Step),
         };
         _file.MeetJumpsOverCalls(write);
         if (!SiemensProgramFrame.WriteBegin(write, fileStem))
@@ -222,6 +228,7 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
         SiemensFlow.WriteLabel(write);
         SiemensFrames.WriteChain(write);
         WriteTools(write);
+        SiemensCycles.EndModalCallBeforeBareFeed(write);
         SiemensSpindles.Write(write);
         SiemensFrames.WriteTransformations(write);
         SiemensFrames.ReportCylinder(write);
@@ -236,6 +243,7 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
         write.WriteMain();
         SiemensCycles.WriteAfter(write);
         SiemensFrames.WriteVerbs(write);
+        SiemensProgramFrame.WriteStock(write);
         SiemensMotion.WriteDwell(write);
         SiemensFlow.WriteVariables(write);
         SiemensFlow.Write(write, fileStem);
@@ -280,7 +288,7 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
     }
 
     // The template the framework wrote the change with: unload for TOOL=0, change_preloaded for a preloaded tool where
-    // the machine has it, change otherwise (machine-config 3).
+    // the machine has it, change_named for a tool called by name, change otherwise (machine-config 3, D172).
     private static string? ChangeTemplate(SiemensBlock write)
     {
         ToolChangeConfig? config = write.Machine.ToolChange;
@@ -297,6 +305,14 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
 
         bool preloaded = write.Before.Holders.TryGetValue(holder, out HolderSnapshot? before)
             && before.Preloaded == after.SpindleTool;
-        return preloaded && config?.ChangePreloaded is not null ? config.ChangePreloaded : config?.Change;
+        if (preloaded && config?.ChangePreloaded is not null)
+        {
+            return config.ChangePreloaded;
+        }
+
+        // D172: a tool called by name is written with change_named.
+        return after.SpindleTool.Name is not null && config?.ChangeNamed is not null
+            ? config.ChangeNamed
+            : config?.Change;
     }
 }

@@ -27,12 +27,8 @@ internal static class HeidenhainFlow
         HeidenhainMotion.FeedKey, HeidenhainSetpos.PlaceKey,
     ];
 
-    // TODO(question): heidenhain.md 1 gives LBL "NAME" for newer controls without saying whether the iTNC 530 is one;
-    // a label or subprogram NAME that is no number is written in that form.
-
     /// <summary>
-    /// A label or subprogram name as LBL writes it: the number, LBL 5, or the name in quotes, LBL "DRILL_ROW"
-    /// (controllers heidenhain.md 1).
+    /// A label or subprogram name as a message names it: the number, 5, or the name in quotes, "DRILL_ROW".
     /// </summary>
     public static string Label(Value value)
     {
@@ -42,6 +38,16 @@ internal static class HeidenhainFlow
             StringValue name => "\"" + name.Content + "\"",
             _ => "\"" + value.ToCanonical() + "\"",
         };
+    }
+
+    /// <summary>
+    /// The LBL number of a LABEL, or of the target of a JUMP or REPEAT, in the section of the block being written
+    /// (D271): its own number where it keeps it, the number the compiler gave it otherwise. LBL "NAME" is never
+    /// written, since numbers run on every software level (controllers heidenhain.md 1).
+    /// </summary>
+    public static string LabelNumber(HeidenhainBlock writing, Value label)
+    {
+        return writing.LabelNumbers.LabelOf(writing.Step.Section, label) ?? Label(label);
     }
 
     /// <summary>
@@ -55,7 +61,13 @@ internal static class HeidenhainFlow
             return;
         }
 
-        writing.Line("LBL " + Label(label.Value));
+        // A counter loop of a REPEAT to this label starts fresh on every arrival through the text (D213).
+        foreach (string counter in writing.Repeats.ResetsBefore(writing.Block))
+        {
+            writing.Line(counter + " = 0");
+        }
+
+        writing.Line("LBL " + LabelNumber(writing, label.Value));
 
         // A JUMP or a CALL LBL REP reaches the label with what the control has active at the jump, which the STATIC
         // walk records and does not follow (virtual machine 1), and the blocks from the label on run on every way with
@@ -119,7 +131,12 @@ internal static class HeidenhainFlow
         if (writing.Take("JUMP") is Word jump)
         {
             bool toTheEnd = jump.Value is IdentValue { Name: "END" };
-            labels.Add(toTheEnd ? EndLabel(writing).ToString(CultureInfo.InvariantCulture) : Label(jump.Value));
+            string? target = toTheEnd ? EndLabel(writing) : LabelNumber(writing, jump.Value);
+            if (target is not null)
+            {
+                labels.Add(target);
+            }
+
             if (!toTheEnd && !writing.Block.Has("RETURN"))
             {
                 HeidenhainArrivals.Check(writing, jump);
@@ -128,8 +145,16 @@ internal static class HeidenhainFlow
 
         if (labels.Count == 0)
         {
+            // A jump whose LBL has no number was reported where the numbers were given (CMP129); its IF goes with it.
+            if (writing.Block.Has("JUMP") || writing.Block.Has("RETURN"))
+            {
+                writing.Take("IF");
+            }
+
             return;
         }
+
+        WriteEntryResets(writing);
 
         string? test = writing.Take("IF") is Word condition ? Condition(writing, condition) : AlwaysTrue;
         if (test is null)
@@ -169,53 +194,15 @@ internal static class HeidenhainFlow
     }
 
     /// <summary>
-    /// Tells whether the program of the block jumps to its end: JUMP=END in its walk, or a RETURN of the program
-    /// itself, which is treated as JUMP=END (language 4.9; virtual machine 3.6); its LBL stands before the M30
-    /// (controller-mapping 1, JUMP=END).
+    /// The number of the LBL before the M30 of the program whose file the block is written into, which JUMP=END and a
+    /// RETURN of the program jump to (controller-mapping 1, JUMP=END), numbered with the labels (D271); null where the
+    /// program has none.
     /// </summary>
-    public static bool JumpsToTheEnd(HeidenhainBlock writing)
+    public static string? EndLabel(HeidenhainBlock writing)
     {
-        IReadOnlyList<BlockStep> steps = writing.LookAhead.Steps;
-        for (int index = writing.Step.Index - 1; index >= 0; index--)
-        {
-            BlockStep step = steps[index];
-            bool returns = step.Section is Section { Kind: SectionKind.Program } && step.Block.Has("RETURN");
-            if (returns || step.Block.Has("JUMP", null, "END"))
-            {
-                return true;
-            }
-
-            if (step.Block.Has("PROGRAM", null, "BEGIN"))
-            {
-                return false;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// The number of the LBL before the M30 that JUMP=END jumps to: one more than every numbered LABEL and SUB of the
-    /// file, so that it names no other label of the output file, where the LBL sections of the subprograms stand next
-    /// to the program's labels (controllers heidenhain.md 1).
-    /// </summary>
-    public static long EndLabel(HeidenhainBlock writing)
-    {
-        long highest = 0;
-        foreach (BlockStep step in writing.LookAhead.Steps)
-        {
-            bool section = step.Block.Has("SUB", null, "BEGIN");
-            foreach (Word word in step.Block.Words)
-            {
-                bool names = word.Key == "LABEL" || (section && word.Key == "NAME");
-                if (names && word.Value is IntegerValue number && number.Number > highest)
-                {
-                    highest = number.Number;
-                }
-            }
-        }
-
-        return highest + 1;
+        return HeidenhainProgramFrame.ProgramOf(writing) is Section program
+            ? writing.LabelNumbers.EndOf(program)
+            : null;
     }
 
     // FN 9: IF +Q1 EQU +Q3, FN 10 unequal, FN 11 greater, FN 12 less (controllers heidenhain.md 6), with two values,
@@ -228,6 +215,11 @@ internal static class HeidenhainFlow
         if (condition.Value is ExprValue { Tree: ExprNode tree }
             && HeidenhainFormula.Unwrapped(tree) is BinaryNode comparison)
         {
+            if (IsString(comparison.Left) || IsString(comparison.Right))
+            {
+                return StringCondition(writing, condition, comparison);
+            }
+
             string? function = comparison.Operator switch
             {
                 BinaryOperator.Equal => "FN 9: IF {0} EQU {1}",
@@ -236,8 +228,11 @@ internal static class HeidenhainFlow
                 BinaryOperator.Less => "FN 12: IF {0} LT {1}",
                 _ => null,
             };
-            string? left = HeidenhainFormula.Operand(comparison.Left, separator);
-            string? right = HeidenhainFormula.Operand(comparison.Right, separator);
+            // D338: an operand that is a formula is spilled into a QL parameter before the jump.
+            string? left = function is null ? null : HeidenhainFormula.Operand(comparison.Left, separator)
+                ?? HeidenhainNumbers.Spilled(writing, comparison.Left);
+            string? right = function is null ? null : HeidenhainFormula.Operand(comparison.Right, separator)
+                ?? HeidenhainNumbers.Spilled(writing, comparison.Right);
             if (function is not null && left is not null && right is not null)
             {
                 return string.Format(CultureInfo.InvariantCulture, function, left, right);
@@ -257,6 +252,11 @@ internal static class HeidenhainFlow
     // TODO(question): which text a compiler writes for a REPEAT without TIMES is not in that answer, which names no
     // compiler form, so REP 1 here, P=1 or no P on Siemens waits on the maintainer; REP 1 stays until then, and a
     // Klartext source cannot produce the form (heidenhain.md 7 rule 3), so no round trip depends on it.
+    // D213: where a JUMP leaves the part, the repeat is a counter loop in a register of [format] counter_registers:
+    // the counter is set to 0 before the label (WriteLabel), counted here, and the jump back taken while it has not
+    // passed k, then set to 0 again, so that a later arrival starts the repeat fresh with k passes, as NCX does; the
+    // TNC keeps the REP count of CALL LBL REP as block state that only GOTO 0 or a new program selection resets
+    // (decisions.md D213, D388 (12)). A repeat without a register is the ERROR CMP130 of HeidenhainRepeats.
     private static void WriteRepeat(HeidenhainBlock writing)
     {
         if (writing.Take("REPEAT") is not Word repeat)
@@ -264,7 +264,7 @@ internal static class HeidenhainFlow
             return;
         }
 
-        string count = "1";
+        long count = 1;
         if (writing.Take("TIMES") is Word times)
         {
             if (times.Value is not IntegerValue number)
@@ -273,49 +273,101 @@ internal static class HeidenhainFlow
                 return;
             }
 
-            count = number.Number.ToString(CultureInfo.InvariantCulture);
+            count = number.Number;
         }
 
-        writing.Line("CALL LBL " + Label(repeat.Value) + " REP " + count);
+        string label = LabelNumber(writing, repeat.Value);
+        string text = count.ToString(CultureInfo.InvariantCulture);
+        WriteEntryResets(writing);
+        if (writing.Repeats.CounterOf(writing.Block) is string counter)
+        {
+            string passes = (count + 1).ToString(CultureInfo.InvariantCulture);
+            writing.Line(counter + " = " + counter + " + 1");
+            writing.Line("FN 12: IF +" + counter + " LT +" + passes + " GOTO LBL " + label);
+            writing.Line(counter + " = 0");
+        }
+        else if (!writing.Repeats.IsRefused(writing.Block))
+        {
+            writing.Line("CALL LBL " + label + " REP " + text);
+        }
 
         // The repeat brings what the control has at the call to the blocks after the label (HeidenhainArrivals).
         HeidenhainArrivals.Check(writing, repeat);
     }
 
-    // RETURN returns to the caller before SUB=END is reached (language 4.9, 4.13), and sub_end is "written for SUB=END
-    // and RETURN" (machine-config 2): in a subprogram the LBL 0 of the machine where the RETURN stands, which ends the
-    // call where the control reaches it (controllers heidenhain.md 1). In a program, which no caller entered, RETURN is
-    // treated as JUMP=END (language 4.9; virtual machine 3.6): the label of the LBL before the M30 is returned, for
-    // WriteJump to write the jump to it with the IF of the block.
-    // TODO(question): heidenhain 7 rule 3 reads "LBL n closed by LBL 0" as a subprogram, and no document says how a
-    // reader takes an LBL 0 before the one that closes the section, which sub_end for RETURN writes; the compiler
-    // writes it as machine-config 2 says.
-    // TODO(question): D272: IF needs the JUMP or CALL of its block (language 5 rule 5) and makes the whole block
-    // conditional (language 4.9: the block executes when the expression is not 0), so a RETURN under IF in a
-    // subprogram returns only when the condition holds, and LBL 0 takes no condition; it is reported, as a CALL under
-    // IF is.
+    // D213: a JUMP or REPEAT that enters the part of a counter loop from outside does not pass the reset before the
+    // loop's label, so it sets the counter to 0 before its jump line; a conditional jump not taken loses nothing, since
+    // every arrival at the part starts the repeat fresh.
+    private static void WriteEntryResets(HeidenhainBlock writing)
+    {
+        foreach (string counter in writing.Repeats.ResetsOnEntry(writing.Block))
+        {
+            writing.Line(counter + " = 0");
+        }
+    }
+
+    // RETURN returns to the caller before SUB=END is reached (language 4.9, 4.13). In a program, which no caller
+    // entered, RETURN is treated as JUMP=END (language 4.9; virtual machine 3.6): the label of the LBL before the M30
+    // is returned, for WriteJump to write the jump to it with the IF of the block.
+    // D272: in a subprogram a RETURN before the end of the section is a jump to an LBL m directly before the closing
+    // LBL 0 of the section (HeidenhainProgramFrame.WriteEnd), FN 9: IF +0 EQU +0 GOTO LBL m without IF and FN 9 to
+    // FN 12 with the condition under IF; a RETURN directly before SUB=END writes nothing. Each section keeps exactly
+    // one LBL 0 (decisions.md D272; machine-config 2, sub_end).
     private static string? ReturnLabel(HeidenhainBlock writing)
     {
-        if (writing.Take("RETURN") is not Word ret)
+        if (writing.Take("RETURN") is null)
         {
             return null;
         }
 
         if (writing.Step.Section is Section { Kind: SectionKind.Program })
         {
-            return EndLabel(writing).ToString(CultureInfo.InvariantCulture);
+            return EndLabel(writing);
         }
 
-        if (writing.Block.Find("IF") is Word condition)
+        if (writing.Step.Section is not Section sub || HeidenhainLabelNumbers.EndsTheSection(writing.LookAhead,
+            writing.Step))
         {
-            writing.Error(DiagnosticCodes.HeidenhainWordWithoutKlartext,
-                $"{ret.ToCanonical()} under {condition.ToCanonical()} returns from the subprogram only when the "
-                + "condition holds, and the sub_end of the machine, LBL 0, takes no condition, so nothing is written "
-                + "for the return (language 4.9; machine-config 2).");
             return null;
         }
 
-        HeidenhainProgramFrame.WriteSubEnd(writing);
+        return writing.LabelNumbers.ReturnOf(sub);
+    }
+
+    // A string parameter QS of Klartext, $QS1 (controllers heidenhain.md 6).
+    private static bool IsString(ExprNode node)
+    {
+        return HeidenhainFormula.Unwrapped(node) is VariableNode { Index: null } variable
+            && variable.Name.StartsWith("QS", StringComparison.Ordinal) && variable.Name.Length > 2
+            && variable.Name.Substring(2).All(char.IsAsciiDigit);
+    }
+
+    // D169: == and != compare two strings by exact, case-sensitive text. Klartext compares two QS parameters with
+    // STRCOMP, which gives 0 when they are identical (iTNC 530 DIN/ISO 606420-01, connector p. 291; the Klartext
+    // formula is the same); no manual states whether STRCOMP compares case-sensitively, which "identisch" suggests:
+    // the result is spilled into a QL parameter (D338) and FN 9 or FN 10 tests it against 0. Any other comparison
+    // with a string, or a string against a number, has no Klartext form: the ERROR CMP126 (decisions.md D169).
+    private static string? StringCondition(HeidenhainBlock writing, Word condition, BinaryNode comparison)
+    {
+        string? function = comparison.Operator switch
+        {
+            BinaryOperator.Equal => "FN 9: IF +{0} EQU +0",
+            BinaryOperator.NotEqual => "FN 10: IF +{0} NE +0",
+            _ => null,
+        };
+        if (function is not null && IsString(comparison.Left) && IsString(comparison.Right))
+        {
+            string left = ((VariableNode)HeidenhainFormula.Unwrapped(comparison.Left)).Name;
+            string right = ((VariableNode)HeidenhainFormula.Unwrapped(comparison.Right)).Name;
+            if (writing.Spill("STRCOMP ( SRC_" + left + " SEA_" + right + " )") is string result)
+            {
+                return string.Format(CultureInfo.InvariantCulture, function, result);
+            }
+        }
+
+        writing.Error(DiagnosticCodes.HeidenhainStringComparison,
+            $"{condition.ToCanonical()}: Klartext compares strings only as two QS parameters for equal or unequal, "
+            + "through STRCOMP into a free QL parameter; this comparison has no Klartext form (language 4.12; D169).");
         return null;
     }
 }

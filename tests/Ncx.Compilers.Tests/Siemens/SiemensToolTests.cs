@@ -269,12 +269,31 @@ public sealed class SiemensToolTests
             StringComparison.Ordinal);
     }
 
-    // D172: the change template of the mill writes {tool}, and a tool by name has no number for it; the template is
-    // unusable, the ERROR of the template (machine-config introduction).
+    // D172: a tool called by name, and the preload of one, take change_named and preload_named with {name}.
     [Fact]
-    public void ToolByName_WithANumericTemplate_IsTheErrorOfTheTemplate()
+    public void ToolByName_IsWrittenWithTheNamedTemplates()
     {
-        Assert.Equal(["CFG100"], Codes(Run(Program(MillHeader, "TOOL=\"DRILL_D8\""), Mill())));
+        Assert.Equal(Lines("T=\"DRILL_D8\" M6", "T=\"MILL_D10\""),
+            MillBody("TOOL=\"DRILL_D8\"", "PRELOAD=\"MILL_D10\""));
+    }
+
+    // D172: a tool called by name on a machine that takes names but has no named template is the ERROR CMP008.
+    [Fact]
+    public void ToolByName_WithoutChangeNamed_IsTheErrorCmp008()
+    {
+        MachineConfig machine = Variant("machines/siemens-840dsl-mill.toml", text => text
+            .Replace("change_named =", "# change_named =", StringComparison.Ordinal)
+            .Replace("preload_named =", "# preload_named =", StringComparison.Ordinal));
+
+        Assert.Equal(["CMP008", "CMP008"],
+            CompilerCodes(Run(Program(MillHeader, "TOOL=\"DRILL_D8\"", "PRELOAD=\"MILL_D10\""), machine)));
+    }
+
+    // D172: a numeric tool keeps the numeric change template.
+    [Fact]
+    public void ToolByNumber_KeepsTheNumericTemplate()
+    {
+        Assert.Equal(Lines("T5 M6"), MillBody("TOOL=5"));
     }
 
     // D172: a tool name with a special character or of more than 31 characters is the WARNING CMP515 (840D sl

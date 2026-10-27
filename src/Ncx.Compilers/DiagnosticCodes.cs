@@ -36,10 +36,75 @@ public static partial class DiagnosticCodes
     public const string SubprogramWalksDiffer = "CMP002";
 
     /// <summary>
-    /// CMP003, a WARNING: under program_layout = "file_per_program" a subprogram that no program calls stands in no
-    /// output file (machine-config 2, D48, D99).
+    /// CMP003, retired 2026-10-27 (D264): a subprogram that no program calls is written once, into the first program's
+    /// file under program_layout = "file_per_program". The number is not reused.
     /// </summary>
+    [Obsolete("Retired by D264: every SUB is written at least once.")]
     public const string UncalledSubprogramNotWritten = "CMP003";
+
+    /// <summary>
+    /// CMP004: a cycle whose [[cycle]] table says available = false on the channel compiled, or on the whole machine
+    /// without channel; nothing is written for it, no before line and no substitute (machine-config 6, D361, D377).
+    /// </summary>
+    public const string CycleNotAvailable = "CMP004";
+
+    /// <summary>
+    /// CMP005, a WARNING: under program_layout = "file_per_program" a program name, compared case-insensitively, is
+    /// taken already by an earlier program, and the file gets _2, _3 (machine-config 2, D266).
+    /// </summary>
+    public const string ProgramNameTaken = "CMP005";
+
+    /// <summary>
+    /// CMP006, a WARNING: {next} of a tool change finds no other tool to prepare, and the tool changed in is written
+    /// (machine-config 3, D267).
+    /// </summary>
+    public const string NoOtherToolToPrepare = "CMP006";
+
+    /// <summary>
+    /// CMP007: ORIENT with an angle other than 0 on a spindle whose ORIENT template has no {angle} (machine-config 5,
+    /// D154).
+    /// </summary>
+    public const string OrientAngleWithoutTemplate = "CMP007";
+
+    /// <summary>
+    /// CMP008: a tool called by name on a machine with tool_name_allowed = true whose [tool_change] has no
+    /// change_named or preload_named for it (machine-config 3, D172).
+    /// </summary>
+    public const string NamedToolTemplateMissing = "CMP008";
+
+    /// <summary>
+    /// CMP012, an INFO: STOCK of a form the machine file has no [stock] template for writes nothing; the blank feeds
+    /// only the control's graphic (machine-config 5, D351).
+    /// </summary>
+    public const string StockFormWithoutTemplate = "CMP012";
+
+    /// <summary>
+    /// CMP013, an INFO: a STOCK the machine's form cannot express writes nothing: a cylinder off the tool axis through
+    /// the datum, about another axis than the template's, or corners given by expressions (machine-config 5, D351).
+    /// </summary>
+    public const string StockNotExpressible = "CMP013";
+
+    /// <summary>
+    /// CMP014, a WARNING: a program with both a STOCK and a RAW blank of the target writes the RAW text alone
+    /// (D351).
+    /// </summary>
+    public const string StockBesideRawBlank = "CMP014";
+
+    /// <summary>
+    /// CMP015: the [tolerance] template the compiler writes has no placeholder for a value the program set, {tol},
+    /// {rotary} or {mode}, so the control keeps the value it holds; once per distinct value per program, never for
+    /// TOLERANCE=OFF, and also for a TOLERANCE:ROTARY on a machine without ON_ROTARY. An INFO when held_value is at
+    /// least as tight as the program's TOLERANCE, else a WARNING (machine-config 5, D151, D367).
+    /// </summary>
+    public const string ToleranceValueNotWritten = "CMP015";
+
+    /// <summary>
+    /// CMP017: an ARC with a tool vector TX TY TZ compiled for a controller without a vector arc, Heidenhain (LN has no
+    /// arc form) and, until a Siemens vector arc is checked, Siemens, an ERROR at compile time like RAW of another
+    /// controller; on Fanuc a vector arc by its centre, as I J K of G43.5 are the vector and only the R form is left
+    /// (D185).
+    /// </summary>
+    public const string VectorArcNotWritable = "CMP017";
 
     /// <summary>
     /// CMP016, an INFO: the program names a measurement point other than 1 and the machine file has no [tool_points],

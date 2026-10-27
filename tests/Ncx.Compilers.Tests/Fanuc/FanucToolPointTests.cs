@@ -172,7 +172,7 @@ public sealed class FanucToolPointTests
     {
         string text = FanucCompile.TextOf(FanucCompile.Run(FanucCompile.Program(blocks.Split('\n')),
             FanucCompile.Mill(extra: extra)));
-        const string Start = "%\nO0001 (T)\nG0 G40\nG80 G90 G94 G98\n";
+        const string Start = "%\nO0001 (T)\nG21\nG0 G40\nG80 G90 G94 G98\n";
         const string End = "M30\n%\n";
         Assert.StartsWith(Start, text, StringComparison.Ordinal);
         Assert.EndsWith(End, text, StringComparison.Ordinal);
