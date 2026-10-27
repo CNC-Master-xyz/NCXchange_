@@ -364,7 +364,7 @@ public sealed partial class FanucReader : ReaderBase
         State.LastSpindle = null;
         State.Preloaded = null;
         fanuc.Unknowns.Clear();
-        fanuc.Chain.Clear();
+        fanuc.Chain.Reset();
         fanuc.Cycle = null;
         fanuc.CssOn = false;
         fanuc.Rpm.Clear();

@@ -89,11 +89,12 @@ public sealed class FanucSubprogramTests
     }
 
     // A subprogram that no program of the file calls runs with the chain of a caller the reader does not know: G69 and
-    // G52 act on entries of that chain and stay RAW, G68 is appended to it (language 4.2, virtual machine 3.9).
+    // G52 act on entries of that chain and stay RAW, G68 about the origin is appended to it (language 4.2, virtual
+    // machine 3.9; D245).
     [Fact]
     public void SubprogramWithoutACallerInTheFile_KeepsItsFrameResetsRaw()
     {
-        string text = Text("%\nO0001\nG0 X0\nM30\nO0100\nG69\nG52 X0\nG68 R30.\nM99\n%\n");
+        string text = Text("%\nO0001\nG0 X0\nM30\nO0100\nG69\nG52 X0\nG68 X0 Y0 R30.\nM99\n%\n");
 
         Assert.Contains("\nSUB=BEGIN NAME=100\nRAW:FANUC=\"G69\"\nRAW:FANUC=\"G52 X0\"\nROTATE=30\nSUB=END\n", text,
             StringComparison.Ordinal);
@@ -103,7 +104,7 @@ public sealed class FanucSubprogramTests
     [Fact]
     public void SubprogramOfACallerWithARotation_ResetsItWithG69()
     {
-        string text = Text("%\nO0001\nG68 R30.\nM98 P100\nM30\nO0100\nG69\nM99\n%\n");
+        string text = Text("%\nO0001\nG68 X0 Y0 R30.\nM98 P100\nM30\nO0100\nG69\nM99\n%\n");
 
         Assert.Contains("\nSUB=BEGIN NAME=100\nROTATE=RESET\nSUB=END\n", text, StringComparison.Ordinal);
     }

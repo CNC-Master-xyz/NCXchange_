@@ -17,6 +17,10 @@ internal sealed class FanucChain
 
     private readonly List<FanucChainEntry> _entries = [];
 
+    // The modes of the control that a block kept as RAW switched on, which the chain of NCX therefore does not hold:
+    // "G68" (a rotation), "G68.2" (a tilted plane) and "G51.1" (a mirror) (D244, D245).
+    private readonly HashSet<string> _native = new(StringComparer.Ordinal);
+
     /// <summary>
     /// True while the reader knows the whole chain: from PROGRAM=BEGIN and from an ORIGIN on (language 4.2).
     /// </summary>
@@ -34,13 +38,30 @@ internal sealed class FanucChain
     public Dictionary<string, decimal> Local { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// ORIGIN starts an empty chain (language 4.2), and a program begins with one (virtual machine 2.1).
+    /// The three-dimensional coordinate conversions (G68 with I J K) the control holds, kept as RAW: a second one is
+    /// measured in the system of the first, a third raises PS5043, and one G69 ends both (D245; B-64484EN p.342-344).
+    /// </summary>
+    public int Conversions { get; set; }
+
+    /// <summary>
+    /// ORIGIN starts an empty chain (language 4.2); the G52 shift of the control holds in all of G54..G59, so Local
+    /// stays (D244 (a); B-64484EN p.216-217).
     /// </summary>
     public void Clear()
     {
         _entries.Clear();
-        Local.Clear();
         Known = true;
+    }
+
+    /// <summary>
+    /// A program begins with an empty chain, no G52 shift and no mode on (virtual machine 2.1).
+    /// </summary>
+    public void Reset()
+    {
+        Clear();
+        Local.Clear();
+        _native.Clear();
+        Conversions = 0;
     }
 
     /// <summary>
@@ -50,6 +71,8 @@ internal sealed class FanucChain
     {
         _entries.Clear();
         Local.Clear();
+        _native.Clear();
+        Conversions = 0;
         Known = false;
     }
 
@@ -67,6 +90,9 @@ internal sealed class FanucChain
             Local[axis.Key] = axis.Value;
         }
 
+        _native.Clear();
+        _native.UnionWith(other._native);
+        Conversions = other.Conversions;
         Known = other.Known;
     }
 
@@ -88,6 +114,42 @@ internal sealed class FanucChain
     }
 
     /// <summary>
+    /// Tells whether a mode of the control is on, written into the chain or switched on by a block kept as RAW (D244,
+    /// D245).
+    /// </summary>
+    /// <param name="owner">The function, "G68", "G68.2" or "G51.1".</param>
+    public bool Active(string owner)
+    {
+        return Holds(owner) || _native.Contains(owner);
+    }
+
+    /// <summary>
+    /// Tells whether a block kept as RAW switched on a mode of the control (D245).
+    /// </summary>
+    /// <param name="owner">The function, "G68", "G68.2" or "G51.1".</param>
+    public bool HoldsNative(string owner)
+    {
+        return _native.Contains(owner);
+    }
+
+    /// <summary>
+    /// A block kept as RAW switches a mode of the control on, or its cancel switches it off (D244, D245).
+    /// </summary>
+    /// <param name="owner">The function, "G68", "G68.2" or "G51.1".</param>
+    /// <param name="on">True when the mode is on afterwards.</param>
+    public void SetNative(string owner, bool on)
+    {
+        if (on)
+        {
+            _native.Add(owner);
+        }
+        else
+        {
+            _native.Remove(owner);
+        }
+    }
+
+    /// <summary>
     /// The chain as text, for comparing the chains two callers leave.
     /// </summary>
     public string ToKey()
@@ -104,6 +166,15 @@ internal sealed class FanucChain
         {
             parts.Add(axis + "=" + Local[axis].ToString(CultureInfo.InvariantCulture));
         }
+
+        var native = new List<string>(_native);
+        native.Sort(StringComparer.Ordinal);
+        foreach (string owner in native)
+        {
+            parts.Add("native " + owner);
+        }
+
+        parts.Add("conversions " + Conversions.ToString(CultureInfo.InvariantCulture));
 
         return string.Join("|", parts);
     }
