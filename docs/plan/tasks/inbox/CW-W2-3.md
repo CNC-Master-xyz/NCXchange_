@@ -40,4 +40,6 @@ Review fixes, 2026-10-27:
 - The Fanuc README names FanucUnits, FanucProgramNumbers, FanucRepeats, FanucRepeatRange and FanucRepeatVariables.
 - Subprograms write no G20/G21: they run inside their caller and inherit its units (D283 names the start of each program).
 
-Found: machines/mori-ntx1000-mapps.toml has `TAILSTOCK = { FORWARD = "M13", BACK = "M14" }`, while NTX1000SZM p.253 note 2 names M13 and M14 as spindle (tool-spindle) rotation codes and p.252 gives the tailstock as M25/M26. Fixed in the review round above. Still open: p.257 note 2 asks M10, M210, M11 and M211 to stand in a block without other commands, while p.252 lists them as multiple M code function codes; the list keeps them.
+Found: machines/mori-ntx1000-mapps.toml has `TAILSTOCK = { FORWARD = "M13", BACK = "M14" }`, while NTX1000SZM p.253 note 2 names M13 and M14 as spindle (tool-spindle) rotation codes and p.252 gives the tailstock as M25/M26. Fixed in the review round above.
+
+Gap closed 2026-10-27 (delegated): p.257 note 2 asks M10, M210, M11 and M211 to stand in a block without other commands, while p.252 lists them as multiple M code function codes; the more specific note wins, so both copies of mori-ntx1000-mapps.toml take them out of m_codes_combinable (41 codes left).
