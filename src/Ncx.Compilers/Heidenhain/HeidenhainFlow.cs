@@ -207,6 +207,11 @@ internal static class HeidenhainFlow
         if (condition.Value is ExprValue { Tree: ExprNode tree }
             && HeidenhainFormula.Unwrapped(tree) is BinaryNode comparison)
         {
+            if (IsString(comparison.Left) || IsString(comparison.Right))
+            {
+                return StringCondition(writing, condition, comparison);
+            }
+
             string? function = comparison.Operator switch
             {
                 BinaryOperator.Equal => "FN 9: IF {0} EQU {1}",
@@ -307,5 +312,41 @@ internal static class HeidenhainFlow
         }
 
         return writing.LabelNumbers.ReturnOf(sub);
+    }
+
+    // A string parameter QS of Klartext, $QS1 (controllers heidenhain.md 6).
+    private static bool IsString(ExprNode node)
+    {
+        return HeidenhainFormula.Unwrapped(node) is VariableNode { Index: null } variable
+            && variable.Name.StartsWith("QS", StringComparison.Ordinal) && variable.Name.Length > 2
+            && variable.Name.Substring(2).All(char.IsAsciiDigit);
+    }
+
+    // D169: == and != compare two strings by exact text. Klartext compares two QS parameters with STRCOMP, which gives
+    // 0 when they are identical (iTNC 530 DIN/ISO 606420-01, connector p. 291; the Klartext formula is the same):
+    // the result is spilled into a QL parameter (D338) and FN 9 or FN 10 tests it against 0. Any other comparison
+    // with a string, or a string against a number, has no Klartext form: the ERROR CMP126 (decisions.md D169).
+    private static string? StringCondition(HeidenhainBlock writing, Word condition, BinaryNode comparison)
+    {
+        string? function = comparison.Operator switch
+        {
+            BinaryOperator.Equal => "FN 9: IF +{0} EQU +0",
+            BinaryOperator.NotEqual => "FN 10: IF +{0} NE +0",
+            _ => null,
+        };
+        if (function is not null && IsString(comparison.Left) && IsString(comparison.Right))
+        {
+            string left = ((VariableNode)HeidenhainFormula.Unwrapped(comparison.Left)).Name;
+            string right = ((VariableNode)HeidenhainFormula.Unwrapped(comparison.Right)).Name;
+            if (writing.Spill("STRCOMP ( SRC_" + left + " SEA_" + right + " )") is string result)
+            {
+                return string.Format(CultureInfo.InvariantCulture, function, result);
+            }
+        }
+
+        writing.Error(DiagnosticCodes.HeidenhainStringComparison,
+            $"{condition.ToCanonical()}: Klartext compares strings only as two QS parameters for equal or unequal, "
+            + "through STRCOMP into a free QL parameter; this comparison has no Klartext form (language 4.12; D169).");
+        return null;
     }
 }

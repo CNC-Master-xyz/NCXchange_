@@ -737,4 +737,27 @@ public sealed class HeidenhainFlowTests
         Assert.Empty(result.Files);
         Assert.Equal(8, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainRepeatWithoutCounter).Line);
     }
+
+    // D169: two QS parameters compare by STRCOMP into a free QL parameter, which FN 9 or FN 10 tests against 0.
+    [Fact]
+    public void Jump_ComparingTwoStrings_IsStrcompAndFn9()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "LABEL=1", "JUMP=1 IF={$QS1 == $QS2}", "JUMP=1 IF={$QS1 != $QS2}"));
+
+        Assert.Equal(
+            "LBL 1\nQL499 = STRCOMP ( SRC_QS1 SEA_QS2 )\nFN 9: IF +QL499 EQU +0 GOTO LBL 1\n"
+            + "QL499 = STRCOMP ( SRC_QS1 SEA_QS2 )\nFN 10: IF +QL499 NE +0 GOTO LBL 1",
+            HeidenhainCompile.Body(result));
+    }
+
+    // D169: a string against a number, or an ordering of strings, has no Klartext form: CMP126.
+    [Fact]
+    public void Jump_ComparingAStringWithANumber_IsTheErrorCmp126()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program("LABEL=1", "JUMP=1 IF={$QS1 == 1}"));
+
+        Assert.Empty(result.Files);
+        Assert.Equal(5, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainStringComparison).Line);
+    }
 }
