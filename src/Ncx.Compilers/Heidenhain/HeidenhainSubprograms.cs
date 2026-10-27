@@ -22,7 +22,7 @@ internal static class HeidenhainSubprograms
         writing.Take("SUB");
         if (writing.Take("NAME") is Word name)
         {
-            writing.Line("LBL " + HeidenhainFlow.Label(name.Value));
+            writing.Line("LBL " + (writing.LabelNumbers.SubOf(name.Value) ?? HeidenhainFlow.Label(name.Value)));
         }
     }
 
@@ -68,7 +68,9 @@ internal static class HeidenhainSubprograms
     private static string CallLine(HeidenhainBlock writing, Value target)
     {
         bool external = target is StringValue name && !writing.After.Flow.Subs.ContainsKey(name.Content);
-        return external ? "CALL PGM " + ((StringValue)target).Content : "CALL LBL " + HeidenhainFlow.Label(target);
+        return external
+            ? "CALL PGM " + ((StringValue)target).Content
+            : "CALL LBL " + (writing.LabelNumbers.SubOf(target) ?? HeidenhainFlow.Label(target));
     }
 
     // CALL PGM name with Q parameters set before the call (controller-mapping 6, CALL + ARG): ARG:Q1=5 as Q1 = 5.

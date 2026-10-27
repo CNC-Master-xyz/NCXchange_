@@ -66,6 +66,16 @@ internal sealed class HeidenhainBlock
     public required HeidenhainLabelWays Labels { get; init; }
 
     /// <summary>
+    /// The LBL numbers of the compile (D271, D272).
+    /// </summary>
+    public required HeidenhainLabelNumbers LabelNumbers { get; init; }
+
+    /// <summary>
+    /// The REPEAT blocks written as counter loops, with their counters (D213).
+    /// </summary>
+    public required HeidenhainRepeats Repeats { get; init; }
+
+    /// <summary>
     /// Writes one line of the block (CompilerBase.Line).
     /// </summary>
     public required Action<string> WriteLine { get; init; }

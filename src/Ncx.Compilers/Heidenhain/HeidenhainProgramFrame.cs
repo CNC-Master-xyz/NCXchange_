@@ -94,10 +94,9 @@ internal static partial class HeidenhainProgramFrame
         if (writing.Block.Has("PROGRAM", null, "END"))
         {
             writing.Take("PROGRAM");
-            if (HeidenhainFlow.JumpsToTheEnd(writing))
+            if (writing.Step.Section is Section program && writing.LabelNumbers.EndOf(program) is string end)
             {
-                writing.Line("LBL " + HeidenhainFlow.EndLabel(writing).ToString(
-                    System.Globalization.CultureInfo.InvariantCulture));
+                writing.Line("LBL " + end);
             }
 
             writing.Template(writing.Machine.Format?.ProgramEnd, "[format] program_end (machine-config 2, D49)",
@@ -106,12 +105,20 @@ internal static partial class HeidenhainProgramFrame
         else if (writing.Block.Has("SUB", null, "END"))
         {
             writing.Take("SUB");
+
+            // D272: the LBL m that a RETURN before the end jumps to stands directly before the one LBL 0.
+            if (writing.Step.Section is Section sub && writing.LabelNumbers.ReturnOf(sub) is string back)
+            {
+                writing.Line("LBL " + back);
+            }
+
             WriteSubEnd(writing);
         }
     }
 
     /// <summary>
-    /// Writes sub_end, "written for SUB=END and RETURN", LBL 0 on Heidenhain (machine-config 2).
+    /// Writes sub_end, LBL 0 on Heidenhain, once per section at its SUB=END; a RETURN before the end jumps to the LBL
+    /// before it (machine-config 2; D272).
     /// </summary>
     public static void WriteSubEnd(HeidenhainBlock writing)
     {
@@ -143,7 +150,7 @@ internal static partial class HeidenhainProgramFrame
     // order (architecture 8, D99). The walk of a subprogram that no program calls follows the PROGRAM=END of the last
     // program and belongs to none: that subprogram stands in no output file, with the WARNING of the framework and its
     // TODO(question) (CompilerBase.FilePerProgram), and its UNITS has no BEGIN PGM to be compared with.
-    private static Section? ProgramOf(HeidenhainBlock writing)
+    internal static Section? ProgramOf(HeidenhainBlock writing)
     {
         if (writing.Step.Section is Section { Kind: SectionKind.Program } own)
         {
