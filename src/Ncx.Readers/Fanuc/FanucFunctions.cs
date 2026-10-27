@@ -1,3 +1,4 @@
+using Ncx.Config.Templates;
 using Ncx.Core.Machine;
 using Ncx.Core.Model;
 
@@ -45,6 +46,54 @@ internal static class FanucFunctions
     }
 
     /// <summary>
+    /// The states of the machine an M code writes, the [workpiece] selection first: every state that writes it, less
+    /// those of a table bound to another channel (D56), or the first in file order, with RDR020 where two resources of
+    /// one word would be switched on (D155; FunctionChoice). The reader keeps no state of the function tables, so no
+    /// state is dropped as holding already.
+    /// </summary>
+    /// <param name="block">The block being read.</param>
+    /// <param name="code">The M word.</param>
+    /// <param name="parameter">The P word that belongs to the M code, M3 P11 on the Doosan; null when none
+    /// does.</param>
+    public static IReadOnlyList<FunctionMatch> Choose(FanucBlock block, SourceWord code, out SourceWord? parameter)
+    {
+        parameter = null;
+        if (NativeCode.Of(code) is not string native)
+        {
+            return [];
+        }
+
+        IReadOnlyList<FunctionMatch> matches = [];
+        string text = native;
+        SourceWord? pWord = block.Find("P");
+        if (pWord?.Number is not null)
+        {
+            matches = block.Templates.FindFunctionsByCode(native + " P" + pWord.Text);
+            parameter = matches.Count == 0 ? null : pWord;
+            text = native + " P" + pWord.Text;
+        }
+
+        if (matches.Count == 0)
+        {
+            matches = block.Templates.FindFunctionsByCode(native);
+            text = native;
+        }
+
+        var context = new FunctionContext { Channel = block.Fanuc.Channel is long channel ? (int)channel : null };
+        return FunctionChoice.Choose(matches, context, block.Line, text, block.Diagnostics);
+    }
+
+    /// <summary>
+    /// The word of a state of a function table; null for a state NCX writes otherwise.
+    /// </summary>
+    /// <param name="block">The block being read.</param>
+    /// <param name="match">The state.</param>
+    public static FanucFunction? WordOf(FanucBlock block, FunctionMatch match)
+    {
+        return WordOf(block, match.Key);
+    }
+
+    /// <summary>
     /// Tells whether an M code is the PHASE of the machine's [spindle_sync], Nakamura M92 (machine-config 5;
     /// controller-mapping 4, SPINDLE_SYNC and PHASE).
     /// </summary>
@@ -88,8 +137,8 @@ internal static class FanucFunctions
             case "SPINDLE" when s_spindleStates.Contains(value):
                 return new FanucFunction(key, SpindleAddress(block, addr), new IdentValue(value), addr);
             case "SPINDLE" when value == "ORIENT":
-                // TODO(question): ORIENT takes the angle as its value (language 4.5) and a bare M19 gives none
-                // (wave-1 question #62); the reader writes ORIENT=0, the reference angle of the spindle.
+                // D154: ORIENT takes the angle as its value (language 4.5); the angle of the template or of the block
+                // is FanucBuilder's, and a bare M19 is ORIENT:role=0 with RDR021.
                 return new FanucFunction("ORIENT", SpindleAddress(block, addr), new IntegerValue(0, "0"), addr);
             case "SPINDLE_MODE":
                 return new FanucFunction(key, addr, new IdentValue(value), null);
@@ -105,12 +154,10 @@ internal static class FanucFunctions
         }
     }
 
-    // SPINDLE_SYNC takes the two spindles it couples or OFF (language 4.5); [spindle_sync] names the codes and not the
-    // spindles.
-    // TODO(question): the documents do not say which spindles the ON code of [spindle_sync] couples (wave-1 question
-    // #62); the reader takes the two work spindles of the machine in the order of [roles], MAIN,SUB, and writes the
-    // code as MFUNC when the machine has not two. PHASE needs the angle as its value, which the code does not carry
-    // (FanucBuilder keeps the PHASE code as RAW).
+    // SPINDLE_SYNC takes the two spindles it couples or OFF (language 4.5). D154: [spindle_sync] ON and PHASE couple
+    // the default spindle, the leader, with the other work spindle, or the pair the table names,
+    // SPINDLE_SYNC=MAIN,SUB (MachineConfig.SpindleSyncRoles); the code is MFUNC where the machine has no such pair.
+    // PHASE adds its angle, which FanucBuilder writes.
     private static FanucFunction? SyncOf(FanucBlock block, string value)
     {
         if (value == "OFF")
@@ -118,22 +165,12 @@ internal static class FanucFunctions
             return new FanucFunction("SPINDLE_SYNC", null, new IdentValue(value), null);
         }
 
-        if (value != "ON")
+        if (value is not ("ON" or "PHASE"))
         {
             return null;
         }
 
-        var workSpindles = new List<string>();
-        foreach (KeyValuePair<string, string> role in block.Machine.Roles)
-        {
-            if (block.Machine.FindResource(role.Value)?.Type == ResourceType.WorkSpindle)
-            {
-                workSpindles.Add(role.Key);
-            }
-        }
-
-        return workSpindles.Count == 2
-            ? new FanucFunction("SPINDLE_SYNC", null, new ListValue(workSpindles), null)
-            : null;
+        IReadOnlyList<string> pair = block.Machine.SpindleSyncRoles();
+        return pair.Count == 2 ? new FanucFunction("SPINDLE_SYNC", null, new ListValue(pair), null) : null;
     }
 }

@@ -1,3 +1,4 @@
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using static Ncx.Readers.Tests.Fanuc.FanucRead;
 
@@ -98,16 +99,37 @@ public sealed class FanucBuilderTests
             Body("G411 L1. I102.\nN102 G0 X1.", Lathe()));
     }
 
-    // M92, the PHASE code of [spindle_sync], runs the spindles phase-synchronous with the phase position that M93 set
-    // in the control; PHASE needs that angle, which the program does not carry, so the block stays RAW (controller-
-    // mapping 4, SPINDLE_SYNC and PHASE; language 4.5; D5).
+    // D154: M92, the PHASE code of [spindle_sync], couples the default spindle with the other work spindle, and
+    // carries no angle, so PHASE=0 with the WARNING RDR021: the angle is set by the machine (M93).
     [Fact]
-    public void M92_PhaseCodeWithoutAnAngle_IsKeptAsRaw()
+    public void M92_PhaseCodeWithoutAnAngle_IsPhase0WithRdr021()
     {
         NcxProgram program = FramedProgram("M92", Lathe());
 
-        Assert.Equal(Lines("RAW:FANUC=\"M92\""), BodyOf(Core.Writing.NcxWriter.Write(program)));
-        Assert.Equal([DiagnosticCodes.KeptAsRaw], Codes(program));
+        Assert.Equal(Lines("SPINDLE_SYNC=MAIN,SUB PHASE=0"), BodyOf(Core.Writing.NcxWriter.Write(program)));
+        Assert.Equal([DiagnosticCodes.FunctionAngleSetByTheMachine], Codes(program));
+    }
+
+    // D154: a bare M19 is ORIENT=0 with RDR021; M19 S90 orients to 90 (controller-mapping 4, ORIENT).
+    [Fact]
+    public void M19_WithoutAnAngle_IsOrient0WithRdr021()
+    {
+        NcxProgram program = FramedProgram("M19\nM19 S90.");
+
+        Assert.Equal(Lines("ORIENT=0", "ORIENT=90"), BodyOf(Core.Writing.NcxWriter.Write(program)));
+        Assert.Equal([DiagnosticCodes.FunctionAngleSetByTheMachine], Codes(program));
+    }
+
+    // D155: a code several states write gives every one of them, M9 the OFF of each coolant channel; a table bound to
+    // another channel is ruled out (D56).
+    [Fact]
+    public void M9_OfTwoCoolantChannels_SwitchesBothOff()
+    {
+        MachineConfig mill = FromToml(MillToml.Replace("STANDARD = { ON = \"M8\", OFF = \"M9\" }",
+            "STANDARD = { ON = \"M8\", OFF = \"M9\" }\nMIST = { ON = \"M7\", OFF = \"M9\" }",
+            StringComparison.Ordinal));
+
+        Assert.Equal(Lines("COOLANT=OFF COOLANT:MIST=OFF"), Body("M9", mill));
     }
 
     // Probing (G31), push checks (G38) and every G code the reader does not map stay RAW (controller-mapping 9).

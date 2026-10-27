@@ -1,4 +1,5 @@
 using System.Globalization;
+using Ncx.Config.Templates;
 using Ncx.Core.Machine;
 using Ncx.Core.Model;
 
@@ -136,20 +137,8 @@ internal static class FanucBuilder
             return;
         }
 
-        if (FanucFunctions.Of(block, word, out SourceWord? parameter) is FanucFunction function)
+        if (ReadFunctions(block, word))
         {
-            if (parameter is not null)
-            {
-                block.MarkRead(parameter);
-            }
-
-            block.Draft.AddState(function.Key, function.Addr, OrientationOf(block, function) ?? function.Value);
-            if (function.SpindleRole is not null)
-            {
-                block.State.LastSpindle = function.SpindleRole;
-                block.Fanuc.Unknowns.Spindle = false;
-            }
-
             return;
         }
 
@@ -165,14 +154,12 @@ internal static class FanucBuilder
             return;
         }
 
-        // The PHASE code of [spindle_sync] is named by a table, so no MFUNC (machine-config 5), and PHASE takes the
-        // angle of the phase-synchronous run (language 4.5), which the code does not carry: the block stays RAW (D5).
-        // TODO(question): Nakamura M92 runs the spindles phase-synchronous with the phase position that M93 set in the
-        // control (controller-mapping 4, SPINDLE_SYNC and PHASE); the documents do not say which PHASE an M92 is (D154,
-        // whose recommendation names M92); the block stays RAW until D154 is answered.
+        // The PHASE code of [spindle_sync] is named by a table, so no MFUNC (machine-config 5); on a machine without a
+        // pair of spindles to couple it stays RAW (D5, D154).
         if (FanucFunctions.IsPhaseCode(block, word))
         {
-            block.Draft.KeepAsRaw($"M{word.Text} is the PHASE of [spindle_sync], which NCX writes with its angle only");
+            block.Draft.KeepAsRaw($"M{word.Text} is the PHASE of [spindle_sync], and the machine names no pair of "
+                + "spindles it couples (D154)");
             return;
         }
 
@@ -186,16 +173,81 @@ internal static class FanucBuilder
         block.Draft.AddState("MFUNC", null, new IntegerValue(mfunc, text));
     }
 
-    // M19 S or M19 R orients the spindle to the angle of S or R (controller-mapping 4, ORIENT).
-    private static Value? OrientationOf(FanucBlock block, FanucFunction function)
+    // The states of the function tables an M code writes, the [workpiece] selection first (D155;
+    // FanucFunctions.Choose); false when none maps to a word, and the code is read as the workpiece, a mark or MFUNC.
+    private static bool ReadFunctions(FanucBlock block, SourceWord word)
     {
-        if (function.Key != "ORIENT")
+        IReadOnlyList<FunctionMatch> chosen = FanucFunctions.Choose(block, word, out SourceWord? parameter);
+        var functions = new List<FunctionMatch>();
+        string? workpiece = null;
+        foreach (FunctionMatch match in chosen)
         {
-            return null;
+            if (match.Table is null)
+            {
+                workpiece ??= match.State;
+            }
+            else if (FanucFunctions.WordOf(block, match) is not null)
+            {
+                functions.Add(match);
+            }
         }
 
-        SourceWord? angle = block.Take("S") ?? block.Take("R");
-        return angle is null ? null : FanucMacro.ValueOf(block, angle);
+        if (functions.Count == 0)
+        {
+            return false;
+        }
+
+        if (parameter is not null)
+        {
+            block.MarkRead(parameter);
+        }
+
+        if (workpiece is not null)
+        {
+            block.Draft.AddState("WORKPIECE", null, new IdentValue(workpiece));
+        }
+
+        foreach (FunctionMatch match in functions)
+        {
+            FanucFunction function = FanucFunctions.WordOf(block, match)!;
+            bool orient = function.Key == "ORIENT";
+            block.Draft.AddState(function.Key, function.Addr, orient ? AngleOf(block, word, match) : function.Value);
+            if (match.State == "PHASE")
+            {
+                block.Draft.AddState("PHASE", null, AngleOf(block, word, match));
+            }
+
+            if (function.SpindleRole is not null)
+            {
+                block.State.LastSpindle = function.SpindleRole;
+                block.Fanuc.Unknowns.Spindle = false;
+            }
+        }
+
+        return true;
+    }
+
+    // D154: ORIENT and PHASE take the angle of the {angle} of their template, or for ORIENT the S or R of the block,
+    // M19 S90 (controller-mapping 4, ORIENT); a code without one, M19 or Nakamura M92, gives 0 with the WARNING RDR021,
+    // the angle being set by the machine (language 4.5).
+    private static Value AngleOf(FanucBlock block, SourceWord word, FunctionMatch match)
+    {
+        if (match.Values.TryGetNumber("angle", out decimal angle))
+        {
+            return FanucNumbers.Of(angle);
+        }
+
+        SourceWord? written = match.State == "PHASE" ? null : block.Take("S") ?? block.Take("R");
+        if (written is not null && FanucMacro.ValueOf(block, written) is Value value)
+        {
+            return value;
+        }
+
+        string key = match.State == "PHASE" ? "PHASE" : "ORIENT";
+        block.Diagnostics.Warning(block.Line, DiagnosticCodes.FunctionAngleSetByTheMachine,
+            $"M{word.Text} carries no angle, so {key}=0 is written: the orientation angle is set by the machine "
+            + "(D154).");
+        return new IntegerValue(0, "0");
     }
 
     // The M code of a [workpiece] template selects the holder the program machines, WORKPIECE=role (controller-mapping
