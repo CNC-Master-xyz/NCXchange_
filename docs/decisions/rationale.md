@@ -8,7 +8,7 @@ Status: 2026-10-01, six rounds answered; the fourth round (2026-09-11) got follo
 
 Sixth round, asked 2026-09-13: seventy-five questions found while building wave 1 (the tasks P0-01 to P0-06, P2-01 to P2-04a, P1-01 to P1-03a and P4-01a). They cover 87 of the 111 questions those tasks recorded; the other 24 are answered by the documents or are a matter of implementation. Of the seventy-five, 23 were settled on 2026-10-01 from the manual library and stand in "Answered (ninth round, 2026-10-01)" below; 52 are still open here. Until an entry is answered, the code keeps the least committal workaround, marked `TODO(question)` where it applies, and the answer replaces workaround and marker in the commit that changes the specification. `../implementation/03-open-questions.md` maps every question and its code location to its entry here, or to the section that already answers it. The entries are grouped by when the answer is needed; the last group holds facts about controllers and machines that a manual or the machine has to confirm, each with the recommendation that applies if it does.
 
-Status 2026-10-27: every entry below was answered or decided on the maintainer's delegation and moved to "Answered (tenth to thirteenth rounds, 2026-10-27)", except D165.
+Status 2026-10-27: every entry below was answered or decided on the maintainer's delegation and moved to "Answered (tenth to thirteenth rounds, 2026-10-27)", except D165. The fourteenth round, D388 to D392, was asked the same day while implementing the measurement points and is open.
 
 ### Later
 
@@ -19,6 +19,50 @@ Where: LICENSE; code-guidelines 9 (license line); optionally the D75 row.
 
 ANSWER:
 Proposed from the manual library 2026-09-27: the library does not answer this (searched the whole cached library for 'MIT License', 'MIT-Lizenz', 'Open-Source-Lizenz', 'Open Source License', 'GNU General Public', 'Apache License' and 'BSD License': no file matches any of them. 'Urheberrechtsinhaber' / 'copyright holder' matches exactly three files, all three Philips MillPlus IT manuals, and in each it is the publisher's own reservation of rights beside '© Heidenhain Numeric B.V. Eindhoven, Niederlande 2008' ('Vervielfältigen ... ist lediglich zulässig mit schriftlicher Zustimmung des Urheberrechtsinhabers', page 18 of the V600 Programmierhandbuch). No manual discusses open-source licensing or how to name a copyright holder. Nothing in a CNC manual bears on who holds the copyright of NCXchange; this is the maintainer's to state). The recommendation above stands for the maintainer.
+
+### Fourteenth round: found while implementing the measurement points (branch `cam-tool-point`), asked 2026-10-27
+
+Questions the decisions D369 and D372 to D376 do not answer, and the two CAM requests R1-13 and R1-14 of `/Users/peterburgener/project_spike/plans/2026-10-01-ncxchange-requests-release1.md`, which no decision covers. Each entry names the conservative option the code takes meanwhile; the code marks it with the D number.
+
+#### D388 A Fanuc tool change without a length offset (R1-13)
+Question: `TOOL=1 RPM=6000` compiles for `fanuc-mill-30i` to `T1 M6` and `S6000 M3` and no `G43 H1`, so the control never applies the tool length and the tip runs one tool length below the programmed Z. Heidenhain (`TOOL CALL`) and Siemens (the active edge) apply the length either way. Should a Fanuc tool change without `OFFSET:LEN` (and without a point word that D373 maps) apply the length register of the tool's own number, or at least warn when a motion follows the change with no length offset active?
+Recommendation: a WARNING, not a default. The Fanuc M-series `T` has no relation to `H` (the D373 audit: 30i-B Operator's Manual printed p. 219), so `H` = tool number is a guess at the shop's numbering; and some builders apply `G43` inside their change macro, which a written `G43` would duplicate. The Fanuc compiler reports a WARNING (next free code of the Fanuc band) at the first tool-axis motion after a `TOOL` while the holder has neither `OFFSET:LEN`, `OFFSET` nor a mapped point register, once per tool change, naming the tool. A machine file whose builder macro applies the length silences it with a `[tool_change]` flag (`length_offset_by_macro = true`). With D373's `registers` form and an explicit `TOOL_POINT` (D392) the CAM gets `G43 H` from the mapping, which replaces its present workaround (`OFFSET:LEN=n`).
+Meanwhile: nothing changes; no diagnostic and no `G43`, so no existing program changes. The CAM keeps writing `OFFSET:LEN`, or writes `TOOL_POINT=1` on a machine with `[tool_points] form = "registers"` (D392).
+Where: controllers/fanuc.md 5; machine-config 3; `src/Ncx.Compilers/Fanuc/FanucToolWords.cs`, `src/Ncx.Compilers/Fanuc/DiagnosticCodes.Fanuc.cs`.
+
+ANSWER:
+
+#### D389 Brackets in a Fanuc comment (R1-14)
+Question: `SECTION="PROFIL (D10)"` compiles for `fanuc-mill-30i` to `(PROFIL (D10))`: the first `)` ends the comment and the rest of the line is read as code, and neither `check --strict` nor `compile` says anything. Should the Fanuc compiler replace `(` and `)` inside comment text (for example by `[` and `]`), or refuse them with an ERROR? And does a machine file state a comment length limit that the compiler checks?
+Recommendation: replace `(` by `[` and `)` by `]` with a WARNING per comment that names the replacement, because the text stays readable and the program stays runnable; `[` `]` are ordinary characters inside a Fanuc comment as far as the program format goes. Not verified against the manual library in this session: the connector (`mcp__cnc-manuals__search_manuals`) was refused, so whether a nested `(` is itself an alarm on the 30i-B (control-in inside a comment) must be checked before the answer. A comment length limit: no new key; the existing `max_line_length` with CMP021 (D263) covers the line, which is what the control limits.
+Meanwhile: the Fanuc compiler refuses a comment text with `(` or `)` with an ERROR (CMP-code of the Fanuc band), because a silently broken line is worse than none and an ERROR is easy to relax later; the CAM already refuses those characters (SplinterCAM DEC-CL-005), so it never meets the ERROR.
+Where: controllers/fanuc.md 10 rule 5; controller-mapping 1 (COMMENT); `src/Ncx.Compilers/Fanuc/FanucBlock.cs` (`CommentText`), `src/Ncx.Compilers/Fanuc/DiagnosticCodes.Fanuc.cs`.
+
+ANSWER:
+
+#### D390 Which holder the point words address without a role
+Question: D372 gives `TOOL_POINT` the holder role as an optional address and names no address for `TIP_OFFSET` and `POINT_RADIUS`. `TOOL` without a role addresses `default_holder`, `OFFSET` the holder of the last `TOOL` (virtual machine 3.8 rule 2). Which holder does a point word without a role address, and which holder do `TIP_OFFSET` and `POINT_RADIUS` follow?
+Recommendation: as `OFFSET` does: the holder of the `TOOL` of the block, else of the `TOOL_POINT:r` of the block, else the holder of the last `TOOL`; `TIP_OFFSET` and `POINT_RADIUS` take no address and follow the same holder. A point change belongs to the tool that is cutting, which on a turret is the last called one, not the default holder. On a machine with one holder every reading gives `default_holder`.
+Meanwhile: the recommendation is coded (`VirtualMachine.ResolvePointWords`), and an address on `TIP_OFFSET` or `POINT_RADIUS` is refused by the catalog (PAR150), so a later answer that adds one breaks no program.
+Where: language 4.4; VM 2.3, 3.8 rule 2; `src/Ncx.Core/VirtualMachine/VirtualMachine.cs`, `src/Ncx.Core/Catalog/ToolWords.cs`.
+
+ANSWER:
+
+#### D391 What "a block of their own" admits
+Question: D372 makes the point words valid "in a TOOL block or in a block of their own". May such a block carry anything else: `SKIP`, a `COMMENT`, `OFFSET` words, `PRELOAD`, a motion verb?
+Recommendation: nothing but the three point words, `SKIP` and a `COMMENT`; anything else beside them without `TOOL` is an ERROR (PAR017). The point takes effect with the next tool-axis motion, so a block that also moves would make it unclear whether its own motion is in the old or the new point; `OFFSET` beside a point word mixes the register numbers the point replaces with the point (D369 (b)); a `PRELOAD` belongs to the next tool, not to this point.
+Meanwhile: the recommendation is coded (`BlockRules.CheckPointWords`, PAR017); it is the stricter reading and can be relaxed without breaking a program.
+Where: language 4.4, 5 rule 5; VM 5; `src/Ncx.Core/Parsing/BlockRules.cs`, `src/Ncx.Core/Model/DiagnosticCodes.Parsing.cs`.
+
+ANSWER:
+
+#### D392 Does an explicit point 1 write the mapped register?
+Question: D375 says "point 1 with a = r = 0 writes nothing, so existing programs compile byte for byte as before", and D369 (b) says the CAM writes the point words and no `OFFSET:*` numbers, so the registers must come from the mapping. Read together they conflict for a CAM program that writes `TOOL=1 TOOL_POINT=1`: on a Fanuc `registers` machine it then gets no `G43 H` at all (the R1-13 failure), on Siemens no `D1`. Does an explicit `TOOL_POINT` of 1 write the register of the mapping, and what wins where a block carries `OFFSET:LEN` and the holder a point?
+Recommendation: a tool whose program names its point (a `TOOL_POINT` word in its `TOOL` block or after it) writes the register the mapping gives, point 1 included; a tool without any point word compiles as before, which is the case D375's sentence protects (no program written before the words has one). Under a point the `OFFSET:*` words are the hand-written form and are not mixed with it: a block with both is refused by PAR017 (D391), and an `OFFSET` word on a holder whose tool named a point is a WARNING that the register of the mapping is replaced.
+Meanwhile: the recommendation's first half is coded: the mapping is written for every tool whose holder carries an explicit `TOOL_POINT` word since its `TOOL`; without one nothing changes. An `OFFSET` word after the point keeps today's behaviour (it writes its register) with no WARNING.
+Where: language 4.4; controller-mapping 3; `src/Ncx.Compilers/CompilerBase.Tools.cs` and the three family tool writers.
+
+ANSWER:
 
 ---
 

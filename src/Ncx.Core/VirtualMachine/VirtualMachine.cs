@@ -241,8 +241,45 @@ public sealed partial class VirtualMachine
                 + "(virtual machine 3.8 rule 2).");
         }
 
+        ResolvePointWords(context, toolHolder);
         ResolveAxisWords(context);
         return context;
+    }
+
+    // The point words are modal per holder (D372). D390: TOOL_POINT with a role addresses the holder of the role as
+    // TOOL does; without one, and TIP_OFFSET and POINT_RADIUS always, they address the holder of the TOOL_POINT or
+    // TOOL of their block, else the holder of the last TOOL, as OFFSET does (virtual machine 3.8 rule 2). The
+    // conservative reading until D390 is answered: on a machine with one holder it is default_holder either way.
+    private void ResolvePointWords(BlockContext context, string? toolHolder)
+    {
+        Block block = context.Block;
+        string? blockHolder = toolHolder;
+        if (block.Find("TOOL_POINT") is Word { Addr: string role } addressedPoint)
+        {
+            blockHolder = _resources.ResolveHolder(role, block, _state, Diagnostics);
+            if (blockHolder is not null)
+            {
+                context.ResourceOf[addressedPoint] = blockHolder;
+            }
+        }
+
+        foreach (Word word in block.Words)
+        {
+            if (word.Key is not ("TOOL_POINT" or "TIP_OFFSET" or "POINT_RADIUS") || word.Addr is not null)
+            {
+                continue;
+            }
+
+            if ((blockHolder ?? _state.LastHolder) is string holder)
+            {
+                context.ResourceOf[word] = holder;
+                continue;
+            }
+
+            Diagnostics.Error(block, DiagnosticCodes.NoDefaultResource,
+                $"{word.ToCanonical()} addresses the holder of the last TOOL, and the machine has no tool holder "
+                + "(virtual machine 3.8 rule 2, D390).");
+        }
     }
 
     // The resource of a word that addresses one (rules 1 and 2): a spindle, a holder, the workpiece holder, a named

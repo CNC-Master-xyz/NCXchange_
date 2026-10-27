@@ -300,6 +300,26 @@ public sealed class WordCatalogTests
         Assert.Equal(["OFF"], cylinder.AllowedIdents);
     }
 
+    // TOOL_POINT=k is an integer with the holder role as an optional address, TIP_OFFSET=a and POINT_RADIUS=r are
+    // numbers or expressions without an address; all three are modal per holder (language 4.4, D372, D390).
+    [Theory]
+    [InlineData("TOOL_POINT", ValueKinds.Integer, AddrKind.Role, CanonicalRanks.ToolPoint)]
+    [InlineData("TIP_OFFSET", ValueKinds.NumberOrExpr, AddrKind.None, CanonicalRanks.TipOffset)]
+    [InlineData("POINT_RADIUS", ValueKinds.NumberOrExpr, AddrKind.None, CanonicalRanks.PointRadius)]
+    public void D372_PointWord_IsAModalToolWordOfLanguage44(string key, ValueKinds valueKinds, AddrKind addrKind,
+        int rank)
+    {
+        WordDefinition? definition = WordCatalog.Lookup(key);
+
+        Assert.NotNull(definition);
+        Assert.Equal(WordKind.Tool, definition.Group);
+        Assert.Equal(valueKinds, definition.ValueKinds);
+        Assert.Equal(addrKind, definition.AddrKind);
+        Assert.Equal(Scope.Modal, definition.Scope);
+        Assert.Equal(rank, definition.CanonicalRank);
+        Assert.Equal("4.4", definition.Section);
+    }
+
     // NAME="..." is a string: the program name with PROGRAM=BEGIN and the program selector with START_CHANNEL; with
     // SUB=BEGIN it is an identifier, an integer or a string (language 4.1, 4.8; language 3, the EBNF line of sub; D90).
     [Fact]

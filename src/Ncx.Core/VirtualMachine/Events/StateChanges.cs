@@ -135,6 +135,11 @@ internal sealed class StateChanges
             Compare("OFFSET:LEN:" + id, Integer(before?.OffsetLen ?? 0), Integer(after.OffsetLen));
             Compare("OFFSET:RAD:" + id, Integer(before?.OffsetRad ?? 0), Integer(after.OffsetRad));
             Compare("OFFSET:" + id, Integer(before?.OffsetCombined ?? 0), Integer(after.OffsetCombined));
+
+            // The measurement point of the holder, named like the offsets (D372).
+            Compare("TOOL_POINT:" + id, Integer(before?.ToolPoint ?? 1), Integer(after.ToolPoint));
+            CompareHolderNumber("TIP_OFFSET", id, before?.TipOffset ?? 0m, after.TipOffset);
+            CompareHolderNumber("POINT_RADIUS", id, before?.PointRadius ?? 0m, after.PointRadius);
         }
     }
 
@@ -182,6 +187,13 @@ internal sealed class StateChanges
     private void CompareNumber(string key, string spindle, decimal? before, decimal? after)
     {
         string stateKey = key + ":" + spindle;
+        Compare(stateKey, EventText.Number(before, _before, stateKey), EventText.Number(after, _after, stateKey));
+    }
+
+    // A number of a holder, empty when UNKNOWN under its state key, TIP_OFFSET:H1 (virtual machine 1).
+    private void CompareHolderNumber(string key, string holder, decimal before, decimal after)
+    {
+        string stateKey = key + ":" + holder;
         Compare(stateKey, EventText.Number(before, _before, stateKey), EventText.Number(after, _after, stateKey));
     }
 

@@ -230,6 +230,14 @@ public sealed class StructureValidationTests
         RuleAssert.Only(RuleAssert.ParseProgram(word).Diagnostics, DiagnosticCodes.PartnerWordMissing);
     }
 
+    // VM 5: a point word outside a TOOL block and outside a block of its own (language 4.4, D372, D391).
+    [Fact]
+    public void PointWord_InAMotionBlock_IsAnError()
+    {
+        RuleAssert.Only(RuleAssert.ParseProgram("RAPID Z=50 TOOL_POINT=2").Diagnostics,
+            DiagnosticCodes.PointWordOutsideToolBlock);
+    }
+
     // VM 5: IF without partner, and ARG, TIMES, WITH without partner (language 5 rule 5).
     [Theory]
     [InlineData("IF={1}")]

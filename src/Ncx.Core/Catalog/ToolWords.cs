@@ -57,6 +57,45 @@ internal static class ToolWords
             Description = "Combined offset register; OFFSET:LEN the tool length offset register (G43 H), OFFSET:RAD "
                 + "the tool radius offset register (D); 0 cancels.",
         },
+
+        // The measurement point of the tool: its number k with the holder role as an optional address, its axial
+        // offset a from the tip and its register radius r, each modal per holder, valid in a TOOL block or in a block
+        // of their own, taking effect with the next tool-axis motion (D372). TIP_OFFSET and POINT_RADIUS carry no
+        // address and follow the holder of the block (D390).
+        new WordDefinition
+        {
+            Key = "TOOL_POINT",
+            Group = WordKind.Tool,
+            ValueKinds = ValueKinds.Integer,
+            AddrKind = AddrKind.Role,
+            Scope = Scope.Modal,
+            CanonicalRank = CanonicalRanks.ToolPoint,
+            Section = "4.4",
+            Description = "The measurement point k of the active tool, from 1; a TOOL without it resets the holder to "
+                + "point 1 (D372).",
+        },
+        new WordDefinition
+        {
+            Key = "TIP_OFFSET",
+            Group = WordKind.Tool,
+            ValueKinds = ValueKinds.NumberOrExpr,
+            Scope = Scope.Modal,
+            CanonicalRank = CanonicalRanks.TipOffset,
+            Section = "4.4",
+            Description = "The axial offset a of the measurement point from the tool tip, not negative; never written "
+                + "to the control (D372, D375).",
+        },
+        new WordDefinition
+        {
+            Key = "POINT_RADIUS",
+            Group = WordKind.Tool,
+            ValueKinds = ValueKinds.NumberOrExpr,
+            Scope = Scope.Modal,
+            CanonicalRank = CanonicalRanks.PointRadius,
+            Section = "4.4",
+            Description = "The register radius r of the measurement point, not negative, 0 for a point on the axis; "
+                + "never written to the control (D372, D375).",
+        },
         new WordDefinition
         {
             Key = "COMP",
