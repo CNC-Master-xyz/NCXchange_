@@ -25,7 +25,7 @@ public sealed class FanucWriterRulesTests
             FanucCompile.Program("RAPID X=0 Y=0", "LINE IX=30 F=800", "RAPID X=0"), FanucCompile.Mill("")));
 
         Assert.Equal(
-            "%\nO0001 (T)\nG90\nG17 G94 G40 G80\nG0 X0. Y0.\nG1 G91 X30. F800.\nG0 G90 X0.\nM30\n%\n", text);
+            "%\nO0001 (T)\nG21\nG90\nG17 G94 G40 G80\nG0 X0. Y0.\nG1 G91 X30. F800.\nG0 G90 X0.\nM30\n%\n", text);
     }
 
     // Fanuc 10 rule 2, controller-mapping 4: M3 and S stand in one block; a speed set while the spindle stands waits
@@ -85,7 +85,7 @@ public sealed class FanucWriterRulesTests
             .Replace("program_end = \"M30\"", "program_end = \"M2\"", StringComparison.Ordinal)));
 
         Assert.Equal(
-            "%\nO0001 (T)\nG0 G40\nG80 G90 G94 G98\nG17 X0. Y0. Z2.\nM98 P0100 L2\nM98 P0100\nM2\n"
+            "%\nO0001 (T)\nG21\nG0 G40\nG80 G90 G94 G98\nG17 X0. Y0. Z2.\nM98 P0100 L2\nM98 P0100\nM2\n"
             + "O0100\nG80\nG1 G17 G91 G94 Z-3. F200.\nG0 Z3.\nM99\n%\n", text);
     }
 
@@ -150,8 +150,8 @@ public sealed class FanucWriterRulesTests
         string text = FanucCompile.TextOf(FanucCompile.Run(
             FanucCompile.Program("SECTION=\"SIDE MILL\"", "RAPID X=1 Y=1"), machine));
 
-        Assert.Equal("%\nO0001 (T)\nN10 G0 G40\nN20 G80 G90 G94 G98\n(SIDE MILL)\nN30 G17 X1. Y1.\nN40 M30\n%\n",
-            text);
+        Assert.Equal(
+            "%\nO0001 (T)\nN10 G21\nN20 G0 G40\nN30 G80 G90 G94 G98\n(SIDE MILL)\nN40 G17 X1. Y1.\nN50 M30\n%\n", text);
     }
 
     // Fanuc 10 rule 5, machine-config 2: a program's name after O stands in the comment charset of the machine.
@@ -163,18 +163,6 @@ public sealed class FanucWriterRulesTests
 
         CompileResult result = FanucCompile.Run(program, FanucCompile.Mill());
 
-        Assert.StartsWith("%\nO0001 (FRAESEN)\n", FanucCompile.TextOf(result), StringComparison.Ordinal);
-    }
-
-    // Controllers fanuc.md 1: a program is named by its O number; a program without NUMBER has none (the
-    // TODO(question) of FanucProgramFrame).
-    [Fact]
-    public void Rule3_ProgramWithoutNumber_IsTheErrorCmp300()
-    {
-        string program = FanucCompile.Program("RAPID X=1 Y=1").Replace(" NUMBER=1", "", StringComparison.Ordinal);
-
-        Diagnostic error = FanucCompile.ErrorOf(FanucCompile.Run(program, FanucCompile.Mill()));
-
-        Assert.Equal(DiagnosticCodes.FanucProgramWithoutNumber, error.Code);
+        Assert.StartsWith("%\nO0001 (FRAESEN)\nG21\n", FanucCompile.TextOf(result), StringComparison.Ordinal);
     }
 }

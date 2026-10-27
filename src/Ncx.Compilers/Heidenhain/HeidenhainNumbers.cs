@@ -41,12 +41,13 @@ internal static class HeidenhainNumbers
 
     // Expressions may stand wherever a number stands, L X+Q1 Y-Q2 (controllers heidenhain.md 6): a Q parameter with
     // its sign.
-    // TODO(question): heidenhain.md 6 shows a Q parameter where a number stands and gives no form for a formula
-    // there, {$Q1 + 5} in a coordinate; such a value has no Klartext form in this compiler and is reported (CMP102).
+    // D338: "a Q parameter may stand wherever a number stands", so a formula is spilled into a QL parameter in a block
+    // of its own directly before the block, QL499 = Q1 + 5, then L X+QL499 (decisions.md D338; HeidenhainSpills).
 
     /// <summary>
-    /// The value of a word where Klartext takes a number: the number with its sign, or a Q parameter with its sign,
-    /// +Q1 of {$Q1}, -Q2 of {-$Q2}; null for any other value, which the caller reports.
+    /// The value of a word where Klartext takes a number: the number with its sign, a Q parameter with its sign, +Q1 of
+    /// {$Q1}, -Q2 of {-$Q2}, or the QL parameter a formula is spilled into, +QL499 of {$Q1 + 5} (D338); null for a
+    /// value without a formula, or where no QL is free, which the caller reports.
     /// </summary>
     public static string? SignedValue(HeidenhainBlock writing, string address, Value value)
     {
@@ -55,7 +56,22 @@ internal static class HeidenhainNumbers
             return Signed(writing, address, number);
         }
 
-        return value is ExprValue { Tree: ExprNode tree } ? HeidenhainFormula.SignedParameter(tree) : null;
+        if (value is not ExprValue { Tree: ExprNode tree })
+        {
+            return null;
+        }
+
+        return HeidenhainFormula.SignedParameter(tree) ?? Spilled(writing, tree);
+    }
+
+    /// <summary>
+    /// The QL parameter with its sign that a formula is spilled into, +QL499 (D338); null for an expression without a
+    /// Klartext formula, or where no QL is free.
+    /// </summary>
+    public static string? Spilled(HeidenhainBlock writing, ExprNode tree)
+    {
+        string? formula = HeidenhainFormula.Of(tree, writing.Numbers.DecimalSeparator, out _);
+        return formula is not null && writing.Spill(formula) is string register ? "+" + register : null;
     }
 
     /// <summary>
@@ -72,8 +88,8 @@ internal static class HeidenhainNumbers
         string reason = parameter
             ? "a Q parameter may stand wherever a number stands in Klartext (controllers heidenhain.md 6), and the "
                 + "compiler writes this word from its number, which a Q parameter gives only when the program runs"
-            : "Klartext takes a number or a Q parameter where a number stands, L X+Q1 Y-Q2, and the documents give no "
-                + "form for a formula there (controllers heidenhain.md 6)";
+            : "Klartext takes a number or a Q parameter where a number stands, L X+Q1 Y-Q2, and the value has no "
+                + "Klartext formula or no QL parameter is free to hold it (controllers heidenhain.md 6; D338)";
         writing.Error(DiagnosticCodes.HeidenhainValueWithoutKlartext,
             $"{word.ToCanonical()}: {reason}; nothing is written for it.");
     }

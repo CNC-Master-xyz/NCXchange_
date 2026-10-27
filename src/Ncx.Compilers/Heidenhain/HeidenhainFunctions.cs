@@ -161,8 +161,11 @@ internal static class HeidenhainFunctions
             values.Set("angle", angle);
         }
 
-        writing.Template(StateOf(machine.SpindleTables, role, "ORIENT"), $"[spindle.{role}] ORIENT (machine-config 5)",
-            values);
+        string? template = StateOf(machine.SpindleTables, role, "ORIENT");
+        if (OrientTemplate.Writes(template, word, writing.Block, writing.Diagnostics))
+        {
+            writing.Template(template, $"[spindle.{role}] ORIENT (machine-config 5)", values);
+        }
     }
 
     // COOLANT:channel=ON with the template of the channel, STANDARD without an address, on change (language 4.6;

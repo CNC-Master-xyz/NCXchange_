@@ -24,8 +24,8 @@ public sealed class JobCompilerTests
         List<string> texts = JobCompile.TextsOf(JobCompile.Run(machine,
             JobCompile.Program(1000, "SYNC=110"), JobCompile.Program(1000, "SYNC=110")));
 
-        Assert.Equal(["%\nO1000 (T)\nG18 G99 G40 G80\nM110 P12\nM30\n%\n",
-            "%\nO1000 (T)\nG18 G99 G40 G80\nM110 P12\nM30\n%\n"], texts);
+        Assert.Equal(["%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110 P12\nM30\n%\n",
+            "%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110 P12\nM30\n%\n"], texts);
     }
 
     // Controller-mapping 7, machine-config 5: with paths = "bitmask" WITH=1,3 is P5.
@@ -64,8 +64,8 @@ public sealed class JobCompilerTests
         List<string> texts = JobCompile.TextsOf(JobCompile.Run(machine,
             JobCompile.Program(1000, "SYNC=110"), JobCompile.Program(1000, "SYNC=110")));
 
-        Assert.Equal("%\nO1000 (T)\nM199\nG18 G99 G40 G80\nM110\nM30\n%\n", texts[0]);
-        Assert.Equal("%\nO1000 (T)\nM199\nG18 G99 G40 G80\nM110\nM30\n%\n", texts[1]);
+        Assert.Equal("%\nO1000 (T)\nG21\nM199\nG18 G99 G40 G80\nM110\nM30\n%\n", texts[0]);
+        Assert.Equal("%\nO1000 (T)\nG21\nM199\nG18 G99 G40 G80\nM110\nM30\n%\n", texts[1]);
     }
 
     // Machine-config 5, start_mark, and the TODO(question) of InsertStartMark: programs whose first mark is the start
@@ -78,8 +78,8 @@ public sealed class JobCompilerTests
         List<string> texts = JobCompile.TextsOf(JobCompile.Run(machine,
             JobCompile.Program(1000, "SYNC=199", "SYNC=110"), JobCompile.Program(1000, "SYNC=199", "SYNC=110")));
 
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM199\nM110\nM30\n%\n", texts[0]);
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM199\nM110\nM30\n%\n", texts[1]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM199\nM110\nM30\n%\n", texts[0]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM199\nM110\nM30\n%\n", texts[1]);
     }
 
     // Machine-config 5, groups: the channels 3 and 4 of the WTW wait with the marks M800 to M849 of their group.
@@ -136,8 +136,8 @@ public sealed class JobCompilerTests
         List<string> texts = JobCompile.TextsOf(JobCompile.Run(JobCompile.Machine(), job,
             new Dictionary<string, string> { ["BOTH.ncx"] = file }));
 
-        Assert.Equal("%\nO1000 (ONE)\nG18 G99 G40 G80\nM110\nM30\n%\n", texts[0]);
-        Assert.Equal("%\nO2000 (TWO)\nG18 G99 G40 G80\nM110\nM30\n%\n", texts[1]);
+        Assert.Equal("%\nO1000 (ONE)\nG21\nG18 G99 G40 G80\nM110\nM30\n%\n", texts[0]);
+        Assert.Equal("%\nO2000 (TWO)\nG21\nG18 G99 G40 G80\nM110\nM30\n%\n", texts[1]);
     }
 
     // Language 4.13, D99: a channel file holds the subprograms its program calls, and a subprogram that no channel
@@ -225,8 +225,8 @@ public sealed class JobCompilerTests
         List<string> texts = JobCompile.TextsOf(JobCompile.Run(machine,
             JobCompile.Program(1000, "START_CHANNEL=2", "SYNC=110"), JobCompile.Program(1000, "SYNC=110")));
 
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM300 P2\nM110\nM30\n%\n", texts[0]);
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nM30\n%\n", texts[1]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM300 P2\nM110\nM30\n%\n", texts[0]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM30\n%\n", texts[1]);
     }
 
     // The WTW of controller-mapping 7: four paths, the channels 1 and 2 with the marks M100 to M199, the channels 3 and

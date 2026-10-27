@@ -75,15 +75,15 @@ public sealed class HeidenhainFlowTests
             HeidenhainCompile.Body(result));
     }
 
-    // Controller-mapping 1, JUMP=END: FN 9 to FN 12 to an LBL that ends with M30, the label after every other label of
-    // the file.
+    // Controller-mapping 1, JUMP=END: FN 9 to FN 12 to an LBL that ends with M30, numbered with the labels of the
+    // program, the lowest number they leave free (D271).
     [Fact]
     public void JumpToTheEnd_GoesToAnLblBeforeTheM30()
     {
         CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
             "LABEL=3", "JUMP=END IF={$Q1 > 0}", "RAPID X=0 Y=0"));
 
-        Assert.Equal("LBL 3\nFN 11: IF +Q1 GT +0 GOTO LBL 4\nL X+0 Y+0 R0 FMAX\nLBL 4", HeidenhainCompile.Body(result));
+        Assert.Equal("LBL 3\nFN 11: IF +Q1 GT +0 GOTO LBL 1\nL X+0 Y+0 R0 FMAX\nLBL 1", HeidenhainCompile.Body(result));
     }
 
     // Controllers heidenhain.md 1; controller-mapping 6, REPEAT: CALL LBL n REP k. D212 settles the default alone,
@@ -560,10 +560,10 @@ public sealed class HeidenhainFlowTests
         Assert.Equal(5, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainValueWithoutKlartext).Line);
     }
 
-    // Machine-config 2: sub_end is written for SUB=END and RETURN, LBL 0 on Heidenhain; language 4.9, 4.13: RETURN
-    // returns to the caller before SUB=END, here behind a conditional jump over it.
+    // D272: a RETURN before the end of a subprogram is the jump to an LBL m directly before the one LBL 0 of the
+    // section, here behind a conditional jump over it; m is the lowest number no label has (D271).
     [Fact]
-    public void Return_InASubprogram_IsTheSubEndLbl0WhereItStands()
+    public void Return_InASubprogram_IsTheJumpToTheLblBeforeItsLbl0()
     {
         CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Lines(
             "FILE=BEGIN NCX=1",
@@ -572,28 +572,43 @@ public sealed class HeidenhainFlowTests
             "FILE=END"));
 
         Assert.Equal(
-            ["BEGIN PGM T MM", "CALL LBL 100", "M30", "LBL 100", "FN 11: IF +Q1 GT +0 GOTO LBL 5", "LBL 0", "LBL 5",
-                "L X+2 R0 FMAX", "LBL 0", "END PGM T MM"],
+            ["BEGIN PGM T MM", "CALL LBL 100", "M30", "LBL 100", "FN 11: IF +Q1 GT +0 GOTO LBL 5",
+                "FN 9: IF +0 EQU +0 GOTO LBL 1", "LBL 5", "L X+2 R0 FMAX", "LBL 1", "LBL 0", "END PGM T MM"],
+            HeidenhainCompile.LinesOf(HeidenhainCompile.TextOf(result)));
+    }
+
+    // D272: a RETURN directly before SUB=END writes nothing, and the section keeps its one LBL 0.
+    [Fact]
+    public void Return_DirectlyBeforeTheEndOfASubprogram_WritesNothing()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"T\"", "UNITS=MM", "CALL=100", "PROGRAM=END",
+            "SUB=BEGIN NAME=100", "RAPID X=2", "RETURN", "SUB=END",
+            "FILE=END"));
+
+        Assert.Equal(
+            ["BEGIN PGM T MM", "CALL LBL 100", "M30", "LBL 100", "L X+2 R0 FMAX", "LBL 0", "END PGM T MM"],
             HeidenhainCompile.LinesOf(HeidenhainCompile.TextOf(result)));
     }
 
     // Language 4.9, virtual machine 3.6: RETURN in a program is treated as JUMP=END, the jump to the LBL before the M30
-    // (controller-mapping 1, JUMP=END), whose number follows every other label of the file; the L block after LBL 2,
-    // which states no COMP, writes none (language 2 rule 2).
+    // (controller-mapping 1, JUMP=END), numbered with the labels, the lowest number LABEL=2 leaves free (D271); the L
+    // block after LBL 2, which states no COMP, writes none (language 2 rule 2).
     [Fact]
     public void Return_InAProgram_IsTheJumpToTheLblBeforeTheM30()
     {
         CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
             "RAPID X=0 Y=0", "LABEL=2", "RAPID X=5", "RETURN"));
 
-        Assert.Equal("L X+0 Y+0 R0 FMAX\nLBL 2\nL X+5 FMAX\nFN 9: IF +0 EQU +0 GOTO LBL 3\nLBL 3",
+        Assert.Equal("L X+0 Y+0 R0 FMAX\nLBL 2\nL X+5 FMAX\nFN 9: IF +0 EQU +0 GOTO LBL 1\nLBL 1",
             HeidenhainCompile.Body(result));
     }
 
-    // The TODO(question) D272 of HeidenhainFlow.ReturnLabel: the IF of a RETURN JUMP block makes the return of the
-    // subprogram conditional (language 4.9; virtual machine 3.6), and the sub_end LBL 0 takes no condition, CMP101.
+    // D272: under IF the return is FN 9 to FN 12 with the condition to the LBL before LBL 0; the JUMP of the same
+    // block after it is never reached (D221) and is written after it.
     [Fact]
-    public void Return_UnderIfInASubprogram_IsTheErrorCmp101()
+    public void Return_UnderIfInASubprogram_IsTheConditionalJumpToTheLblBeforeItsLbl0()
     {
         CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Lines(
             "FILE=BEGIN NCX=1",
@@ -601,15 +616,16 @@ public sealed class HeidenhainFlowTests
             "SUB=BEGIN NAME=100", "RAPID X=1", "RETURN JUMP=5 IF={$Q1 > 0}", "LABEL=5", "RAPID X=2", "SUB=END",
             "FILE=END"));
 
-        Assert.Empty(result.Files);
-        Assert.Equal(8, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainWordWithoutKlartext).Line);
+        Assert.Equal(
+            ["BEGIN PGM T MM", "CALL LBL 100", "M30", "LBL 100", "L X+1 R0 FMAX", "FN 11: IF +Q1 GT +0 GOTO LBL 1",
+                "FN 11: IF +Q1 GT +0 GOTO LBL 5", "LBL 5", "L X+2 FMAX", "LBL 1", "LBL 0", "END PGM T MM"],
+            HeidenhainCompile.LinesOf(HeidenhainCompile.TextOf(result)));
     }
 
-    // Language 4.9 and 4.13; controllers heidenhain.md 1: the LBL sections of the subprograms stand in the program, and
-    // Klartext labels are program-local, so a LABEL and a SUB of one number are the same LBL twice in one file; the
-    // TODO(question) of HeidenhainLabels leaves them unrenumbered, CMP116 on the second.
+    // D271: the labels of the subprograms are numbered first, since their text stands in every caller's file; a LABEL
+    // of the program with the number of a SUB gets the lowest number neither has.
     [Fact]
-    public void Labels_LabelAndSubprogramOfOneNumberInOneFile_AreTheErrorCmp116()
+    public void Labels_LabelAndSubprogramOfOneNumberInOneFile_RenumberTheLabel()
     {
         CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Lines(
             "FILE=BEGIN NCX=1",
@@ -627,15 +643,17 @@ public sealed class HeidenhainFlowTests
             "SUB=END",
             "FILE=END"));
 
-        Assert.Empty(result.Files);
-        Assert.Equal(10, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainLabelNotUnique).Line);
+        List<string> lines = HeidenhainCompile.LinesOf(HeidenhainCompile.TextOf(result));
+        Assert.Contains("LBL 3", lines);
+        Assert.Contains("CALL LBL 1", lines);
+        Assert.Contains("FN 12: IF +Q1 LT +3 GOTO LBL 3", lines);
+        Assert.Contains("LBL 2", lines);
     }
 
-    // Language 4.9: a LABEL is unique per program or subprogram, and Klartext has one LBL namespace for the program and
-    // the LBL sections in its file (controllers heidenhain.md 1; language 4.13), so a LABEL of the program and one of
-    // a subprogram it calls collide, CMP116.
+    // D271: a LABEL of the program and one of a subprogram it calls would be one LBL of the file; the program's label
+    // is renumbered.
     [Fact]
-    public void Labels_OneLabelInTheProgramAndInItsSubprogram_AreTheErrorCmp116()
+    public void Labels_OneLabelInTheProgramAndInItsSubprogram_RenumberTheProgramsLabel()
     {
         CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Lines(
             "FILE=BEGIN NCX=1",
@@ -652,17 +670,174 @@ public sealed class HeidenhainFlowTests
             "SUB=END",
             "FILE=END"));
 
-        Assert.Empty(result.Files);
-        Assert.Equal(10, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainLabelNotUnique).Line);
+        Assert.Equal(
+            ["BEGIN PGM T MM", "L X+0 Y+0 Z+5 R0 FMAX", "LBL 3", "CALL LBL 1", "CALL LBL 1", "M30", "LBL 1", "LBL 2",
+                "L IX+5 R0 F200", "LBL 0", "END PGM T MM"],
+            HeidenhainCompile.LinesOf(HeidenhainCompile.TextOf(result)));
     }
 
-    // Controllers heidenhain.md 1: LBL 0 ends a subprogram, so LABEL=0 has no LBL of its own, CMP116.
+    // D271: LBL 0 ends a subprogram, so LABEL=0 gets the lowest free number.
     [Fact]
-    public void Labels_LabelZero_IsTheErrorCmp116()
+    public void Labels_LabelZero_GetsTheLowestFreeNumber()
     {
         CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program("RAPID X=0 Y=0", "LABEL=0"));
 
+        Assert.Equal("L X+0 Y+0 R0 FMAX\nLBL 1", HeidenhainCompile.Body(result));
+    }
+
+    // D271: an identifier label and a number beyond label_max get numbers; LBL "NAME" is never written.
+    [Fact]
+    public void Labels_AnIdentifierAndANumberBeyondLabelMax_GetFreeNumbers()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "RAPID X=0 Y=0", "LABEL=1", "LABEL=LOOP", "LABEL=5000", "JUMP=LOOP IF={$Q1 > 0}", "JUMP=5000"));
+
+        Assert.Equal(
+            "L X+0 Y+0 R0 FMAX\nLBL 1\nLBL 2\nLBL 3\nFN 11: IF +Q1 GT +0 GOTO LBL 2\nFN 9: IF +0 EQU +0 GOTO LBL 3",
+            HeidenhainCompile.Body(result));
+    }
+
+    // D271: a label_max without a free number for a label that needs one is the ERROR CMP129.
+    [Fact]
+    public void Labels_WithoutAFreeNumber_AreTheErrorCmp129()
+    {
+        var mill = HeidenhainCompile.MillWith("comment_charset = \"ASCII\"",
+            "comment_charset = \"ASCII\"\nlabel_max = 1");
+        CompileResult result = HeidenhainCompile.Run(
+            HeidenhainCompile.Program("RAPID X=0 Y=0", "LABEL=1", "LABEL=2"), mill);
+
         Assert.Empty(result.Files);
-        Assert.Equal(5, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainLabelNotUnique).Line);
+        Assert.Equal(6, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainNoFreeLabel).Line);
+    }
+
+    // D213: a REPEAT whose part a JUMP leaves is a counter loop in a register of [format] counter_registers, QL90 to
+    // QL99 on the iTNC 530 of the repository: the counter set to 0 before the label, counted at the REPEAT and set to
+    // 0 after the last pass.
+    [Fact]
+    public void Repeat_ThatAJumpLeaves_IsACounterLoop()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "RAPID X=0 Y=0", "LABEL=1", "RAPID IX=5", "JUMP=2 IF={$Q1 > 0}", "REPEAT=1 TIMES=3", "LABEL=2"));
+
+        Assert.Equal(
+            "L X+0 Y+0 R0 FMAX\nQL90 = 0\nLBL 1\nL IX+5 FMAX\nFN 11: IF +Q1 GT +0 GOTO LBL 2\nQL90 = QL90 + 1\n"
+            + "FN 12: IF +QL90 LT +4 GOTO LBL 1\nQL90 = 0\nLBL 2",
+            HeidenhainCompile.Body(result));
+    }
+
+    // D213, D388 (12): without counter_registers such a REPEAT is the ERROR CMP130; a REPEAT that no JUMP leaves
+    // stays CALL LBL REP.
+    [Fact]
+    public void Repeat_ThatAJumpLeavesOnAMachineWithoutCounterRegisters_IsTheErrorCmp130()
+    {
+        var mill = HeidenhainCompile.MillWith(CounterRegisters, "# no counter registers");
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "RAPID X=0 Y=0", "LABEL=1", "RAPID IX=5", "JUMP=END IF={$Q1 > 0}", "REPEAT=1 TIMES=3"), mill);
+
+        Assert.Empty(result.Files);
+        Assert.Equal(8, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainRepeatWithoutCounter).Line);
+    }
+
+    // D169: two QS parameters compare by STRCOMP into a free QL parameter, which FN 9 or FN 10 tests against 0.
+    [Fact]
+    public void Jump_ComparingTwoStrings_IsStrcompAndFn9()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "LABEL=1", "JUMP=1 IF={$QS1 == $QS2}", "JUMP=1 IF={$QS1 != $QS2}"));
+
+        Assert.Equal(
+            "LBL 1\nQL499 = STRCOMP ( SRC_QS1 SEA_QS2 )\nFN 9: IF +QL499 EQU +0 GOTO LBL 1\n"
+            + "QL499 = STRCOMP ( SRC_QS1 SEA_QS2 )\nFN 10: IF +QL499 NE +0 GOTO LBL 1",
+            HeidenhainCompile.Body(result));
+    }
+
+    // D169: a string against a number, or an ordering of strings, has no Klartext form: CMP126.
+    [Fact]
+    public void Jump_ComparingAStringWithANumber_IsTheErrorCmp126()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program("LABEL=1", "JUMP=1 IF={$QS1 == 1}"));
+
+        Assert.Empty(result.Files);
+        Assert.Equal(5, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainStringComparison).Line);
+    }
+
+    // D213: a JUMP from outside back into a counter loop's part does not pass the reset before the label, so it sets
+    // the counter to 0 before its jump line, and the repeat starts fresh with its passes.
+    [Fact]
+    public void Repeat_LeftByAJumpAndEnteredAgainByAJump_ResetsTheCounterAtTheEntry()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "RAPID X=0 Y=0", "LABEL=1", "RAPID IX=5", "JUMP=2 IF={$Q1 > 0}", "REPEAT=1 TIMES=3", "LABEL=2",
+            "JUMP=1 IF={$Q1 < 3}"), CounterMill("[\"QL90\", \"QL99\"]"));
+
+        Assert.Equal(
+            "L X+0 Y+0 R0 FMAX\nQL90 = 0\nLBL 1\nL IX+5 FMAX\nFN 11: IF +Q1 GT +0 GOTO LBL 2\nQL90 = QL90 + 1\n"
+            + "FN 12: IF +QL90 LT +4 GOTO LBL 1\nQL90 = 0\nLBL 2\nQL90 = 0\nFN 12: IF +Q1 LT +3 GOTO LBL 1",
+            HeidenhainCompile.Body(result));
+    }
+
+    // D213, D388 (12): a counter register the program names itself is skipped; with none left, CMP130.
+    [Fact]
+    public void Repeat_CounterRegisterTheProgramNames_IsSkipped()
+    {
+        string[] blocks =
+        [
+            "VAR:QL90=7", "RAPID X=0 Y=0", "LABEL=1", "RAPID IY={$QL90}", "JUMP=2 IF={$Q1 > 0}", "REPEAT=1 TIMES=3",
+            "LABEL=2",
+        ];
+
+        string body = HeidenhainCompile.Body(HeidenhainCompile.Run(HeidenhainCompile.Program(blocks),
+            CounterMill("[\"QL90\", \"QL99\"]")));
+        CompileResult full = HeidenhainCompile.Run(HeidenhainCompile.Program(blocks),
+            CounterMill("[\"QL90\", \"QL90\"]"));
+
+        Assert.Contains("QL91 = 0\nLBL 1", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("QL90 = 0", body, StringComparison.Ordinal);
+        Assert.Equal(9, HeidenhainCompile.Single(full, DiagnosticCodes.HeidenhainRepeatWithoutCounter).Line);
+    }
+
+    // D271, D99: a JUMP=END in a subprogram two programs call jumps to the same end label number in both files, so
+    // that the SUB's text does not depend on its caller.
+    [Fact]
+    public void JumpToTheEnd_InASubprogramOfTwoPrograms_UsesOneEndLabel()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"PA\"", "UNITS=MM", "CALL=50", "PROGRAM=END",
+            "PROGRAM=BEGIN NAME=\"PB\"", "UNITS=MM", "LABEL=1", "LABEL=2", "CALL=50", "JUMP=1 IF={$Q3 > 0}",
+            "JUMP=2 IF={$Q3 > 1}", "PROGRAM=END",
+            "SUB=BEGIN NAME=50", "RAPID IX=1", "JUMP=END IF={$Q1 > 0}", "SUB=END",
+            "FILE=END"));
+
+        Assert.False(result.Diagnostics.HasErrors, result.Diagnostics.ToText());
+        Assert.Equal(2, result.Files.Count);
+        foreach (CompiledFile file in result.Files)
+        {
+            List<string> lines = HeidenhainCompile.LinesOf(file.Text);
+            Assert.Contains("FN 11: IF +Q1 GT +0 GOTO LBL 1", lines);
+            Assert.Equal("LBL 1", lines[lines.IndexOf("M30") - 1]);
+        }
+    }
+
+    // D271: a JUMP=END whose label finds no free number is CMP129 alone, without a CMP101 for its IF.
+    [Fact]
+    public void JumpToTheEnd_WithoutAFreeLabel_IsCmp129Alone()
+    {
+        var mill = HeidenhainCompile.MillWith("comment_charset = \"ASCII\"",
+            "comment_charset = \"ASCII\"\nlabel_max = 1");
+        CompileResult result = HeidenhainCompile.Run(
+            HeidenhainCompile.Program("LABEL=1", "JUMP=END IF={$Q1 > 0}", "RAPID X=0"), mill);
+
+        Assert.Contains(DiagnosticCodes.HeidenhainNoFreeLabel, HeidenhainCompile.Codes(result));
+        Assert.DoesNotContain(DiagnosticCodes.HeidenhainWordWithoutKlartext, HeidenhainCompile.Codes(result));
+    }
+
+    // The counter_registers line of machines/heidenhain-itnc530.toml.
+    private const string CounterRegisters = "counter_registers = [\"QL90\", \"QL99\"]";
+
+    // The iTNC 530 with another [format] counter_registers.
+    private static Ncx.Core.Machine.MachineConfig CounterMill(string range)
+    {
+        return HeidenhainCompile.MillWith(CounterRegisters, "counter_registers = " + range);
     }
 }

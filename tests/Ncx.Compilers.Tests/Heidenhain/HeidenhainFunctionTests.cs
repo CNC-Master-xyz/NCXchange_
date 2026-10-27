@@ -92,9 +92,21 @@ public sealed class HeidenhainFunctionTests
     {
         var mill = HeidenhainCompile.MillWith("OFF = \"M5\"", "OFF = \"M5\"\nORIENT = \"M19\"");
 
-        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program("ORIENT=90"), mill);
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program("ORIENT=0"), mill);
 
         Assert.Equal("M19", HeidenhainCompile.Body(result));
+    }
+
+    // D154: a template without {angle} is written only for ORIENT=0; another angle is the ERROR CMP007.
+    [Fact]
+    public void Orient_AngleWithoutAngleTemplate_IsTheErrorCmp007()
+    {
+        var mill = HeidenhainCompile.MillWith("OFF = \"M5\"", "OFF = \"M5\"\nORIENT = \"M19\"");
+
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program("ORIENT=90"), mill);
+
+        Assert.Contains(result.Diagnostics.Items, item => item.Code == DiagnosticCodes.OrientAngleWithoutTemplate);
+        Assert.Empty(result.Files);
     }
 
     // Language 2 rule 8: nothing of the program is dropped silently; a word the compiler writes no Klartext for is an

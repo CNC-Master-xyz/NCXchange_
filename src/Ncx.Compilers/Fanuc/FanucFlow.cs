@@ -136,16 +136,118 @@ internal static class FanucFlow
 
         if (block.Find("REPEAT") is Word repeat)
         {
-            // TODO(question): controller-mapping 6 writes REPEAT with TIMES as "counter variable and IF GOTO
-            // (compiler)" and names no variable for the counter, which may clash with a variable of the program; the
-            // block is an ERROR until that is answered (D213). D212 settles only what a missing TIMES means, the
-            // count 1.
             write.Written(repeat);
             write.Written("TIMES");
-            write.Error(DiagnosticCodes.FanucRepeatNotWritten,
-                "REPEAT needs a counter variable and IF GOTO on Fanuc, and no document names the variable that holds "
-                + "the count (controller-mapping 6, REPEAT + TIMES).");
+            WriteRepeat(write, repeat);
         }
+    }
+
+    /// <summary>
+    /// Clears the counters of every repeat counter the program uses, at its start: a common variable keeps its value
+    /// over a reset, so a run that stopped inside a repeat would leave its count (D213, D280).
+    /// </summary>
+    public static void ClearCounters(FanucBlock write)
+    {
+        IReadOnlyList<string> counters = write.Machine.Variables.RepeatCounters;
+        for (int depth = 0; depth < write.Repeats.Counters && depth < counters.Count; depth++)
+        {
+            write.Write(counters[depth] + " = 0");
+        }
+    }
+
+    // REPEAT=label TIMES=k runs the blocks from the label to the REPEAT k more times (language 4.9, D212): the counter
+    // of its nesting depth counts the passes, IF GOTO returns to the label while it is not above k, and the counter is
+    // 0 again once the repeat ends, so that a later arrival starts it fresh (controller-mapping 6, REPEAT + TIMES;
+    // D213, D280).
+    private static void WriteRepeat(FanucBlock write, Word repeat)
+    {
+        string label = repeat.Value.ToCanonical();
+        if (write.Repeats.RangeOf(write.Step.Section, write.Block) is not FanucRepeatRange range
+            || write.Labels.NumberOf(label) is not int number
+            || CounterOf(write, range) is not string counter)
+        {
+            return;
+        }
+
+        string times = "1";
+        if (write.Block.Find("TIMES") is Word count)
+        {
+            if (FanucExpressions.WordValue(write, "L", count.Value, 1m) is not string value)
+            {
+                return;
+            }
+
+            times = value;
+        }
+
+        // The label takes the modal values that differ by path from the control (FanucFlow.WriteLabel).
+        FanucPaths.CheckJump(write, label);
+        write.Write(counter + " = " + counter + " + 1");
+        write.Write("IF [" + counter + " LE " + times + "] GOTO " + number.ToString(CultureInfo.InvariantCulture));
+        write.Write(counter + " = 0");
+    }
+
+    // The counter of a range: the variable of its nesting depth in [variables] repeat_counters; CMP314 where the list
+    // is missing or too short, CMP315 where the program uses the variable itself; no fallback (D280).
+    private static string? CounterOf(FanucBlock write, FanucRepeatRange range)
+    {
+        IReadOnlyList<string> counters = write.Machine.Variables.RepeatCounters;
+        string depth = (range.Depth + 1).ToString(CultureInfo.InvariantCulture);
+        if (range.Depth >= counters.Count)
+        {
+            write.Error(DiagnosticCodes.FanucRepeatCounterMissing,
+                $"REPEAT={range.Label} needs a counter variable for nesting depth {depth}, and [variables] "
+                + $"repeat_counters names {counters.Count.ToString(CultureInfo.InvariantCulture)}; the compiler "
+                + "guesses no variable (D280; machine-config 7).");
+            return null;
+        }
+
+        string counter = counters[range.Depth];
+        if (write.Repeats.Uses(counter))
+        {
+            write.Error(DiagnosticCodes.FanucRepeatCounterInUse,
+                $"REPEAT={range.Label} counts in {counter} of [variables] repeat_counters, which the program uses "
+                + "itself (D280; machine-config 7).");
+            return null;
+        }
+
+        return counter;
+    }
+
+    /// <summary>
+    /// D213: a JUMP that leaves a repeat ends it, so it clears the counter of every range it leaves, under the
+    /// condition of the jump where it has one, before it jumps; a RETURN leaves every range around it, as JUMP=END
+    /// does, so that the next call of the subprogram counts its passes afresh.
+    /// </summary>
+    /// <param name="write">The JUMP or RETURN block.</param>
+    /// <param name="target">The label of the JUMP; "END" for JUMP=END and RETURN.</param>
+    /// <param name="condition">The Fanuc condition of the jump; null for an unconditional one.</param>
+    public static void ClearLeftRepeats(FanucBlock write, string target, string? condition)
+    {
+        int? line = target == "END" ? null : LineOf(write, target);
+        IReadOnlyList<string> counters = write.Machine.Variables.RepeatCounters;
+        foreach (FanucRepeatRange range in write.Repeats.LeftBy(write.Step.Section, write.Block.Line, line))
+        {
+            if (range.Depth < counters.Count)
+            {
+                string clear = counters[range.Depth] + " = 0";
+                write.Write(condition is null ? clear : "IF " + condition + " THEN " + clear);
+            }
+        }
+    }
+
+    // The line of the LABEL block of a label in the section of the block.
+    private static int? LineOf(FanucBlock write, string label)
+    {
+        foreach (BlockStep step in write.Steps)
+        {
+            if (step.Section == write.Step.Section && step.Block.Find("LABEL")?.Value.ToCanonical() == label)
+            {
+                return step.Block.Line;
+            }
+        }
+
+        return null;
     }
 
     // #n = e assigns (controllers fanuc.md 7): a V name is #n (D33), a Heidenhain name the variable of [variables] map
@@ -187,13 +289,21 @@ internal static class FanucFlow
             return;
         }
 
+        // A conditional JUMP=END in a subprogram ends the whole program, which no GOTO of the subprogram reaches: it is
+        // CMP302 below and writes nothing, the clearing included.
+        bool endInSub = target == "END" && conditional && write.Step.Section?.Kind != SectionKind.Program;
+        if (!endInSub)
+        {
+            ClearLeftRepeats(write, target, condition);
+        }
+
         if (target == "END")
         {
             if (!conditional)
             {
                 FanucProgramFrame.WriteEnd(write, "");
             }
-            else if (write.Labels.EndLabel is int end)
+            else if (!endInSub && write.Labels.EndLabel is int end)
             {
                 write.Write("IF " + condition + " GOTO " + end.ToString(CultureInfo.InvariantCulture));
             }
@@ -235,8 +345,9 @@ internal static class FanucFlow
     // are the pass-through ARG:Vn={$Vn} alone is, the NCX program does not say: the block is written as the
     // subprogram call and reported with CMP311 (FormOf, row 196). A CALL that carries an argument value is the macro
     // call, a pass-through word next to it or not (D148: only a macro call can take arguments).
-    // TODO(question): D215: the file name of CALL="name" is open; a name O followed by digits is called by its number,
-    // any other external name is an ERROR, until D215 is answered.
+    // D215: the name of CALL="name" is the file name without directory and extension; a Fanuc program is named by its
+    // O number only (controllers fanuc.md 1), so a name O followed by digits, or digits alone, is called by its number
+    // and any other external name has no Fanuc form, an ERROR.
     private static void WriteCall(FanucBlock write, Word call)
     {
         if (write.Block.Has("IF"))

@@ -231,11 +231,35 @@ public sealed class HeidenhainMotionTests
         Assert.Equal(5, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainValueWithoutKlartext).Line);
     }
 
-    // The TODO(question) of HeidenhainNumbers: a formula in a coordinate has no Klartext form, CMP102.
+    // D338: a formula in a coordinate is spilled into the highest free QL parameter in a block of its own directly
+    // before the motion; a second formula of the block takes the next one down.
     [Fact]
-    public void Rule2_FormulaInACoordinate_IsTheErrorCmp102()
+    public void Rule2_FormulaInACoordinate_IsSpilledIntoAQlParameter()
     {
-        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program("RAPID X={$Q1 + 5} Y=0"));
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program("RAPID X={$Q1 + 5} Y={$Q2 * 2}"));
+
+        Assert.Equal("QL499 = Q1 + 5\nQL498 = Q2 * 2\nL X+QL499 Y+QL498 R0 FMAX", HeidenhainCompile.Body(result));
+    }
+
+    // D338: the compiler takes the highest QL numbers that no word of the file names; FN 9 to FN 12 operands spill
+    // too.
+    [Fact]
+    public void Rule2_FormulaBesideANamedQl_TakesTheNextFreeOneAndSpillsTheOperandOfAJump()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "VAR:QL499=1", "LABEL=1", "JUMP=1 IF={$Q1 + 1 > $QL499}"));
+
+        Assert.Equal("QL499 = 1\nLBL 1\nQL498 = Q1 + 1\nFN 11: IF +QL498 GT +QL499 GOTO LBL 1",
+            HeidenhainCompile.Body(result));
+    }
+
+    // D338: CMP102 remains only where no QL is free, here every QL held by counter_registers.
+    [Fact]
+    public void Rule2_FormulaWithoutAFreeQl_IsTheErrorCmp102()
+    {
+        var mill = HeidenhainCompile.MillWith("counter_registers = [\"QL90\", \"QL99\"]",
+            "counter_registers = [\"QL0\", \"QL499\"]");
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program("RAPID X={$Q1 + 5} Y=0"), mill);
 
         Assert.Empty(result.Files);
         Assert.Equal(4, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainValueWithoutKlartext).Line);

@@ -125,6 +125,12 @@ internal static partial class HeidenhainFlow
         }
 
         block.Draft.Main.Add("JUMP", target).Add("IF", condition);
+        if (block.Heidenhain.Labels.JumpsLeavingRepeats.TryGetValue(block.Line, out string? repeated))
+        {
+            block.Draft.Warnings.Add(new HeidenhainWarning(DiagnosticCodes.HeidenhainJumpLeavesRepeat,
+                $"FN {function} jumps out of the part that CALL LBL {repeated} REP repeats: the control may keep the "
+                + "remaining REP count; NCX ends the repeat (D213; language 4.9)."));
+        }
     }
 
     // CALL LBL n calls the subprogram LBL n ... LBL 0 once (controllers heidenhain.md 1; controller-mapping 6, CALL).
@@ -182,10 +188,24 @@ internal static partial class HeidenhainFlow
     // CALL PGM name calls another file, with the Q parameters set before the call (controllers heidenhain.md 1;
     // controller-mapping 6, CALL and ARG): CALL="name", an external program (language 4.9). Where the tool stands
     // afterwards is unknown (virtual machine 1), and so is the pole, which the called file may set.
+    // D215: the name is the file name without directory and extension, which the VM opens as <name>.ncx; the reader
+    // drops a path, TNC:\NC\ or PARTS/, and a .h or .H, and keeps any other extension, the .I of a DIN/ISO program,
+    // as RAW with its WARNING (decisions.md; language 4.9).
     private static void ReadProgramCall(HeidenhainBlock block)
     {
         block.MarkAllRead();
-        string name = Regex.Replace(block.Content, @"^CALL\s+PGM\s*", "", RegexOptions.IgnoreCase).Trim().Trim('"');
+        string path = Regex.Replace(block.Content, @"^CALL\s+PGM\s*", "", RegexOptions.IgnoreCase).Trim().Trim('"');
+        string name = path[(path.LastIndexOfAny(['\\', '/', ':']) + 1)..];
+        int dot = name.LastIndexOf('.');
+        string extension = dot < 0 ? "" : name[(dot + 1)..];
+        if (dot >= 0 && extension is not ("h" or "H"))
+        {
+            block.Draft.KeepAsRaw($"CALL PGM {path} calls a file of the extension .{extension}, which is no Klartext "
+                + "program; only a .h is read as CALL (D215)");
+            return;
+        }
+
+        name = dot < 0 ? name : name[..dot];
         if (name.Length == 0)
         {
             block.Draft.KeepAsRaw("CALL PGM names no program");

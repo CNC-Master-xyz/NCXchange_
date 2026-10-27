@@ -20,8 +20,8 @@ public sealed class JobBindingTests
             JobCompile.Program(1000, "SYNC=110", "DWELL=1", "SPINDLE_SYNC=MAIN,SUB", "SYNC=111"),
             JobCompile.Program(1000, "SYNC=110", "SYNC=111")));
 
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nG4 P1000\nM111\nM30\n%\n", texts[0]);
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nM96\nM111\nM30\n%\n", texts[1]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nG4 X1.\nM111\nM30\n%\n", texts[0]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM96\nM111\nM30\n%\n", texts[1]);
     }
 
     // D56: the words of a block bound to another channel move, the other words of the block stay.
@@ -32,8 +32,8 @@ public sealed class JobBindingTests
             JobCompile.Program(1000, "SYNC=110", "SPINDLE_SYNC=MAIN,SUB COOLANT=ON"),
             JobCompile.Program(1000, "SYNC=110")));
 
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nM8\nM30\n%\n", texts[0]);
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nM96\nM30\n%\n", texts[1]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM8\nM30\n%\n", texts[0]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM96\nM30\n%\n", texts[1]);
     }
 
     // D56 and the TODO(question) of JobCompiler.Destination: a word that no mark stands before stands after the
@@ -44,8 +44,8 @@ public sealed class JobBindingTests
         List<string> texts = JobCompile.TextsOf(JobCompile.Run(JobCompile.Machine(),
             JobCompile.Program(1000, "SYNC=110"), JobCompile.Program(1000, "FUNC:DOOR=OPEN", "SYNC=110")));
 
-        Assert.Equal("%\nO1000 (T)\nM62\nG18 G99 G40 G80\nM110\nM30\n%\n", texts[0]);
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nM30\n%\n", texts[1]);
+        Assert.Equal("%\nO1000 (T)\nG21\nM62\nG18 G99 G40 G80\nM110\nM30\n%\n", texts[0]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM30\n%\n", texts[1]);
     }
 
     // Implementation 16, P6-02 tests first: a channels = "all" word appears in both programs behind a generated wait,
@@ -59,8 +59,8 @@ public sealed class JobBindingTests
             JobCompile.Program(1000, "SYNC=110", "DWELL=1", "SPINDLE_SYNC=MAIN,SUB", "SYNC=111"),
             JobCompile.Program(1000, "SYNC=110", "SYNC=111")));
 
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nG4 P1000\nM100\nM96\nM111\nM30\n%\n", texts[0]);
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nM100\nM96\nM111\nM30\n%\n", texts[1]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nG4 X1.\nM100\nM96\nM111\nM30\n%\n", texts[0]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM100\nM96\nM111\nM30\n%\n", texts[1]);
     }
 
     // Virtual machine 3.8 rule 2a, D56: every function the compiler writes is bound, also a word an expansion rule
@@ -76,8 +76,8 @@ public sealed class JobBindingTests
             JobCompile.Program(1000, "SYNC=110", "TOOL=1 OFFSET=1", "SYNC=111"),
             JobCompile.Program(1000, "SYNC=110", "SYNC=111")));
 
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nM100\nM70\nT0101\nM111\nM30\n%\n", texts[0]);
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nM100\nM70\nM111\nM30\n%\n", texts[1]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM100\nM70\nT0101\nM111\nM30\n%\n", texts[0]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM100\nM70\nM111\nM30\n%\n", texts[1]);
     }
 
     // Virtual machine 3.8 rule 2a, D56: FUNC:DOOR=OPEN, which [tool_change] pre generates before the tool change of
@@ -91,8 +91,8 @@ public sealed class JobBindingTests
             JobCompile.Program(1000, "SYNC=110", "SYNC=111"),
             JobCompile.Program(1000, "SYNC=110", "TOOL=2 OFFSET=2", "SYNC=111")));
 
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nM62\nM111\nM30\n%\n", texts[0]);
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nT0202\nM111\nM30\n%\n", texts[1]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM62\nM111\nM30\n%\n", texts[0]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nT0202\nM111\nM30\n%\n", texts[1]);
     }
 
     // Virtual machine 3.8 rule 2a, D56, architecture 9: FUNC:DOOR=OPEN, which the rewriter of a plugin writes before a
@@ -108,8 +108,8 @@ public sealed class JobBindingTests
         List<string> texts = JobCompile.TextsOf(JobCompile.Run(JobCompile.Machine(), job, files,
             new CompileOptions { Rewriters = [rewriter] }));
 
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nM62\nM30\n%\n", texts[0]);
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nG4 P1000\nM30\n%\n", texts[1]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM62\nM30\n%\n", texts[0]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nG4 X1.\nM30\n%\n", texts[1]);
         Assert.Equal(["2"], rewriter.Channels);
     }
 
@@ -124,8 +124,8 @@ public sealed class JobBindingTests
             JobCompile.Program(1000, "SYNC=110", "SKIP=2 SPINDLE_SYNC=MAIN,SUB", "SYNC=111"),
             JobCompile.Program(1000, "SYNC=110", "SYNC=111")));
 
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\n/2M100\n/2M96\nM111\nM30\n%\n", texts[0]);
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\n/2M100\n/2M96\nM111\nM30\n%\n", texts[1]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\n/2M100\n/2M96\nM111\nM30\n%\n", texts[0]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\n/2M100\n/2M96\nM111\nM30\n%\n", texts[1]);
     }
 
     // D201 (open, its recommendation): a word moved from a SKIP=2 block is skipped on switch 2 in the program of its
@@ -137,8 +137,8 @@ public sealed class JobBindingTests
             JobCompile.Program(1000, "SYNC=110", "SKIP=2 SPINDLE_SYNC=MAIN,SUB", "SYNC=111"),
             JobCompile.Program(1000, "SYNC=110", "SYNC=111")));
 
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nM111\nM30\n%\n", texts[0]);
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\n/2M96\nM111\nM30\n%\n", texts[1]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM111\nM30\n%\n", texts[0]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\n/2M96\nM111\nM30\n%\n", texts[1]);
     }
 
     // D312 (a): a word bound to every channel that every channel program already writes behind the same mark, as a
@@ -152,8 +152,8 @@ public sealed class JobBindingTests
             JobCompile.Program(1000, "SYNC=110", "SPINDLE_SYNC=MAIN,SUB"),
             JobCompile.Program(1000, "SYNC=110", "SPINDLE_SYNC=MAIN,SUB")));
 
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nM96\nM30\n%\n", texts[0]);
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nM96\nM30\n%\n", texts[1]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM96\nM30\n%\n", texts[0]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM96\nM30\n%\n", texts[1]);
     }
 
     // Virtual machine 3.7 (marks are matched in execution order) and 3.8 rule 2a: the words of two blocks of one
@@ -169,8 +169,9 @@ public sealed class JobBindingTests
             JobCompile.Program(1000, "SYNC=110", "SPINDLE_SYNC=MAIN,SUB", "DWELL=1", "FUNC:CLAMP=ON", "SYNC=111"),
             JobCompile.Program(1000, "SYNC=110", "SYNC=111")));
 
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nM100\nM96\nG4 P1000\nM100\nM70\nM111\nM30\n%\n", texts[0]);
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nM100\nM96\nM100\nM70\nM111\nM30\n%\n", texts[1]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM100\nM96\nG4 X1.\nM100\nM70\nM111\nM30\n%\n",
+            texts[0]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM100\nM96\nM100\nM70\nM111\nM30\n%\n", texts[1]);
     }
 
     // Virtual machine 3.7 and 3.8 rule 2a: the words of two channels behind different marks stand in both programs in
@@ -185,8 +186,8 @@ public sealed class JobBindingTests
             JobCompile.Program(1000, "SYNC=110", "SPINDLE_SYNC=MAIN,SUB", "SYNC=111"),
             JobCompile.Program(1000, "SYNC=110", "SYNC=111", "FUNC:CLAMP=ON")));
 
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nM100\nM96\nM111\nM100\nM70\nM30\n%\n", texts[0]);
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM110\nM100\nM96\nM111\nM100\nM70\nM30\n%\n", texts[1]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM100\nM96\nM111\nM100\nM70\nM30\n%\n", texts[0]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM100\nM96\nM111\nM100\nM70\nM30\n%\n", texts[1]);
     }
 
     // D312 (b): the words of two channels duplicated between the same marks would stand in the programs in two
@@ -354,8 +355,8 @@ public sealed class JobBindingTests
         List<string> texts = JobCompile.TextsOf(JobCompile.Run(machine,
             JobCompile.Program(1000, "START_CHANNEL=2", "SPINDLE_SYNC=MAIN,SUB"), JobCompile.Program(1000, "DWELL=1")));
 
-        Assert.Equal("%\nO1000 (T)\nG18 G99 G40 G80\nM300 P2\nM100\nM96\nM30\n%\n", texts[0]);
-        Assert.Equal("%\nO1000 (T)\nM100\nM96\nG18 G99 G40 G80\nG4 P1000\nM30\n%\n", texts[1]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM300 P2\nM100\nM96\nM30\n%\n", texts[0]);
+        Assert.Equal("%\nO1000 (T)\nG21\nM100\nM96\nG18 G99 G40 G80\nG4 X1.\nM30\n%\n", texts[1]);
     }
 
     // Machine-config 5, D56: without a mark_range the job compiler has no mark for the SYNC a word bound to every

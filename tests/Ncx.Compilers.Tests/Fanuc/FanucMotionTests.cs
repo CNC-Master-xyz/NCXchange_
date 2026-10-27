@@ -9,7 +9,7 @@ namespace Ncx.Compilers.Tests.Fanuc;
 public sealed class FanucMotionTests
 {
     // Controller-mapping 2, R: an arc with R keeps its signed radius; G2 or G3 stands on every arc block (the
-    // TODO(question) of FanucMotion), as the sources write N300 to N330 of 2.5D_FRAESEN.
+    // family value "arcs" of [format] motion_code, D282 (a), D299), as the sources write N300 to N330 of 2.5D_FRAESEN.
     [Fact]
     public void Arc_WithRadius_WritesR_AndTheArcCodeOnEveryBlock()
     {
@@ -17,6 +17,28 @@ public sealed class FanucMotionTests
             "RAPID X=0 Y=0\nLINE X=10 F=100\nARC=CCW X=20 Y=10 R=10\nARC=CCW X=10 Y=20 R=-10");
 
         Assert.Equal("G17 X0. Y0.\nG1 X10. F100.\nG3 X20. Y10. R10.\nG3 X10. Y20. R-10.\n", body);
+    }
+
+    // [format] motion_code = "change" (D299, D282 (a)): the code only where it changes, arcs included.
+    [Fact]
+    public void MotionCode_Change_WritesTheArcCodeOnlyWhereItChanges()
+    {
+        string text = FanucCompile.TextOf(FanucCompile.Run(FanucCompile.Program(
+                "RAPID X=0 Y=0", "LINE X=10 F=100", "ARC=CCW X=20 Y=10 R=10", "ARC=CCW X=10 Y=20 R=-10"),
+            FanucCompile.Mill(FanucCompile.SourceHabits + "\nmotion_code = \"change\"")));
+
+        Assert.Contains("G1 X10. F100.\nG3 X20. Y10. R10.\nX10. Y20. R-10.\n", text, StringComparison.Ordinal);
+    }
+
+    // [format] motion_code = "every_block" (D299): the code on every motion block, G1 included.
+    [Fact]
+    public void MotionCode_EveryBlock_WritesG1Again()
+    {
+        string text = FanucCompile.TextOf(FanucCompile.Run(FanucCompile.Program(
+                "RAPID X=0 Y=0", "LINE X=10 F=100", "LINE Y=10"),
+            FanucCompile.Mill(FanucCompile.SourceHabits + "\nmotion_code = \"every_block\"")));
+
+        Assert.Contains("G1 X10. F100.\nG1 Y10.\n", text, StringComparison.Ordinal);
     }
 
     // Controller-mapping 2, CENTER:X; language 6: the absolute centre is written as I J from the start point, G3 X70.
@@ -110,23 +132,23 @@ public sealed class FanucMotionTests
         Assert.Equal("G17 X10. Y10.\nG1 X20. Y15. F100.\n", body);
     }
 
-    // Language 4.1 DWELL, controller-mapping 1: G4 with P in milliseconds (D159).
+    // Language 4.1 DWELL, controller-mapping 1 (D159): G4 X in seconds with a decimal point, which the control reads
+    // as seconds whatever its increment system and parameter 1015#7 (B-64484EN p.188).
     [Fact]
-    public void Dwell_InSeconds_IsG4PInMilliseconds()
+    public void Dwell_InSeconds_IsG4XInSecondsWithADecimalPoint()
     {
-        string body = FanucCompile.Body("DWELL=1.5");
-
-        Assert.Equal("G4 P1500\n", body);
+        Assert.Equal("G4 X1.5\n", FanucCompile.Body("DWELL=1.5"));
+        Assert.Equal("G4 X2.\n", FanucCompile.Body("DWELL=2"));
     }
 
-    // Language 4.1 DWELL (seconds), controllers fanuc.md 4 and 7 (D159): an expression dwell is the expression times
-    // 1000 in brackets, an operation in brackets of its own.
+    // Language 4.1 DWELL (seconds), controllers fanuc.md 4 and 7 (D159): an expression dwell is the expression in
+    // seconds, a variable bare and an operation in brackets.
     [Fact]
-    public void Dwell_AsAnExpression_IsG4PWithTheExpressionTimes1000()
+    public void Dwell_AsAnExpression_IsG4XWithTheExpression()
     {
         string body = FanucCompile.Body("VAR:V1=2\nDWELL={$V1}\nDWELL={$V1 + 0.5}");
 
-        Assert.Equal("#1 = 2\nG4 P[#1 * 1000]\nG4 P[[#1 + 0.5] * 1000]\n", body);
+        Assert.Equal("#1 = 2\nG4 X#1\nG4 X[#1 + 0.5]\n", body);
     }
 
     // Controller-mapping 1, SKIP; language 2 rule 2 (the verb on every block), 4.3 (F is modal); D53, virtual machine

@@ -17,6 +17,9 @@
 # Rules of the Siemens reader and compiler that no key of the catalog carries:
 # - A direct CYCLE8x(...) block calls once at the current position; MCALL CYCLE8x(...) makes the cycle modal, every following block with a position calls it,
 #   MCALL alone ends it (siemens 7, controller-mapping 5). The call form is a word of its own: no entry is modal.
+#   The reader writes CYCLE=OFF after the CYCLE_CALL of a direct call, for which the compiler writes nothing (D224). A literal F on a position block under MCALL
+#   is the CYCLE_F of the following calls and the path feed: the reader writes the CYCLE block again, the compiler writes the F on the position block (D387).
+#   SLOT1 and SLOT2 take _CPA/_CPO at a single position only, so the compiler writes them as a direct call at each position (D379).
 # - The cycle always returns to RTP: CYCLE_RETRACT=SAFE with SAFE = RTP, and the compiler writes RTP = CLEARANCE for CYCLE_RETRACT=CLEARANCE (controller-mapping 5).
 #   CYCLE_RETRACT has no position of its own: the NCX words of a drilling entry are its params plus this rule (D157), and the words that CYCLE81, G81 and
 #   CYCL DEF 200 share (phase 2 P2-03) are compared with the rules of each family included (see cycles/fanuc.toml).
@@ -62,7 +65,7 @@ absolute_from_surface = ["CLEARANCE"]
 name = "PECK"
 native = "CYCLE83"                                                                     # deep hole drilling 1, VARI=1: Entspanen (SW4.92 p.1086-1089)
 signature = ["RTP", "RFP", "SDIS", "DP", "DPR", "FDEP", "FDPR", "_DAM", "DTB", "DTS", "FRF", "VARI", "_AXN", "_MDEP", "_VRT", "_DTD", "_DIS1", "_GMODE", "_DMODE", "_AMODE"]
-params = { SAFE = "RTP", SURFACE = "RFP", CLEARANCE = "SDIS", DEPTH = "DP", PECK = "FDPR", CYCLE_DWELL = "DTB", AXIS = "_AXN", CYCLE_F = "F" }
+params = { SAFE = "RTP", SURFACE = "RFP", CLEARANCE = "SDIS", DEPTH = "DP", PECK = "FDPR", CYCLE_DWELL = "_DTD", AXIS = "_AXN", CYCLE_F = "F" }
 absolute_from_surface = ["CLEARANCE"]
 fixed = { VARI = 1 }                                                                   # controller-mapping 5
 defaults = { VARI = 0 }                                                                # an omitted VARI is 0, chip breaking (D181)
@@ -71,15 +74,17 @@ defaults = { VARI = 0 }                                                         
 name = "CHIP_BREAK"
 native = "CYCLE83"                                                                     # deep hole drilling 1, VARI=0: Spänebrechen, _VRT the lift amount
 signature = ["RTP", "RFP", "SDIS", "DP", "DPR", "FDEP", "FDPR", "_DAM", "DTB", "DTS", "FRF", "VARI", "_AXN", "_MDEP", "_VRT", "_DTD", "_DIS1", "_GMODE", "_DMODE", "_AMODE"]
-params = { SAFE = "RTP", SURFACE = "RFP", CLEARANCE = "SDIS", DEPTH = "DP", PECK = "FDPR", CYCLE_DWELL = "DTB", AXIS = "_AXN", CYCLE_F = "F" }
+params = { SAFE = "RTP", SURFACE = "RFP", CLEARANCE = "SDIS", DEPTH = "DP", PECK = "FDPR", CYCLE_DWELL = "_DTD", AXIS = "_AXN", CYCLE_F = "F" }
 absolute_from_surface = ["CLEARANCE"]
 fixed = { VARI = 0 }                                                                   # controller-mapping 5
 defaults = { VARI = 0 }
 # D181: the constant PECK of NCX is FDPR, the first depth relative to RFP, with _DAM = 0 (no degression) and FDEP, the absolute alternative of the same value,
 # left empty (840D sl Zyklen 01/2008 p.50-55). D356: for PECK and CHIP_BREAK without PECK, or with PECK = 0, the compiler writes FDPR = the whole depth in one
 # infeed, the distance from DEPTH to SURFACE, or to CLEARANCE where the block gives no SURFACE; FDEP stays empty. D358: the compiler writes _VRT (position 15)
-# from [cycles] chip_break_lift on VARI=0 and _DIS1 (position 17) from [cycles] peck_clearance where that key is set; DTS, FRF, _MDEP and _DTD have no NCX
-# word.
+# from [cycles] chip_break_lift on VARI=0 and _DIS1 (position 17) from [cycles] peck_clearance where that key is set, and the reader takes either as the key's
+# value. CYCLE_DWELL is _DTD (position 16), "Verweilzeit auf Endbohrtiefe"; DTB (position 9) is the dwell at every drilling depth, as on CYCLE830 (SW4.92
+# p.1086-1087; D181, gap closed 2026-10-27). DTB, DTS, FRF and _MDEP have no NCX word. A call that sets FDEP or a _DAM other than 0 has no constant PECK and
+# stays native (D181).
 
 [[cycle]]
 name = "TAP"

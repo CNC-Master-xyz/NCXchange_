@@ -119,6 +119,15 @@ public sealed record OutputFormat
     public int? LabelMax { get; init; }
 
     /// <summary>
+    /// counter_registers: the first and the last Q parameter of the range the Heidenhain compiler counts a REPEAT in
+    /// when a JUMP leaves its section, ["QL90", "QL99"], both of one kind, Q, QL or QR; empty when the file leaves it
+    /// out, and then such a REPEAT is an ERROR, never a guessed register (D213, D388 (12)).
+    /// Gap closed 2026-10-27 (delegated): the form is an array of the first and the last name, as [variables]
+    /// repeat_counters lists names.
+    /// </summary>
+    public IReadOnlyList<string> CounterRegisters { get; init; } = [];
+
+    /// <summary>
     /// motion_code: on which motion blocks the verb is written; null when the file leaves it out, and then the family
     /// value (D299).
     /// </summary>

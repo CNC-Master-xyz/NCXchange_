@@ -25,7 +25,7 @@ public sealed class CommentCharsetTests
         Assert.Empty(diagnostics.Items);
     }
 
-    // Machine-config 2 and the TODO(question) of CommentCharset: a character outside ASCII that is no umlaut becomes ?
+    // Machine-config 2, D263: a character outside ASCII that is no umlaut becomes ?
     // with a WARNING that names it.
     [Fact]
     public void Transliterate_CharacterWithoutTransliteration_IsTheWarningCmp022()
@@ -40,7 +40,8 @@ public sealed class CommentCharsetTests
         Assert.Contains("Ø, °", warning.Message, StringComparison.Ordinal);
     }
 
-    // The TODO(question) of CommentCharset: without comment_charset the comment is written as it is.
+    // D263: a charset other than ASCII, UTF-8 or a format that never took its family value, writes the comment as it
+    // is.
     [Fact]
     public void Transliterate_WithoutCharset_WritesTheTextAsItIs()
     {
