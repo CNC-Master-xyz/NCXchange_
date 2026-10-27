@@ -384,13 +384,18 @@ internal static class SiemensMotion
         return clockwise != turned ? "G2" : "G3";
     }
 
-    // G41 left of the contour, G42 right, G40 off (controllers siemens.md 3); mirrored with the arcs.
+    // G41 left of the contour, G42 right, G40 off (controllers siemens.md 3); mirrored with the arcs. D146: under
+    // TRACYL the cylinder plane of NCX (cylinder axis, then C) and the G19 of the control (Y = C, then Z) run the other
+    // way round, which mirrors left and right as it turns CCW into G2 (Arbeitsvorbereitung 2013, connector p.352;
+    // Grundlagen 2013, connector p.154). Gap closed 2026-10-28 (delegated): COMP=LEFT is G42 and COMP=RIGHT G41 while
+    // CYLINDER is on.
     private static string CompensationCode(SiemensBlock write)
     {
+        bool turned = SiemensArcs.Mirrored(write) != SiemensArcs.TurnedByTheCylinderPlane(write);
         return write.After.Motion.Comp switch
         {
-            Compensation.Left => SiemensArcs.Mirrored(write) ? "G42" : "G41",
-            Compensation.Right => SiemensArcs.Mirrored(write) ? "G41" : "G42",
+            Compensation.Left => turned ? "G42" : "G41",
+            Compensation.Right => turned ? "G41" : "G42",
             _ => "G40",
         };
     }

@@ -12,19 +12,23 @@ public sealed class ArcOnTheGridTests
 {
     private const decimal Step = 0.001m;
 
-    // D364: rounding the centre 18.098696 3.111792 to 18.099 3.112 leaves the radii 0.000876 apart; 18.098 3.112 one
+    // D364: rounding the centre 18.098696 3.111792 to 18.099 3.112 leaves the radii 0.000876 apart; within one
+    // output step that centre stays (gap closed 2026-10-28); against 0.0001 the grid is searched, and 18.098 3.112 one
     // step beside it brings them within 0.00005.
-    [Fact]
-    public void Choose_NeighbourOfTheRoundedCentre_WhenItsRadiiAgreeBetter()
+    [Theory]
+    [InlineData("0.001", "18.099")]
+    [InlineData("0.0001", "18.098")]
+    public void Choose_NeighbourOfTheRoundedCentre_OnlyWhenTheRoundedCentreMissesTheTolerance(string tolerance,
+        string first)
     {
+        decimal allowed = decimal.Parse(tolerance, System.Globalization.CultureInfo.InvariantCulture);
         GridCentre centre = ArcOnTheGrid.Choose(
             new GridAxis(17.48289m, 13.195465m, 18.098696m, Step, Step, Incremental: false),
-            new GridAxis(8.206899m, 1.59599m, 3.111792m, Step, Step, Incremental: false));
+            new GridAxis(8.206899m, 1.59599m, 3.111792m, Step, Step, Incremental: false), allowed);
 
-        Assert.Equal(18.098m, centre.First);
+        Assert.Equal(decimal.Parse(first, System.Globalization.CultureInfo.InvariantCulture), centre.First);
         Assert.Equal(3.112m, centre.Second);
-        Assert.True(centre.RadiusDifference < 0.0001m);
-        Assert.Null(ArcOnTheGrid.Report(centre, Step));
+        Assert.Null(ArcOnTheGrid.Report(centre, allowed));
     }
 
     // D364: an incremental centre lies on the grid of the offset from the written start, here 0.0004 off the grid of
@@ -34,7 +38,7 @@ public sealed class ArcOnTheGridTests
     {
         GridCentre centre = ArcOnTheGrid.Choose(
             new GridAxis(0.0004m, 10.0004m, 5.0004m, Step, Step, Incremental: true),
-            new GridAxis(0m, 0m, 0m, Step, Step, Incremental: true));
+            new GridAxis(0m, 0m, 0m, Step, Step, Incremental: true), Step);
 
         Assert.Equal(0m, centre.WrittenStartFirst);
         Assert.Equal(5m, centre.First - centre.WrittenStartFirst);
@@ -47,7 +51,7 @@ public sealed class ArcOnTheGridTests
     {
         GridCentre centre = ArcOnTheGrid.Choose(
             new GridAxis(0m, 10m, 5m, Step, 0.1m, Incremental: false),
-            new GridAxis(0m, 0.04m, 3m, Step, 0.1m, Incremental: false));
+            new GridAxis(0m, 0.04m, 3m, Step, 0.1m, Incremental: false), Step);
 
         Assert.NotNull(ArcOnTheGrid.Report(centre, Step));
     }

@@ -306,9 +306,9 @@ internal static class HeidenhainArcs
             axes[word.Axis] = axis;
         }
 
-        GridCentre centre = ArcOnTheGrid.Choose(axes[plane[0]], axes[plane[1]]);
         decimal tolerance = ArcOnTheGrid.ToleranceOf(writing.Machine, writing.After.Frame.Units,
             Math.Max(axes[plane[0]].CentreStep, axes[plane[1]].CentreStep));
+        GridCentre centre = ArcOnTheGrid.Choose(axes[plane[0]], axes[plane[1]], tolerance);
         if (ArcOnTheGrid.Report(centre, tolerance) is string message)
         {
             writing.Warning(DiagnosticCodes.ArcRadiiDifferOnTheGrid, message);

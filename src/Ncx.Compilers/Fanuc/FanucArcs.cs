@@ -190,9 +190,9 @@ internal static class FanucArcs
 
         GridAxis firstAxis = GridAxisOf(write, motion, first);
         GridAxis secondAxis = GridAxisOf(write, motion, second);
-        GridCentre centre = ArcOnTheGrid.Choose(firstAxis, secondAxis);
         decimal tolerance = ArcOnTheGrid.ToleranceOf(write.Machine, write.After.Frame.Units,
             Math.Max(firstAxis.CentreStep, secondAxis.CentreStep));
+        GridCentre centre = ArcOnTheGrid.Choose(firstAxis, secondAxis, tolerance);
         if (ArcOnTheGrid.Report(centre, tolerance) is string message)
         {
             write.Warning(DiagnosticCodes.ArcRadiiDifferOnTheGrid, message);

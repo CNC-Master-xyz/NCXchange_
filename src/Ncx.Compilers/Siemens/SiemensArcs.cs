@@ -303,9 +303,9 @@ internal static class SiemensArcs
 
         GridAxis firstAxis = GridAxisOf(write, arc, first, words?[first]);
         GridAxis secondAxis = GridAxisOf(write, arc, second, words?[second]);
-        GridCentre centre = ArcOnTheGrid.Choose(firstAxis, secondAxis);
         decimal tolerance = ArcOnTheGrid.ToleranceOf(write.Machine, write.After.Frame.Units,
             Math.Max(firstAxis.CentreStep, secondAxis.CentreStep));
+        GridCentre centre = ArcOnTheGrid.Choose(firstAxis, secondAxis, tolerance);
         if (ArcOnTheGrid.Report(centre, tolerance) is string message)
         {
             write.Warning(DiagnosticCodes.ArcRadiiDifferOnTheGrid, message);

@@ -11,7 +11,8 @@ namespace Ncx.Compilers;
 /// the one that makes the radius from the written start and the radius to the written end agree best, and among equals
 /// the one nearest the exact centre. A written centre may so move inside its rounding step. The remaining difference
 /// is the WARNING CMP030 where it exceeds [machine] arc_radius_tolerance, or one output step of the centre's address
-/// without the key.
+/// without the key. Gap closed 2026-10-28 (delegated): D364 searches the neighbouring grid points only when the
+/// rounded centre misses the tolerance, so the program's own centre stays wherever its radii already agree.
 /// </summary>
 internal static class ArcOnTheGrid
 {
@@ -26,7 +27,9 @@ internal static class ArcOnTheGrid
     /// </summary>
     /// <param name="first">The first plane axis.</param>
     /// <param name="second">The second plane axis.</param>
-    public static GridCentre Choose(GridAxis first, GridAxis second)
+    /// <param name="tolerance">The radius difference the rounded centre may leave before the neighbouring grid points
+    /// are searched (<see cref="ToleranceOf"/>).</param>
+    public static GridCentre Choose(GridAxis first, GridAxis second, decimal tolerance)
     {
         decimal startFirst = OnGrid(first.Start, first.PointStep);
         decimal startSecond = OnGrid(second.Start, second.PointStep);
@@ -36,6 +39,15 @@ internal static class ArcOnTheGrid
         decimal anchorSecond = second.Incremental ? startSecond : 0m;
         decimal roundedFirst = anchorFirst + OnGrid(first.Centre - anchorFirst, first.CentreStep);
         decimal roundedSecond = anchorSecond + OnGrid(second.Centre - anchorSecond, second.CentreStep);
+
+        // Gap closed 2026-10-28 (delegated): the program's own centre, rounded to the grid, stays where its radii
+        // agree within the tolerance; only a centre that misses it moves to a neighbouring grid point.
+        double rounded = Math.Abs(Distance(roundedFirst - startFirst, roundedSecond - startSecond)
+            - Distance(roundedFirst - endFirst, roundedSecond - endSecond));
+        if ((decimal)rounded <= tolerance)
+        {
+            return new GridCentre(roundedFirst, roundedSecond, startFirst, startSecond, (decimal)rounded);
+        }
 
         decimal bestFirst = roundedFirst;
         decimal bestSecond = roundedSecond;

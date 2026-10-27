@@ -390,6 +390,21 @@ public sealed class SiemensFrameTests
         Assert.Equal(Lines("M70", "TRACYL(40)", "G19", "G1 X30 F100", "G1 Z-10 Y15", written), body);
     }
 
+    // D146: the orientation change that turns NCX CCW into G2 under the G19 of TRACYL mirrors left and right as well,
+    // so COMP=LEFT is G42 and COMP=RIGHT G41 while CYLINDER is on (Arbeitsvorbereitung 2013 p.352; Grundlagen 2013
+    // p.154; gap closed 2026-10-28), and G41 again after TRAFOOF.
+    [Theory]
+    [InlineData("LEFT", "G42")]
+    [InlineData("RIGHT", "G41")]
+    public void Cylinder_Compensation_IsMirroredInTheG19OfTracyl(string side, string code)
+    {
+        string body = MillTurnBody("SPINDLE_MODE:MAIN=AXIS", "CYLINDER=20", "LINE X=30 F=100",
+            "LINE Z=-10 C=15 COMP=" + side);
+
+        Assert.Contains(code + " ", body, StringComparison.Ordinal);
+        Assert.DoesNotContain(code == "G42" ? "G41" : "G42", body, StringComparison.Ordinal);
+    }
+
     // D146: a Y word, a rotary word other than the workpiece holder's (C2 of the sub spindle) and a sweep of a turn or
     // more, whose TURN= end point needs the plane of the developed surface, are the ERROR CMP536.
     [Theory]
