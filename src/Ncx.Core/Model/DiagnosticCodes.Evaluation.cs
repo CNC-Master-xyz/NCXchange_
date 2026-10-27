@@ -42,13 +42,15 @@ public static partial class DiagnosticCodes
     public const string ResultOutOfRange = "VM906";
 
     /// <summary>
-    /// VM907: an index on a variable that is not a SYS_ name, $Q1[2]; the index selects a register or table row of a
-    /// system variable (language 4.12, D51).
+    /// VM907, retired 2026-10-27 (D145): an index on a variable that is not a SYS_ name is an ERROR of the expression
+    /// parser now, PAR112. The number is not reused.
     /// </summary>
+    [Obsolete("Retired by D145: the index check moved into the expression parser, PAR112.")]
     public const string IndexNeedsSystemVariable = "VM907";
 
     /// <summary>
-    /// VM908: an index that selects no register or table row, because it is not a whole number (language 4.12, D51).
+    /// VM908: a computed index that selects no register or table row: negative after rounding half away from zero,
+    /// or beyond every register (language 4.12, D51, D145).
     /// </summary>
     public const string IndexSelectsNoRegister = "VM908";
 }

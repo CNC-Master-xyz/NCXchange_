@@ -216,6 +216,8 @@ Expressions and variables (language 4.9, 4.12; VM 1, 2.7, 3.6, 5; D38, D51). The
 | `PAR109` | ERROR | A part after a complete expression. | language 4.12 |
 | `PAR110` | ERROR | A second comparison behind a comparison. | language 4.12 |
 | `PAR111` | ERROR | A function with a number of arguments it does not take. | language 4.12; D118 |
+| `PAR112` | ERROR | An index on a variable that is not a SYS_ name. | language 4.12; D145 |
+| `PAR113` | ERROR | A literal index that is no whole number of 0 or more. | language 4.12; D145 |
 | `VM080` | ERROR | Assignment to a SYS_ variable. | VM 2.7, 5 |
 | `VM540` | WARNING | Unresolved expression in STATIC mode, counted and reported once per run. | VM 1, 5 |
 | `VM900` | ERROR | Division by zero. | language 4.12; VM 5 |
@@ -224,8 +226,8 @@ Expressions and variables (language 4.9, 4.12; VM 1, 2.7, 3.6, 5; D38, D51). The
 | `VM903` | ERROR | A SYS_ name the configuration does not map, or an unknown state, read in INTERPRETED mode. | VM 2.7, 3.6; D51 |
 | `VM905` | ERROR | An operation without a real result. | language 4.12 |
 | `VM906` | ERROR | A number beyond the range of the decimal arithmetic. | language 4.12 |
-| `VM907` | ERROR | An index on a variable that is not a SYS_ name. | language 4.12; D51 |
-| `VM908` | ERROR | An index that selects no register. | language 4.12; D51 |
+| `VM907` | ERROR | Retired (D145): an index on a variable that is not a SYS_ name is PAR112. | language 4.12; D145 |
+| `VM908` | ERROR | A computed index that selects no register: negative after rounding half away from zero. | language 4.12; D51, D145 |
 | `VM754` | ERROR | An expression gives a number with decimals where its word takes an integer. | language 3, 4; VM 5 |
 
 ## Resource

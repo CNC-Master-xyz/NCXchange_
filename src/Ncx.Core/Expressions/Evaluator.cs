@@ -90,17 +90,8 @@ internal sealed partial class Evaluator
             return EvaluateSystemVariable(variable);
         }
 
-        // TODO(question): language 4.12 gives an index a meaning for the SYS_ names only (it "selects a register or
-        // table row", D51), while the grammar allows it on every variable; an index on any other variable, $Q1[2], is
-        // an ERROR until D145 is settled.
-        if (variable.Index is not null)
-        {
-            Report(DiagnosticCodes.IndexNeedsSystemVariable,
-                $"{variable} has an index, and only a SYS_ name has registers or table rows for it to select "
-                + "(language 4.12, D51).");
-            return null;
-        }
-
+        // Only a SYS_ name takes an index; the expression parser reports one on any other variable (PAR112, D145),
+        // so a tree here has none.
         // $Q1 reads the variable: V1 to V33 the locals of the call that runs, every other name the value it holds for
         // the program's lifetime (language 4.9, virtual machine 3.6, 4).
         VariableValue? value = _vars.Get(variable.Name);
@@ -184,16 +175,18 @@ internal sealed partial class Evaluator
         return null;
     }
 
-    // The index selects a register or table row (language 4.12): a whole number; null after the ERROR.
-    // TODO(question): language 4.12 does not say what an index that is not a whole number selects; it is an ERROR
-    // until D145 is settled.
-    private int? RegisterOf(VariableNode variable, decimal index)
+    // The index selects a register or table row (language 4.12). A computed index is rounded half away from zero,
+    // like ROUND, as Fanuc does; negative after rounding, or beyond every register, it is VM908 (D145). Null after
+    // the ERROR.
+    private int? RegisterOf(VariableNode variable, decimal computed)
     {
-        if (index != decimal.Truncate(index) || index < int.MinValue || index > int.MaxValue)
+        decimal index = decimal.Round(computed, MidpointRounding.AwayFromZero);
+        if (index < 0 || index > int.MaxValue)
         {
             Report(DiagnosticCodes.IndexSelectsNoRegister,
-                $"The index of {variable} is {index.ToString(CultureInfo.InvariantCulture)}, which selects no "
-                + "register or table row: an index is a whole number (language 4.12, D51).");
+                $"The index of {variable} is {computed.ToString(CultureInfo.InvariantCulture)}, which selects no "
+                + "register or table row: rounded half away from zero, an index is a whole number of 0 or more "
+                + "(language 4.12, D145).");
             return null;
         }
 
@@ -242,10 +235,13 @@ internal sealed partial class Evaluator
     // The operators with two operands (language 4.12, orexpr to power), the left operand evaluated before the right.
     // D168: AND and OR do not short-circuit; both operands are evaluated, as for every other operator, so
     // 0 AND 1 / 0 is the division by zero (decisions.md).
-    // TODO(question): language 4.12 does not say whether == and != compare strings; every operator takes numbers, and
-    // a string is the ERROR of virtual machine 5, until D169 is settled.
     private ExprResult? EvaluateBinary(BinaryNode binary)
     {
+        if (binary.Operator is BinaryOperator.Equal or BinaryOperator.NotEqual)
+        {
+            return EvaluateEquality(binary);
+        }
+
         ExprResult? left = EvaluateNode(binary.Left);
         if (left is null || !RequireNumber(left, binary))
         {
@@ -258,6 +254,50 @@ internal sealed partial class Evaluator
             return null;
         }
 
+        return Compute(binary, left, right);
+    }
+
+    // == and != compare two strings by exact, case-sensitive text and yield 1 or 0; a string against a number stays
+    // the ERROR of virtual machine 5, and a string against UNKNOWN is UNKNOWN. There are no string literals, so the
+    // strings are those variables hold (D169; language 4.12).
+    private ExprResult? EvaluateEquality(BinaryNode binary)
+    {
+        ExprResult? left = EvaluateNode(binary.Left);
+        if (left is null)
+        {
+            return null;
+        }
+
+        ExprResult? right = EvaluateNode(binary.Right);
+        if (right is null)
+        {
+            return null;
+        }
+
+        if (left.Content is string leftText && right.Content is string rightText)
+        {
+            bool equal = string.Equals(leftText, rightText, StringComparison.Ordinal);
+            return Truth(binary.Operator == BinaryOperator.Equal ? equal : !equal);
+        }
+
+        bool stringAgainstUnknown = (left.Content is not null && right.IsUnknown)
+            || (left.IsUnknown && right.Content is not null);
+        if (stringAgainstUnknown)
+        {
+            return ExprResult.Unknown;
+        }
+
+        if (!RequireNumber(left, binary) || !RequireNumber(right, binary))
+        {
+            return null;
+        }
+
+        return Compute(binary, left, right);
+    }
+
+    // The value of an operator with two numbers or UNKNOWN as its operands.
+    private ExprResult? Compute(BinaryNode binary, ExprResult left, ExprResult right)
+    {
         // An operation on UNKNOWN is UNKNOWN (virtual machine 1).
         if (left.Number is not decimal leftNumber || right.Number is not decimal rightNumber)
         {
