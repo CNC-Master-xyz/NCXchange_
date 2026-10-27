@@ -48,4 +48,40 @@ public sealed record CyclesConfig
     /// out.
     /// </summary>
     public bool PeckRigidTapping { get; init; }
+
+    /// <summary>
+    /// The line of the [cycles] table in the machine file, where the checks of its keys against the catalog stand
+    /// (D358); 1 when the table is built in code.
+    /// </summary>
+    public int Line { get; init; } = 1;
+
+    /// <summary>
+    /// The names of the keys of the table that the machine file sets with a value, beside catalog: "chip_break_lift",
+    /// "peck_clearance", in the order of machine-config 6 (D358 checks them against the catalog).
+    /// </summary>
+    public IReadOnlyList<string> SetKeys()
+    {
+        var keys = new List<string>();
+        if (SurfaceClearance is not null)
+        {
+            keys.Add("surface_clearance");
+        }
+
+        if (ChipBreakLift is not null)
+        {
+            keys.Add("chip_break_lift");
+        }
+
+        if (PeckClearance is not null)
+        {
+            keys.Add("peck_clearance");
+        }
+
+        if (ReamFeedOut is not null)
+        {
+            keys.Add("ream_feed_out");
+        }
+
+        return keys;
+    }
 }

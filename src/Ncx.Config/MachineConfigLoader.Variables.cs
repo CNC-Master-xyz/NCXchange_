@@ -32,6 +32,7 @@ public static partial class MachineConfigLoader
         return new CyclesConfig
         {
             CatalogFile = table.Text("catalog"),
+            Line = table.Line,
             SurfaceClearance = Distance(table, "surface_clearance"),
             ChipBreakLift = Distance(table, "chip_break_lift"),
             PeckClearance = Distance(table, "peck_clearance"),
