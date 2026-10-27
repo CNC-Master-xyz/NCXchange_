@@ -112,6 +112,41 @@ public sealed class LexicalRulesTests
         Assert.False(program.Diagnostics.HasErrors);
     }
 
+    // A UTF-8 byte order mark at the start of the file is allowed and is no part of the text: the parser skips it and
+    // the program records it next to the line ending (D111; language 3, Encoding).
+    [Fact]
+    public void D111_ByteOrderMark_IsSkippedAndRecorded()
+    {
+        NcxProgram program = ParseText.File("\uFEFFFILE=BEGIN NCX=1\nPROGRAM=BEGIN\nPROGRAM=END\nFILE=END\n");
+
+        Assert.True(program.Diagnostics.Items.Count == 0, program.Diagnostics.ToText());
+        Assert.True(program.HasByteOrderMark);
+        Assert.Equal("FILE=BEGIN", program.Blocks[0].Words[0].ToCanonical());
+    }
+
+    // A file without a byte order mark records none (D111).
+    [Fact]
+    public void D111_NoByteOrderMark_IsRecordedAsNone()
+    {
+        NcxProgram program = ParseText.File("FILE=BEGIN NCX=1\nPROGRAM=BEGIN\nPROGRAM=END\nFILE=END\n");
+
+        Assert.False(program.HasByteOrderMark);
+    }
+
+    // A column of a PAR message is one Unicode code point of the line, first is column 1: a character outside the
+    // basic plane before the word counts once (D166; language 5 rule 7).
+    [Theory]
+    [InlineData("COMMENT=\"\U0001F600\" 1X=2", DiagnosticCodes.MalformedWord, 13)]
+    [InlineData("COMMENT=\"\U0001F600\\A\"", DiagnosticCodes.InvalidStringEscape, 11)]
+    public void D166_ColumnOfADiagnostic_CountsCodePoints(string text, string code, int column)
+    {
+        var diagnostics = new Diagnostics("test.ncx");
+        ParseText.Block(text, diagnostics);
+
+        Diagnostic diagnostic = ParseText.Single(diagnostics, code);
+        Assert.Contains($"column {column}", diagnostic.Message, StringComparison.Ordinal);
+    }
+
     // A word that is not KEY, KEY=VALUE or KEY:ADDR=VALUE is an ERROR with the column where it breaks (language 3,
     // Word, KEY, ADDR).
     [Theory]

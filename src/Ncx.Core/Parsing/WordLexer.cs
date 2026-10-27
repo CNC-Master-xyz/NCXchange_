@@ -155,8 +155,10 @@ internal static class WordLexer
                     continue;
                 }
 
+                // The column counts the code points of the string before the backslash (D166).
+                int backslashColumn = column + Columns.CodePoints(value, index);
                 diagnostics.Error(line, DiagnosticCodes.InvalidStringEscape, string.Create(CultureInfo.InvariantCulture,
-                    $"The backslash at column {column + index} in the string of {word.Key} escapes neither a quote "
+                    $"The backslash at column {backslashColumn} in the string of {word.Key} escapes neither a quote "
                     + $"nor a backslash; a string writes \\\" for a quote and \\\\ for a backslash "
                     + $"(language 3, string)."));
                 return null;

@@ -18,6 +18,13 @@ public sealed record NcxProgram
     public LineEnding? LineEnding { get; init; }
 
     /// <summary>
+    /// Whether the file began with a UTF-8 byte order mark. The mark is allowed and is no part of the text: the parser
+    /// skips it, and the canonical writer writes it back as read; a program built by a reader has none (D111;
+    /// language 3, Encoding).
+    /// </summary>
+    public bool HasByteOrderMark { get; init; }
+
+    /// <summary>
     /// Every block of the file in file order. Comment-only and blank lines are not blocks but trivia (language 3,
     /// Block; D92).
     /// </summary>

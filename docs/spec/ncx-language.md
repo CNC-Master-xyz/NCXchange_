@@ -27,7 +27,7 @@ All three uses share one requirement: an NCX file must mean exactly the same thi
 
 | Rule | Definition |
 |---|---|
-| Encoding | UTF-8, LF or CRLF line endings |
+| Encoding | UTF-8, LF or CRLF line endings. A UTF-8 byte order mark at the start of the file is allowed and is not part of the text: the parser skips it, the program records it next to the line ending, every command accepts it, and `ncx format` writes it back as read; programs built by readers get none (D111). A controller program is read as UTF-8 (byte order mark skipped) when its bytes are valid UTF-8, otherwise as Windows-1252 with a WARNING that names the code page; NCX output is UTF-8, and compiler output follows `comment_charset` (D229). |
 | Block | One line is one block. Blank lines, whitespace-only lines and comment-only lines are not blocks but trivia: they are kept in place and written back by every writer (D92). |
 | Word | `KEY`, `KEY=VALUE` or `KEY:ADDR=VALUE`. Words are separated by whitespace. |
 | Comment | `;` outside a string starts a comment to the end of the line. The parser keeps it, as trivia when the line holds nothing else or as the trailing comment of its block; it carries no meaning (program comments use the `COMMENT` word). D92. |
@@ -360,7 +360,7 @@ A machine may need more than the program says: a spindle that has to stop before
    17. `COMMENT` or `SECTION`, then `MESSAGE`.
 
    Words of one key with several addresses sort by the address text (`COOLANT:AIR` before `COOLANT:THROUGH`, `VAR:Q1` before `VAR:Q3`).
-7. Canonical layout of a block: the words, then, when the block has a comment, spaces up to column 57 so that the semicolon stands in column 57, or three spaces when the words reach column 54 or later, then the comment. Blank lines and comment-only lines are kept as read (D92).
+7. Canonical layout of a block: the words, then, when the block has a comment, spaces up to column 57 so that the semicolon stands in column 57, or three spaces when the words reach column 54 or later, then the comment. Blank lines and comment-only lines are kept as read (D92). A column is one Unicode code point of the line, the first is column 1; the writer counts the words in code points, and the lexer gives the columns of its PAR messages the same way (D166).
 
 ## 6. Examples
 

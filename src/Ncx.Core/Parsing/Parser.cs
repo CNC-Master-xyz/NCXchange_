@@ -13,15 +13,27 @@ namespace Ncx.Core.Parsing;
 /// </summary>
 public static class Parser
 {
+    // The UTF-8 byte order mark as it stands at the start of a decoded text (D111).
+    private const char ByteOrderMark = '\uFEFF';
+
     /// <summary>
     /// Parses the text of a file.
     /// </summary>
-    /// <param name="text">The whole text, UTF-8 decoded, LF or CRLF line endings (language 3, Encoding).</param>
+    /// <param name="text">The whole text, UTF-8 decoded, LF or CRLF line endings, with or without a byte order mark
+    /// (language 3, Encoding; D111).</param>
     /// <param name="fileName">The name of the file, which every diagnostic carries (D98).</param>
     /// <param name="options">A user file, or the generated text of the expander (D95).</param>
     /// <returns>The program with its blocks, trivia, sections and diagnostics.</returns>
     public static NcxProgram Parse(string text, string fileName, ParserOptions options)
     {
+        // A UTF-8 byte order mark at the start of the file is allowed and is no part of the text; the program records
+        // it next to the line ending, so that format writes it back as read (D111; language 3, Encoding).
+        bool hasByteOrderMark = text.StartsWith(ByteOrderMark);
+        if (hasByteOrderMark)
+        {
+            text = text.Substring(1);
+        }
+
         var diagnostics = new Diagnostics(fileName);
         LineEnding? lineEnding = Lexer.DetectLineEnding(text, diagnostics);
         var blocks = new List<Block>();
@@ -48,6 +60,7 @@ public static class Parser
         {
             FileName = fileName,
             LineEnding = lineEnding,
+            HasByteOrderMark = hasByteOrderMark,
             Blocks = blocks,
             Sections = structure.Sections,
             FileBegin = structure.FileBegin,
