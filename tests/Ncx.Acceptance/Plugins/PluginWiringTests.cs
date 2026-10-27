@@ -117,8 +117,8 @@ public sealed class PluginWiringTests : IDisposable
             StringComparison.Ordinal);
     }
 
-    // Architecture 9, D40, D66: convert offers the reader rules of the plugins the blocks the tables of the machine
-    // leave undecided; ShopRules reads M456 as COOLANT=ON.
+    // Architecture 9, D66, D231: convert offers every source block to the reader rules of the plugins before the
+    // tables of the machine; ShopRules reads M456, which no table names, as COOLANT=ON.
     [Fact]
     public void Convert_ReaderRuleOfAPlugin_ReadsACodeTheTablesLeaveUndecided()
     {

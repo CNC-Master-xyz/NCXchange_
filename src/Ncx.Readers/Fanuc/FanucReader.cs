@@ -294,24 +294,6 @@ public sealed partial class FanucReader : ReaderBase
     private static partial Regex PathSuffix();
 
     /// <summary>
-    /// A block leaves an M code undecided that neither the controller nor a table of the machine names (D40, D66).
-    /// </summary>
-    /// <param name="block">A source block with words.</param>
-    protected override bool LeavesUndecided(SourceBlock block)
-    {
-        FanucBlock reading = Reading(block);
-        foreach (SourceWord word in block.Words)
-        {
-            if (word.Address == "M" && !FanucBuilder.Names(reading, word))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
     /// A section starts from what its source says: a program from the initial state of the control with the header of
     /// D34, a subprogram from the state of its callers (virtual machine 3.9).
     /// </summary>

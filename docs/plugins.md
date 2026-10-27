@@ -98,27 +98,27 @@ public sealed class CoolantClutchRule : IProgramRewriter
 
 The whole rule, with its comments, is `../templates/ncx-plugin/CoolantClutchRule.cs`, and `../samples/plugins/CoolantClutch/` is the same rule as a finished plugin with its tests. A block that does not parse rejects the whole answer with `PLG004` on the line of the block; the blocks a rewriter inserted are the INFO `PLG001`.
 
-### ISourceRule: an M code the machine file does not name
+### ISourceRule: what an M code or a run of blocks means on this machine
 
-A reader offers a rule the source blocks that the tables of the machine file leave undecided, one block at a time, with the source-side state read only. A rule that claims a block writes its NCX blocks with the builder and returns `true`; the reader then reads nothing more of it and keeps its comment. A rule that returns `false` leaves the block to the reader.
+A reader offers every source block to the rules of the loaded plugins before it tries the tables of the machine file, in the order the plugins are loaded, one block at a time, with the source-side state read only (D231). `block.Following` shows the blocks that follow it in its section, up to the next structure block (`O`, `M30`, `M99`, a jump target), without the comment-only lines. A rule that claims blocks writes its NCX blocks for the whole run with the builder and returns how many source blocks it claimed, the offered one among them; the reader then reads nothing more of them, applies them to the source state and keeps their comments as comment-only lines after the rule's blocks. A rule that returns `0` leaves the block to the next rule, and then to the tables and the reader (D232). A count below 0 or beyond the blocks shown is a `PLG003` failure of the plugin. A plugin is written for one machine: claim only what you recognise, since a claimed block is no longer read by the tables.
 
 ```csharp
 public sealed class ShopCoolantCode : ISourceRule
 {
-    public bool Read(SourceBlock block, SourceState state, NcxBuilder builder)
+    public int Read(SourceBlock block, SourceState state, NcxBuilder builder)
     {
         if (block.Find("M")?.Number != 456m)
         {
-            return false;
+            return 0;
         }
 
         builder.Begin(block.Line).Word("COOLANT", null, new IdentValue("ON")).End();
-        return true;
+        return 1;
     }
 }
 ```
 
-`../samples/plugins/ThroughCoolantSourceRule/` folds the three blocks `M5`, `M51`, `M3 S1500` that a machine with a coolant clutch writes back into `COOLANT:THROUGH=ON` (D66). It cannot do so in a reader yet: the tables of the machine file are tried first and name all three codes (D231), and a rule sees the one block it is offered, none after it (D232). Its test shows the fold with the three blocks.
+`../samples/plugins/ThroughCoolantSourceRule/` folds the three blocks `M5`, `M51`, `M3 S1500` that a machine with a coolant clutch writes back into `COOLANT:THROUGH=ON` (D66): offered the `M5`, it looks at the two blocks in `block.Following`, writes the one word and returns 3. Its tests show the fold alone and through the Fanuc reader, whose tables name all three codes.
 
 ### IVmListener: reading the state around a block
 

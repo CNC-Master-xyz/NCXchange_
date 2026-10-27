@@ -13,15 +13,12 @@ public sealed class ThroughCoolantSourceRule : ISourceRule
     private const decimal ThroughCoolantOn = 51m;
     private const decimal SpindleStart = 3m;
 
-    // TODO(question): D231, D232. The reader offers a rule only the blocks its tables leave
-    // undecided, and the tables name M5, M51 and M3 (D231); a claim covers the one block
-    // offered, and the rule sees no block after it (D232). So Read cannot fold the sequence
-    // yet: it hands Fold no following blocks, and Fold folds nothing without them. Once a
-    // rule is offered every block and sees the blocks after it, as D231 and D232 recommend,
-    // Read hands Fold those blocks and claims the three it folded.
-    public bool Read(SourceBlock block, SourceState state, NcxBuilder builder)
+    // The reader offers every block to the rules before its tables, which name M5, M51 and M3
+    // (D231), and shows the rule the blocks after it up to the next structure block (D232). Read
+    // claims the three blocks it folded, or none.
+    public int Read(SourceBlock block, SourceState state, NcxBuilder builder)
     {
-        return Fold(block, [], builder) > 0;
+        return Fold(block, block.Following, builder);
     }
 
     /// <summary>

@@ -34,18 +34,6 @@ internal static class HeidenhainFunctions
     private static readonly string[] s_motionVerbs = ["RAPID", "LINE", "ARC", "RETRACT", "HOME"];
 
     /// <summary>
-    /// Tells whether the controller or a table of the machine names an M function, so that no reader rule is asked for
-    /// it: the tables are tried first (D40, D66, machine-config 5).
-    /// </summary>
-    /// <param name="word">The M word.</param>
-    /// <param name="templates">The templates of the machine.</param>
-    public static bool Names(SourceWord word, TemplateSet templates)
-    {
-        string? code = NativeCode.Of(word);
-        return code is null || s_ownCodes.Contains(code) || templates.FindFunctionByCode(code) is not null;
-    }
-
-    /// <summary>
     /// Tells whether Read reads an M function of a block that moves into a word of the block's NCX block, without
     /// keeping the block RAW: false for M91 and M92, which the motion reads in another frame, M140 (RETRACT is a block
     /// of its own, virtual machine 3.1a), M128 with the feed of its compensating motion after it (D86), a state of a

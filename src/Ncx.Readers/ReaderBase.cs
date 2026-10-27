@@ -8,9 +8,10 @@ namespace Ncx.Readers;
 
 /// <summary>
 /// The skeleton every reader shares (architecture 7; code-guidelines 5, Template Method): tokenize the file, lay out
-/// its structure, and for every source block apply the source-side state, try the configuration tables and then the
-/// reader rules, and read the block with the mapping of the controller family into the builder; diagnostics carry RDR
-/// codes. A reader of a controller family fills in the tokenizer, the structure of a block and the reading of a block.
+/// its structure, and for every source block apply the source-side state, offer it to the reader rules of the plugins
+/// and read a block no rule claims with the configuration tables and the mapping of the controller family into the
+/// builder (D231); diagnostics carry RDR codes. A reader of a controller family fills in the tokenizer, the structure
+/// of a block and the reading of a block.
 /// </summary>
 public abstract class ReaderBase : IReader
 {
@@ -30,6 +31,10 @@ public abstract class ReaderBase : IReader
 
     // The comment of the source block being read, until an NCX block takes it (controller-mapping 1).
     private string? _pendingComment;
+
+    // The source blocks of the file with a role in its structure, the frame, a section begin, a program end, a return
+    // (language 4.13): a reader rule's look-ahead stops in front of them (D232).
+    private readonly HashSet<SourceBlock> _structureBlocks = new(ReferenceEqualityComparer.Instance);
 
     // The contour sections the structure pass made of the file being read (language 4.7.1, D65).
     private ContourLayout _contours = ContourLayout.None;
@@ -94,13 +99,22 @@ public abstract class ReaderBase : IReader
         var structures = new List<SourceStructure>(blocks.Count);
         foreach (SourceBlock block in blocks)
         {
-            structures.Add(block.IsTrivia ? SourceStructure.None : StructureOf(block));
+            SourceStructure structure = block.IsTrivia ? SourceStructure.None : StructureOf(block);
+            structures.Add(structure);
+            if (structure.Role != StructureRole.None)
+            {
+                _structureBlocks.Add(block);
+            }
         }
 
         SourceBlock? current = null;
         List<ReadStep> plan = StructurePass.Plan(blocks, structures, Diagnostics, out _contours);
-        foreach (ReadStep step in plan)
+
+        // The last step of the run a reader rule claimed (D232); the claimed blocks after the offered one are not read.
+        int claimedThrough = -1;
+        for (int index = 0; index < plan.Count; index++)
         {
+            ReadStep step = plan[index];
             if (!ReferenceEquals(step.Source, current))
             {
                 KeepPendingComment();
@@ -108,7 +122,20 @@ public abstract class ReaderBase : IReader
                 _pendingComment = string.IsNullOrEmpty(current.Comment) ? null : current.Comment;
             }
 
-            TakeStep(step);
+            if (step.Kind == ReadStepKind.Read && index <= claimedThrough)
+            {
+                // A block of a claimed run acts on the source state, and its comment stays as a comment-only line
+                // after the rule's blocks (D232, D5).
+                State.Apply(step.Source);
+            }
+            else if (step.Kind == ReadStepKind.Read)
+            {
+                claimedThrough = ReadSourceBlock(plan, index);
+            }
+            else
+            {
+                TakeStep(step);
+            }
         }
 
         KeepPendingComment();
@@ -132,14 +159,6 @@ public abstract class ReaderBase : IReader
 
     /// <param name="block">A source block with words.</param>
     protected abstract SourceStructure StructureOf(SourceBlock block);
-
-    /// <summary>
-    /// Tells whether the controller's own words and the configuration tables of the machine leave a word of the block
-    /// undecided, such as an M code that no table names. Only such a block is offered to the reader rules, because the
-    /// tables are tried first (D40, D66, machine-config 5).
-    /// </summary>
-    /// <param name="block">A source block with words.</param>
-    protected abstract bool LeavesUndecided(SourceBlock block);
 
     /// <summary>
     /// Reads a source block into NCX blocks, each begun with BeginBlock(block), with the mapping of the controller
@@ -279,6 +298,7 @@ public abstract class ReaderBase : IReader
         _options = options;
         _pendingComment = null;
         _contours = ContourLayout.None;
+        _structureBlocks.Clear();
 
         // The templates of the machine, which the tables are matched through (architecture 6). A template the machine
         // file cannot use is an ERROR of the machine file; the machine record keeps neither its file nor the lines of
@@ -300,50 +320,81 @@ public abstract class ReaderBase : IReader
                 Builder.Trivia(_pendingComment is null ? "" : "; " + _pendingComment);
                 _pendingComment = null;
                 break;
-            case ReadStepKind.Read:
-                ReadSourceBlock(step.Source);
-                break;
             default:
                 WriteStructure(step);
                 break;
         }
     }
 
-    private void ReadSourceBlock(SourceBlock block)
+    // Reads the source block of a Read step and returns the index of the last step it took: the step itself, or the
+    // last step of the run a reader rule claimed (D232).
+    private int ReadSourceBlock(List<ReadStep> plan, int index)
     {
         // The modal codes of a block act for the block itself, so it is read with them (controllers fanuc.md 1, 3).
+        SourceBlock block = plan[index].Source;
         State.Apply(block);
 
-        // The configuration tables are tried first; a reader rule decides what they leave undecided, and a block no
-        // rule claims is read by the mapping of the controller family (D40, D66, machine-config 5).
-        // TODO(question): architecture 9 and virtual machine 7 give folding M5, M51, M3 S1500 back into
-        // COOLANT:THROUGH=ON as the work of a reader rule, while the tables name each of the three codes and are
-        // tried first (machine-config 5, D40); a rule is offered only the blocks the tables leave undecided, so it
-        // cannot fold a sequence of codes the tables know, until D231 is answered.
-        if (LeavesUndecided(block) && ClaimedByRule(block))
+        // Every block goes to the reader rules first, in the order the plugins are loaded; a block no rule claims is
+        // read as without a plugin, with the tables and then the words of the family (D231, D317). The order of the
+        // built-in mechanisms, the [workpiece] table before the chuck function rule, is the family's (D40).
+        if (_rules.Count > 0)
         {
-            return;
-        }
-
-        ReadBlock(block);
-    }
-
-    // The first rule that claims the block reads it, and its claim covers that one block (D40, D66).
-    // TODO(question): how a rule claims a sequence of source blocks (D66, architecture 9) through the one method
-    // Read(SourceBlock, SourceState, NcxBuilder): a block the tables decide is not offered to the rules and nothing is
-    // called after the last block, so a rule holding blocks back would see them reordered or lost (ISourceRule), until
-    // D232 is answered.
-    private bool ClaimedByRule(SourceBlock block)
-    {
-        foreach (ISourceRule rule in _rules)
-        {
-            if (rule.Read(block, State, Builder))
+            List<int> following = FollowingReads(plan, index);
+            int claimed = ClaimedByRule(block, plan, following);
+            if (claimed > 0)
             {
-                return true;
+                return claimed == 1 ? index : following[claimed - 2];
             }
         }
 
-        return false;
+        ReadBlock(block);
+        return index;
+    }
+
+    // The Read steps after a step, up to the next block of the file structure (O, M30, M99, a jump target), which
+    // stays with the structure pass: a step that writes the structure, or the source block of one; trivia lines are
+    // passed over (D232).
+    private List<int> FollowingReads(List<ReadStep> plan, int index)
+    {
+        var following = new List<int>();
+        for (int next = index + 1; next < plan.Count; next++)
+        {
+            if (plan[next].Kind == ReadStepKind.Write || _structureBlocks.Contains(plan[next].Source))
+            {
+                break;
+            }
+
+            if (plan[next].Kind == ReadStepKind.Read)
+            {
+                following.Add(next);
+            }
+        }
+
+        return following;
+    }
+
+    // The first rule that claims the block reads it, and the run it claims (D231, D232); 0 when no rule claims it. A
+    // rule shown n following blocks claims at most n + 1: a larger count takes the blocks it was shown and no more,
+    // so that the structure after them is still written (gap closed 2026-10-27, delegated).
+    private int ClaimedByRule(SourceBlock block, List<ReadStep> plan, List<int> following)
+    {
+        var shown = new List<SourceBlock>(following.Count);
+        foreach (int next in following)
+        {
+            shown.Add(plan[next].Source);
+        }
+
+        SourceBlock offered = block with { Following = shown.AsReadOnly() };
+        foreach (ISourceRule rule in _rules)
+        {
+            int claimed = rule.Read(offered, State, Builder);
+            if (claimed > 0)
+            {
+                return Math.Min(claimed, shown.Count + 1);
+            }
+        }
+
+        return 0;
     }
 
     private void WriteStructure(ReadStep step)

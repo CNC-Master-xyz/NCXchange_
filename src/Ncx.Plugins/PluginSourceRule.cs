@@ -1,3 +1,4 @@
+using System.Globalization;
 using Ncx.Core.Model;
 using Ncx.Core.Writing;
 using Ncx.Readers;
@@ -5,10 +6,10 @@ using Ncx.Readers;
 namespace Ncx.Plugins;
 
 /// <summary>
-/// Stands in a reader for a reader rule of a plugin (architecture 7, 9; D40, D66): it offers the rule the source block,
-/// and hands the rule's blocks to the program only when the rule claimed the block without failing; a plugin that
-/// throws is reported and left out, and the reader reads the block as it would without the plugin (implementation 17,
-/// P7-01).
+/// Stands in a reader for a reader rule of a plugin (architecture 7, 9; D40, D66, D231, D232): it offers the rule the
+/// source block, and hands the rule's blocks to the program only when the rule claimed a run without failing; a plugin
+/// that throws, or claims fewer than none or more blocks than it was shown, is reported and left out, and the reader
+/// reads the block as it would without the plugin (implementation 17, P7-01).
 /// </summary>
 internal sealed class PluginSourceRule : ISourceRule
 {
@@ -27,12 +28,12 @@ internal sealed class PluginSourceRule : ISourceRule
     /// </summary>
     public ISourceRule Rule { get; }
 
-    public bool Read(SourceBlock block, SourceState state, NcxBuilder builder)
+    public int Read(SourceBlock block, SourceState state, NcxBuilder builder)
     {
         // A plugin that failed is asked nothing more in the run (implementation 17, P7-01).
         if (_plugin.IsDropped)
         {
-            return false;
+            return 0;
         }
 
         // The rule writes into a builder of its own. Only a claim made without failing reaches the program, so that a
@@ -40,11 +41,13 @@ internal sealed class PluginSourceRule : ISourceRule
         // reads the block, and nothing is lost).
         var ownBuilder = new NcxBuilder(new Diagnostics(_diagnostics.File));
         NcxProgram claimed;
+        int count;
         try
         {
-            if (!Rule.Read(block, state, ownBuilder))
+            count = Rule.Read(block, state, ownBuilder);
+            if (count == 0)
             {
-                return false;
+                return 0;
             }
 
             claimed = ownBuilder.Build();
@@ -54,10 +57,23 @@ internal sealed class PluginSourceRule : ISourceRule
             _diagnostics.Failed(_plugin.Name, $"{nameof(Read)} threw {PluginFaults.Describe(exception)}", block.Line,
                 null);
             _plugin.Drop();
-            return false;
+            return 0;
+        }
+
+        // A claim runs from the offered block over at most the blocks the rule was shown (D232); any other count is a
+        // fault of the plugin, reported like a throw (gap closed 2026-10-27, delegated).
+        int most = block.Following.Count + 1;
+        if (count < 0 || count > most)
+        {
+            _diagnostics.Failed(_plugin.Name,
+                string.Create(CultureInfo.InvariantCulture,
+                    $"{nameof(Read)} claimed {count} source blocks where it was shown {most}"),
+                block.Line, null);
+            _plugin.Drop();
+            return 0;
         }
 
         ClaimedBlocks.CopyInto(claimed, builder);
-        return true;
+        return count;
     }
 }

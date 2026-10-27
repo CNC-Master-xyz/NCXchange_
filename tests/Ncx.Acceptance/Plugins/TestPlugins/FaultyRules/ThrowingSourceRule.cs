@@ -5,11 +5,11 @@ namespace FaultyRules;
 /// </summary>
 public sealed class ThrowingSourceRule : ISourceRule
 {
-    public bool Read(SourceBlock block, SourceState state, NcxBuilder builder)
+    public int Read(SourceBlock block, SourceState state, NcxBuilder builder)
     {
         if (block.Find("M")?.Number != 457m)
         {
-            return false;
+            return 0;
         }
 
         builder.Begin(block.Line).Word("COOLANT", null, new IdentValue("ON"));

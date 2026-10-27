@@ -94,6 +94,30 @@ public sealed class FailingPluginTests : IDisposable
         Assert.DoesNotContain("COOLANT", _output, StringComparison.Ordinal);
     }
 
+    // D232: a reader rule claims at most the offered block and the blocks it was shown; a rule that claims more is
+    // reported like one that throws and dropped, and nothing it wrote reaches the program (gap closed 2026-10-27,
+    // delegated).
+    [Fact]
+    public void Read_ReaderRuleClaimingMoreBlocksThanItWasShown_IsReportedAndClaimsNothing()
+    {
+        var diagnostics = new Diagnostics("part.nc");
+        var plugin = new Plugin("Greedy", new Dictionary<string, string>());
+        var rule = new PluginSourceRule(plugin, new GreedySourceRule(), new PluginDiagnostics(diagnostics));
+        var builder = new Ncx.Core.Writing.NcxBuilder(new Diagnostics("part.nc"));
+        var block = new Ncx.Readers.SourceBlock { Line = 4, Text = "M5" };
+
+        int claimed = rule.Read(block, new Ncx.Readers.SourceState(null, new Dictionary<string, int>()), builder);
+
+        Assert.Equal(0, claimed);
+        Assert.True(plugin.IsDropped);
+        Assert.Empty(builder.Build().Blocks);
+        Diagnostic failure = Assert.Single(diagnostics.Items);
+        Assert.Equal("PLG003", failure.Code);
+        Assert.Equal(4, failure.Line);
+        Assert.StartsWith("plugin Greedy: Read claimed 2 source blocks where it was shown 1", failure.Message,
+            StringComparison.Ordinal);
+    }
+
     // Implementation 17, P7-01: a block writer that edits the lines of the RAPID of line 4 and throws is reported and
     // dropped, and the lines stay as the compiler wrote them; the RAPID of line 5 is no longer handed to it.
     [Fact]

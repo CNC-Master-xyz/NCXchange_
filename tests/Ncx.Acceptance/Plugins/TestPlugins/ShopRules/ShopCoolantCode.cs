@@ -6,14 +6,14 @@ namespace ShopRules;
 /// </summary>
 public sealed class ShopCoolantCode : ISourceRule
 {
-    public bool Read(SourceBlock block, SourceState state, NcxBuilder builder)
+    public int Read(SourceBlock block, SourceState state, NcxBuilder builder)
     {
         if (block.Find("M")?.Number != 456m)
         {
-            return false;
+            return 0;
         }
 
         builder.Begin(block.Line).Word("COOLANT", null, new IdentValue("ON")).End();
-        return true;
+        return 1;
     }
 }

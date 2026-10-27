@@ -94,24 +94,6 @@ public sealed partial class HeidenhainReader : ReaderBase
     }
 
     /// <summary>
-    /// A block leaves an M function undecided that neither the controller nor a table of the machine names (D40, D66).
-    /// </summary>
-    /// <param name="block">A source block with words.</param>
-    protected override bool LeavesUndecided(SourceBlock block)
-    {
-        Facts();
-        foreach (SourceWord word in block.Words)
-        {
-            if (word.Address == "M" && !HeidenhainFunctions.Names(word, _templates!))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
     /// A program starts from the initial state of the control with the complete header of D34; a subprogram from what
     /// its callers agree on (virtual machine 3.9).
     /// </summary>
