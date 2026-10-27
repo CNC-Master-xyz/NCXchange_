@@ -55,6 +55,12 @@ public static partial class DiagnosticCodes
     public const string NoOtherToolToPrepare = "CMP006";
 
     /// <summary>
+    /// CMP007: ORIENT with an angle other than 0 on a spindle whose ORIENT template has no {angle} (machine-config 5,
+    /// D154).
+    /// </summary>
+    public const string OrientAngleWithoutTemplate = "CMP007";
+
+    /// <summary>
     /// CMP008: a tool called by name on a machine with tool_name_allowed = true whose [tool_change] has no
     /// change_named or preload_named for it (machine-config 3, D172).
     /// </summary>
