@@ -321,7 +321,7 @@ JUMP=22                              ; back into the main flow
 PROGRAM=END
 ```
 
-A section that ends the program (the `N2 M2` case) ends with `JUMP=END`. A block of a program that no `LABEL` makes reachable after an unconditional `JUMP` gets a WARNING.
+A section that ends the program (the `N2 M2` case) ends with `JUMP=END`. A block of a program or subprogram that no `LABEL` makes reachable after an unconditional `JUMP`, `RETURN` or `JUMP=END` gets a WARNING; the `SUB=END` of a subprogram is never unreachable (D195).
 
 A program may also loop instead of ending: Fanuc `M99` in a main program jumps back to the first block (bar work runs this way until the bar feeder reports the end), and `/M99` under the block skip switch is the usual way to repeat a section during setup. NCX writes this as a `LABEL` after the header and a `JUMP` to it (with `SKIP` when the source had the slash); a `RETURN` outside a subprogram is not the way to say it (it is a WARNING, treated as `JUMP=END`). A file holds at least one program, so where no section of a source file ends one, the first that no block of the file calls is the program and its loop is read this way; the reader says so in an INFO, because a subprogram in a file of its own reads the same way (D210).
 

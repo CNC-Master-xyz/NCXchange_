@@ -17,7 +17,7 @@ builder = "dmg"                    # machine builder id, used by RAW:DMG and by 
 gcode_system = "A"                 # Fanuc lathes only: A (G98/G99 feed, U/W incremental, G90 = turning cycle), B (G94/G95, G90/G91, cycles G77/G78/G79) or C (as B, with G70/G71 for inch and mm and cycles G20/G21/G24; D174)
 s_binds_to_spindle_word = true     # Fanuc: one S word, owned by the spindle of the M code in the same block; RPM:role is written into that role's SPINDLE block
 limits = "warn"                    # warn | clamp: what the expander does with RPM, F and targets beyond the machine limits (D64)
-channels = [1]
+channels = [1]                     # the channel numbers; absent means one channel, and a run without a manifest on a machine of several channels is no single-channel job (D196)
 units_default = "MM"
 default_spindle = "S1"
 default_holder = "H1"

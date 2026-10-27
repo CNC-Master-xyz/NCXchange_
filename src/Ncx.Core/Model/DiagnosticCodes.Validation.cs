@@ -90,8 +90,8 @@ public static partial class DiagnosticCodes
     public const string JumpEndInSub = "VM522";
 
     /// <summary>
-    /// VM523, a WARNING: a block of a program after an unconditional JUMP that no LABEL makes reachable (language 4.13,
-    /// virtual machine 3.9, 5, D89).
+    /// VM523, a WARNING: a block of a program or subprogram after an unconditional JUMP that no LABEL makes reachable
+    /// (language 4.13, virtual machine 3.9, 5, D89, D195).
     /// </summary>
     public const string UnreachableBlock = "VM523";
 
