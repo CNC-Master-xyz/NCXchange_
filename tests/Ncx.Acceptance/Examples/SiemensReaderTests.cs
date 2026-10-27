@@ -190,7 +190,7 @@ public sealed class SiemensReaderTests : IDisposable
         N470 L100
         N480 CALL "L100"
         N490 EXTCALL("/_N_EXT_DIR/_N_EXT1_SPF")
-        N500 G75 FP=1 Z1=0
+        N500 G75 FP=2 Z1=0
         N510 G74 X1=0
         N520 PRESETON(X,0)
         N530 IF COUNT==99 GOTOS
@@ -219,7 +219,7 @@ public sealed class SiemensReaderTests : IDisposable
         "SKIP=2 RAPID X=2", "SHIFT X=5", "ROTATE=30", "MIRROR=X", "TILT A=10 B=20 C=0", "ORIGIN=0",
         "RAPID Z=0 FRAME=MACHINE", "LABEL=BACK", "JUMP=BACK IF={$COUNT > 0}", "LABEL=LOOP1", "JUMP=LOOP1",
         "LABEL=LOOP1_END", "TIMES=1 REPEAT=ANF", "CALL=REPEAT_ANF_ENDE TIMES=2", "CALL=REPEAT_N430 TIMES=2",
-        "CALL=\"SUBEXT\" ARG:P1=1.5", "CALL=L100", "CALL=\"EXT1\"", "HOME Z POINT=1", "HOME X", "SETPOS X=0",
+        "CALL=\"SUBEXT\" ARG:P1=1.5", "CALL=L100", "CALL=\"EXT1\"", "HOME Z POINT=2", "HOME X", "SETPOS X=0",
         "LABEL=START", "JUMP=START IF={$COUNT == 99}", "PRELOAD=0", "TOOL=0", "PRELOAD=1 OFFSET=1", "TOOL=1",
         "SUB=BEGIN NAME=REPEAT_ANF_ENDE", "SUB=BEGIN NAME=REPEAT_N430", "SUB=BEGIN NAME=L100", "SUB=END",
     ];

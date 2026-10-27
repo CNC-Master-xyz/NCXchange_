@@ -49,4 +49,10 @@ public static partial class DiagnosticCodes
     /// manual audit 2026-10-26).
     /// </summary>
     public const string SiemensDivisionRoundingUnknown = "RDR506";
+
+    /// <summary>
+    /// RDR509, a WARNING: G75 FP=1, or G75 without FP, which the control reads as FP=1, approaches fixed point 1, and
+    /// NCX has no POINT for it, since POINT=1 is the reference point G74 approaches; the block is kept as RAW (D260).
+    /// </summary>
+    public const string SiemensFixedPoint1HasNoPoint = "RDR509";
 }

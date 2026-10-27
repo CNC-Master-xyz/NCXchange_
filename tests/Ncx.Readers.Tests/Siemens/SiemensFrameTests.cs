@@ -198,6 +198,27 @@ public sealed class SiemensFrameTests
             CheckedBody("G74 Z1=0\nG75 FP=2 Z1=0\nPRESETON(X,0)"));
     }
 
+    // D260: G75 FP=2 to FP=4 are the fixed points of MD30600, HOME POINT=2..4; G75 FP=1, and G75 without FP, which
+    // the manual defines as FP=1, have no NCX POINT, since POINT=1 is the reference point G74 approaches: RAW with
+    // the WARNING RDR509.
+    [Theory]
+    [InlineData("G75 FP=1 Z1=0")]
+    [InlineData("G75 Z1=0")]
+    public void G75FixedPoint1_StaysRawWithTheWarning(string source)
+    {
+        NcxProgram program = FramedProgram(source);
+
+        Assert.Equal(Lines(Raw(source)), BodyOf(NcxWriter.Write(program)));
+        Assert.Equal([DiagnosticCodes.SiemensFixedPoint1HasNoPoint, DiagnosticCodes.KeptAsRaw], Codes(program));
+    }
+
+    // D260: G75 FP=4 is HOME POINT=4; a fixed point above 4 names none the control has (MD30600).
+    [Fact]
+    public void G75FixedPoints_AreHomePoint2To4()
+    {
+        Assert.Equal(Lines("HOME X POINT=4", Raw("G75 FP=5 X1=0")), Body("G75 FP=4 X1=0\nG75 FP=5 X1=0"));
+    }
+
     // DIAMON and DIAMOF switch the diameter programming, DIAM90 doubles the incremental X (controller-mapping 1,
     // DIAMETER).
     [Fact]

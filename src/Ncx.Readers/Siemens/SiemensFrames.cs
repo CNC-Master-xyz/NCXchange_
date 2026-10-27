@@ -317,11 +317,12 @@ internal static class SiemensFrames
         block.Siemens.ForgetPositions();
     }
 
-    // G74 X1=0 Y1=0 Z1=0 returns the axes to the reference point by their machine names, HOME X Y Z; G75 X0 Z0 FP=2 to
-    // the fixed point FP, HOME X Z POINT=2 (controllers siemens.md 3; controller-mapping 1, HOME).
-    // TODO(question): controller-mapping 1 reads the fixed points of G75 as POINT, 1 to 4, and G74 as HOME, while a
-    // HOME without POINT is the first reference point (virtual machine 3, step 5); G75 without FP, the fixed point 1,
-    // is written HOME with POINT=1.
+    // G74 X1=0 Y1=0 Z1=0 returns the axes to the reference point by their machine names, HOME X Y Z, the counterpart
+    // of Fanuc G28; G75 X0 Z0 FP=2 to FP=4 approaches the fixed point of MD30600 $MA_FIX_POINT_POS, HOME X Z POINT=2,
+    // the counterpart of Fanuc G30 P2 to P4 (D260; controllers siemens.md 3; controller-mapping 1, HOME). G75 FP=1,
+    // and G75 without FP, which the control reads as FP=1, stay RAW with the WARNING RDR509: POINT=1 is the reference
+    // point G74 approaches, so NCX has no POINT for fixed point 1 (840D sl/828D Programmierhandbuch Grundlagen 2013
+    // p.377-378, cnc-manuals; D260).
     private static void ReadHome(SiemensBlock block)
     {
         bool reference = block.TakeCode("G74");
@@ -351,7 +352,16 @@ internal static class SiemensFrames
         {
             SourceWord? point = block.Take("FP");
             int? number = point is null ? 1 : SiemensNumbers.WholeNumber(point.Text);
-            if (number is not int fixedNumber || fixedNumber < 1)
+            if (number is 0 or 1)
+            {
+                block.Draft.ReadingWarnings.Add(new SiemensWarning(DiagnosticCodes.SiemensFixedPoint1HasNoPoint,
+                    "G75 approaches fixed point 1, which NCX has no POINT for, since POINT=1 is the reference point "
+                    + "that G74 approaches; the block is kept as RAW (D260, D5)."));
+                block.Draft.KeepAsRaw("G75 approaches fixed point 1, which NCX has no POINT for (D260)");
+                return;
+            }
+
+            if (number is not int fixedNumber || fixedNumber is < 2 or > 4)
             {
                 block.Draft.KeepAsRaw("FP of G75 names no fixed point 1 to 4 (controllers siemens.md 3)");
                 return;
