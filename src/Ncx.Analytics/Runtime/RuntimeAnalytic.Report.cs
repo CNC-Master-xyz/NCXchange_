@@ -1,4 +1,5 @@
 using System.Text;
+using Ncx.Core.Machine;
 
 namespace Ncx.Analytics.Runtime;
 
@@ -22,6 +23,13 @@ public sealed partial class RuntimeAnalytic
             "An estimate from the values of the machine file, not a measured cycle time (virtual machine 8, D64).",
             format));
         text.Append(TextTable.Line(dynamics.ProfileLine(), format));
+        if (dynamics.HasProfile)
+        {
+            // D286: the report names the rest points; D350: the corners per mode where the program changes it.
+            text.Append(TextTable.Line(dynamics.RestPointLine(), format));
+            text.Append(CornersText(format));
+        }
+
         text.Append('\n').Append(dynamics.LinearAxisTable().Write(format));
         text.Append('\n').Append(TextTable.Line(MachineDynamics.RotaryAxisLine(), format));
         text.Append(dynamics.RotaryAxisTable().Write(format));
@@ -45,6 +53,32 @@ public sealed partial class RuntimeAnalytic
             + "the kinematics module, virtual machine 9), tool changes, waits at marks.",
             format));
 
+        // D290: a block through the centre of the polar plane; D357: the [cycles] keys the cycles defaulted.
+        if (_estimator.ThroughCentre > 0)
+        {
+            text.Append(TextTable.Line(
+                $"C clamp near centre not estimated: {ReportText.Count(_estimator.ThroughCentre)} motions through the "
+                + "centre of the polar plane took the limits of X alone (D290).",
+                format));
+        }
+
+        if (_estimator.CylinderRadiusUnknown > 0)
+        {
+            text.Append(TextTable.Line(
+                "C clamp at an unknown cylinder radius not estimated: "
+                + $"{ReportText.Count(_estimator.CylinderRadiusUnknown)} motions of C in the cylinder plane while the "
+                + "radius of CYLINDER was unknown or 0 took the limits of the linear axes alone (D290).",
+                format));
+        }
+
+        foreach (string key in _estimator.DefaultedCycleKeys)
+        {
+            text.Append(TextTable.Line(
+                $"[cycles] {key} is not in the machine file: the expanded cycles took 0 mm, the default of the family "
+                + "(D357).",
+                format));
+        }
+
         // The time of the run is the longest channel; the job time with the waits at the marks comes with the job
         // scheduler (virtual machine 8, 3.7).
         // TODO: the job time as the longest channel including its waits at the marks, from SYNC_WAIT and SYNC_RELEASE,
@@ -53,6 +87,32 @@ public sealed partial class RuntimeAnalytic
             $"Estimated time: {ReportText.Seconds(TotalSeconds)} s ({ReportText.Clock(TotalSeconds)}), the longest "
             + "channel.",
             format));
+        return text.ToString();
+    }
+
+    // D350: where the program changes PATH_MODE, the corners timed in each mode, and the corners in a mode the machine
+    // has no [transform] template for.
+    private string CornersText(TableFormat format)
+    {
+        var text = new StringBuilder();
+        if (_estimator.PathModeChanged)
+        {
+            text.Append(TextTable.Line(
+                $"Corners: {ReportText.Count(_estimator.ContinuousCorners)} timed under CONTINUOUS, "
+                + $"{ReportText.Count(_estimator.ExactStopCorners)} under EXACT_STOP; the program changes PATH_MODE "
+                + "(D350).",
+                format));
+        }
+
+        foreach (KeyValuePair<PathMode, int> corners in _estimator.UnexpressedCorners)
+        {
+            string mode = corners.Key == PathMode.Continuous ? "CONTINUOUS" : "EXACT_STOP";
+            text.Append(TextTable.Line(
+                $"The machine has no [transform] template for PATH_MODE={mode}: {ReportText.Count(corners.Value)} "
+                + "corners are timed in a mode it cannot express (D350).",
+                format));
+        }
+
         return text.ToString();
     }
 

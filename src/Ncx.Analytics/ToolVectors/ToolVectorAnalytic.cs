@@ -13,8 +13,9 @@ namespace Ncx.Analytics.ToolVectors;
 /// </summary>
 public sealed partial class ToolVectorAnalytic : IAnalytic
 {
-    // A change keeps three decimals of a degree, as the sweep of an arc does (MotionEvents.SweepDecimals of the virtual
-    // machine); the rounding also takes away the rest a turn and its return leave in double precision.
+    // A change keeps three decimals of a degree, the digits the report prints (ReportText.Angle; D121 keeps six in the
+    // virtual machine, plan flag N13); the rounding also takes away the rest a turn and its return leave in double
+    // precision.
     private const int AngleDecimals = 3;
 
     private readonly AnalyticOptions _options;
@@ -25,11 +26,12 @@ public sealed partial class ToolVectorAnalytic : IAnalytic
     private readonly WorstMotions _largest = new(largest: true);
 
     /// <summary>
-    /// The tool vector change of one run, with the histogram over the default bounds.
+    /// The tool vector change of one run, with the histogram over the bounds of --vector-bins, the default bounds
+    /// without them (D324).
     /// </summary>
-    /// <param name="options">The machine, the names, the block range and the format of the run.</param>
+    /// <param name="options">The machine, the names, the block range, the format and the bounds of the run.</param>
     public ToolVectorAnalytic(AnalyticOptions options)
-        : this(options, DefaultBins)
+        : this(options, options.VectorBins ?? DefaultBins)
     {
     }
 
@@ -50,8 +52,7 @@ public sealed partial class ToolVectorAnalytic : IAnalytic
     /// The bounds between the bins of the histogram in degrees when no others are given: 0.01, 0.1, 0.5, 1, 2, 5, 10,
     /// 45, 90.
     /// </summary>
-    // TODO(question): where a user gives the bins of the histogram, the question at SegmentAnalytic.DefaultBins; ncx
-    // analyze writes these default bounds until it is answered.
+    // D324: ncx analyze --vector-bins gives other bounds (architecture 10; implementation 14, P4-03).
     public static IReadOnlyList<decimal> DefaultBins { get; } = [0.01m, 0.1m, 0.5m, 1m, 2m, 5m, 10m, 45m, 90m];
 
     /// <inheritdoc/>

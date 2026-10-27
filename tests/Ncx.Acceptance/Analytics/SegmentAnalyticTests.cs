@@ -50,6 +50,21 @@ public sealed class SegmentAnalyticTests
         Assert.Equal(1, segments.FromUnknown);
     }
 
+    // D353: the length of an ARC is its path, the arc length in the working plane together with the travel of every
+    // linear axis it moves outside it, so a helix is measured along its three-dimensional path: the half circle of
+    // radius 10 about X=20 Y=40 that also moves Z by 5 is sqrt((pi 10)^2 + 5^2) mm, 31.811324 mm rounded (D121), and
+    // the report header says so.
+    [Fact]
+    public void SegmentLength_Helix_IsTheArcLengthWithTheTravelOfTheHelix()
+    {
+        string[] blocks = ["UNITS=MM", "RAPID X=30 Y=40 Z=0", "ARC=CCW X=10 Y=40 Z=-5 CENTER:X=20 CENTER:Y=40 F=1000"];
+        var segments = new SegmentAnalytic(AnalyticRuns.Options(Mill));
+        string report = AnalyticRuns.Run(CliHarness.OneProgram(blocks), Mill, segments);
+
+        Assert.Equal(Math.Sqrt((Math.PI * 10 * Math.PI * 10) + 25), segments.Statistics.Of(Verb.Arc)!.Maximum, 5);
+        Assert.Contains("the arc length with the travel of a helix for an ARC", report, StringComparison.Ordinal);
+    }
+
     // P4-03: the count of skipped blocks with unknown positions and why. Line 4 starts from the unknown start position,
     // lines 6 and 8 move in the machine frame (FRAME=MACHINE, HOME: VM 2.1, 3.4), line 7 goes from the Z known in the
     // MACHINE frame into the workpiece frame (VM 3.4, D35), line 9 starts from the Z that HOME left unknown on an axis
@@ -155,8 +170,9 @@ public sealed class SegmentAnalyticTests
 
         Assert.StartsWith("Segment length: test.ncx, the whole file, on test.toml, INTERPRETED run\n", report,
             StringComparison.Ordinal);
-        Assert.Contains("Per MOTION the distance in mm between its start and its end point, the arc length for an ARC "
-            + "(virtual machine 8)", report, StringComparison.Ordinal);
+        Assert.Contains("Per MOTION the length in mm of the path it describes, the distance between its start and its "
+            + "end point, the arc length with the travel of a helix for an ARC (virtual machine 8, D353)", report,
+            StringComparison.Ordinal);
         Assert.Contains("\nThe ten shortest motions:\n", report, StringComparison.Ordinal);
         Assert.EndsWith("Skipped: 1 of 4 motions: 0 in the machine frame (HOME, FRAME=MACHINE), 1 from an unknown "
             + "position, 0 to an unknown position, 0 from one frame into another, 0 arcs that did not resolve (virtual "

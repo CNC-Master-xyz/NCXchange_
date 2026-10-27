@@ -7,9 +7,9 @@ namespace Ncx.Analytics.Segments;
 
 /// <summary>
 /// The segment length (virtual machine 8; architecture 9): for every MOTION in the workpiece frame whose positions are
-/// known, the distance between its start and its end point, the arc length for an arc; the minimum, maximum and mean, a
-/// histogram with configurable bins, the ten shortest motions with their lines and the motions skipped and why, over
-/// the blocks of the range (D67; implementation 14, P4-03). One of the two analytics CAM programmers use to judge
+/// known, the length of its path, the arc length with the travel of a helix for an arc (D353); the minimum, maximum and
+/// mean, a histogram with configurable bins, the ten shortest motions with their lines and the motions skipped and why,
+/// over the blocks of the range (D67; implementation 14, P4-03). One of the two analytics CAM programmers use to judge
 /// 5-axis output.
 /// </summary>
 public sealed partial class SegmentAnalytic : IAnalytic
@@ -21,11 +21,12 @@ public sealed partial class SegmentAnalytic : IAnalytic
     private readonly WorstMotions _shortest = new(largest: false);
 
     /// <summary>
-    /// The segment length of one run, with the histogram over the default bounds.
+    /// The segment length of one run, with the histogram over the bounds of --segment-bins, the default bounds without
+    /// them (D324).
     /// </summary>
-    /// <param name="options">The machine, the names, the block range and the format of the run.</param>
+    /// <param name="options">The machine, the names, the block range, the format and the bounds of the run.</param>
     public SegmentAnalytic(AnalyticOptions options)
-        : this(options, DefaultBins)
+        : this(options, options.SegmentBins ?? DefaultBins)
     {
     }
 
@@ -44,10 +45,7 @@ public sealed partial class SegmentAnalytic : IAnalytic
     /// <summary>
     /// The bounds between the bins of the histogram in mm when no others are given: 0.01, 0.1, 0.5, 1, 5, 10, 50, 100.
     /// </summary>
-    // TODO(question): implementation 14 (P4-03) asks for a histogram "with configurable bins" and names no place where
-    // a user gives them: architecture 10, the one list of the options of ncx, has no such option of ncx analyze, and
-    // neither ncx.toml nor the machine file has a key for them. The bounds are a parameter of the analytic that a
-    // front end or a plugin can pass, and ncx analyze writes these default bounds, until that is answered.
+    // D324: ncx analyze --segment-bins gives other bounds (architecture 10; implementation 14, P4-03).
     public static IReadOnlyList<decimal> DefaultBins { get; } = [0.01m, 0.1m, 0.5m, 1m, 5m, 10m, 50m, 100m];
 
     /// <inheritdoc/>
@@ -130,8 +128,9 @@ public sealed partial class SegmentAnalytic : IAnalytic
             return;
         }
 
-        // With known positions: the MOTION carries the euclidean length over the linear axes, the arc length for an
-        // arc, and none when an axis it moved is not known at both ends in one frame (virtual machine 7, 8).
+        // With known positions: the MOTION carries the euclidean length over the linear axes, the arc length with the
+        // travel of a helix for an arc (D353), and none when an axis it moved is not known at both ends in one frame
+        // (virtual machine 7, 8).
         if (motion.Length is not decimal length)
         {
             CountUnknown(motion);

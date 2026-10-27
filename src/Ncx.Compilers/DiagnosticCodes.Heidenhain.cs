@@ -170,12 +170,17 @@ public static partial class DiagnosticCodes
     public const string HeidenhainCycleWordLost = "CMP122";
 
     /// <summary>
-    /// CMP123: a measurement point beyond the nine indices of a Klartext tool, k above 10, an ERROR; and, as a
-    /// WARNING, a point change of the tool in the spindle by an indexed TOOL CALL, which runs the change macro on the
-    /// TNC 640 and on the iTNC 530 depending on MP7480.0 and the builder's macro, unless point_change = "call"
-    /// (machine-config 3, D373).
+    /// CMP123, a WARNING: a point change of the tool in the spindle by an indexed TOOL CALL, which runs the change
+    /// macro on the TNC 640 and on the iTNC 530 depending on MP7480.0 and the builder's macro, unless point_change =
+    /// "call" (machine-config 3, D373; the ERROR of k above 10 is CMP124, D388).
     /// </summary>
     public const string HeidenhainToolPoint = "CMP123";
+
+    /// <summary>
+    /// CMP124, an ERROR: a measurement point beyond the nine indices of a Klartext tool, k above 10, which the
+    /// indexed_tool form cannot map (machine-config 3, D373 improvement 1, D388).
+    /// </summary>
+    public const string HeidenhainToolPointBeyondIndices = "CMP124";
 
     /// <summary>
     /// CMP125: the caller reads, after a CALL, a name that an ARG of the call assigns. In NCX the ARG is a local of the

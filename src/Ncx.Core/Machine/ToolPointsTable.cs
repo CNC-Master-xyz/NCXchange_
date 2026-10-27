@@ -64,7 +64,7 @@ public sealed record ToolPointsTable
 
     /// <summary>
     /// What selects point k of a tool, or null where the form cannot map it, which a compiler reports as the ERROR of
-    /// its family (CMP123, CMP341, CMP514; D373).
+    /// its family (CMP124, CMP341, CMP514; D373, D388).
     /// </summary>
     /// <param name="tool">The tool number; null for a tool called by name, which only indexed_tool maps.</param>
     /// <param name="point">The point k, from 1.</param>

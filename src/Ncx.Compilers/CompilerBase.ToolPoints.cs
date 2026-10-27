@@ -40,9 +40,9 @@ public abstract partial class CompilerBase
     }
 
     // The point of a step, before its lines (D373, D376): a point other than 1 on a machine without [tool_points] is
-    // the INFO CMP016 once per program; a point the form cannot map is the ERROR of the family, CMP123, CMP341 or
-    // CMP514, naming the tool and k; a TIP_OFFSET or POINT_RADIUS that differs from the row of the tool table by more
-    // than one output step of the tool axis is the WARNING CMP032, and no coordinate is corrected.
+    // the INFO CMP016 once per program; a point the form cannot map is the ERROR of the family, CMP124 (D388),
+    // CMP341 or CMP514, naming the tool and k; a TIP_OFFSET or POINT_RADIUS that differs from the row of the tool
+    // table by more than one output step of the tool axis is the WARNING CMP032, and no coordinate is corrected.
     private void CheckPoint(BlockStep step)
     {
         Block block = step.Block;
@@ -119,7 +119,7 @@ public abstract partial class CompilerBase
 
         string code = Machine.Machine.Controller switch
         {
-            Controller.Heidenhain => DiagnosticCodes.HeidenhainToolPoint,
+            Controller.Heidenhain => DiagnosticCodes.HeidenhainToolPointBeyondIndices,
             Controller.Siemens => DiagnosticCodes.SiemensToolPointNotMapped,
             _ => DiagnosticCodes.FanucToolPointNotMapped,
         };
