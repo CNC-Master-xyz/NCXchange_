@@ -189,9 +189,9 @@ internal static class FanucMotion
     /// <param name="write">The block being written.</param>
     /// <param name="axes">The axis words of the block.</param>
     /// <param name="machineFrame">True under G53, which takes absolute words only.</param>
-    // TODO(question): fanuc 10 rule 1 writes absolute values, or G91 blocks where the NCX block had incremental words,
-    // "a machine setting" that machine-config does not name; the compiler writes G91 blocks, which keep an incremental
-    // subprogram right at every call (language 4.13), until that is answered.
+    // No machine key chooses between absolute values and G91 blocks (D282 (b)): G91 blocks keep an incremental
+    // subprogram right at every call (language 4.13); a mixed block, a G53 block and a canned-cycle position are
+    // written absolute from the reached point (controllers fanuc.md 10 rule 1).
     public static bool AddAxisWords(FanucBlock write, List<FanucAxisWord> axes, bool machineFrame)
     {
         if (axes.Count == 0)
@@ -273,10 +273,9 @@ internal static class FanucMotion
         }
     }
 
-    // G0 and G1 are written only when the verb changes (controllers fanuc.md 10 rule 1), and the first motion after a
-    // tool change writes its code under motion_code_after_tool_change (the TODO(question) of OutputFormat).
-    // TODO(question): fanuc 10 rule 1 names G0 and G1 and not G2 and G3; an arc writes G2 or G3 on every block, as the
-    // sources write it, which is right whatever the control has active, until that is answered.
+    // The code is written as [format] motion_code says, "arcs" by default: G0 and G1 where they change, G2 and G3 on
+    // every arc block (D282 (a), D299; controllers fanuc.md 10 rule 1), and the first motion after a tool change writes
+    // its code under motion_code_after_tool_change (the TODO(question) of OutputFormat).
     private static void WriteMotionCode(FanucBlock write, string verb, Value value)
     {
         string code = verb switch
@@ -285,7 +284,7 @@ internal static class FanucMotion
             "LINE" => "G1",
             _ => value.ToCanonical() == "CCW" ? "G3" : "G2",
         };
-        if (verb == "ARC" || write.Target.ActiveOf(FanucCodes.Motion) != code)
+        if (MotionCodeRule.Writes(write.Machine.Format, verb == "ARC", write.Target.ActiveOf(FanucCodes.Motion), code))
         {
             write.Main.Code(FanucCodes.RankOf(FanucCodes.Motion), code);
         }

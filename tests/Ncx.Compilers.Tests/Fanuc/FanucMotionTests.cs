@@ -9,7 +9,7 @@ namespace Ncx.Compilers.Tests.Fanuc;
 public sealed class FanucMotionTests
 {
     // Controller-mapping 2, R: an arc with R keeps its signed radius; G2 or G3 stands on every arc block (the
-    // TODO(question) of FanucMotion), as the sources write N300 to N330 of 2.5D_FRAESEN.
+    // family value "arcs" of [format] motion_code, D282 (a), D299), as the sources write N300 to N330 of 2.5D_FRAESEN.
     [Fact]
     public void Arc_WithRadius_WritesR_AndTheArcCodeOnEveryBlock()
     {
@@ -17,6 +17,28 @@ public sealed class FanucMotionTests
             "RAPID X=0 Y=0\nLINE X=10 F=100\nARC=CCW X=20 Y=10 R=10\nARC=CCW X=10 Y=20 R=-10");
 
         Assert.Equal("G17 X0. Y0.\nG1 X10. F100.\nG3 X20. Y10. R10.\nG3 X10. Y20. R-10.\n", body);
+    }
+
+    // [format] motion_code = "change" (D299, D282 (a)): the code only where it changes, arcs included.
+    [Fact]
+    public void MotionCode_Change_WritesTheArcCodeOnlyWhereItChanges()
+    {
+        string text = FanucCompile.TextOf(FanucCompile.Run(FanucCompile.Program(
+                "RAPID X=0 Y=0", "LINE X=10 F=100", "ARC=CCW X=20 Y=10 R=10", "ARC=CCW X=10 Y=20 R=-10"),
+            FanucCompile.Mill(FanucCompile.SourceHabits + "\nmotion_code = \"change\"")));
+
+        Assert.Contains("G1 X10. F100.\nG3 X20. Y10. R10.\nX10. Y20. R-10.\n", text, StringComparison.Ordinal);
+    }
+
+    // [format] motion_code = "every_block" (D299): the code on every motion block, G1 included.
+    [Fact]
+    public void MotionCode_EveryBlock_WritesG1Again()
+    {
+        string text = FanucCompile.TextOf(FanucCompile.Run(FanucCompile.Program(
+                "RAPID X=0 Y=0", "LINE X=10 F=100", "LINE Y=10"),
+            FanucCompile.Mill(FanucCompile.SourceHabits + "\nmotion_code = \"every_block\"")));
+
+        Assert.Contains("G1 X10. F100.\nG1 Y10.\n", text, StringComparison.Ordinal);
     }
 
     // Controller-mapping 2, CENTER:X; language 6: the absolute centre is written as I J from the start point, G3 X70.
