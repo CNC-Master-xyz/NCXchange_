@@ -176,10 +176,22 @@ internal static class SiemensFrames
                 return null;
             }
 
-            shift.Add(SiemensAxes.AxisOf(block, word)!, value);
+            string axis = SiemensAxes.AxisOf(block, word)!;
+            shift.Add(axis, ShiftValue(block, axis, value));
         }
 
         return new SiemensChainEntry("SHIFT", name, shift);
+    }
+
+    // The value of a shift in NCX. A Siemens facing axis keeps its frame offsets as radii, MD20360 bit 3 off
+    // (Funktionshandbuch Grundfunktionen 2012 p.901-903, cnc-manuals), while NCX reads SHIFT X under DIAMETER=ON as a
+    // diameter, so the reader doubles the X of a shift under DIAMON and DIAM90; where [[axis]] frames_in_diameter
+    // says the control keeps them as diameters, X is taken as written (D125, D388).
+    private static Value ShiftValue(SiemensBlock block, string axis, Value value)
+    {
+        bool radius = axis == "X" && block.Facts.DiameterMode is "DIAMON" or "DIAM90"
+            && block.Machine.ResolveAxis("X") is not { FramesInDiameter: true };
+        return radius ? SiemensMotion.Doubled(block, value) : value;
     }
 
     // ROT RPL=30 and ROT Z30 under G17 turn about the tool axis, ROTATE=30; ROT X180 turns about another axis, the
@@ -297,7 +309,7 @@ internal static class SiemensFrames
 
             string axis = SiemensAxes.AxisOf(block, word)!;
             shift.Remove(axis);
-            shift.Add(axis, value);
+            shift.Add(axis, ShiftValue(block, axis, value));
         }
 
         // A G59 without an additive shift before it appends one where the shift of TRANS or G58 is the last entry.

@@ -1,3 +1,4 @@
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.Writing;
 using static Ncx.Readers.Tests.Siemens.SiemensRead;
@@ -45,6 +46,44 @@ public sealed class SiemensFrameTests
     {
         Assert.Equal(Lines("SHIFT X=10", "SHIFT Y=5", "SHIFT=RESET", "SHIFT=RESET", "SHIFT X=20", "SHIFT=RESET"),
             CheckedBody("TRANS X10\nATRANS Y5\nTRANS X20\nTRANS"));
+    }
+
+    // D125: a Siemens facing axis keeps its frame offsets as radii (MD20360 bit 3 off), while NCX reads SHIFT X under
+    // DIAMETER=ON as a diameter, so the reader doubles the X of TRANS, ATRANS and G58/G59 under DIAMON; under DIAMOF,
+    // and where the machine file sets frames_in_diameter, X is taken as written.
+    [Fact]
+    public void TransX_UnderDiamon_IsDoubledIntoTheDiameter()
+    {
+        Assert.Equal(Lines("DIAMETER=ON", "SHIFT X=20 Z=5", "SHIFT X=4", "DIAMETER=OFF", "SHIFT X=3"),
+            CheckedBody("DIAMON\nTRANS X10 Z5\nATRANS X2\nDIAMOF\nATRANS X3", MillTurn()));
+    }
+
+    // D125, D388: with frames_in_diameter the control keeps the frame offsets of X as diameters, which NCX writes as
+    // they are.
+    [Fact]
+    public void TransX_WithFramesInDiameter_IsTakenAsWritten()
+    {
+        MachineConfig machine = MillTurnWith("programming = \"switchable\"",
+            "programming = \"switchable\"\nframes_in_diameter = true");
+
+        Assert.Equal(Lines("DIAMETER=ON", "SHIFT X=10 Z=5"), CheckedBody("DIAMON\nTRANS X10 Z5", machine));
+    }
+
+    // D240: $AA_IW[X] reads a diameter under DIAMON and maps one to one; $AA_IM[X] reads a radius (MD20360 bits 6/7
+    // off), so the reader doubles it under DIAMON, and takes it as written under DIAMOF or with frames_in_diameter.
+    [Fact]
+    public void AaImX_UnderDiamon_IsDoubled()
+    {
+        const string variables = "call_depth = 8\n\n[system_variables]\nSYS_POS_X = \"$AA_IW[X]\"\n"
+            + "SYS_MPOS_X = \"$AA_IM[X]\"\n";
+        MachineConfig machine = MillTurnWith("call_depth = 8\n", variables);
+        MachineConfig inDiameter = MillTurnWith("call_depth = 8\n", variables, "programming = \"switchable\"",
+            "programming = \"switchable\"\nframes_in_diameter = true");
+
+        Assert.Equal(Lines("DIAMETER=ON", "VAR:R1={(2 * $SYS_MPOS_X)}", "VAR:R2={$SYS_POS_X}", "DIAMETER=OFF",
+                "VAR:R3={$SYS_MPOS_X}"),
+            Body("DIAMON\nR1=$AA_IM[X]\nR2=$AA_IW[X]\nDIAMOF\nR3=$AA_IM[X]", machine));
+        Assert.Equal(Lines("DIAMETER=ON", "VAR:R1={$SYS_MPOS_X}"), Body("DIAMON\nR1=$AA_IM[X]", inDiameter));
     }
 
     // Rule 4: ROT and MIRROR cut the chain like TRANS, AROT and AMIRROR append; MIRROR=OFF resets a mirror (D124).

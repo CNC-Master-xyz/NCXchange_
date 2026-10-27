@@ -572,8 +572,12 @@ internal static class SiemensMotion
         }
     }
 
-    // Twice a value, for the radius an incremental X under DIAM90 gives.
-    private static Value Doubled(SiemensBlock block, Value value)
+    /// <summary>
+    /// Twice a value, for the radius an incremental X under DIAM90 or a frame offset of X under DIAMON gives (D125).
+    /// </summary>
+    /// <param name="block">The block being read.</param>
+    /// <param name="value">The radius.</param>
+    public static Value Doubled(SiemensBlock block, Value value)
     {
         if (SiemensNumbers.NumberOf(value) is decimal number)
         {

@@ -424,6 +424,17 @@ internal static partial class SiemensExpression
         return end;
     }
 
+    // $AA_IW[X] reads a diameter under DIAMON and maps one to one, while $AA_IM[X] reads a radius where MD20360 bits
+    // 6/7 are off, so under DIAMON and DIAM90 the reader doubles it into the diameter NCX reads under DIAMETER=ON;
+    // where [[axis]] frames_in_diameter says the control gives diameters it maps one to one (D240, D388;
+    // Funktionshandbuch Grundfunktionen 2012 p.901-903, cnc-manuals).
+    private static bool MachinePositionInRadius(SiemensBlock block, string native)
+    {
+        return string.Equals(native, "$AA_IM[X]", StringComparison.OrdinalIgnoreCase)
+            && block.Facts.DiameterMode is "DIAMON" or "DIAM90"
+            && block.Machine.ResolveAxis("X") is not { FramesInDiameter: true };
+    }
+
     // R1 and R[1] are $R1; an indirect R[R1] is RAW (controller-mapping 6, VAR); a system variable is the SYS_ name
     // the machine maps it to, and unmapped it is RAW (language 4.12, D51); a DEF or GUD name keeps its name (language
     // 4.9).
@@ -436,7 +447,7 @@ internal static partial class SiemensExpression
             {
                 if (string.Equals(entry.Value.Replace(" ", ""), native, StringComparison.OrdinalIgnoreCase))
                 {
-                    return "$" + entry.Key;
+                    return MachinePositionInRadius(block, native) ? "(2 * $" + entry.Key + ")" : "$" + entry.Key;
                 }
             }
 
