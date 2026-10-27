@@ -119,6 +119,33 @@ internal sealed class StateChanges
         Compare("COMP", EventText.Ident(before.Comp), EventText.Ident(after.Comp));
         CompareVector(["TX", "TY", "TZ"], before.ToolVector, after.ToolVector);
         CompareVector(["NX", "NY", "NZ"], before.SurfaceNormal, after.SurfaceNormal);
+        CompareTip();
+    }
+
+    // TIP:axis, the tip on the tool axis, derived and never stored (D374); a row only where a tip offset stands
+    // before or after the block, so that a trace written before the point words keeps its rows, and none where the
+    // tool axis is tilted and no tip is derived.
+    private void CompareTip()
+    {
+        decimal offsetBefore = TipRules.ActiveHolder(_before)?.TipOffset ?? 0m;
+        decimal offsetAfter = TipRules.ActiveHolder(_after)?.TipOffset ?? 0m;
+        if (offsetBefore == 0m && offsetAfter == 0m)
+        {
+            return;
+        }
+
+        string axis = TipRules.ToolAxis(_after.Frame.Workplane);
+        IReadOnlyDictionary<string, AxisPosition>? before = TipRules.Tip(_before, _before.Motion.Position);
+        IReadOnlyDictionary<string, AxisPosition>? after = TipRules.Tip(_after, _after.Motion.Position);
+        if (after is null || !after.TryGetValue(axis, out AxisPosition tip))
+        {
+            return;
+        }
+
+        AxisPosition old = before is not null && before.TryGetValue(axis, out AxisPosition known)
+            ? known
+            : AxisPosition.Unknown;
+        Compare("TIP:" + axis, EventText.Position(old), EventText.Position(tip));
     }
 
     // The tool rows of virtual machine 2.3 per holder; a holder created on the spot during the block (D103) starts

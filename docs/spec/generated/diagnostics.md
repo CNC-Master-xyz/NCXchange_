@@ -154,6 +154,7 @@ The tool change of the two-word model and the offsets (language 4.4; VM 2.3, 3.5
 | `VM481` | ERROR | TOOL_POINT, TIP_OFFSET or POINT_RADIUS on a holder that holds no tool. Suppressed inside a subprogram that no program of the file calls (D99). | language 4.4; VM 5; D372 |
 | `VM482` | ERROR | A negative TIP_OFFSET or POINT_RADIUS. | language 4.4; VM 5; D372 |
 | `VM483` | ERROR | TOOL_POINT of 0 or less. | language 4.4; VM 5; D372 |
+| `VM484` | WARNING | A motion with a TIP_OFFSET under TILT, TILT_AXIS or TCPM=ON: no tip is derived; once per program. | VM 5, 9; D374 |
 
 ## Spindle
 

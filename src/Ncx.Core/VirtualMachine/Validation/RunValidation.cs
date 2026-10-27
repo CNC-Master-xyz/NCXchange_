@@ -30,6 +30,9 @@ internal sealed class RunValidation
     private readonly HashSet<Word> _unresolved = new(ReferenceEqualityComparer.Instance);
     private Block? _firstUnresolved;
 
+    // VM484 comes once per program (D374).
+    private bool _tipUnderTiltReported;
+
     // The state the block finds, for the rules that compare it with the state the block leaves.
     private Compensation _compensationBefore;
     private string? _workpieceHolderBefore;
@@ -93,6 +96,7 @@ internal sealed class RunValidation
         if (block.Has("PROGRAM", null, "BEGIN"))
         {
             _offsetForms.Clear();
+            _tipUnderTiltReported = false;
         }
 
         _compensationBefore = state.Motion.Comp;
@@ -128,6 +132,10 @@ internal sealed class RunValidation
         ArcValidation.CheckCompensationChange(context, _compensationBefore);
         ToolValidation.CheckOffsetForms(context, _offsetForms);
         ToolValidation.CheckPointWords(context);
+        if (!_tipUnderTiltReported)
+        {
+            _tipUnderTiltReported = ToolValidation.CheckTipUnderTilt(context);
+        }
         SpindleValidation.CheckSpindleBeforeLine(context);
         SpindleValidation.CheckRpmLimits(context);
         ResourceValidation.CheckWorkpieceChange(context, _workpieceHolderBefore);

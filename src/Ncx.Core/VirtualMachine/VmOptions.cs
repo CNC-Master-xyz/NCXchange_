@@ -1,4 +1,5 @@
 using Ncx.Core.Machine;
+using Ncx.Core.Model;
 
 namespace Ncx.Core.VirtualMachine;
 
@@ -55,6 +56,13 @@ public sealed record VmOptions
     /// channels is none (implementation 16, P6-02). The job scheduler tells its own virtual machines.
     /// </summary>
     public int? JobChannels { get; init; }
+
+    /// <summary>
+    /// The measured point of a tool, the [[tool.point]] row of the tool table for a tool and a point k; null when the
+    /// run has no tool table or the table no row (D376). The VM adds its wear to the radius it reports and to nothing
+    /// else (D374).
+    /// </summary>
+    public Func<ToolRef, int, ToolPointData?>? MeasuredPoint { get; init; }
 
     /// <summary>
     /// The options a machine file gives: the block cap, the call depth and unassigned of [variables] (machine-config 7,

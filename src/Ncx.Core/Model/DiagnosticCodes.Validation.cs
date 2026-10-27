@@ -73,6 +73,12 @@ public static partial class DiagnosticCodes
     public const string ToolPointNotPositive = "VM483";
 
     /// <summary>
+    /// VM484, a WARNING: a motion with a TIP_OFFSET under TILT, TILT_AXIS or TCPM=ON, where the tool axis is no machine
+    /// axis and the virtual machine derives no tip; once per program (D374).
+    /// </summary>
+    public const string TipOffsetUnderTilt = "VM484";
+
+    /// <summary>
     /// VM500, a WARNING: the spindle is OFF before a LINE, the spindle of the current tool holder or the default
     /// spindle when the holder has none (virtual machine 5). Suppressed inside a subprogram that no program of the file
     /// calls (3.9, D99).

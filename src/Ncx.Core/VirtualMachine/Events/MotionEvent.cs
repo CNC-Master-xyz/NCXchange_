@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Ncx.Core.Geometry;
 using Ncx.Core.VirtualMachine.State;
@@ -82,6 +83,28 @@ public sealed record MotionEvent : VmEvent
     /// </summary>
     public decimal? Length { get; init; }
 
+    /// <summary>
+    /// The measurement point of the tool the motion is written in, 1 by default (D372, D374).
+    /// </summary>
+    public int ToolPoint { get; init; } = 1;
+
+    /// <summary>
+    /// The register radius the control applies under COMP: POINT_RADIUS plus the wear of the tool table (D374, D376);
+    /// null when the radius comes from an expression in STATIC mode.
+    /// </summary>
+    public decimal? PointRadius { get; init; } = 0m;
+
+    /// <summary>
+    /// The tip of the tool where the motion ends: the programmed point less TIP_OFFSET along the tool axis of the
+    /// active WORKPLANE; null under TILT, TILT_AXIS or TCPM=ON, where the tool axis is no machine axis (D374).
+    /// </summary>
+    public IReadOnlyDictionary<string, AxisPosition>? Tip { get; init; }
+
+    /// <summary>
+    /// The tip offset the tip was derived with, 0 for a point at the tip (D374).
+    /// </summary>
+    public decimal TipOffset { get; init; }
+
     /// <inheritdoc/>
     public override string Kind => "MOTION";
 
@@ -122,8 +145,38 @@ public sealed record MotionEvent : VmEvent
         }
 
         parts.Add("comp " + EventText.Ident(Comp));
+
+        // The point beside COMP and the tip, only where the point differs from point 1 at the tip, so that every
+        // motion written before the point words reads as it did (D374).
+        if (ToolPoint != 1 || PointRadius != 0m || TipOffset != 0m)
+        {
+            parts.Add("point " + ToolPoint.ToString(CultureInfo.InvariantCulture) + " radius "
+                + EventText.Number(PointRadius));
+        }
+
+        if (TipOffset != 0m && Tip is not null)
+        {
+            parts.Add("tip " + EventText.KnownPositions(OnlyChanged(Tip, To)));
+        }
+
         parts.Add("frame " + EventText.Frame(Frame));
         parts.Add("length " + EventText.Number(Length));
         return text.Append(string.Join(", ", parts)).ToString();
+    }
+
+    // The axes where the tip differs from the programmed point: the tool axis (D374).
+    private static Dictionary<string, AxisPosition> OnlyChanged(IReadOnlyDictionary<string, AxisPosition> tip,
+        IReadOnlyDictionary<string, AxisPosition> to)
+    {
+        var changed = new Dictionary<string, AxisPosition>(StringComparer.Ordinal);
+        foreach (KeyValuePair<string, AxisPosition> axis in tip)
+        {
+            if (!to.TryGetValue(axis.Key, out AxisPosition programmed) || programmed != axis.Value)
+            {
+                changed[axis.Key] = axis.Value;
+            }
+        }
+
+        return changed;
     }
 }

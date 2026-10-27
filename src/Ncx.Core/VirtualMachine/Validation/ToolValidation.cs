@@ -1,5 +1,6 @@
 using System.Globalization;
 using Ncx.Core.Model;
+using Ncx.Core.VirtualMachine.State;
 
 namespace Ncx.Core.VirtualMachine.Validation;
 
@@ -49,8 +50,35 @@ internal static class ToolValidation
                 "language 4.4; VM 5; D372"),
             ValidationRule.Error(DiagnosticCodes.ToolPointNotPositive, "TOOL_POINT of 0 or less.",
                 "language 4.4; VM 5; D372"),
+            ValidationRule.Warning(DiagnosticCodes.TipOffsetUnderTilt,
+                "A motion with a TIP_OFFSET under TILT, TILT_AXIS or TCPM=ON: no tip is derived; once per program.",
+                "VM 5, 9; D374"),
         ],
     };
+
+    /// <summary>
+    /// A motion with a tip offset while TILT, TILT_AXIS or TCPM=ON leaves the tool axis no machine axis: the VM derives
+    /// no tip and says so with the WARNING VM484, which the caller reports once per program (D374).
+    /// </summary>
+    /// <returns>True when the WARNING was reported.</returns>
+    public static bool CheckTipUnderTilt(BlockContext context)
+    {
+        ChannelState state = context.State;
+        if (!MotionRules.IsMotion(context.Block)
+            || state.LastHolder is not string holderId
+            || !state.Holders.TryGetValue(holderId, out HolderState? holder)
+            || holder.TipOffset == 0m
+            || !TipRules.ToolAxisTilted(state.Frame.Chain, state.Frame.Tcpm))
+        {
+            return false;
+        }
+
+        context.Diagnostics.Warning(context.Block, DiagnosticCodes.TipOffsetUnderTilt,
+            string.Create(CultureInfo.InvariantCulture,
+                $"TIP_OFFSET={holder.TipOffset} under a tilted tool axis (TILT, TILT_AXIS or TCPM=ON): the tool axis "
+                + $"is no machine axis, so the virtual machine derives no tip in this program (D374)."));
+        return true;
+    }
 
     /// <summary>
     /// The point words of D372 after the block: a point word on a holder that holds no tool is VM481, a negative

@@ -204,6 +204,7 @@ public sealed partial class VirtualMachine
             Resources = _resources,
             Diagnostics = Diagnostics,
             CallerRuleDiagnostics = _suppressCallerRules ? _suppressed : Diagnostics,
+            MeasuredPoint = Options.MeasuredPoint,
         };
 
         string? toolHolder = null;
