@@ -256,7 +256,9 @@ public abstract partial class CompilerBase : ICompiler
         IReadOnlyList<BlockStep> steps)
     {
         _program = program;
-        _machine = machine;
+        // D263: a [format] key the machine file leaves out takes the value of the compiler's family, so every writer
+        // reads one value per key (OutputFormat.WithFamilyDefaults; machine-config 2).
+        _machine = machine with { Format = (machine.Format ?? new OutputFormat()).WithFamilyDefaults(Controller) };
         _options = options;
         _diagnostics = diagnostics;
         _steps = steps;
