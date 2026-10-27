@@ -243,6 +243,15 @@ public sealed class FanucToolWordsTests
         Assert.Equal("M19\n", body);
     }
 
+    // D154: M19 orients to the angle the machine sets, so ORIENT=90 needs a template with {angle}: the ERROR CMP007.
+    [Fact]
+    public void Orient_AngleWithoutAngleTemplate_IsTheErrorCmp007()
+    {
+        CompileResult result = FanucCompile.Run(FanucCompile.Program("ORIENT=90"), FanucCompile.Mill());
+
+        Assert.Equal(DiagnosticCodes.OrientAngleWithoutTemplate, FanucCompile.ErrorOf(result).Code);
+    }
+
     // Controller-mapping 4 and 1: coolant from [coolant], STOP as M0 and M1, MFUNC as the M code with a WARNING
     // (language 4.6).
     [Fact]

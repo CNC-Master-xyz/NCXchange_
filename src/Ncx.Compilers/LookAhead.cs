@@ -30,6 +30,9 @@ public sealed class LookAhead
     // The index of the last step of the program each step belongs to, by the index of the step.
     private readonly int[] _programEnds;
 
+    // The index of the first step of the program each step belongs to, by the index of the step.
+    private readonly int[] _programStarts;
+
     // Whether the program each step belongs to has PRELOAD words, by the index of the step (virtual machine 3.5).
     private readonly bool[] _programHasPreload;
 
@@ -41,6 +44,7 @@ public sealed class LookAhead
         _steps = steps;
         _machine = machine;
         _programEnds = new int[steps.Count];
+        _programStarts = new int[steps.Count];
         _programHasPreload = new bool[steps.Count];
         FindPrograms();
     }
@@ -141,6 +145,30 @@ public sealed class LookAhead
             if (later.SpindleTool != now.SpindleTool && later.SpindleTool != s_emptySpindle)
             {
                 return later.SpindleTool;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The first tool a TOOL block of the program of a step changes into the holder, the empty spindle aside; null
+    /// when the program changes in none (D267).
+    /// </summary>
+    /// <param name="step">A step of the program.</param>
+    /// <param name="holder">The holder.</param>
+    public ToolRef? FirstTool(BlockStep step, string holder)
+    {
+        int end = ProgramEnd(step);
+        for (int index = _programStarts[step.Index]; index <= end; index++)
+        {
+            BlockStep later = _steps[index];
+            if (later.Block.Has("TOOL")
+                && later.After.LastHolder == holder
+                && later.After.Holders.TryGetValue(holder, out HolderSnapshot? state)
+                && state.SpindleTool != s_emptySpindle)
+            {
+                return state.SpindleTool;
             }
         }
 
@@ -356,9 +384,8 @@ public sealed class LookAhead
 
     // The steps from first to last are one program of the run, which has PRELOAD words when one of them has
     // (virtual machine 3.5).
-    // TODO(question): virtual machine 3.5 leaves alone "a program that has its own PRELOAD words" and does not say
-    // whether the PRELOAD words of a subprogram the program calls are its own; they count, so that auto_preload
-    // inserts no preload beside those the run of the program writes, until that is answered.
+    // D267 (b): the PRELOAD words of the subprograms the program calls count as its own, so that auto_preload inserts
+    // no preload beside those the run of the program writes.
     private void MarkProgram(int first, int last)
     {
         bool hasPreload = false;
@@ -370,6 +397,7 @@ public sealed class LookAhead
         for (int index = first; index <= last; index++)
         {
             _programEnds[index] = last;
+            _programStarts[index] = first;
             _programHasPreload[index] = hasPreload;
         }
     }

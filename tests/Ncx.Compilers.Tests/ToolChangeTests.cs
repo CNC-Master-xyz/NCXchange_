@@ -51,7 +51,7 @@ public sealed class ToolChangeTests
     }
 
     // Machine-config 3, virtual machine 3.5: with auto_preload, in a program without PRELOAD words, {next} is the next
-    // tool of the STATIC look-ahead; the last change has none and writes 0 (the TODO(question) of NextOf).
+    // tool of the STATIC look-ahead; the last change takes the program's first tool (D267 (a)).
     [Fact]
     public void Next_AutoPreload_IsTheNextToolOfTheLookAhead()
     {
@@ -60,7 +60,7 @@ public sealed class ToolChangeTests
 
         string text = FakeCompile.TextOf(FakeCompile.Run(program, FakeMachines.Mill(toolChange: toolChange)));
 
-        Assert.Equal("%\nO1 (T)\nN10 T1 M6 A3\nN20 G0 X0. Y0. Z5.\nN30 T3 M6 A0\nN40 Z10.\nN50 M30\n%\n", text);
+        Assert.Equal("%\nO1 (T)\nN10 T1 M6 A3\nN20 G0 X0. Y0. Z5.\nN30 T3 M6 A1\nN40 Z10.\nN50 M30\n%\n", text);
     }
 
     // Machine-config 3, virtual machine 3.5: with auto_preload and a change command without {next}, the preload of
@@ -212,7 +212,7 @@ public sealed class ToolChangeTests
         string text = FakeCompile.TextOf(FakeCompile.Run(program, FakeMachines.Mill(toolChange: toolChange)));
 
         Assert.Equal(
-            "%\nO1 (A)\nN10 T1 M6 A2\nN20 G0 X0. Y0. Z5.\nN30 T2 M6 A0\nN40 M30\nO2 (B)\nN50 T4\nN60 G0 X0. Y0. Z5.\n"
+            "%\nO1 (A)\nN10 T1 M6 A2\nN20 G0 X0. Y0. Z5.\nN30 T2 M6 A1\nN40 M30\nO2 (B)\nN50 T4\nN60 G0 X0. Y0. Z5.\n"
             + "N70 M30\n%\n",
             text);
     }
@@ -277,17 +277,30 @@ public sealed class ToolChangeTests
         Assert.Equal([DiagnosticCodes.PreloadDropped], FakeCompile.Codes(result).FindAll(IsCompiler));
     }
 
-    // Machine-config introduction: a change command whose {next} has no value is unusable, which the template
-    // reports.
+    // D267 (a): a change with {next} and no preload pending, outside auto_preload, takes the next tool changed in from
+    // the STATIC look-ahead, and at the last change the program's first tool.
     [Fact]
-    public void Next_WithoutPreloadAndWithoutAutoPreload_LeavesTheTemplateUnusable()
+    public void Next_WithoutPreloadAndWithoutAutoPreload_IsTheNextToolElseTheFirstTool()
+    {
+        string program = FakeCompile.Program("TOOL=1", "RAPID X=0 Y=0 Z=5", "TOOL=3");
+
+        CompileResult result = FakeCompile.Run(program, FakeMachines.Mill(toolChange: ChangeWithNext));
+
+        Assert.Equal("%\nO1 (T)\nN10 T1 M6 A3\nN20 G0 X0. Y0. Z5.\nN30 T3 M6 A1\nN40 M30\n%\n",
+            FakeCompile.TextOf(result));
+        Assert.Empty(FakeCompile.CompilerDiagnostics(result));
+    }
+
+    // D267 (a): in a one-tool program {next} is the tool being changed in, written with the WARNING CMP006; never 0.
+    [Fact]
+    public void Next_OneToolProgram_WritesThatToolWithTheWarningCmp006()
     {
         string program = FakeCompile.Program("TOOL=1");
 
         CompileResult result = FakeCompile.Run(program, FakeMachines.Mill(toolChange: ChangeWithNext));
 
-        Assert.Empty(result.Files);
-        Assert.Contains("CFG100", FakeCompile.Codes(result));
+        Assert.Equal("%\nO1 (T)\nN10 T1 M6 A1\nN20 M30\n%\n", FakeCompile.TextOf(result));
+        Assert.Equal([DiagnosticCodes.NoOtherToolToPrepare], FakeCompile.Codes(result).FindAll(IsCompiler));
     }
 
     private static bool IsCompiler(string code)
