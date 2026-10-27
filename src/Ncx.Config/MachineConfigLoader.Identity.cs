@@ -174,7 +174,10 @@ public static partial class MachineConfigLoader
 
             // The M codes of one Fanuc block: 1 to 5, and the codes that may join another (D339).
             MCodesPerBlock = table.IntegerInRange("m_codes_per_block", 1, 5),
-            MCodesCombinable = table.TextList("m_codes_combinable").Select(FunctionValues.Normalize).ToList(),
+            // Null without the key: no list restricts the codes; an empty list lets no code join another (D339).
+            MCodesCombinable = table.Has("m_codes_combinable")
+                ? table.TextList("m_codes_combinable").Select(FunctionValues.Normalize).ToList()
+                : null,
             HelixFeed = table.Choice("helix_feed", s_helixFeeds) switch
             {
                 "path" => HelixFeed.Path,
@@ -195,7 +198,7 @@ public static partial class MachineConfigLoader
         table.WarnUnknownKeys(s_blockNumberKeys);
         return new BlockNumbering
         {
-            Enabled = table.Flag("enabled"),
+            Enabled = table.Has("enabled") ? table.Flag("enabled") : null,
             Start = table.Integer("start"),
             Step = table.Integer("step"),
         };

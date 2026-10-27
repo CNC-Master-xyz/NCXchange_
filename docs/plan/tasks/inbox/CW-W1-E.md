@@ -26,5 +26,8 @@ Gaps closed 2026-10-27 (delegated):
 - A non-positive `arc_tolerance`, `arc_radius_tolerance` or `dwell_increment`, a `label_max` outside 1..65535 and an `m_codes_per_block` outside 1..5 are CFG005, as D263's bad `comment_charset` is (D388 15).
 - A missing `[coolant] STANDARD` is CFG004, the missing-key ERROR.
 - The Heidenhain family value of `motion_code` is "every_block" (D299 names Fanuc and Siemens only; Klartext writes L or C on every block).
+- D339 on the Mori: M03/M04/M13/M14 never share a block with a code of the combinable list (NTX1000SZM p.253 note 2); the W2-3 writer applies it.
+
+Review fixes, 2026-10-27: `m_codes_combinable` is null when the key is missing (no restriction) and an empty list when written empty (nothing combines); `block_numbers.enabled` is null when left out, which `WithFamilyDefaults` reads as enabled on Heidenhain only (Klartext always numbers its blocks); the Doosan D179 comment cites the MX programming book p.21, p.25 and p.31 for M35/M135 and p.29 for G28 H0 after them (checked in the connector; p.25-26 was wrong).
 
 Not in this package: D278's type II key is `[cycles] contour_type_ii` under D388 (11), and `CyclesConfig.cs` and `s_cyclesKeys` are W1-G's; `[[axis]] frames_in_diameter` (D388 10) is in W1-C's `[[axis]]` reader; `[format] counter_registers` (D388 12, for D213) is left for W2-6; the machine-config 5 rewording of D314 is W3-1's.

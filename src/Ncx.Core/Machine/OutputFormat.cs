@@ -133,11 +133,12 @@ public sealed record OutputFormat
 
     /// <summary>
     /// m_codes_combinable: when set, the only M codes that may be the second and later M code of a block, normalized
-    /// (D105); empty when the file leaves it out, and then no list restricts them (D339). M00, M01, M02, M30, M98,
-    /// M99, M198, the [sync] wait range and the macro-call codes always stand alone, and a spindle code shares a block
-    /// only with a code this list names, whatever the keys say.
+    /// (D105); null when the file leaves it out, and then no list restricts them, while an empty list lets no code
+    /// be the second M code of a block (D339). M00, M01, M02, M30, M98, M99, M198, the [sync] wait range and the
+    /// macro-call codes always stand alone, and a spindle code shares a block only with a code this list names,
+    /// whatever the keys say.
     /// </summary>
-    public IReadOnlyList<string> MCodesCombinable { get; init; } = [];
+    public IReadOnlyList<string>? MCodesCombinable { get; init; }
 
     /// <summary>
     /// helix_feed: along which path the control measures F on a helix; null when the file leaves it out, and then the
@@ -160,12 +161,14 @@ public sealed record OutputFormat
     {
         bool heidenhain = controller == Machine.Controller.Heidenhain;
         bool fanuc = controller == Machine.Controller.Fanuc;
-        BlockNumbering numbering = BlockNumbers ?? new BlockNumbering { Enabled = heidenhain };
+        // Klartext always numbers its blocks: on Heidenhain a block_numbers table without enabled is enabled (D263).
+        BlockNumbering numbering = BlockNumbers ?? new BlockNumbering();
         return this with
         {
             LineEnding = LineEnding ?? Model.LineEnding.Lf,
             BlockNumbers = numbering with
             {
+                Enabled = numbering.Enabled ?? heidenhain,
                 Start = numbering.Start ?? (heidenhain ? 0 : 10),
                 Step = numbering.Step ?? (heidenhain ? 1 : 10),
             },

@@ -105,6 +105,33 @@ public sealed class FormatKeysTests
         Assert.Equal(HelixFeed.Path, format.HelixFeed);
     }
 
+    // D339: "m_codes_combinable (optional list; when set, only those codes may be the second and later M code of a
+    // block)": a missing key restricts nothing (null), an empty list lets no code join another.
+    [Fact]
+    public void MCodesCombinable_MissingAndEmpty_AreToldApart()
+    {
+        Assert.Null(LoadFormat("fanuc", "m_codes_per_block = 3").MCodesCombinable);
+        Assert.Equal([], LoadFormat("fanuc", "m_codes_combinable = []").MCodesCombinable);
+    }
+
+    // D263: Klartext always numbers its blocks, so a Heidenhain block_numbers table without enabled is enabled, with
+    // the start it names and the Heidenhain step; off Heidenhain such a table stays disabled.
+    [Theory]
+    [InlineData("heidenhain", true, 1)]
+    [InlineData("fanuc", false, 10)]
+    public void BlockNumbers_TableWithoutEnabled_IsEnabledOnHeidenhainOnly(string controller, bool enabled, int step)
+    {
+        OutputFormat written = LoadFormat(controller, "block_numbers = { start = 5 }");
+        Assert.Null(written.BlockNumbers?.Enabled);
+
+        Controller family = controller == "heidenhain" ? Controller.Heidenhain : Controller.Fanuc;
+        OutputFormat format = written.WithFamilyDefaults(family);
+
+        Assert.Equal(enabled, format.BlockNumbers?.Enabled);
+        Assert.Equal(5, format.BlockNumbers?.Start);
+        Assert.Equal(step, format.BlockNumbers?.Step);
+    }
+
     // Loads a clean machine of the controller whose [format] holds the lines.
     private static OutputFormat LoadFormat(string controller, string lines)
     {

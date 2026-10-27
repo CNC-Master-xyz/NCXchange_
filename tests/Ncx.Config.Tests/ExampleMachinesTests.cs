@@ -140,7 +140,7 @@ public sealed class ExampleMachinesTests
     {
         OutputFormat? mori = Shipped("mori-ntx1000-mapps.toml").Format;
         Assert.Equal(3, mori?.MCodesPerBlock);
-        Assert.Equal(47, mori?.MCodesCombinable.Count);
+        Assert.Equal(47, mori?.MCodesCombinable?.Count);
         Assert.Contains("M210", mori?.MCodesCombinable ?? []);
         Assert.DoesNotContain("M3", mori?.MCodesCombinable ?? []);
         Assert.Equal(MotionCode.EveryBlock, Shipped("millturn1.toml").Format?.MotionCode);
