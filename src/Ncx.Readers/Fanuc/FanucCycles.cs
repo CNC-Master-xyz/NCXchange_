@@ -922,9 +922,10 @@ internal static class FanucCycles
     // R before the depth: under G91 R is the distance from the initial level and Z the distance from the R level; Q is
     // the peck, P the dwell in milliseconds, F the feed of the cycle and also the modal F of the control, K the number
     // of repeats (controllers fanuc.md 6; controller-mapping 5; D29).
-    // TODO(question): on a lathe the documents do not say whether R of a drilling cycle is a level or the distance from
-    // the initial level; system A has no G91, and R is read as the level, as on a mill under G90, until D248 is
-    // answered.
+    // D248: on a lathe G83..G89 R is the signed incremental distance from the initial level, always a radius, so
+    // CLEARANCE is the initial level + R, + 2R on an X axis programmed in diameters; where the initial level is not
+    // known the block stays RAW. The depth word follows its address in system A (Z/X absolute, W/U incremental from
+    // R) and G90/G91 in systems B and C. On a mill under G91 R counts from the initial level and Z from R.
     private static void ReadDrilling(FanucBlock block, FanucCycle cycle, bool defines)
     {
         // Under G90 or G91 of a caller the reader does not know (FanucCallerState), R, the depth and the positions of
@@ -937,7 +938,11 @@ internal static class FanucCycles
         }
 
         SourceWord? clearance = block.Take("R");
-        if (clearance is not null)
+        if (clearance is not null && block.IsLathe)
+        {
+            cycle.Clearance = LatheLevel(block, clearance, cycle);
+        }
+        else if (clearance is not null)
         {
             cycle.Clearance = Level(block, clearance, cycle.InitialLevel, block.Incremental);
         }
@@ -1010,6 +1015,21 @@ internal static class FanucCycles
         {
             Call(block, cycle, positions, count);
         }
+    }
+
+    // D248: the R level of a lathe drilling cycle, the initial level plus R, twice R on a diameter X axis.
+    private static Value? LatheLevel(FanucBlock block, SourceWord word, FanucCycle cycle)
+    {
+        if (cycle.InitialLevel is not decimal initial || word.Number is not decimal distance
+            || word.Expression is not null)
+        {
+            block.Draft.KeepAsRaw($"R{word.Text} of {cycle.Code} counts from the initial level, where the drilling "
+                + "axis stood before the cycle, which the reader does not know here (D248)");
+            return null;
+        }
+
+        bool diameter = cycle.Axis == "X" && block.Machine.ResolveAxis("X")?.Programming == Programming.Diameter;
+        return FanucNumbers.Of(initial + (diameter ? 2m * distance : distance));
     }
 
     // An absolute level as written, or under G91 the distance from a known level (controllers fanuc.md 6).

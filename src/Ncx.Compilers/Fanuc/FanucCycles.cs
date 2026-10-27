@@ -20,6 +20,9 @@ internal static class FanucCycles
     /// </summary>
     public const string Definition = "CYCLE:DEF";
 
+    // The key of the initial level of the run of a lathe drilling cycle in the target state (D248).
+    private const string InitialLevel = "CYCLE:INITIAL";
+
     // The words of a CYCLE block (language 4.7).
     private static readonly string[] s_cycleWords =
     [
@@ -525,9 +528,17 @@ internal static class FanucCycles
             write.Main.Word((FanucAxes.LetterOf(write, cycle.Axis, incremental: false) ?? cycle.Axis) + z);
         }
 
-        // TODO(question): D248: on a lathe the documents do not say whether R is a level or the distance from the
-        // initial level; R is written as the level CLEARANCE, as the reader reads it, until D248 is answered.
-        if (clearance is not null && FanucExpressions.WordValue(write, address, clearance, factor) is string r)
+        // D248: on a lathe R is the signed distance from the initial level, always a radius.
+        if (clearance is not null && write.IsLathe)
+        {
+            if (LatheR(write, cycle, clearance) is not string latheR)
+            {
+                return false;
+            }
+
+            write.Main.Word("R" + latheR);
+        }
+        else if (clearance is not null && FanucExpressions.WordValue(write, address, clearance, factor) is string r)
         {
             write.Main.Word("R" + r);
         }
@@ -543,6 +554,38 @@ internal static class FanucCycles
         FanucToolWords.AddOffsets(write, movesToolAxis: true);
         AddFeed(write, entry, cycle);
         return true;
+    }
+
+    // D248: R of a lathe drilling cycle, CLEARANCE minus the initial level, halved on an X axis programmed in
+    // diameters, since R is always a radius; the initial level is where the drilling axis stood when the run of the
+    // cycle began, which the target state keeps for a definition later in the run. Null, with CMP396, where the level
+    // or CLEARANCE is not a known number.
+    private static string? LatheR(FanucBlock write, CycleSnapshot cycle, Value clearance)
+    {
+        decimal? initial = null;
+        if (write.Target.ActiveOf(FanucCodes.Cycle) is string active && active != "G80"
+            && write.Target.ActiveOf(InitialLevel) is string kept)
+        {
+            initial = decimal.Parse(kept, CultureInfo.InvariantCulture);
+        }
+        else if (write.Before.Motion.Position.TryGetValue(cycle.Axis, out AxisPosition position) && position.Known)
+        {
+            initial = position.Value;
+        }
+
+        if (initial is not decimal level || FanucFunctions.NumberOf(clearance) is not decimal plane)
+        {
+            write.Error(DiagnosticCodes.FanucLatheRWithoutInitialLevel,
+                $"R of a lathe drilling cycle is the distance of CLEARANCE from the initial level, where {cycle.Axis} "
+                + "stands before the cycle, and that position or CLEARANCE is not known here (controllers fanuc.md 6; "
+                + "D248).");
+            return null;
+        }
+
+        // The virtual machine keeps a diameter axis as a radius, while CLEARANCE is written as the program writes X.
+        write.Target.Set(InitialLevel, level.ToString(CultureInfo.InvariantCulture));
+        bool diameter = cycle.Axis == "X" && write.Machine.ResolveAxis("X")?.Programming == Programming.Diameter;
+        return write.FormatComputed("R", diameter ? (plane / 2m) - level : plane - level);
     }
 
     // G98 returns to the initial level, the drilling-axis position before the cycle, G99 to R (controllers fanuc.md 3,

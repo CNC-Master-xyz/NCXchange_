@@ -197,6 +197,12 @@ public static partial class DiagnosticCodes
     public const string FanucCycleDwellDropped = "CMP388";
 
     /// <summary>
+    /// CMP396: a drilling cycle of a lathe where the drilling-axis position before the cycle, the initial level R
+    /// counts from, is not known, so R cannot be written (D248).
+    /// </summary>
+    public const string FanucLatheRWithoutInitialLevel = "CMP396";
+
+    /// <summary>
     /// CMP400: a variable that neither the V names of custom macro B nor [variables] map nor [system_variables] name a
     /// Fanuc variable for (language 4.9, machine-config 7, D51).
     /// </summary>

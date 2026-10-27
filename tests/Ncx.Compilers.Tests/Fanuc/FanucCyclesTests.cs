@@ -219,7 +219,7 @@ public sealed class FanucCyclesTests
             "PROGRAM=END",
             "FILE=END"), FanucCompile.Lathe()));
 
-        Assert.Contains("\nG84 Z-10. R2. F800.\n", text, StringComparison.Ordinal);
+        Assert.Contains("\nG84 Z-10. R-3. F800.\n", text, StringComparison.Ordinal);
     }
 
     // Controller-mapping 5 TAP, language 2 rule 8: the spindle of the current tool holder is off, so PITCH x S has no
@@ -432,7 +432,31 @@ public sealed class FanucCyclesTests
 
         string text = FanucCompile.TextOf(FanucCompile.Run(program, FanucCompile.Lathe()));
 
-        Assert.Contains("\nG87 X30. R54. F50.\nG80\n", text, StringComparison.Ordinal);
+        // D248: R is the signed distance from the initial level X60 as a radius, (54 - 60) / 2.
+        Assert.Contains("\nG87 X30. R-3. F50.\nG80\n", text, StringComparison.Ordinal);
+    }
+
+    // D248: on a lathe R counts from the initial level, so a drilling cycle where the drilling axis is not known, after
+    // a position from an expression in STATIC mode, is the ERROR CMP396.
+    [Fact]
+    public void Drill_OnALatheFromAnUnknownInitialLevel_IsTheErrorCmp396()
+    {
+        string program = FanucCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+            "FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
+            "VAR:V1=5",
+            "RAPID Z={$V1}",
+            "CYCLE=DRILL AXIS=Z CLEARANCE=2 DEPTH=-30 CYCLE_F=50",
+            "CYCLE_CALL",
+            "CYCLE=OFF",
+            "PROGRAM=END",
+            "FILE=END");
+
+        CompileResult result = FanucCompile.Run(program, FanucCompile.Lathe());
+
+        Assert.Contains(FanucCompile.CompilerDiagnostics(result),
+            diagnostic => diagnostic.Code == DiagnosticCodes.FanucLatheRWithoutInitialLevel);
     }
 
     // Language 4.7.1, controller-mapping 5: the simple turning cycle G90 of system A is modal, one call per block.

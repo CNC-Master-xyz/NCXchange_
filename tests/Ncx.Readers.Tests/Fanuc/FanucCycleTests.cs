@@ -607,16 +607,24 @@ public sealed class FanucCycleTests
                 "CYCLE_CALL",
                 "CYCLE_CALL C=120",
                 "CYCLE=OFF"),
-            Body("G0 X60. Z-20. C0\nG87 X30. R54. F0.05\nC120.\nG80", Lathe()));
+            Body("G0 X60. Z-20. C0\nG87 X30. R-3. F0.05\nC120.\nG80", Lathe()));
+    }
+
+    // D248: R of a lathe drilling cycle counts from the initial level, so where that is not known the block stays RAW.
+    [Fact]
+    public void LatheDrilling_FromAnUnknownInitialLevel_StaysRaw()
+    {
+        Assert.Contains("RAW:FANUC=\"G83 Z-40. R-5. F0.2\"", Body("G83 Z-40. R-5. F0.2\nG80", Lathe()),
+            StringComparison.Ordinal);
     }
 
     // D160: of two entries on one native the reader takes the first in catalog order whose params cover the words of
     // the block, so a lathe G83 with a peck depth Q is PECK and one without it DRILL; the same holds for G87 along X.
     [Theory]
     [InlineData("G83 Z-40. R-5. F0.2",
-        "CYCLE=DRILL AXIS=Z SURFACE=0 CLEARANCE=-5 DEPTH=-40 CYCLE_RETRACT=CLEARANCE CYCLE_F=0.2")]
+        "CYCLE=DRILL AXIS=Z SURFACE=0 CLEARANCE=0 DEPTH=-40 CYCLE_RETRACT=CLEARANCE CYCLE_F=0.2")]
     [InlineData("G83 Z-40. R-5. Q2000 F0.2",
-        "CYCLE=PECK AXIS=Z SURFACE=0 CLEARANCE=-5 DEPTH=-40 CYCLE_RETRACT=CLEARANCE PECK=2000 CYCLE_F=0.2")]
+        "CYCLE=PECK AXIS=Z SURFACE=0 CLEARANCE=0 DEPTH=-40 CYCLE_RETRACT=CLEARANCE PECK=2000 CYCLE_F=0.2")]
     public void LatheDrillingEntry_G83WithAndWithoutQ_IsPeckAndDrill(string source, string cycle)
     {
         Assert.Equal(Lines("RAPID Z=5", cycle, "CYCLE_CALL", "CYCLE=OFF"),
