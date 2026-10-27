@@ -105,7 +105,7 @@ We follow the Microsoft conventions as written. The list below is what a reviewe
 
 - `async`: the Microsoft page recommends `async`/`await` for I/O-bound work. NCXchange is a batch command that reads one file and writes one file; the code is synchronous by decision, and a server front end that wants asynchrony wraps it later (KISS).
 - Nullable reference types are enabled everywhere and warnings are errors; `?` on a type is a statement that null is a valid value, and every such value is handled at the point of use, not by a null check three calls later.
-- Number parsing and formatting always pass `CultureInfo.InvariantCulture`. An implementation that parses with the OS culture reads `X10.5` as ten thousand five hundred on a German-Swiss machine (this has happened); the analyzer rule CA1305 is an error in this repository.
+- Number parsing and formatting always pass `CultureInfo.InvariantCulture`. An implementation that parses with the OS culture reads `X10.5` as ten thousand five hundred on a German-Swiss machine (this has happened); the analyzer rule CA1305 is an error in this repository and checks every project (D108).
 - `sealed` by default on classes that are not designed for inheritance; `internal` by default with `InternalsVisibleTo` for the test projects; `public` only for what plugins and front ends need.
 - `record` for immutable data (blocks, words, values, options, events), `class` for state that changes (`ChannelState` and its parts), `readonly record struct` for small values such as `Vec3`.
 - Pattern matching (`switch` expressions, `is` patterns) is the way to dispatch on value types and events; no Visitor classes.
@@ -203,7 +203,7 @@ Patterns we do not use, on purpose:
 
 ## 9. Repository settings
 
-- `Directory.Build.props` at the root: `<TargetFramework>` the current LTS, `<Nullable>enable</Nullable>`, `<ImplicitUsings>enable</ImplicitUsings>`, `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`, `<AnalysisLevel>latest-recommended</AnalysisLevel>`, `<EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>`, `<InvariantGlobalization>true</InvariantGlobalization>`.
+- `Directory.Build.props` at the root: `<TargetFramework>` the current LTS, `<Nullable>enable</Nullable>`, `<ImplicitUsings>enable</ImplicitUsings>`, `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`, `<AnalysisLevel>latest-recommended</AnalysisLevel>`, `<EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>`, and the item `<RuntimeHostConfigurationOption Include="System.Globalization.Invariant" Value="true" />`, which makes every executable run culture-independent without the `InvariantGlobalization` property, under which the analyzers do not report CA1305 at all (D108).
 - `.editorconfig` copied from `dotnet/docs` as the starting point, with the project's additions: 120-character lines, `dotnet_diagnostic.CA1305.severity = error` (specify `IFormatProvider`), `csharp_style_namespace_declarations = file_scoped:error`.
 - `dotnet format --verify-no-changes` and `dotnet test` run in CI on every push; a formatting difference fails the build.
 - License of the project: MIT (D75). Packages: Tomlyn (TOML), System.CommandLine (CLI), xUnit; each addition gets a line in the decision log with its license.

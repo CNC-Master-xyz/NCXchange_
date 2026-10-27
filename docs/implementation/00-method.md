@@ -23,7 +23,7 @@ Status: 2026-09-11, before any code. How every task of `../plan/tasks/` is worke
 Verified on the development machine: .NET SDK 10.0.400 (also 10.0.301 and 7.0.302 present), git 2.50.1, gh 2.93.0.
 
 - `global.json` pins `10.0.400` with `rollForward: latestPatch` (D72: current LTS, one target framework, `net10.0`).
-- `Directory.Build.props` at the root per code-guidelines 9: `Nullable` enable, `ImplicitUsings` enable, `TreatWarningsAsErrors`, `AnalysisLevel` latest-recommended, `EnforceCodeStyleInBuild`, `InvariantGlobalization`, `LangVersion` latest.
+- `Directory.Build.props` at the root per code-guidelines 9: `Nullable` enable, `ImplicitUsings` enable, `TreatWarningsAsErrors`, `AnalysisLevel` latest-recommended, `EnforceCodeStyleInBuild`, the `System.Globalization.Invariant` runtime option as a `RuntimeHostConfigurationOption` item (not the `InvariantGlobalization` property, which silences CA1305; D108), `LangVersion` latest.
 - `Directory.Packages.props` with central package versions: Tomlyn, System.CommandLine, xunit, xunit.runner.visualstudio, Microsoft.NET.Test.Sdk. Every addition gets a line in the decision log with its license (code-guidelines 9).
 - `.editorconfig` copied from `dotnet/docs` with the three project rules: 120-character lines, `dotnet_diagnostic.CA1305.severity = error`, `csharp_style_namespace_declarations = file_scoped:error`.
 - CI: restore, build, `dotnet format --verify-no-changes`, `dotnet test`, on Ubuntu and Windows (the line-ending handling of the writer must hold on both).

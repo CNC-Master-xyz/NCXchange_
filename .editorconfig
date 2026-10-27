@@ -39,8 +39,9 @@ dotnet_code_quality.ca1802.api_surface = private, internal
 # SYSLIB5001: Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 dotnet_diagnostic.SYSLIB5001.severity = suggestion
 
-# NCXchange: number parsing and formatting always pass CultureInfo.InvariantCulture (code-guidelines 3.4 and 9).
-# TODO(question): the analyzers do not report CA1305 while InvariantGlobalization is true (Directory.Build.props; D108).
+# NCXchange: number parsing and formatting always pass CultureInfo.InvariantCulture (code-guidelines 3.4 and 9). The
+# runtime option System.Globalization.Invariant is set as an item in Directory.Build.props, so the analyzers report it
+# in every project (D108).
 dotnet_diagnostic.CA1305.severity = error
 
 # Miscellaneous style rules
