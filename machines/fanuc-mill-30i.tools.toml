@@ -1,0 +1,27 @@
+# NCX tool table of the generic Fanuc 30i vertical mill (machine-config 1, D10, D265, D376): the tool kind, length and radius per tool,
+# and per measurement point the tip offset, the register radius and the wear. Every number is in the machine's units_default, MM.
+# An example, not a real magazine: tool 5 is the tool of R1-11 (point 1 at the tip, point 2 two millimetres up with an 8 mm register radius).
+# A tool without [[tool.point]] rows is point 1 with tip_offset = 0 and radius = 0 (D376).
+
+[[tool]]
+number = 1
+kind = "ROTARY"
+length = 95.0
+radius = 5.0
+
+[[tool]]
+number = 5
+kind = "ROTARY"
+length = 120.0
+radius = 8.0
+
+[[tool.point]]
+k = 1
+tip_offset = 0.0
+radius = 0.0
+
+[[tool.point]]
+k = 2
+tip_offset = 2.0
+radius = 8.0
+wear = 0.0

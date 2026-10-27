@@ -4,6 +4,7 @@ using Ncx.Cli;
 using Ncx.Cli.Commands;
 using Ncx.Compilers;
 using Ncx.Core.Machine;
+using Ncx.Core.Model;
 using Ncx.Tests.Fixtures;
 
 namespace Ncx.Acceptance.Cli;
@@ -104,13 +105,27 @@ public sealed partial class CompileCommandTests : IDisposable
     [Fact]
     public void Compile_MachineWithoutToolTable_GivesNoToolTable()
     {
+        _project.WriteInWorkingDirectory("machines/mill.toml", TestMachines.ClutchMill);
         string file = _project.WriteInWorkingDirectory("part.ncx", Program);
         var compiler = new RecordingCompiler(Controller.Fanuc);
 
-        RunCompile(file, "fanuc-mill-30i", Registry(compiler));
+        RunCompile(file, "mill", Registry(compiler));
 
         Assert.Null(compiler.Options?.ToolTable);
         Assert.Null(compiler.Options?.ToolTableFile);
+    }
+
+    // D376: the shipped Fanuc mill names its shipped tool table, which the compiler gets with the measured points.
+    [Fact]
+    public void Compile_ShippedFanucMill_GivesItsToolTableWithThePoints()
+    {
+        string file = _project.WriteInWorkingDirectory("part.ncx", Program);
+        var compiler = new RecordingCompiler(Controller.Fanuc);
+
+        int exitCode = RunCompile(file, "fanuc-mill-30i", Registry(compiler));
+
+        Assert.True(exitCode == 0, _error);
+        Assert.Equal(2m, compiler.Options?.ToolTable?.Find(new ToolRef(5))?.FindPoint(2)?.TipOffset);
     }
 
     // D10: a tool table that the machine names and that is not there is no error; the compiler gets its name as the

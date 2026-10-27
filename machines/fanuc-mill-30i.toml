@@ -16,6 +16,7 @@ units_default = "MM"
 default_spindle = "S1"
 default_holder = "H1"
 default_workpiece = "TABLE1"
+tool_table = "fanuc-mill-30i.tools.toml"   # beside this file (D10); two example tools, tool 5 with two measurement points (D376)
 
 [format]
 decimal_separator = "."

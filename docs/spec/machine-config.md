@@ -34,7 +34,15 @@ number = 4                         # the tool number TOOL=4 calls; or name = "DR
 kind = "ROTARY"                    # a key of [tool_change] kind_map (section 3, D52)
 length = 120.5
 radius = 4
+
+[[tool.point]]                     # optional, one per measurement point of the tool (D376)
+k = 2                              # the point, from 1, as TOOL_POINT names it (language 4.4, D372)
+tip_offset = 2                     # a: the axial offset of the point from the tip, not negative
+radius = 8                         # r: the register radius of the point, not negative, 0 by default
+wear = 0                           # what the control adds to r, 0 by default; the virtual machine adds it to the radius it reports (D374)
 ```
+
+Every numeric key of the tool table, `length`, `radius`, `tip_offset` and `wear`, is in the machine's `units_default` (D370, D376). A tool without `[[tool.point]]` rows is point 1 with a = 0 and r = 0. The compiler compares the program's `TIP_OFFSET` and `POINT_RADIUS` of the active point with its row and reports the WARNING CMP032 where either differs by more than one output step of the tool-axis address (10 to the minus `decimals` of that address, section 2); it is silent where the table has no row for that tool and point, and it never corrects a coordinate (D376).
 
 Without the table, or for a tool it does not describe, `{kind}` takes the default kind `ROTARY`, and the compiler writes the warning block of D10 at the head of that program only, after its header: comment lines of the controller, under `comment_charset` (section 2), that name D10, the expected file and the tools without data with the kind written. The block stops nothing, and a machine whose templates need no tool data gets no warning (D265).
 
