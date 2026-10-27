@@ -6,6 +6,8 @@
 # TODO(question): machine-config 6 has no key for the kind of a parameter ("Params with their kinds", phase 2 P2-03); every parameter of this file is a number
 # or an expression (D115).
 
+ncx_schema = 1                     # the version of the machine-configuration schema, not of NCXchange (machine-config 6, D348)
+
 # ---------------------------------------------------------------------------------------------------------------------------------------------------
 # Drilling cycles of a lathe (fanuc 6, controller-mapping 5, AXIS; D59, D160)
 #

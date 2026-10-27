@@ -4,6 +4,8 @@
 # D100: every number under [[axis]], [positions], [dynamics] and the spindle limits is plausible for a machine of this class and not verified on the machine. The reference point is the machine zero, so the L Z0 FMAX M91 and L X0 Y0 FMAX M91 of the sources are the HOME Z and HOME X Y of the Fanuc sources (2.5D_FRAESEN note 4).
 # The tables of lathes, rotary axes and several channels ([diameter], [spindle_mode], [spindle_sync], [workpiece], [sync], [transform]) have nothing to configure on this machine.
 
+ncx_schema = 1                     # the version of the machine-configuration schema, not of NCXchange (machine-config 1, D348)
+
 [machine]
 name = "Generic Heidenhain iTNC 530 vertical mill"
 controller = "heidenhain"

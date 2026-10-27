@@ -4,6 +4,8 @@
 # D100: every number under [[axis]], [positions], [dynamics] and the spindle limits is plausible for a machine of this class and not verified on the machine.
 # The tables of lathes, rotary axes and several channels ([diameter], [spindle_mode], [spindle_sync], [workpiece], [sync], [transform]) have nothing to configure on this machine.
 
+ncx_schema = 1                     # the version of the machine-configuration schema, not of NCXchange (machine-config 1, D348)
+
 [machine]
 name = "Generic 840D sl vertical mill"
 controller = "siemens"

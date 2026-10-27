@@ -3,6 +3,8 @@
 # The point of this file: the two-step ATC of the tool spindle maps exactly onto PRELOAD (the T word) and TOOL (G361), the spindle synchronization codes must be written in both channel programs, the sub spindle moves on a named linear axis A, and turret 2 tools use offsets +30 for spindle 2.
 # D100 data (P2-04): home and limits in machine coordinates, rapid, max_feed and acceleration on every [[axis]], rpm_min, rpm_max and accel_time on every spindle table, the [positions] and [dynamics] tables. The numbers are plausible for a machine of this class and not verified on the machine.
 
+ncx_schema = 1                     # the version of the machine-configuration schema, not of NCXchange (machine-config 1, D348)
+
 [machine]
 name = "Mori Seiki NTX1000 SZM"
 controller = "fanuc"

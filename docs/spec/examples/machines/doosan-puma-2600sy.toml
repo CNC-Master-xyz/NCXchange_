@@ -3,6 +3,8 @@
 # The point of this file: one channel with two work spindles, spindle selection by a P suffix on the M code, and cycle behaviour chosen by mode M codes.
 # D100 data (P2-04): home and limits in machine coordinates, rapid, max_feed and acceleration on every [[axis]], rpm_min, rpm_max and accel_time on every spindle table, the [positions] and [dynamics] tables. The numbers are plausible for a machine of this class and not verified on the machine.
 
+ncx_schema = 1                     # the version of the machine-configuration schema, not of NCXchange (machine-config 1, D348)
+
 [machine]
 name = "Doosan Puma 2600SY"
 controller = "fanuc"

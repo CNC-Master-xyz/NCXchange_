@@ -9,6 +9,8 @@ Everything that differs between two machines lives here and nowhere else. A user
 ## 1. Identity and dialect
 
 ```toml
+ncx_schema = 1                     # optional, the first key: the version of this schema the file is written in (D348)
+
 [machine]
 name = "DMU 50"
 controller = "heidenhain"          # fanuc | heidenhain | siemens
@@ -37,6 +39,8 @@ radius = 4
 ```
 
 Without the table, or for a tool it does not describe, `{kind}` takes the default kind `ROTARY`, and the compiler writes the warning block of D10 at the head of that program only, after its header: comment lines of the controller, under `comment_charset` (section 2), that name D10, the expected file and the tools without data with the kind written. The block stops nothing, and a machine whose templates need no tool data gets no warning (D265).
+
+`ncx_schema` is the format version of the machine-configuration schema, with the meaning `NCX=1` has in language 4.1: not the release of `ncx` and not the content of the file. A machine file and a cycle catalog may carry it as their first key; a file without it is version 1, and a version this build does not read is the ERROR CFG009 that names the file and the version. The number changes only when the schema breaks, so it stays 1 through release 1.0, and the shipped files carry it (D348).
 
 `controller` selects the reader and compiler; `dialect` selects their variant tables. `default_*` resolve NCX words without a role address. `check`, `trace`, `annotate` and `analyze` run without a machine file against a built-in default machine (`ncx-virtual-machine.md`, section 3.8, D103); `convert` and `compile` need one (D77).
 
@@ -233,7 +237,7 @@ start_channel = ""                 # Siemens: "START({channel})"
 wait_channel = ""                  # Siemens: "WAITE({channel})"
 
 [coolant]
-STANDARD = { ON = "M8", OFF = "M9" }
+STANDARD = { ON = "M8", OFF = "M9" }   # required: the channel of a bare COOLANT; a machine file without it is the ERROR CFG004 (D130)
 AIR = { ON = "M14", OFF = "M15" }
 THROUGH = { ON = "M51", OFF = "M9" }
 
@@ -324,6 +328,8 @@ A named function is written as `FUNC:SUB_CHUCK=OPEN` in NCX and compiles to the 
 catalog = "heidenhain-cycles.toml"  # controller family catalog, shipped with NCXchange, user-extendable
 
 # excerpt of a catalog file
+ncx_schema = 1                      # optional, as in the machine file (section 1, D348)
+
 [[cycle]]
 name = "RECT_POCKET"
 native = 251
@@ -455,6 +461,8 @@ my-shop/
     dmu50/part-123.h
     fanuc-vmc/part-123.nc
 ```
+
+Every machine file and catalog file of the layout may begin with `ncx_schema = 1` (section 1, D348); the version is the schema's, so a file copied from another project keeps it.
 
 `ncx.toml` names the plugin assemblies (`plugins = ["MyShop.NcxPlugins.dll"]`) that subscribe to VM events (`ncx-virtual-machine.md`, section 7).
 

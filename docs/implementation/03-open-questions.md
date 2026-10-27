@@ -100,7 +100,7 @@ The tasks of wave 1 (P0-01 to P0-06, P2-01 to P2-04a, P1-01 to P1-03a and P4-01a
 | 90 | P1-02 | Does a switch list of skip_blocks also skip a bare SKIP? | settled 2026-10-01 (D133) | `src/Ncx.Core/VirtualMachine/SkipBlocks.cs:59` |
 | 91 | P1-02 | Which machine-config key holds the arc tolerance of D36? | D139 | `src/Ncx.Core/VirtualMachine/VmOptions.cs:52` |
 | 92 | P1-02 | Type, id and axis name of a resource D103 creates on the spot | D170 | `src/Ncx.Core/VirtualMachine/ResourceResolver.cs:58`, `:415` |
-| 93 | P1-02 | Is a coolant channel the machine file does not name an ERROR? | D130 | `src/Ncx.Core/VirtualMachine/ResourceResolver.cs:205` |
+| 93 | P1-02 | Is a coolant channel the machine file does not name an ERROR? | settled 2026-10-27 (D130) | `src/Ncx.Core/VirtualMachine/ResourceResolver.cs:205` |
 | 94 | P1-02 | Which verbs does the C= check of VM 3.8 rule 4 cover? | settled 2026-10-01 (D131) | `src/Ncx.Core/VirtualMachine/ResourceResolver.cs:333` |
 | 95 | P1-02 | SHIFT=RESET removes "the shifts", VM 2.1 cuts at the last entry of the kind: which? | answered by VM 2.1, the chain paragraph of language 4.2 ("a RESET of a kind removes that entry and everything after it"), D31 and P1-02; main matches; code: the marker becomes a comment. Document fix: the SHIFT=RESET row of language 4.2 and the SHIFT description in `src/Ncx.Core/Catalog/FrameWords.cs` (rank 90 of `generated/word-catalog.md`) say the last shift and what follows it; the catalog description applied 2026-09-14, the marker in FrameRules.cs is left to the residual review RR-P1-03 and the language 4.2 row to the maintainer | `src/Ncx.Core/VirtualMachine/FrameRules.cs:53` |
 | 96 | P1-02 | What does ORIGIN do to the position? | D123 | `src/Ncx.Core/VirtualMachine/FrameRules.cs:71` |
@@ -431,7 +431,7 @@ The twelve requests of opencam, the first client of NCXchange, for its release 1
 | # | Task | Question | Disposition | Code location |
 |---|---|---|---|---|
 | 197 | P7-03 Release 1.0 | What does `ncx --version` print, and where does the number come from? | D347 (open) | R1-01 |
-| 198 | P7-03 Release 1.0 (the files it touches belong to P2-01 and P2-03, both in `done/`) | Does a machine file or a cycle catalog carry a schema version, and what happens to a version this build does not read? | D348 (open) | R1-01 |
+| 198 | P7-03 Release 1.0 (the files it touches belong to P2-01 and P2-03, both in `done/`) | Does a machine file or a cycle catalog carry a schema version, and what happens to a version this build does not read? | settled 2026-10-27 (D348) | R1-01 |
 | 199 | P0-03 Word catalog | Is there an NCX word for exact stop and continuous path, and what are its values, its rank and its machine templates? | D349 (open) | R1-02 |
 | 200 | P4-02 Analytics: tool list, runtime estimate | Is `[dynamics] path_mode` the start value of the programmed mode, and which of the two does the runtime estimate read? | D350 (open) | R1-02 |
 | 201 | P0-03 (word catalog), with P2-01, P2-02 and P2-04 for the `[stock]` key and P3-04, P3-06 and P5-02 for the writing | Which word carries the blank, in which forms, by which coordinate words, and what does a control without a blank form do? | D351 (open) | R1-03 |

@@ -26,6 +26,9 @@ public sealed class MachineConfigLoaderTemplateTests
 
             [tool_change]
             change = "T{tool M6"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """, diagnostics);
 
         Diagnostic error = Assert.Single(diagnostics.Items);
@@ -80,6 +83,9 @@ public sealed class MachineConfigLoaderTemplateTests
             [system_variables]
             SYS_WEAR_Z = "#11{index:03}"
             SYS_POS_X = "#{-}"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         var lines = new List<int>();
@@ -115,6 +121,9 @@ public sealed class MachineConfigLoaderTemplateTests
 
             [spindle.SUB]
             RPM = "S{rpm"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Diagnostic error = Assert.Single(diagnostics.Items);
@@ -133,6 +142,9 @@ public sealed class MachineConfigLoaderTemplateTests
 
             [func]
             PALLET_CHANGE = { RUN = "M60", pre = ["VAR:Q1={$Q1 + 1}", "RAPID {position:tool_change} FRAME=MACHINE"] }
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.Equal("", diagnostics.ToText());
@@ -152,6 +164,9 @@ public sealed class MachineConfigLoaderTemplateTests
             [tool_change]
             change = "G340 T{tool:02}{offset:02}. A{next:02}."
             unload = "G00 T{tool:02}00"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """, diagnostics);
 
         Assert.Equal("", diagnostics.ToText());

@@ -29,6 +29,8 @@
 # TODO(question): siemens 7 ends most signatures with "..."; the signatures below stop where siemens 7 stops. The full sl signatures that siemens 12.5 writes
 # "from the catalog" are not in the documents (D181).
 
+ncx_schema = 1                     # the version of the machine-configuration schema, not of NCXchange (machine-config 6, D348)
+
 # ---------------------------------------------------------------------------------------------------------------------------------------------------
 # Drilling family (controller-mapping 5: DRILL CYCLE81, DRILL_DWELL CYCLE82, PECK and CHIP_BREAK CYCLE83, TAP CYCLE84, REAM CYCLE85, BORE CYCLE86)
 

@@ -45,4 +45,10 @@ public static partial class DiagnosticCodes
     /// prefix cannot state the width of (machine-config 7, D173).
     /// </summary>
     public const string VariableMapWithoutIndex = "CFG008";
+
+    /// <summary>
+    /// ERROR: a machine file or a cycle catalog declares an ncx_schema version this build does not read, ncx_schema
+    /// = 2; the message names the file and the version (machine-config 1, D348).
+    /// </summary>
+    public const string UnsupportedSchema = "CFG009";
 }

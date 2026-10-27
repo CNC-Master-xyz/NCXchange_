@@ -147,6 +147,9 @@ public sealed class TemplateSetTests
 
         [tolerance]
         ON = "CYCL DEF 32.0 TOLERANZ\nCYCL DEF 32.1 T{tol}"
+
+        [coolant]
+        STANDARD = { ON = "M8", OFF = "M9" }
         """;
 
     // The same retract on a Heidenhain machine whose file has no [format].
@@ -157,6 +160,9 @@ public sealed class TemplateSetTests
 
         [retract]
         BY = "M140 MB{distance}"
+
+        [coolant]
+        STANDARD = { ON = "M8", OFF = "M9" }
         """;
 
     // The same retract on a Heidenhain machine whose [format] writes the point.
@@ -170,6 +176,9 @@ public sealed class TemplateSetTests
 
         [retract]
         BY = "M140 MB{distance}"
+
+        [coolant]
+        STANDARD = { ON = "M8", OFF = "M9" }
         """;
 
     // A Siemens machine with the tolerance call of the Siemens files, whose arguments the comma separates.
@@ -180,6 +189,9 @@ public sealed class TemplateSetTests
 
         [tolerance]
         ON = "CYCLE832({tol},{mode},{rotary})"
+
+        [coolant]
+        STANDARD = { ON = "M8", OFF = "M9" }
         """;
 
     // A Fanuc machine whose file has no [format].
@@ -190,6 +202,9 @@ public sealed class TemplateSetTests
 
         [retract]
         BY = "M140 MB{distance}"
+
+        [coolant]
+        STANDARD = { ON = "M8", OFF = "M9" }
         """;
 
     // A Fanuc machine whose [format] writes the comma, as no example file does.
@@ -203,6 +218,9 @@ public sealed class TemplateSetTests
 
         [spindle.MAIN]
         VC = "G96 S{value}"
+
+        [coolant]
+        STANDARD = { ON = "M8", OFF = "M9" }
         """;
 
     // Every template text of EveryTable, each once: M9 stands in two coolant channels and is one template, and
@@ -421,6 +439,9 @@ public sealed class TemplateSetTests
 
             [func]
             LAMP = { ON = "", OFF = "M9" }
+
+            [coolant]
+            STANDARD = { ON = "M51", OFF = "M50" }
             """;
 
         Assert.Null(Templates(EmptyState).FindFunctionByCode(code));
