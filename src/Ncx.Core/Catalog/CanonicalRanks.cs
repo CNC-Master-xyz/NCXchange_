@@ -46,12 +46,10 @@ internal static class CanonicalRanks
     public const int Ny = 280;
     public const int Nz = 290;
 
-    // Bucket 5: CENTER:X, CENTER:Y, CENTER:Z, then the incremental forms.
-    // TODO(question): D90 sorts the words of one key by the address text, which would put CENTER:IX before CENTER:X,
-    // and lists bucket 5 as CENTER:X, CENTER:Y, CENTER:Z, then the incremental forms; the catalog follows the list of
-    // bucket 5. Under POLAR and CYLINDER the plane of ARC is the X word or the cylinder axis with the C word, and
-    // CENTER keeps its meaning there (virtual machine 3.1, 3.2, D102), so CENTER:C and CENTER:IC are plane axis
-    // addresses that D90 does not list; the catalog ranks C after Z and IC after IZ, as bucket 3 puts C after Z (D143).
+    // Bucket 5: CENTER:X, CENTER:Y, CENTER:Z, CENTER:C, then the incremental forms in the same order. Under POLAR and
+    // CYLINDER the C word is a plane axis of ARC and CENTER keeps its meaning (virtual machine 3.1, 3.2, D102), so
+    // CENTER:C ranks after CENTER:Z and CENTER:IC after CENTER:IZ; the address-text sort applies only to addresses
+    // without a rank of their own (D143; language 5 rule 6).
     public const int CenterX = 300;
     public const int CenterY = 310;
     public const int CenterZ = 320;

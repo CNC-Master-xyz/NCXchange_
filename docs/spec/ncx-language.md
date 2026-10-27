@@ -347,7 +347,7 @@ A machine may need more than the program says: a spindle that has to stop before
    2. The verb.
    3. Axis words: `X Y Z A B C`, then machine axes in alphabetical order (by letter, then by number: `C2`, `W`, `Z2`); all absolute words in that order, then all incremental words in the same order.
    4. `TX TY TZ`, `NX NY NZ`.
-   5. `CENTER:X`, `CENTER:Y`, `CENTER:Z`, then the incremental forms.
+   5. `CENTER:X`, `CENTER:Y`, `CENTER:Z`, `CENTER:C`, then the incremental forms in the same order (D143).
    6. `R` or `ANGLE`.
    7. `F`.
    8. `FEED_MODE`.
@@ -362,7 +362,7 @@ A machine may need more than the program says: a spindle that has to stop before
    17. `COMMENT` or `SECTION`, then `MESSAGE`.
    18. The pseudo-words of generated blocks: `@SAVE`, then `@RESTORE` (ranks 1140 and 1150 of the catalog; D167, D388). Pseudo-words stand in blocks of their own, so the bucket orders nothing in practice; it gives every word a rank.
 
-   Words of one key with several addresses sort by the address text (`COOLANT:AIR` before `COOLANT:THROUGH`, `VAR:Q1` before `VAR:Q3`).
+   Words of one key with several addresses sort by the address text (`COOLANT:AIR` before `COOLANT:THROUGH`, `VAR:Q1` before `VAR:Q3`); the sort applies only to addresses without a rank of their own, so `CENTER:X` stays before `CENTER:IX` (D143).
 7. Canonical layout of a block: the words, then, when the block has a comment, spaces up to column 57 so that the semicolon stands in column 57, or three spaces when the words reach column 54 or later, then the comment. Blank lines and comment-only lines are kept as read (D92). A column is one Unicode code point of the line, the first is column 1; the writer counts the words in code points, and the lexer gives the columns of its PAR messages the same way (D166).
 
 ## 6. Examples
