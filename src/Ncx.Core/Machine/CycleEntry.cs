@@ -81,6 +81,21 @@ public sealed record CycleEntry
     public string? DwellNative { get; init; }
 
     /// <summary>
+    /// channel: the channel whose compilation the [[cycle]] table of a machine file overrides the entry for, as the
+    /// channel key of a function table does (machine-config 5, D56); the table of the compiled channel is taken first,
+    /// then the one without the key (D361). Null on the entry for every channel and in a catalog file, which ignores
+    /// the key with CFG157 (D377).
+    /// </summary>
+    public int? Channel { get; init; }
+
+    /// <summary>
+    /// available: false where the machine cannot run the cycle on the channel compiled, or on the whole machine
+    /// without channel; the compiler reports CMP004 and writes nothing for it, no before line and no substitute
+    /// (D377). True by default.
+    /// </summary>
+    public bool Available { get; init; } = true;
+
+    /// <summary>
     /// fixed: native parameters the entry always writes with this value, which tell two entries of one native cycle
     /// apart, VARI = 1 for PECK on CYCLE83 (machine-config 6, controller-mapping 5).
     /// </summary>
@@ -293,6 +308,7 @@ public sealed record CycleEntry
             Title = entry.Writes("title") ? entry.Title : Title,
             Before = entry.Writes("before") ? entry.Before : Before,
             DwellNative = entry.Writes("dwell_native") ? entry.DwellNative : DwellNative,
+            Available = entry.Writes("available") ? entry.Available : Available,
             Rule = OverriddenRule(entry),
             Family = Family ?? entry.Family,
             WrittenKeys = writtenKeys,

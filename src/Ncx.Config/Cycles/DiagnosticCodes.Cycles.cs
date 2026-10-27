@@ -55,6 +55,12 @@ public static partial class DiagnosticCodes
     public const string CycleDefaultBesideMachineKey = "CFG156";
 
     /// <summary>
+    /// WARNING: a catalog file writes channel or available, keys of the [[cycle]] tables of a machine file; the
+    /// loader ignores them (D361, D377).
+    /// </summary>
+    public const string CycleMachineKeyInCatalog = "CFG157";
+
+    /// <summary>
     /// ERROR: the catalog of a Heidenhain machine writes Q256, the chip-break lift the control holds, and the machine
     /// sets no [cycles] chip_break_lift, its one source; the loader does not guess a lift (D164, D358).
     /// </summary>

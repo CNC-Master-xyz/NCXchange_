@@ -23,6 +23,12 @@ public sealed record CycleCatalog
     public IReadOnlyList<CycleEntry> Entries { get; init; } = [];
 
     /// <summary>
+    /// The [[cycle]] tables of the machine file that name a channel, in file order, kept apart from Entries until
+    /// ForChannel applies those of the channel compiled (machine-config 6, D361).
+    /// </summary>
+    public IReadOnlyList<CycleEntry> ChannelEntries { get; init; } = [];
+
+    /// <summary>
     /// The entry of an NCX cycle name, CYCLE=RECT_POCKET (language 4.7.1); null when the catalog has none, which the
     /// caller reports.
     /// </summary>
@@ -185,8 +191,16 @@ public sealed record CycleCatalog
         // The catalog file of the family overrides the built-in drilling family, the [[cycle]] entries of a machine
         // file override the catalog per machine (machine-config 6).
         var overridden = new List<CycleEntry>(Entries);
+        var channelEntries = new List<CycleEntry>(ChannelEntries);
         foreach (CycleEntry entry in entries)
         {
+            if (entry.Channel is not null)
+            {
+                // D361: a table of one channel waits for ForChannel; the channel-less table is the fallback.
+                channelEntries.Add(entry with { Family = entry.Family ?? Controller });
+                continue;
+            }
+
             int index = IndexOfName(overridden, entry.Name, entry.ForAxis);
             if (index < 0)
             {
@@ -200,7 +214,26 @@ public sealed record CycleCatalog
             }
         }
 
-        return new CycleCatalog { Controller = Controller, Entries = overridden };
+        return new CycleCatalog { Controller = Controller, Entries = overridden, ChannelEntries = channelEntries };
+    }
+
+    /// <summary>
+    /// The catalog a channel compiles with: the [[cycle]] tables of the machine file that name this channel over the
+    /// entries, the table of the compiled channel first, then the channel-less one (machine-config 6, D361, D377).
+    /// </summary>
+    /// <param name="channel">The channel compiled, 1 for a single-channel machine.</param>
+    public CycleCatalog ForChannel(int channel)
+    {
+        var ofChannel = new List<CycleEntry>();
+        foreach (CycleEntry entry in ChannelEntries)
+        {
+            if (entry.Channel == channel)
+            {
+                ofChannel.Add(entry with { Channel = null });
+            }
+        }
+
+        return (this with { ChannelEntries = [] }).Override(ofChannel);
     }
 
     /// <summary>

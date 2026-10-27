@@ -241,7 +241,6 @@ MAIN_CHUCK = { CLOSE = "M10", OPEN = "M11" }
 SUB_CHUCK = { CLOSE = "M210", OPEN = "M211" }
 TAILSTOCK = { FORWARD = "M13", BACK = "M14" }
 THREAD_CHAMFER = { ON = "M23", OFF = "M24" }
-SYNC_TAP = { ON = "M329" }
 RADIUS_MODE = { ON = "M582", OFF = "M583" }
 B_CONTOUR = { ON = "M594", OFF = "M595" }
 CUTOFF_DETECT = { RUN = "M80" }
@@ -268,5 +267,18 @@ TILT_OFF = "G69"
 
 [cycles]
 catalog = "fanuc-lathe.toml"       # the Fanuc lathe catalog: drilling along Z and along X by for_axis, turning cycles in system A numbers (machine-config 6, D160, D174)
+
+# The builder's rigid-tapping line is machine data: Mori Seiki switches synchronized tapping with M329, so the TAP entry of the catalog takes it as its
+# "before" line in place of the Fanuc M29, and SYNC_TAP is no [func] table, as RIGID_TAP in fanuc-mill-30i.toml (machine-config 6, D256, D361).
+[[cycle]]
+name = "TAP"
+native = "G84"
+before = "M329 S{rpm}"
+
+[[cycle]]
+name = "TAP"
+for_axis = "X"
+native = "G88"
+before = "M329 S{rpm}"
 [raw]
 known = ["G38", "G362", "G330", "G320", "G325", "G334", "G335", "G336", "G337", "G338", "G339", "G343", "G460", "G461", "G462", "G463", "G464", "G478"]   # push check, tool change via 4th zero point, tool life management, probing, steady rest sync

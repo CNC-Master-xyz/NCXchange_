@@ -54,7 +54,8 @@ public static partial class CycleCatalogLoader
 
         // The catalog file of a controller family overrides the built-in drilling family of that family entry by
         // entry and adds the catalog cycles (machine-config 6, language 4.7.1).
-        IReadOnlyList<CycleEntry> entries = ReadEntries(root.Tables("cycle", "[[cycle]]"), controller);
+        IReadOnlyList<CycleEntry> entries =
+            ReadEntries(root.Tables("cycle", "[[cycle]]"), controller, catalogFile: true);
         CycleCatalog catalog = DrillingFamily.Catalog(controller).Override(entries);
         return TomlDocument.ErrorCount(diagnostics) > errorsBefore ? null : catalog;
     }

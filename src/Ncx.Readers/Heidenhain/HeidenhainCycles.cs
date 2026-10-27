@@ -614,8 +614,9 @@ internal static partial class HeidenhainCycles
     // D115: a native parameter takes a number or an expression (language 4.7.1, D94), and the control literals
     // (FMAX, FAUTO, FU, FZ, PREDEF, MAX) are allowed only in a catalog's native `defaults` text (D164), so a Q
     // parameter whose value is such a literal has no NCX value and the whole definition is kept as RAW (D5;
-    // heidenhain 7 rule 9); no number is invented for it. The mixed cycle 203 that D163 sends here then does not reach CYCLE:HEIDENHAIN=203:
-    // the Q208=MAX of docs/spec/examples/sources/BOHREN.h keeps its definition and five calls RAW.
+    // heidenhain 7 rule 9); no number is invented for it. The mixed cycle 203 that D163 sends here then does not
+    // reach CYCLE:HEIDENHAIN=203: the Q208=MAX of docs/spec/examples/sources/BOHREN.h keeps its definition and five
+    // calls RAW.
     private static HeidenhainDefinition Native(HeidenhainBlock block, string native, List<SourceWord> parameters)
     {
         var words = new List<Word>
