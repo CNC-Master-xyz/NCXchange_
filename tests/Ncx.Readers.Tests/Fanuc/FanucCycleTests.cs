@@ -187,23 +187,23 @@ public sealed class FanucCycleTests
     // D256: an S command between M29 and G84 is alarm PS0203 (B-64484EN-2 p.104), so the line does not reach the
     // G84, which keeps the reading of a G84 without its line.
     [Fact]
-    public void RigidTapLine_WithAnSWordBetween_DoesNotReachTheCycle()
+    public void RigidTapLine_WithAnSWordBetween_IsAlarmPs0203AndStaysRaw()
     {
         NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\nS600\nG84 G99 Z-20. R5. F750\nG80\n"
             + "M30\n%\n");
-        Assert.Contains("CYCLE=TAP_COMPENSATING SURFACE=0 CLEARANCE=5 DEPTH=-20", NcxWriter.Write(program),
-            StringComparison.Ordinal);
+        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("PS0203", program.Diagnostics.ToText(), StringComparison.Ordinal);
     }
 
     // D256: an axis movement between M29 and G84 is alarm PS0203 (B-64484EN-2 p.104), so the line does not reach the
     // G84, which keeps the reading of a G84 without its line.
     [Fact]
-    public void RigidTapLine_WithAnAxisMovementBetween_DoesNotReachTheCycle()
+    public void RigidTapLine_WithAnAxisMovementBetween_IsAlarmPs0203AndStaysRaw()
     {
         NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\nX5.\nG84 G99 Z-20. R5. F750\nG80\n"
             + "M30\n%\n");
-        Assert.Contains("CYCLE=TAP_COMPENSATING SURFACE=0 CLEARANCE=5 DEPTH=-20", NcxWriter.Write(program),
-            StringComparison.Ordinal);
+        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("PS0203", program.Diagnostics.ToText(), StringComparison.Ordinal);
     }
 
     // D256: a call between M29 and G84 runs blocks the reader does not see at that place, so it can tell neither that
@@ -232,6 +232,21 @@ public sealed class FanucCycleTests
         string text = NcxWriter.Write(program);
         Assert.Contains("CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20", text, StringComparison.Ordinal);
         Assert.Contains("CYCLE=TAP_COMPENSATING SURFACE=0 CLEARANCE=5 DEPTH=-25", text, StringComparison.Ordinal);
+    }
+
+    // D256, D359: a motion block between M29 and G84, G0 X20. or G1 X12. F100, is alarm PS0203 (B-64484EN-2 p.104,
+    // p.108), not a G84 without its line, so the cycle stays RAW with that reason.
+    [Theory]
+    [InlineData("G0 X20.")]
+    [InlineData("G1 X12. F100")]
+    public void RigidTapLine_WithAMotionBlockBetween_IsAlarmPs0203AndStaysRaw(string motion)
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\n" + motion
+            + "\nG84 G99 Z-20. R5. F750\nG80\nM30\n%\n");
+        string text = NcxWriter.Write(program);
+        Assert.DoesNotContain("CYCLE=TAP", text, StringComparison.Ordinal);
+        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", text, StringComparison.Ordinal);
+        Assert.Contains("PS0203", program.Diagnostics.ToText(), StringComparison.Ordinal);
     }
 
     // D256: G80 or a group-01 code between M29 and G84 cancels the mode the line set (0i-D Connection Manual

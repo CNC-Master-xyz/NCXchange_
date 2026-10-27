@@ -103,6 +103,13 @@ internal sealed class FanucState
     public Dictionary<int, string> BeforeLineSpindle { get; } = [];
 
     /// <summary>
+    /// The line of the "before" line further back than an S or axis block between it and the cycle block, by the line
+    /// of that cycle block: the control raises PS0203 there (B-64484EN-2 p.104, p.108), so the blocks stay RAW. Each is
+    /// in BeforeLineUnseen as well.
+    /// </summary>
+    public Dictionary<int, int> BeforeLineAlarm { get; } = [];
+
+    /// <summary>
     /// The lines of the cycle blocks that one path of the flow reaches with the "before" line and another without
     /// it, so that the blocks stay RAW (D360; FanucBeforeLineWalk). Each is in BeforeLineUnseen as well.
     /// </summary>

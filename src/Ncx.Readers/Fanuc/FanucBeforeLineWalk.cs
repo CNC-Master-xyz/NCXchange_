@@ -86,6 +86,7 @@ internal sealed class FanucBeforeLineWalk
 
         string? spindle = null;
         bool lineBehindTheSpindle = false;
+        int? stop = null;
         for (int index = cycleIndex - 1; index >= 0; index--)
         {
             SourceBlock block = blocks[index];
@@ -139,6 +140,7 @@ internal sealed class FanucBeforeLineWalk
 
             if (CancelsTheMode(block))
             {
+                stop = MovesOrSetsTheSpeed(block) ? index : null;
                 break;
             }
 
@@ -146,10 +148,21 @@ internal sealed class FanucBeforeLineWalk
             lineBehindTheSpindle |= spindle is not null && CarriesTheCodesOf(block, before);
             if (MovesOrSetsTheSpeed(block))
             {
+                stop = CarriesTheCodesOf(block, before) ? null : index;
                 break;
             }
 
             spindle ??= SpindleCodeOf(block);
+        }
+
+        // D256, D359: a line further back than the S or axis block that stopped the walk is no G84 without the line:
+        // the control raises PS0203 for an S command or an axis movement between M29 and G84 (B-64484EN-2 p.104,
+        // p.108), so the blocks stay RAW with that reason instead of reading TAP_COMPENSATING.
+        if (stop is int stopIndex && LineBeyond(stopIndex, before, catalogEntry?.Native) is int alarmLine)
+        {
+            _fanuc.BeforeLineUnseen.Add(cycle.Line);
+            _fanuc.BeforeLineAlarm[cycle.Line] = alarmLine;
+            lines.Clear();
         }
 
         // D385: a line further back than a spindle code reaches the G84 only past that code.
@@ -164,6 +177,40 @@ internal sealed class FanucBeforeLineWalk
         {
             _fanuc.CycleBefore[line] = entry;
         }
+    }
+
+    // The line of a block before the stop of the walk that carries the codes of the before line with nothing between
+    // them that ends the mode it switches on (G80, a canned-cycle code, M2, M30, the entry's own native) or hides what
+    // runs; null for none.
+    private int? LineBeyond(int stopIndex, string before, string? native)
+    {
+        IReadOnlyList<SourceBlock> blocks = _fanuc.Blocks;
+        for (int index = stopIndex - 1; index >= 0; index--)
+        {
+            SourceBlock block = blocks[index];
+            if (block.Find("O") is not null || HidesWhatRunsBefore(block)
+                || (native is not null && HasNativeCode(block, native)))
+            {
+                return null;
+            }
+
+            if (CarriesTheCodesOf(block, before))
+            {
+                return block.Line;
+            }
+
+            if (CancelsTheMode(block) && !HasGroupOneMotion(block))
+            {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool HasGroupOneMotion(SourceBlock block)
+    {
+        return HasCode(block, "G0") || HasCode(block, "G1") || HasCode(block, "G2") || HasCode(block, "G3");
     }
 
     // D360: a cycle block whose before line the reader cannot see directly, because a jump enters the cycle block or
@@ -280,9 +327,12 @@ internal sealed class FanucBeforeLineWalk
                 return;
             }
 
-            if (CancelsTheMode(block))
+            if (CancelsTheMode(block) || (!CarriesTheCodesOf(block, paths.Before) && MovesOrSetsTheSpeed(block)))
             {
-                paths.Without = true;
+                // A line beyond an S or axis block is alarm PS0203 on this path, which the reader keeps RAW.
+                bool alarm = MovesOrSetsTheSpeed(block) && LineBeyond(index, paths.Before, paths.Native) is not null;
+                paths.Unseen |= alarm;
+                paths.Without |= !alarm;
                 return;
             }
 
@@ -291,12 +341,6 @@ internal sealed class FanucBeforeLineWalk
                 paths.Lines.Add(block.Line);
                 paths.InForce |= !spindle;
                 paths.Unseen |= spindle;
-                return;
-            }
-
-            if (MovesOrSetsTheSpeed(block))
-            {
-                paths.Without = true;
                 return;
             }
 

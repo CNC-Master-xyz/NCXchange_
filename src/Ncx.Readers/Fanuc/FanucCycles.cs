@@ -762,6 +762,14 @@ internal static class FanucCycles
                 + "not read into the cycle (machine-config 6, D256, D5); its blocks stay RAW";
         }
 
+        if (block.Fanuc.BeforeLineAlarm.TryGetValue(block.Line, out int alarm))
+        {
+            // D256, D359: an S command or an axis movement between M29 and G84 is alarm PS0203.
+            return $"the line \"{entry.Before}\" of the cycle {entry.Name} on line {alarm} is followed by an S "
+                + $"command or an axis movement before {entry.Native}, which the control rejects with alarm PS0203 "
+                + "(B-64484EN-2 p.104, p.108; machine-config 6, D256); its blocks stay RAW";
+        }
+
         if (block.Fanuc.BeforeLineNotOnEveryPath.Contains(block.Line))
         {
             // D360: one path reaches the cycle block without the line.
@@ -789,7 +797,7 @@ internal static class FanucCycles
     {
         FanucState fanuc = block.Fanuc;
         return SeesWhatRunsBefore(block) && !fanuc.BeforeLineWithACancel.Contains(block.Line)
-            && !fanuc.BeforeLineSpindle.ContainsKey(block.Line)
+            && !fanuc.BeforeLineSpindle.ContainsKey(block.Line) && !fanuc.BeforeLineAlarm.ContainsKey(block.Line)
             && !(fanuc.BeforeLinesOf.TryGetValue(block.Line, out List<int>? lines)
                 && lines.Exists(fanuc.BeforeLineRaw.Contains));
     }
