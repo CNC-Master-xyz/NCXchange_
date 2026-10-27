@@ -65,4 +65,11 @@ public static partial class DiagnosticCodes
     /// path (D354; machine-config 2).
     /// </summary>
     public const string FanucHelixFeedNotScaled = "RDR110";
+
+    /// <summary>
+    /// RDR108, a WARNING: a position variable, #5021.. or #5041.., is mapped 1:1 onto $SYS_MPOS_ or $SYS_POS_ of an
+    /// axis programmed in diameters or switchable, while whether the control gives a diameter or a radius there is not
+    /// measured yet (D240; language 4.12).
+    /// </summary>
+    public const string FanucPositionOfADiameterAxis = "RDR108";
 }

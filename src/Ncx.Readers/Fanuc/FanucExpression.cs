@@ -1,6 +1,7 @@
 using System.Text;
 using Ncx.Config.Templates;
 using Ncx.Core.Expressions;
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 
 namespace Ncx.Readers.Fanuc;
@@ -170,6 +171,7 @@ internal sealed class FanucExpression
             if (_block.Templates.For(entry.Value) is Template template
                 && template.Matches(native, out TemplateValues values))
             {
+                WarnOfADiameterPosition(entry.Key, native);
                 return values.TryGetNumber("index", out decimal index)
                     ? "$" + entry.Key + "[" + FanucNumbers.Of(index).ToCanonical() + "]"
                     : "$" + entry.Key;
@@ -178,6 +180,23 @@ internal sealed class FanucExpression
 
         _problem = $"{native} is a system variable the machine does not map in [system_variables] (language 4.12, D51)";
         return null;
+    }
+
+    // D240: the position variables #5021 and #5041 map 1:1 onto $SYS_MPOS_X and $SYS_POS_X, which read a diameter
+    // under DIAMETER=ON (D216); whether the control gives a diameter or a radius there is not measured yet, so the
+    // reader warns, RDR108, where it maps one on an axis programmed in diameters or switchable.
+    private void WarnOfADiameterPosition(string name, string native)
+    {
+        string? axis = name.StartsWith("SYS_POS_", StringComparison.Ordinal) ? name["SYS_POS_".Length..]
+            : name.StartsWith("SYS_MPOS_", StringComparison.Ordinal) ? name["SYS_MPOS_".Length..]
+            : null;
+        if (axis is not null
+            && _block.Machine.ResolveAxis(axis)?.Programming is Programming.Diameter or Programming.Switchable)
+        {
+            _block.Diagnostics.Warning(_block.Line, DiagnosticCodes.FanucPositionOfADiameterAxis,
+                $"{native} is read 1:1 as ${name}, a diameter of the {axis} axis programmed in diameters; whether the "
+                + "control gives the diameter or the radius there is not measured yet (D240, D216).");
+        }
     }
 
     // A number with a leading or a trailing dot, 1. and .5, in the form of language 3.
