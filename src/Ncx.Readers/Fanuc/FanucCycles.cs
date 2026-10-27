@@ -41,6 +41,9 @@ internal static class FanucCycles
 
     private static readonly string[] s_motion = ["G0", "G1", "G2", "G3"];
 
+    // D177: the mill drilling codes whose format has no dwell P (B-64484EN-2 p.56, 61-84).
+    private static readonly string[] s_millWithoutDwell = ["G73", "G81", "G83", "G85", "G86"];
+
     // The word of the thread lead F of a simple turning cycle (D175).
     private const string PitchWord = "PITCH";
     private static readonly IntegerValue s_zero = new(0, "0");
@@ -328,10 +331,8 @@ internal static class FanucCycles
     // once at the current position; language 4.7). A modal cycle still active is written again before its next call,
     // since the one-shot CYCLE replaced it in NCX (language 4.7); where the tool stands afterwards the reader does not
     // follow.
-    // TODO(question): a one-shot entry runs once where it stands (machine-config 6), while the virtual machine keeps a
-    // CYCLE until CYCLE=OFF, the next CYCLE, TOOL (with a WARNING) or PROGRAM=END (virtual machine 2.6, 4); the
-    // documents do not say whether a reader closes a one-shot cycle with CYCLE=OFF, so it writes none, as the direct
-    // Siemens call of controller-mapping 5 reads, until D224 is answered.
+    // D224: a one-shot entry runs once where it stands (machine-config 6), while the virtual machine keeps a CYCLE
+    // until CYCLE=OFF, so the reader closes it with CYCLE=OFF after its call.
     private static void ReadContourCycle(FanucBlock block, CycleEntry entry, string contour)
     {
         block.Take(entry.Contour[0]);
@@ -353,7 +354,11 @@ internal static class FanucCycles
         }
 
         block.Draft.After.Add(new DraftBlock().WithVerb("CYCLE_CALL"));
-        block.Fanuc.Record("CYCLE", entry.Name);
+
+        // D224: the reader writes CYCLE=OFF directly after the CYCLE_CALL of a one-shot entry, and a compiler writes
+        // nothing for it.
+        block.Draft.After.Add(new DraftBlock().Add("CYCLE", new IdentValue("OFF")));
+        block.Fanuc.Record("CYCLE", "OFF");
         if (block.Fanuc.Cycle is FanucCycle active)
         {
             active.Written = null;
@@ -621,9 +626,18 @@ internal static class FanucCycles
         }
 
         string axis = block.IsLathe ? (code is "G87" or "G88" or "G89" ? "X" : "Z") : ToolAxis(block);
+        if (!block.IsLathe && axis != "Z")
+        {
+            // D157: outside G17 the drilling axis of the control depends on parameter 5101#0 FXY.
+            block.Draft.Warnings.Add((DiagnosticCodes.FanucDrillingAxisByParameter,
+                $"{code} outside G17 drills along {axis}, the axis the reader derives from the plane; the control "
+                + "drills along Z where parameter 5101#0 FXY is 0 and by the plane where it is 1 (controller-mapping "
+                + "5, AXIS; D157)."));
+        }
+
         CycleEntry? matched = block.IsLathe
             ? LatheEntry(block, catalog, code, axis, previous)
-            : ModalEntry(catalog, code);
+            : ModalEntry(catalog, code) ?? DwellNativeEntry(catalog, code);
         bool before = matched is not null && !string.IsNullOrEmpty(matched.Before)
             && WithItsBeforeLine(block, matched, code, previous);
         string? problem = matched is null || string.IsNullOrEmpty(matched.Before) || before
@@ -805,6 +819,20 @@ internal static class FanucCycles
         return null;
     }
 
+    // D177: a mill code no entry writes as its own may be the dwell_native of one, G89 of REAM (G85 with a dwell P).
+    private static CycleEntry? DwellNativeEntry(CycleCatalog catalog, string native)
+    {
+        foreach (CycleEntry entry in catalog.Entries)
+        {
+            if (entry.DwellNative == native && entry.Native != native && entry.Modal)
+            {
+                return entry;
+            }
+        }
+
+        return null;
+    }
+
     // On a mill the drilling axis is the tool axis of G17 to G19 (controller-mapping 5, AXIS).
     private static string ToolAxis(FanucBlock block)
     {
@@ -927,10 +955,18 @@ internal static class FanucCycles
             cycle.Peck = FanucMacro.ValueOf(block, peck);
         }
 
+        // D159: P of a cycle is the dwell in units of [machine] dwell_increment, seconds per unit, 0.001 by default.
         SourceWord? dwell = block.Take("P");
-        if (dwell?.Number is decimal milliseconds && dwell.Expression is null)
+        if (dwell is not null && !block.IsLathe && s_millWithoutDwell.Contains(cycle.Code))
         {
-            cycle.Dwell = FanucNumbers.Of(milliseconds / 1000m);
+            // D177: the code takes no dwell, so the control ignores P, and the reader drops it with a WARNING.
+            block.Draft.Warnings.Add((DiagnosticCodes.FanucCycleDwellIgnored,
+                $"P{dwell.Text} of {cycle.Code}: {cycle.Code} takes no dwell P on a machining centre (B-64484EN-2 "
+                + "p.56, 61-84), so the dwell is dropped (controllers fanuc.md 6; D177)."));
+        }
+        else if (dwell?.Number is decimal units && dwell.Expression is null)
+        {
+            cycle.Dwell = FanucNumbers.Of(units * block.Machine.Machine.DwellIncrement);
         }
         else if (dwell is not null)
         {
@@ -1014,12 +1050,17 @@ internal static class FanucCycles
             definition.Add("AXIS", new IdentValue(cycle.Axis));
         }
 
-        // TODO(question): SURFACE is R minus the clearance of the machine file or 0 (controller-mapping 5), and no key
-        // of the machine file carries that clearance (wave-1 question #14); the reader writes SURFACE=0, as language 6
-        // writes the drilling of G81, and none on a cycle along X, whose 0 is the axis of the part.
-        if (cycle.Axis != "X")
+        // D158: SURFACE is R minus [cycles] surface_clearance, SURFACE=0 where the machine file leaves the key out (as
+        // language 6 writes the drilling of G81); none on a cycle along X, whose 0 is the axis of the part, and none
+        // where R is no number the reader knows.
+        decimal? gap = block.Machine.Cycles?.SurfaceClearance;
+        if (cycle.Axis != "X" && gap is null)
         {
             definition.Add("SURFACE", s_zero);
+        }
+        else if (cycle.Axis != "X" && FanucNumbers.NumberOf(cycle.Clearance) is decimal level)
+        {
+            definition.Add("SURFACE", FanucNumbers.Of(level - gap!.Value));
         }
 
         definition.Add("CLEARANCE", cycle.Clearance).Add("DEPTH", cycle.Depth);

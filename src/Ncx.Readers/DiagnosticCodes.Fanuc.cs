@@ -59,4 +59,10 @@ public static partial class DiagnosticCodes
     /// executes the group-01 code and cancels the cycle as G80 does (B-64484EN-2 p.105); the block stays RAW (D386).
     /// </summary>
     public const string FanucGroupOneCancelsTheCycle = "RDR121";
+
+    /// <summary>
+    /// RDR122, a WARNING: a dwell P on a mill drilling code whose format has none, G73, G81, G83, G85 or G86; the
+    /// control ignores it and the reader drops it (B-64484EN-2 p.56, 61-84; D177).
+    /// </summary>
+    public const string FanucCycleDwellIgnored = "RDR122";
 }

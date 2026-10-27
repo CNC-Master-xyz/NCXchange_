@@ -502,6 +502,55 @@ public sealed class FanucCycleTests
             Body("G0 X0 Y0 Z10.\nG85 G99 Z-20. R5. F420\nX15.\nG80"));
     }
 
+    // D177: G89 of a mill is G85 with a dwell P at the bottom, the dwell_native of REAM: CYCLE=REAM with
+    // CYCLE_DWELL, P times dwell_increment (D159).
+    [Fact]
+    public void G89_OfAMill_IsReamWithItsDwell()
+    {
+        Assert.Equal(
+            Lines(
+                "RAPID X=0 Y=0 Z=10",
+                "CYCLE=REAM SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE CYCLE_F=420 CYCLE_DWELL=0.5",
+                "CYCLE_CALL",
+                "CYCLE=OFF"),
+            Body("G0 X0 Y0 Z10.\nG89 G99 Z-20. R5. P500 F420\nG80"));
+    }
+
+    // D177: G73, G81, G83, G85 and G86 of a mill take no dwell (B-64484EN-2 p.56, 61-84), so a P on them is dropped
+    // with the WARNING RDR122.
+    [Theory]
+    [InlineData("G81", "DRILL")]
+    [InlineData("G83 Q1.", "PECK")]
+    [InlineData("G85", "REAM")]
+    [InlineData("G86", "BORE")]
+    public void DwellP_OnAMillCodeWithoutOne_IsDroppedWithTheWarningRdr122(string code, string cycle)
+    {
+        NcxProgram program = Program("%\nO0001\nG0 X0 Y0 Z10.\n" + code + " G99 Z-5. R2. P500 F100\nG80\nM30\n%\n");
+        string text = NcxWriter.Write(program);
+        Assert.Contains("CYCLE=" + cycle + " SURFACE=0", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("CYCLE_DWELL", text, StringComparison.Ordinal);
+        Assert.Contains(program.Diagnostics.Items, diagnostic => diagnostic.Code == "RDR122");
+    }
+
+    // D158: with [cycles] surface_clearance the reader writes SURFACE = R - surface_clearance.
+    [Fact]
+    public void SurfaceClearance_OfTheMachine_GivesSurfaceBelowR()
+    {
+        string text = Text("%\nO0001\nG0 X0 Y0 Z10.\nG81 G99 Z-5. R2. F100\nG80\nM30\n%\n",
+            MillWithCycles("surface_clearance = 1.5"));
+        Assert.Contains("CYCLE=DRILL SURFACE=0.5 CLEARANCE=2 DEPTH=-5", text, StringComparison.Ordinal);
+    }
+
+    // D157: outside G17 the Fanuc drilling axis depends on parameter 5101#0 FXY; the reader derives it from the plane
+    // and warns with RDR120.
+    [Fact]
+    public void DrillingCycle_OutsideG17_WarnsWithRdr120()
+    {
+        NcxProgram program = Program("%\nO0001\nG19 G0 X10. Y0 Z0\nG81 G99 X-5. R2. F100\nG80\nM30\n%\n");
+        Assert.Contains(program.Diagnostics.Items,
+            diagnostic => diagnostic.Code == "RDR120" && diagnostic.Message.Contains("5101", StringComparison.Ordinal));
+    }
+
     // G86 bores: CYCLE=BORE, G98 back to the initial level (controller-mapping 5; cycles/fanuc.toml).
     [Fact]
     public void G86_WithG98_BecomesBoreCycleBackToTheInitialLevel()
@@ -671,6 +720,7 @@ public sealed class FanucCycleTests
                 "RAPID X=40 Z=2",
                 "CYCLE=" + cycle + " CONTOUR=CONTOUR_10_20",
                 "CYCLE_CALL",
+                "CYCLE=OFF",
                 "RAPID X=100",
                 "PROGRAM=END",
                 "SUB=BEGIN NAME=CONTOUR_10_20",
@@ -711,8 +761,10 @@ public sealed class FanucCycleTests
                 "RAPID X=40 Z=2",
                 "CYCLE=ROUGH_TURN CONTOUR=CONTOUR_10_20",
                 "CYCLE_CALL",
+                "CYCLE=OFF",
                 "CYCLE=FINISH CONTOUR=CONTOUR_10_20",
-                "CYCLE_CALL"),
+                "CYCLE_CALL",
+                "CYCLE=OFF"),
             BodyOf(text));
         Assert.Single(text.Split('\n'), line => line == "SUB=BEGIN NAME=CONTOUR_10_20");
     }

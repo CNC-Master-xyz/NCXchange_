@@ -146,8 +146,18 @@ internal static class FanucCycles
             write.Written(word);
             // D362: a CYCLE_DWELL of 0 is the behaviour the control has anyway and is dropped silently; G81, G83, G73
             // and G86 have no P (D177).
+            if (entry is not null && key == "CYCLE_DWELL" && !IsZero(word.Value) && entry.CycleDwell is null
+                && DwellEntry(write, entry) is null)
+            {
+                // D177: PECK, CHIP_BREAK and BORE have no dwell form on a machining centre; the dwell is dropped.
+                write.Warning(DiagnosticCodes.FanucCycleDwellDropped,
+                    $"{word.ToCanonical()} of CYCLE={entry.Name}: {entry.Native} takes no dwell P on this machine, so "
+                    + "the dwell is dropped (controllers fanuc.md 6; D177).");
+                continue;
+            }
+
             bool carried = entry is null
-                || (key == "CYCLE_DWELL" && IsZero(word.Value))
+                || (key == "CYCLE_DWELL" && (IsZero(word.Value) || entry.CycleDwell is null))
                 || (entry.Words.Contains(key)
                     && (key != "PITCH" || entry.CycleF is not null || entry.NativeOf(key) is not null));
             if (!carried)
@@ -158,6 +168,22 @@ internal static class FanucCycles
                     + "(machine-config 6; controller-mapping 5; language 2 rule 8).");
             }
         }
+    }
+
+    // D177: the entry that writes a DRILL with a dwell other than 0, the DRILL_DWELL of the catalog where it maps
+    // CYCLE_DWELL; null for every other entry.
+    private static CycleEntry? DwellEntry(FanucBlock write, CycleEntry entry)
+    {
+        return entry.Name == "DRILL" && CatalogOf(write).Find("DRILL_DWELL", write.After.Cycle.Axis) is
+            { CycleDwell: not null } dwell
+            ? dwell
+            : null;
+    }
+
+    // Whether the cycle carries a CYCLE_DWELL other than 0 (D177); an expression counts as a dwell.
+    private static bool HasADwell(CycleSnapshot cycle)
+    {
+        return Parameter(cycle, "CYCLE_DWELL") is Value dwell && !IsZero(dwell);
     }
 
     // D361, D377: the catalog of the channel compiled, the [[cycle]] tables of the machine file that name it over the
@@ -255,10 +281,22 @@ internal static class FanucCycles
             : null;
         // D144: n of CYCLE:FANUC=n is the native cycle as the family's catalog writes it (G71, "G83.5"), so the
         // block carries it as written; every native parameter follows as its address with its value in source order.
+        if (entry is not null && HasADwell(cycle) && entry.CycleDwell is null && DwellEntry(write, entry) is { } dwell)
+        {
+            // D177: a DRILL with a dwell other than 0 is written as G82, the DRILL_DWELL of the catalog.
+            entry = dwell;
+        }
+
         string? code = cycle.Controller is null ? CodeOf(write, entry, cycle) : name;
         if (code is null)
         {
             return;
+        }
+
+        if (entry?.DwellNative is string dwellNative && HasADwell(cycle) && code == entry.Native)
+        {
+            // D177: a REAM with a dwell other than 0 is its dwell_native, G89 on a machining centre.
+            code = dwellNative;
         }
 
         string definition = DefinitionOf(cycle) ?? name;
@@ -496,9 +534,9 @@ internal static class FanucCycles
 
         AddMapped(write, entry, cycle, "PECK", "Q", address, 1m);
 
-        // TODO(question): D177: whether the control dwells with the P of G81, G83, G73, G85 and G86 is open; P stands
-        // where the entry maps CYCLE_DWELL, as the catalog follows controller-mapping 5, until D177 is answered.
-        AddMapped(write, entry, cycle, "CYCLE_DWELL", "P", "P", 1000m);
+        // D177: P stands where the entry maps CYCLE_DWELL, G82, G84, G89 on a machining centre and every lathe entry.
+        // D159: a cycle P is round(seconds / dwell_increment), an integer ([machine] dwell_increment, 0.001 s).
+        AddDwell(write, entry, cycle);
 
         // The definition calls at its position and drills along the tool axis: H stands before F, as the sources
         // write G43 Z2. H1 (language 4.4; the TODO(question) of FanucLine).
@@ -575,6 +613,29 @@ internal static class FanucCycles
         if (FanucExpressions.WordValue(write, decimalsAddress, value, factor) is string text)
         {
             write.Main.Word(address + text);
+        }
+    }
+
+    // D159: the P of a cycle block, the dwell in units of dwell_increment, an integer for a number; an expression is
+    // written with its factor (controllers fanuc.md 7).
+    private static void AddDwell(FanucBlock write, CycleEntry entry, CycleSnapshot cycle)
+    {
+        if (Parameter(cycle, "CYCLE_DWELL") is not Value value || entry.NativeOf("CYCLE_DWELL") is null)
+        {
+            return;
+        }
+
+        decimal increment = write.Machine.Machine.DwellIncrement;
+        if (FanucFunctions.NumberOf(value) is decimal seconds)
+        {
+            decimal units = Math.Round(seconds / increment, 0, MidpointRounding.AwayFromZero);
+            write.Main.Word("P" + units.ToString("0", CultureInfo.InvariantCulture));
+            return;
+        }
+
+        if (FanucExpressions.WordValue(write, "P", value, 1m / increment) is string text)
+        {
+            write.Main.Word("P" + text);
         }
     }
 

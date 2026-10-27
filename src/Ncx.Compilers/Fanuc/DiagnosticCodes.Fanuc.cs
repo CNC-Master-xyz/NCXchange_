@@ -190,6 +190,13 @@ public static partial class DiagnosticCodes
     public const string FanucTapFeedNotKnown = "CMP386";
 
     /// <summary>
+    /// CMP388, a WARNING: a CYCLE_DWELL other than 0 on a cycle whose Fanuc code takes no dwell P and that has no
+    /// dwell form, PECK (G83), CHIP_BREAK (G73) and BORE (G86) on a machining centre, or DRILL where the catalog has
+    /// no DRILL_DWELL; the dwell is dropped (D177).
+    /// </summary>
+    public const string FanucCycleDwellDropped = "CMP388";
+
+    /// <summary>
     /// CMP400: a variable that neither the V names of custom macro B nor [variables] map nor [system_variables] name a
     /// Fanuc variable for (language 4.9, machine-config 7, D51).
     /// </summary>

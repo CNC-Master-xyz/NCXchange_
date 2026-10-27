@@ -519,4 +519,35 @@ public sealed class FanucCyclesTests
 
         Assert.EndsWith(written, body, StringComparison.Ordinal);
     }
+
+    // D177: a DRILL with a dwell other than 0 is written as G82 (DRILL_DWELL), a REAM with one as its dwell_native
+    // G89; P is round(seconds / dwell_increment), 0.001 by default (D159).
+    [Theory]
+    [InlineData("DRILL", "G82 G99 Z-20. R5. P500 F100.\n")]
+    [InlineData("REAM", "G89 G99 Z-20. R5. P500 F100.\n")]
+    public void DrillAndReam_WithADwell_TakeTheirDwellCode(string cycle, string written)
+    {
+        string body = FanucCompile.Body(Approach
+            + $"\nCYCLE={cycle} CLEARANCE=5 DEPTH=-20 CYCLE_F=100 CYCLE_DWELL=0.5\nCYCLE_CALL");
+
+        Assert.EndsWith(written, body, StringComparison.Ordinal);
+    }
+
+    // D177: PECK, CHIP_BREAK and BORE have no P on a machining centre, so a dwell other than 0 is dropped with the
+    // WARNING CMP388.
+    [Theory]
+    [InlineData("PECK", " PECK=2", "G83 G99 Z-20. R5. Q2. F100.\n")]
+    [InlineData("CHIP_BREAK", " PECK=2", "G73 G99 Z-20. R5. Q2. F100.\n")]
+    [InlineData("BORE", "", "G86 G99 Z-20. R5. F100.\n")]
+    public void PeckChipBreakAndBore_WithADwell_DropItWithTheWarningCmp388(string cycle, string peck, string written)
+    {
+        CompileResult result = FanucCompile.Run(FanucCompile.Program((Approach
+            + $"\nCYCLE={cycle} CLEARANCE=5 DEPTH=-20{peck} CYCLE_F=100 CYCLE_DWELL=0.5\nCYCLE_CALL").Split('\n')),
+            FanucCompile.Mill());
+
+        Assert.EndsWith(written + "M30\n%\n", FanucCompile.TextOf(result), StringComparison.Ordinal);
+        Diagnostic warning = Assert.Single(FanucCompile.CompilerDiagnostics(result),
+            diagnostic => diagnostic.Code == DiagnosticCodes.FanucCycleDwellDropped);
+        Assert.Equal(Severity.Warning, warning.Severity);
+    }
 }
