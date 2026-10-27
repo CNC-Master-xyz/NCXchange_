@@ -2,7 +2,8 @@ namespace Ncx.Core.Catalog;
 
 /// <summary>
 /// The file and program words of language 4.1: the frame of the file and of its programs, the header words, units,
-/// comments, stops, dwell, source text kept as RAW, the optional block skip and the path tolerance.
+/// comments, stops, dwell, source text kept as RAW, the optional block skip, the path-control mode and the path
+/// tolerance.
 /// </summary>
 internal static class FileWords
 {
@@ -168,6 +169,21 @@ internal static class FileWords
             CanonicalRank = CanonicalRanks.Skip,
             Section = "4.1",
             Description = "Optional block skip, bare or with the number 1 to 9 of the block skip switch (D53).",
+        },
+        // The path-control mode, beside the tolerance words it is measured against; DEFAULT is the machine's own
+        // [dynamics] path_mode (D349, D350).
+        new WordDefinition
+        {
+            Key = "PATH_MODE",
+            Group = WordKind.Program,
+            ValueKinds = ValueKinds.Ident,
+            AllowedIdents = ["EXACT_STOP", "CONTINUOUS", "DEFAULT"],
+            Scope = Scope.Modal,
+            CanonicalRank = CanonicalRanks.PathMode,
+            Section = "4.1",
+            Description = "Path-control mode: every block ends at standstill (EXACT_STOP) or the control carries the "
+                + "speed through corners (CONTINUOUS); DEFAULT returns to the machine's [dynamics] path_mode, which "
+                + "is the start value (D349, D350).",
         },
         new WordDefinition
         {

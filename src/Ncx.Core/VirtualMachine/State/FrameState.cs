@@ -4,7 +4,7 @@ namespace Ncx.Core.VirtualMachine.State;
 
 /// <summary>
 /// The frame rows of virtual machine 2.1: units, workplane, origin, the transform chain, the setpos shifts, the
-/// kinematic transformations, the rotary and tolerance settings, the workpiece holder and the frame of the block.
+/// kinematic transformations, the rotary settings, the path mode and the tolerance settings, the workpiece holder and the frame of the block.
 /// Mutable; only the virtual machine changes it (code-guidelines 7).
 /// </summary>
 internal sealed class FrameState
@@ -34,6 +34,11 @@ internal sealed class FrameState
         RotaryFeed = RotaryFeed.DegMin;
         Tolerance = new ToleranceState { Value = null, Rotary = null, Mode = ToleranceMode.Finish };
         MachineFrameBlock = false;
+
+        // The path-control mode starts at the machine's [dynamics] path_mode, exact stop without one; PATH_MODE=DEFAULT
+        // and PROGRAM=END put it back (virtual machine 2.1, 4; D349, D350).
+        StartPathMode = machine.Dynamics?.PathMode ?? PathMode.ExactStop;
+        PathMode = StartPathMode;
         Diameter = false;
 
         // The workpiece holder starts at default_workpiece from TOML (virtual machine 2.1).
@@ -87,6 +92,16 @@ internal sealed class FrameState
     public ToleranceState Tolerance { get; set; }
 
     /// <summary>
+    /// path mode: exact stop or continuous path, set by PATH_MODE (D349).
+    /// </summary>
+    public PathMode PathMode { get; set; }
+
+    /// <summary>
+    /// The start value of the path mode, the machine's [dynamics] path_mode or exact stop without one (D350).
+    /// </summary>
+    public PathMode StartPathMode { get; }
+
+    /// <summary>
     /// The resource id of the workpiece holder; null when the machine names no default_workpiece.
     /// </summary>
     public string? WorkpieceHolder { get; set; }
@@ -119,6 +134,7 @@ internal sealed class FrameState
             RotaryPath = RotaryPath,
             RotaryFeed = RotaryFeed,
             Tolerance = Tolerance,
+            PathMode = PathMode,
             WorkpieceHolder = WorkpieceHolder,
             MachineFrameBlock = MachineFrameBlock,
         };

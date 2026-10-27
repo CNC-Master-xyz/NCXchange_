@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.State;
 
@@ -92,6 +93,7 @@ internal sealed class StateChanges
         Compare("TCPM", EventText.OnOff(before.Tcpm), EventText.OnOff(after.Tcpm));
         Compare("ROTARY_PATH", EventText.Ident(before.RotaryPath), EventText.Ident(after.RotaryPath));
         Compare("ROTARY_FEED", EventText.Ident(before.RotaryFeed), EventText.Ident(after.RotaryFeed));
+        Compare("PATH_MODE", PathModeText(before.PathMode), PathModeText(after.PathMode));
         Compare("TOLERANCE", OffOr(before.Tolerance.Value, _before, "TOLERANCE"),
             OffOr(after.Tolerance.Value, _after, "TOLERANCE"));
         Compare("TOLERANCE:ROTARY", EventText.Number(before.Tolerance.Rotary, _before, "TOLERANCE:ROTARY"),
@@ -201,6 +203,12 @@ internal sealed class StateChanges
     private static decimal? Shift(FrameSnapshot frame, string axis)
     {
         return frame.SetposShift.TryGetValue(axis, out decimal shift) ? shift : null;
+    }
+
+    // The value of PATH_MODE as the word writes it (language 4.1, D349).
+    private static string PathModeText(PathMode mode)
+    {
+        return mode == PathMode.Continuous ? "CONTINUOUS" : "EXACT_STOP";
     }
 
     private static string Integer(int value)

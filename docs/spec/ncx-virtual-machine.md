@@ -41,6 +41,7 @@ Everything below exists once per channel unless marked "per resource" or "per jo
 | setpos shift per axis | 0 | `SETPOS` (3.4); cleared by `ORIGIN` |
 | cylinder, polar, tcpm | OFF, OFF, OFF | `CYLINDER` (the reference radius while on, D96), `POLAR`, `TCPM`; under `POLAR=ON` or `CYLINDER=n` the VM keeps the position in the polar or cylinder plane of 3.1 (D102), `TCPM` is state only; the Cartesian workpiece geometry belongs to the kinematics module (D54) |
 | rotary path, rotary feed | FULL, DEG_MIN | `ROTARY_PATH`, `ROTARY_FEED` (state only, D86) |
+| path mode | from TOML (`[dynamics] path_mode`, exact stop without it) | `PATH_MODE`; `DEFAULT` puts the start value back. State only: the runtime estimate reads it (section 8), the compiler writes it through the `[transform]` templates (D349, D350) |
 | tolerance, rotary tolerance, tolerance mode | OFF, none, FINISH | `TOLERANCE`, `TOLERANCE:ROTARY`, `TOLERANCE_MODE` (state only, written through by the compiler, D85) |
 | frame (block) | WORKPIECE | `FRAME=MACHINE` for one block |
 | diameter | OFF | `DIAMETER` |
@@ -219,7 +220,7 @@ The resets of `PROGRAM=END` below belong to the `PROGRAM=END` that ends a progra
 | feed value and mode, compensation | yes | explicit word; `PROGRAM=END` |
 | tool in spindle, preloaded tool, offsets | yes | explicit word; preload consumed by `TOOL`; `PROGRAM=END` keeps the tool in the spindle |
 | spindle direction, rpm, vc, mode, sync and phase, css | yes | explicit word; `PROGRAM=END` sets OFF, mode SPINDLE, sync OFF |
-| cylinder, polar, tcpm, rotary path and feed, tolerance | yes | explicit word; `PROGRAM=END` sets OFF and the defaults |
+| cylinder, polar, tcpm, rotary path and feed, path mode, tolerance | yes | explicit word; `PROGRAM=END` sets OFF and the defaults, the path mode its start value from `[dynamics] path_mode` (D349, D350) |
 | `SKIP`, `PHASE`, `POINT` | block | end of block |
 | coolant, named functions | yes | explicit word; `PROGRAM=END` sets coolant OFF |
 | cycle | yes | `CYCLE=OFF`, next `CYCLE`, `TOOL` (WARNING), `PROGRAM=END`; these are also where the `post` and `@RESTORE` of a catalog cycle's expansion rule stand (D204) |

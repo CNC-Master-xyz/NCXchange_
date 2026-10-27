@@ -112,6 +112,7 @@ public sealed class CanonicalOrderTests
         }
 
         Assert.Contains(CanonicalRanks.MaxX, ranks);
+        Assert.Contains(CanonicalRanks.PathMode, ranks);
     }
 
     // The later words stand where their decisions put them: MAX:X to MAX:Z after CENTER:IC and before R, PATH_MODE
@@ -120,6 +121,8 @@ public sealed class CanonicalOrderTests
     [Theory]
     [InlineData("CENTER:IC=1", "MAX:X=1")]
     [InlineData("MAX:Z=1", "R=1")]
+    [InlineData("ROTARY_FEED=MM_MIN", "PATH_MODE=EXACT_STOP")]
+    [InlineData("PATH_MODE=EXACT_STOP", "TOLERANCE=0.01")]
     public void LaterWords_FirstWord_StandsBeforeTheSecond(string first, string second)
     {
         int firstRank = CanonicalOrder.RankOf(WordOf(first), s_plainBlock);

@@ -1,10 +1,11 @@
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.State;
 
 namespace Ncx.Core.VirtualMachine.Handlers;
 
 /// <summary>
-/// The frame words of language 4.2 and the units and path tolerance of 4.1: the rows of virtual machine 2.1. The frame
+/// The frame words of language 4.2 and the units, path mode and path tolerance of 4.1: the rows of virtual machine 2.1. The frame
 /// verbs SHIFT, TILT, TILT_AXIS and SETPOS with their axis words are step 4, not state words (virtual machine 3); their
 /// RESET forms are state words and handled here.
 /// </summary>
@@ -33,6 +34,7 @@ internal static class FrameHandlers
         handlers["TCPM"] = ApplyTcpm;
         handlers["ROTARY_PATH"] = ApplyRotaryPath;
         handlers["ROTARY_FEED"] = ApplyRotaryFeed;
+        handlers["PATH_MODE"] = ApplyPathMode;
         handlers["TOLERANCE"] = ApplyTolerance;
         handlers["TOLERANCE_MODE"] = ApplyToleranceMode;
     }
@@ -208,6 +210,19 @@ internal static class FrameHandlers
     private static void ApplyRotaryFeed(Word word, BlockContext context)
     {
         context.State.Frame.RotaryFeed = BlockContext.IdentOf(word) == "MM_MIN" ? RotaryFeed.MmMin : RotaryFeed.DegMin;
+    }
+
+    // PATH_MODE=EXACT_STOP or CONTINUOUS; DEFAULT returns to the start value, the machine's [dynamics] path_mode
+    // (language 4.1, virtual machine 2.1; D349, D350).
+    private static void ApplyPathMode(Word word, BlockContext context)
+    {
+        FrameState frame = context.State.Frame;
+        frame.PathMode = BlockContext.IdentOf(word) switch
+        {
+            "EXACT_STOP" => PathMode.ExactStop,
+            "CONTINUOUS" => PathMode.Continuous,
+            _ => frame.StartPathMode,
+        };
     }
 
     // TOLERANCE=value or OFF, TOLERANCE:ROTARY=degrees: state only, written through by the compiler (language 4.1,

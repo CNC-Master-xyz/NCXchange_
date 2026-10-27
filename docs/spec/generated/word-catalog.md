@@ -104,6 +104,7 @@ one. The ranks were laid out in steps of ten; a word added later takes a free nu
 | 760 | `TCPM` | `ON`, `OFF` |  |  |  | modal | 4.2 | Tool center point control for 5-axis simultaneous motion (G43.4, TRAORI, M128; D54). |
 | 770 | `ROTARY_PATH` | `SHORTEST`, `FULL` |  |  |  | modal | 4.2 | Rotary axes take the shortest way (M126) or turn exactly as programmed (M127); default FULL (D86). |
 | 780 | `ROTARY_FEED` | `MM_MIN`, `DEG_MIN` |  |  |  | modal | 4.2 | Feed of rotary axes in length per minute at the tool tip (M116) or in degrees per minute (M117); default DEG_MIN (D86). |
+| 785 | `PATH_MODE` | `EXACT_STOP`, `CONTINUOUS`, `DEFAULT` |  |  |  | modal | 4.1 | Path-control mode: every block ends at standstill (EXACT_STOP) or the control carries the speed through corners (CONTINUOUS); DEFAULT returns to the machine's [dynamics] path_mode, which is the start value (D349, D350). |
 | 790 | `TOLERANCE` | number, expression, `OFF` |  |  | tolerance kind, optional | modal | 4.1 | Path tolerance in the active units, OFF for the control's default; TOLERANCE:ROTARY is the orientation tolerance of the rotary axes in degrees (D85). |
 | 800 | `TOLERANCE:ROTARY` | number, expression |  |  | `ROTARY` | modal | 4.1 | Path tolerance in the active units, OFF for the control's default; TOLERANCE:ROTARY is the orientation tolerance of the rotary axes in degrees (D85). |
 | 810 | `TOLERANCE_MODE` | `FINISH`, `ROUGH` |  |  |  | modal | 4.1 | What the control optimizes for under the tolerance, accuracy or speed; default FINISH (D85). |

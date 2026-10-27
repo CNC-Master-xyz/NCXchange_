@@ -432,8 +432,8 @@ The twelve requests of opencam, the first client of NCXchange, for its release 1
 |---|---|---|---|---|
 | 197 | P7-03 Release 1.0 | What does `ncx --version` print, and where does the number come from? | D347 (open) | R1-01 |
 | 198 | P7-03 Release 1.0 (the files it touches belong to P2-01 and P2-03, both in `done/`) | Does a machine file or a cycle catalog carry a schema version, and what happens to a version this build does not read? | D348 (open) | R1-01 |
-| 199 | P0-03 Word catalog | Is there an NCX word for exact stop and continuous path, and what are its values, its rank and its machine templates? | D349 (open) | R1-02 |
-| 200 | P4-02 Analytics: tool list, runtime estimate | Is `[dynamics] path_mode` the start value of the programmed mode, and which of the two does the runtime estimate read? | D350 (open) | R1-02 |
+| 199 | P0-03 Word catalog | Is there an NCX word for exact stop and continuous path, and what are its values, its rank and its machine templates? | settled 2026-10-27 (D349) | R1-02 |
+| 200 | P4-02 Analytics: tool list, runtime estimate | Is `[dynamics] path_mode` the start value of the programmed mode, and which of the two does the runtime estimate read? | settled 2026-10-27 (D350) | R1-02 |
 | 201 | P0-03 (word catalog), with P2-01, P2-02 and P2-04 for the `[stock]` key and P3-04, P3-06 and P5-02 for the writing | Which word carries the blank, in which forms, by which coordinate words, and what does a control without a blank form do? | settled 2026-10-27 (D351) | R1-03 |
 | 202 | P3-05 (Heidenhain reader), with P5-01 (Siemens reader) and P3-07 (acceptance) | Do the readers read `BLK FORM` and `WORKPIECE(...)` into the stock word, or do both stay `RAW` in release 1? | settled 2026-10-27 (D352) | R1-03 |
 | 203 | P1-05 (the MOTION length that carries the rule; the runtime estimate that reads it is P4-02 and the segment report P4-03) | Along which path is `F` measured on an arc and a helix, the circle in the working plane or the whole path with the travel outside it? | D353 (open) | R1-04 |
