@@ -115,4 +115,25 @@ public abstract partial class CompilerBase
             }
         }
     }
+
+    // A cycle the machine marks available = false on the compiled channel, or on the whole machine, is the ERROR
+    // CMP004 at its definition, and nothing is written for it: no before line and no substitute such as a bare G84
+    // (machine-config 6, D361, D377).
+    private static void CheckCyclesAvailable(NcxProgram program, MachineConfig machine, int channel,
+        Diagnostics diagnostics)
+    {
+        foreach (Block block in program.Blocks)
+        {
+            if (block.Find("CYCLE", null)?.Value is not IdentValue name
+                || machine.CycleCatalog.Find(name.Name) is not CycleEntry { Available: false } entry)
+            {
+                continue;
+            }
+
+            diagnostics.Error(block, DiagnosticCodes.CycleNotAvailable,
+                $"The cycle {entry.Name} is not available on channel {channel} of the machine "
+                + $"\"{machine.Machine.Name}\" ([[cycle]] available = false), so nothing is written for it "
+                + "(machine-config 6, D361, D377).");
+        }
+    }
 }

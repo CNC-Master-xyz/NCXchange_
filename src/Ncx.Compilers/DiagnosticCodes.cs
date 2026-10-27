@@ -43,6 +43,12 @@ public static partial class DiagnosticCodes
     public const string UncalledSubprogramNotWritten = "CMP003";
 
     /// <summary>
+    /// CMP004: a cycle whose [[cycle]] table says available = false on the channel compiled, or on the whole machine
+    /// without channel; nothing is written for it, no before line and no substitute (machine-config 6, D361, D377).
+    /// </summary>
+    public const string CycleNotAvailable = "CMP004";
+
+    /// <summary>
     /// CMP005, a WARNING: under program_layout = "file_per_program" a program name, compared case-insensitively, is
     /// taken already by an earlier program, and the file gets _2, _3 (machine-config 2, D266).
     /// </summary>
