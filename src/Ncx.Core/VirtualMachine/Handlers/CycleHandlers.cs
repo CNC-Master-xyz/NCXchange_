@@ -51,9 +51,10 @@ internal static class CycleHandlers
         cycle.Controller = word.Addr;
         cycle.Parameters.Clear();
         bool nativeBlock = word.Addr is not null;
+        bool catalogBlock = WordCatalog.IsCatalogCycleBlock(context.Block);
         foreach (Word parameter in context.Block.Words)
         {
-            if (IsParameter(parameter, nativeBlock))
+            if (IsParameter(parameter, nativeBlock, catalogBlock))
             {
                 cycle.Parameters.Add(parameter);
             }
@@ -69,11 +70,11 @@ internal static class CycleHandlers
     // The parameter words of a cycle block: the cycle words of language 4.7 but CYCLE, AXIS and CYCLE_CALL; in a
     // CYCLE:controller=n block every key the catalog does not know, a native parameter (D94); in a block of a catalog
     // cycle every such key but a machine axis word, a cycle parameter (D114).
-    private static bool IsParameter(Word word, bool nativeBlock)
+    private static bool IsParameter(Word word, bool nativeBlock, bool catalogBlock)
     {
         if (word.Definition is null)
         {
-            return nativeBlock || !WordCatalog.TryMachineAxis(word.Key, out _);
+            return nativeBlock || (catalogBlock && !WordCatalog.TryMachineAxis(word.Key, out _));
         }
 
         return word.Definition.Group == WordKind.Cycle && word.Key is not ("CYCLE" or "AXIS" or "CYCLE_CALL");

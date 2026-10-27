@@ -91,7 +91,7 @@ variable) sort under their rank by the address text. The ten verbs share one ran
 | 690 | `TILT=RESET` | `RESET` |  |  |  | modal | 4.2 | Removes the entry of `TILT` and what follows it from the frame chain; a frame word, not the verb. |
 | 700 | `TILT_AXIS=RESET` | `RESET` |  |  |  | modal | 4.2 | Removes the entry of `TILT_AXIS` and what follows it from the frame chain; a frame word, not the verb. |
 | 710 | `MOVE` | `TURN`, `MOVE`, `STAY` |  |  |  | block | 4.2 | How the machine reaches the tilted plane, with TILT or TILT_AXIS; default STAY (D82). |
-| 720 | `ROT` | `TABLE`, `COORD` |  |  |  | block | 4.2 | On table kinematics, whether the table turns or only the coordinate system, with TILT or TILT_AXIS; default TABLE (D82). |
+| 720 | `ROT` | `TABLE`, `COORD` |  |  |  | block | 4.2 | Whether the table turns or only the coordinate system, with TILT or TILT_AXIS; the option acts through a free rotary axis, whoever carries it; default TABLE (D82, D191). |
 | 730 | `POINT` | integer |  |  |  | block | 4.3 | The reference point HOME moves to, POINT=2 for the second (G30 P2); only with HOME. |
 | 740 | `CYLINDER` | number, expression, `OFF` |  |  |  | modal | 4.2 | Cylinder surface transformation, on with the reference radius as the value, off with OFF; there is no ON form (D54, D96, D102). |
 | 750 | `POLAR` | `ON`, `OFF` |  |  |  | modal | 4.2 | Face transformation, Cartesian programming of the face with X and C (G12.1, TRANSMIT; D54, D102). |

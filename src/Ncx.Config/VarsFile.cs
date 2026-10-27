@@ -1,4 +1,5 @@
 using System.Globalization;
+using Ncx.Core.Expressions;
 using Ncx.Core.Model;
 
 namespace Ncx.Config;
@@ -9,9 +10,6 @@ namespace Ncx.Config;
 /// </summary>
 public sealed record VarsFile
 {
-    // The names that read the state of the control, the only ones with an index (language 4.12, D145).
-    private const string SystemPrefix = "SYS_";
-
     /// <summary>
     /// The start value of each variable in file order: Q1 = 10 as an integer, Q2 = 5.5 as a decimal, QS1 = "TEXT" as
     /// a string.
@@ -94,7 +92,7 @@ public sealed record VarsFile
             return name;
         }
 
-        if (!name.StartsWith(SystemPrefix, StringComparison.Ordinal) || !key.EndsWith(']'))
+        if (!SystemNames.IsSystem(name) || !key.EndsWith(']'))
         {
             return null;
         }

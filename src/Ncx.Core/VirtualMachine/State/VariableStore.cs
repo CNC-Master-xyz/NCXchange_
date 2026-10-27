@@ -1,4 +1,5 @@
 using System.Globalization;
+using Ncx.Core.Expressions;
 using Ncx.Core.Machine;
 using Ncx.Core.Model;
 
@@ -11,9 +12,6 @@ namespace Ncx.Core.VirtualMachine.State;
 /// </summary>
 internal sealed class VariableStore
 {
-    // Names starting with SYS_ are reserved for the values the control provides (language 4.12, D51).
-    private const string SystemPrefix = "SYS_";
-
     // The active tool (language 4.12).
     private const string ActiveToolName = "SYS_TOOL";
 
@@ -71,7 +69,7 @@ internal sealed class VariableStore
     /// </summary>
     public static bool IsSystem(string name)
     {
-        return name.StartsWith(SystemPrefix, StringComparison.Ordinal);
+        return SystemNames.IsSystem(name);
     }
 
     /// <summary>

@@ -63,7 +63,8 @@ internal static class ExpressionValidation
                 "language 4.12"),
             ValidationRule.Error(DiagnosticCodes.ResultOutOfRange,
                 "A number beyond the range of the decimal arithmetic.", "language 4.12"),
-#pragma warning disable CS0618 // VM907 keeps its row as retired, so that the documentation can still cite it (D98).
+            // VM907 keeps its row as retired, so that the documentation can still cite it (D98, D145).
+#pragma warning disable CS0618
             ValidationRule.Error(DiagnosticCodes.IndexNeedsSystemVariable,
                 "Retired (D145): an index on a variable that is not a SYS_ name is PAR112.", "language 4.12; D145"),
 #pragma warning restore CS0618

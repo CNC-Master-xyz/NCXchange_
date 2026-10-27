@@ -93,7 +93,7 @@ twice.ncx(4): ERROR PAR015: TOOL stands twice in the block; a key appears once p
 
 ### 2.3 The writer
 
-`src/Ncx.Core/Writing/NcxWriter.cs`. `Write` goes through the blocks in file order and puts every trivia line back in front of the first block with a greater line number (D92). `WriteBlock` writes one block: `CanonicalOrder.Sort` (`src/Ncx.Core/Catalog/CanonicalOrder.cs`) sorts the words by their rank in `src/Ncx.Core/Catalog/CanonicalRanks.cs`, the rank table of D90; every word writes itself (`Word.ToCanonical`), a number exactly as it was read (language 2 rule 5); and the comment gets column 57. The rank comes from the catalog alone, never from a machine file, so the canonical text of a program never depends on the machine (D91, D93).
+`src/Ncx.Core/Writing/NcxWriter.cs`. `Write` goes through the blocks in file order and puts every trivia line back in front of the block whose index it records (D92, D142). `WriteBlock` writes one block: `CanonicalOrder.Sort` (`src/Ncx.Core/Catalog/CanonicalOrder.cs`) sorts the words by their rank in `src/Ncx.Core/Catalog/CanonicalRanks.cs`, the rank table of D90; every word writes itself (`Word.ToCanonical`), a number exactly as it was read (language 2 rule 5); and the comment gets column 57. The rank comes from the catalog alone, never from a machine file, so the canonical text of a program never depends on the machine (D91, D93).
 
 ### 2.4 Where it is tested
 

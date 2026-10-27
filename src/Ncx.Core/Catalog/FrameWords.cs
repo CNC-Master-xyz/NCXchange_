@@ -146,8 +146,8 @@ internal static class FrameWords
             Scope = Scope.Block,
             CanonicalRank = CanonicalRanks.Rot,
             Section = "4.2",
-            Description = "On table kinematics, whether the table turns or only the coordinate system, with TILT or "
-                + "TILT_AXIS; default TABLE (D82).",
+            Description = "Whether the table turns or only the coordinate system, with TILT or TILT_AXIS; the option "
+                + "acts through a free rotary axis, whoever carries it; default TABLE (D82, D191).",
         },
         new WordDefinition
         {

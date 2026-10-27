@@ -1,6 +1,5 @@
 using System.Globalization;
 using Ncx.Core.Model;
-using Ncx.Core.VirtualMachine.State;
 
 namespace Ncx.Core.Expressions;
 
@@ -269,7 +268,7 @@ public sealed class ExprParser
 
         // Only a SYS_ name takes an index, which selects a register or table row; an index on any other variable is
         // plainly wrong text and an ERROR of the parser, so that every command reports it (D145; language 4.12).
-        if (!VariableStore.IsSystem(name.Text))
+        if (!SystemNames.IsSystem(name.Text))
         {
             Report(DiagnosticCodes.ExpressionIndexNeedsSystemVariable,
                 $"${name.Text} {Place(name)} of {Braced} has an index, and only a SYS_ name has registers or table "
