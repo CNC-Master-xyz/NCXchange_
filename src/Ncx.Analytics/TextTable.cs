@@ -6,12 +6,10 @@ namespace Ncx.Analytics;
 /// One table of a report: a header row of column names and one row per entry, written as plain text in aligned columns
 /// or as comma-separated values (virtual machine 8: "All output is plain text (CSV or aligned columns)").
 /// </summary>
-// TODO(question): virtual machine 8 says "CSV or aligned columns" and nothing more, the same gap as for the table of
-// ncx trace (wave-2 question #40): whether a table has a header row, which format is the default, how a CSV field is
-// quoted, and, for a report of several tables with lines of text between them, how CSV writes those lines. As trace
-// does until that is answered: a header row of the column names first, aligned text the default, a CSV field with a
-// comma, a quote or a line break in quotes with its quotes doubled (RFC 4180), every line ended with LF; a line of
-// text of a report is written as it is, in CSV as a row of one field.
+// D237 points 1 to 3 apply to every text table of virtual machine 8: a header row of the column names first, aligned
+// text the default and CSV the other form, a CSV field with a comma, a quote or a line break in quotes with its quotes
+// doubled (RFC 4180), every line ended with LF; a line of text of a report is written as it is, in CSV as a row of one
+// field.
 public sealed class TextTable
 {
     // Aligned columns stand two spaces apart.

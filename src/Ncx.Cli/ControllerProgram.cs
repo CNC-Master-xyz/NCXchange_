@@ -45,9 +45,8 @@ internal static class ControllerProgram
             return null;
         }
 
-        // TODO(question): D229, as recommended: no document gives the encoding of a controller program. It is read as
-        // UTF-8 when its bytes are valid UTF-8, and otherwise as Windows-1252 with a WARNING that names the code page,
-        // until D229 is answered.
+        // A controller program is read as UTF-8 when its bytes are valid UTF-8, and otherwise as Windows-1252 with a
+        // WARNING that names the code page; CLI002 stays only for unreadable files (D229; language 3, Encoding).
         string text;
         try
         {

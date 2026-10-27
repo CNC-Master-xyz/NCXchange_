@@ -87,7 +87,7 @@ variable) sort under their rank by the address text. The ten verbs share one ran
 | 650 | `FRAME` | `MACHINE` |  |  |  | block | 4.2 | The coordinates of this block refer to the machine datum (G53, M91). |
 | 660 | `SHIFT=RESET` | `RESET` |  |  |  | modal | 4.2 | Removes the entry of `SHIFT` and what follows it from the frame chain; a frame word, not the verb. |
 | 670 | `ROTATE` | number, expression, `RESET` |  |  |  | modal | 4.2 | Rotation of the working plane about the tool axis in degrees, appended to the chain; ROTATE=RESET removes it and what follows. |
-| 680 | `MIRROR` | list, identifier |  |  |  | modal | 4.2 | Mirrors the named axes, an axis list or a single axis, appended to the chain; MIRROR=OFF. |
+| 680 | `MIRROR` | list, identifier |  |  |  | modal | 4.2 | Mirrors the named axes, an axis list or a single axis, appended to the chain; MIRROR=OFF cuts the chain at the last mirror (D124). |
 | 690 | `TILT=RESET` | `RESET` |  |  |  | modal | 4.2 | Removes the entry of `TILT` and what follows it from the frame chain; a frame word, not the verb. |
 | 700 | `TILT_AXIS=RESET` | `RESET` |  |  |  | modal | 4.2 | Removes the entry of `TILT_AXIS` and what follows it from the frame chain; a frame word, not the verb. |
 | 710 | `MOVE` | `TURN`, `MOVE`, `STAY` |  |  |  | block | 4.2 | How the machine reaches the tilted plane, with TILT or TILT_AXIS; default STAY (D82). |

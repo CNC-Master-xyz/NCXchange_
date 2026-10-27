@@ -99,9 +99,9 @@ internal sealed class GeneratedText
     /// </summary>
     public static Block Mark(Block block, GeneratedBlock generated)
     {
-        // TODO(question): language 4.15 and virtual machine 3.10 do not say whether a generated block is skipped with
-        // the SKIP block it was generated for (D53); it carries the SKIP word of its origin, so that skip_blocks skips
-        // the stop, the retract or the mode code together with the block that needs them, until D201 is answered.
+        // A generated block carries the SKIP of its origin unless its own text writes one, so that skip_blocks skips or
+        // runs the group together, and the compiler writes the skip mark on every generated line (D201; language
+        // 4.15).
         IReadOnlyList<Word> words = block.Words;
         if (generated.Origin.Find("SKIP") is Word skip && !block.Has("SKIP"))
         {

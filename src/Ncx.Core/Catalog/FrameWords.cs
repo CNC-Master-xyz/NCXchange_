@@ -93,7 +93,8 @@ internal static class FrameWords
             Scope = Scope.Modal,
             CanonicalRank = CanonicalRanks.Mirror,
             Section = "4.2",
-            Description = "Mirrors the named axes, an axis list or a single axis, appended to the chain; MIRROR=OFF.",
+            Description = "Mirrors the named axes, an axis list or a single axis, appended to the chain; MIRROR=OFF cuts "
+                + "the chain at the last mirror (D124).",
         },
         new WordDefinition
         {
