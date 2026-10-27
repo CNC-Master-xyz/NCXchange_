@@ -61,6 +61,20 @@ public sealed class HeidenhainCycleTests
         Assert.StartsWith(reading, Body(source), StringComparison.Ordinal);
     }
 
+    // D164, D358: in an INCH program the compiler writes Q256 as chip_break_lift / 25.4 rounded to four decimals,
+    // 0.0236 for 0.6 mm, so a CHIP_BREAK with that Q256 reads back as CHIP_BREAK and one with 0.6 natively.
+    [Theory]
+    [InlineData("0,0236", "CYCLE=CHIP_BREAK")]
+    [InlineData("0,6", "RAW:HEIDENHAIN=\"1 CYCL DEF 203")]
+    public void CyclDef203_InAnInchProgram_ComparesQ256InInches(string lift, string reading)
+    {
+        string source = Universal(breaks: 4, retract: "MAX").Replace("Q256=0,6", "Q256=" + lift,
+            StringComparison.Ordinal);
+        string text = Text("0 BEGIN PGM TEST INCH\n" + source + "\n9998 M30\n9999 END PGM TEST INCH\n");
+
+        Assert.StartsWith(reading, BodyOf(text), StringComparison.Ordinal);
+    }
+
     // D164: Q208 of cycle 203 other than the default MAX is a retract feed the compiler would not write.
     [Fact]
     public void CyclDef203_WithAnotherRetractFeed_IsWrittenNatively()

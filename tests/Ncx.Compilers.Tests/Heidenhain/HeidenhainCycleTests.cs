@@ -174,6 +174,30 @@ public sealed class HeidenhainCycleTests
         Assert.Equal(6, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainChipBreakLiftOutOfRange).Line);
     }
 
+    // D358: in an INCH program Q256 is chip_break_lift / 25.4, rounded to the four decimals of Q256.
+    [Fact]
+    public void D358_Q256InAnInchProgram_IsTheLiftInInches()
+    {
+        string program = Program(
+            "CYCLE=CHIP_BREAK SURFACE=0 CLEARANCE=0.2 DEPTH=-0.8 CYCLE_RETRACT=CLEARANCE PECK=0.05 CYCLE_F=20")
+            .Replace("UNITS=MM", "UNITS=INCH", StringComparison.Ordinal);
+
+        Assert.EndsWith("    Q256=+0,0236", HeidenhainCompile.Body(HeidenhainCompile.Run(program)),
+            StringComparison.Ordinal);
+    }
+
+    // D157, D362: AXIS is a rule word only of an entry that maps DEPTH; BACK_BORE (cycle 204) maps none, so an AXIS
+    // on it would be lost, the ERROR CMP122.
+    [Fact]
+    public void D362_AxisOnAnEntryWithoutDepth_IsTheErrorCmp122()
+    {
+        CompileResult result = Run("CYCLE=BACK_BORE SURFACE=0 CLEARANCE=5 SAFE=50 CYCLE_RETRACT=SAFE AXIS=Z");
+
+        Assert.Empty(result.Files);
+        Assert.Contains("AXIS", HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainCycleWordLost).Message,
+            StringComparison.Ordinal);
+    }
+
     // D164: a position no word carries takes the defaults of the catalog entry, which a machine file may override.
     [Fact]
     public void D164_DefaultsOfTheEntry_FillThePositionNoWordCarries()

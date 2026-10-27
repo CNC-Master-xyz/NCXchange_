@@ -22,12 +22,6 @@ internal static class HeidenhainCycleValues
     private const string CycleDwell = "CYCLE_DWELL";
 
     private const string ChipBreakLift = "Q256";
-    private const decimal MillimetresPerInch = 25.4m;
-
-    // D358: Q256 takes 0.1000 to 99999.9999 on the iTNC 530 (iTNC 530 Zyklen 670388-12, NC-SW 340490-07, cycle 203
-    // parameters, connector p.89-90), in millimetres.
-    private const decimal LeastLift = 0.1m;
-    private const decimal GreatestLift = 99999.9999m;
 
     // The words whose numbers the Q parameters are computed from (language 4.7).
     private static readonly string[] s_numberWords =
@@ -159,26 +153,27 @@ internal static class HeidenhainCycleValues
             : text;
     }
 
-    // D358: Q256 from [cycles] chip_break_lift, a distance in millimetres (D357) written in the units of the program.
-    // A lift outside the input range of Q256 is written as the nearest value of the range with the WARNING CMP121,
-    // where the cycle breaks chips at all (CHIP_BREAK; PECK with Q213=0 never lifts). Gap closed 2026-10-27
-    // (delegated): without the key, which the loader requires of a machine file (CFG158), the compiler takes the
-    // absent-key lift 0 of the virtual machine (D357), so it writes 0.1 with CMP121.
+    // D358: Q256 from [cycles] chip_break_lift, a distance in millimetres (D357) written in the units of the program
+    // (DrillingFamily.HeidenhainChipBreakLift, which the reader compares with). A lift outside the input range of Q256
+    // is written as the nearest value of the range with the WARNING CMP121, where the cycle breaks chips at all
+    // (CHIP_BREAK; PECK with Q213=0 never lifts). Gap closed 2026-10-27 (delegated): without the key, which the loader
+    // requires of a machine file (CFG158), the compiler takes the absent-key lift 0 of the virtual machine (D357), so
+    // it writes 0.1 mm with CMP121.
     private static string Lift(HeidenhainBlock writing, CycleEntry entry)
     {
-        decimal millimetres = writing.Machine.Cycles?.ChipBreakLift ?? 0m;
-        decimal written = Math.Clamp(millimetres, LeastLift, GreatestLift);
-        if (written != millimetres && entry.Name != "PECK")
+        decimal? millimetres = writing.Machine.Cycles?.ChipBreakLift;
+        bool inch = writing.After.Frame.Units == Units.Inch;
+        decimal written = DrillingFamily.HeidenhainChipBreakLift(millimetres, inch, writing.Machine.Format);
+        if (DrillingFamily.HeidenhainChipBreakLiftOutOfRange(millimetres) && entry.Name != "PECK")
         {
             writing.Warning(DiagnosticCodes.HeidenhainChipBreakLiftOutOfRange,
                 $"Q256 of cycle {entry.Native} ({entry.Name}): [cycles] chip_break_lift = "
-                + $"{millimetres.ToString(CultureInfo.InvariantCulture)} mm lies outside the input range of Q256, "
-                + $"0.1 to 99999.9999 mm, so {written.ToString(CultureInfo.InvariantCulture)} mm is written (D358; "
-                + "iTNC 530 cycle manual, cycle 203).");
+                + $"{(millimetres ?? 0m).ToString(CultureInfo.InvariantCulture)} mm lies outside the input range of "
+                + "Q256, 0.1 to 99999.9999 mm, so the nearest value of the range is written (D358; iTNC 530 cycle "
+                + "manual, cycle 203).");
         }
 
-        bool inch = writing.After.Frame.Units == Units.Inch;
-        return Signed(writing, ChipBreakLift, inch ? written / MillimetresPerInch : written);
+        return Signed(writing, ChipBreakLift, written);
     }
 
     // D157: Q204 at or below Q200 does not act, so CYCLE_RETRACT=SAFE with such a SAFE ends at CLEARANCE: a WARNING

@@ -225,7 +225,8 @@ internal sealed class HeidenhainLabels
             {
                 int target = JumpsToTheEnd.Contains(blocks[jump].Line) ? blocks.Count
                     : FindLabel(blocks, LabelOf(blocks[jump])!);
-                if (jump > start && jump < repeat && (target < start || target > repeat))
+                // A jump to a label the file does not hold leaves nothing: its block stays RAW.
+                if (target >= 0 && jump > start && jump < repeat && (target < start || target > repeat))
                 {
                     JumpsLeavingRepeats.TryAdd(blocks[jump].Line, label);
                 }

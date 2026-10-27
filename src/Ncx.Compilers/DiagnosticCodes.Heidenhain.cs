@@ -32,8 +32,9 @@ public static partial class DiagnosticCodes
     public const string HeidenhainCycleWithoutSignature = "CMP103";
 
     /// <summary>
-    /// CMP104: a Q parameter of the signature of a cycle has no value, neither from a word of the cycle block nor from
-    /// a rule of the compiler (controllers heidenhain.md 8 rule 7, D164).
+    /// CMP104: a Q parameter of the signature of a cycle has no value, neither from a word of the cycle block, nor from
+    /// a rule of the compiler, nor from the `defaults` of the catalog entry; Q204 under CYCLE_RETRACT=SAFE without SAFE
+    /// among them (controllers heidenhain.md 8 rule 7, D164, D188).
     /// </summary>
     public const string HeidenhainCycleParameterWithoutValue = "CMP104";
 
@@ -154,9 +155,9 @@ public static partial class DiagnosticCodes
     public const string HeidenhainChipBreakLiftOutOfRange = "CMP121";
 
     /// <summary>
-    /// CMP122: a word of a cycle block that the catalog entry maps to no Q parameter and no rule word carries, and
-    /// whose value the native cycle neither reaches from another word nor has anyway, would be lost; the cycle is not
-    /// written (D362; machine-config 6, controller-mapping 5).
+    /// CMP122, an ERROR: a word of a cycle block that the catalog entry maps to no Q parameter and no rule word
+    /// carries, and whose value the native cycle neither reaches from another word nor has anyway, would be lost; the
+    /// cycle is not written (D362; machine-config 6, controller-mapping 5).
     /// </summary>
     public const string HeidenhainCycleWordLost = "CMP122";
 

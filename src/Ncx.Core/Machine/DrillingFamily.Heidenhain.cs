@@ -30,6 +30,44 @@ public static partial class DrillingFamily
     // and G73). Q256 is no default: [cycles] chip_break_lift is its one source (D358).
     private static readonly Dictionary<string, string> s_cycle200Defaults = new() { ["Q210"] = "0" };
 
+    // D358: Q256 takes 0.1000 to 99999.9999 mm on the iTNC 530, four decimals (iTNC 530 Zyklen 670388-12, NC-SW
+    // 340490-07, cycle 203 parameters, connector p.89-90).
+    private const decimal LeastChipBreakLift = 0.1m;
+    private const decimal GreatestChipBreakLift = 99999.9999m;
+    private const int ChipBreakLiftDecimals = 4;
+    private const decimal MillimetresPerInch = 25.4m;
+
+    /// <summary>
+    /// The Q256 the Heidenhain compiler writes for [cycles] chip_break_lift, which the reader compares a source Q256
+    /// with (D164, D358): the key in millimetres (D357, 0 when the machine sets none) clamped to the input range of
+    /// Q256, in inches under an INCH program, rounded half away from zero to the [format] decimals of Q256, else to
+    /// the four decimals of its input.
+    /// </summary>
+    /// <param name="millimetres">The [cycles] chip_break_lift; null when the machine sets none.</param>
+    /// <param name="inch">Whether the program is in inches.</param>
+    /// <param name="format">The [format] table of the machine, whose decimals may name Q256.</param>
+    public static decimal HeidenhainChipBreakLift(decimal? millimetres, bool inch, OutputFormat? format)
+    {
+        decimal clamped = Math.Clamp(millimetres ?? 0m, LeastChipBreakLift, GreatestChipBreakLift);
+        decimal value = inch ? clamped / MillimetresPerInch : clamped;
+        int decimals = format is not null && format.Decimals.TryGetValue("Q256", out int set)
+            ? Math.Clamp(set, 0, 28)
+            : ChipBreakLiftDecimals;
+        return Math.Round(value, decimals, MidpointRounding.AwayFromZero);
+    }
+
+    /// <summary>
+    /// Whether [cycles] chip_break_lift lies outside the input range of Q256, so that the compiler writes the nearest
+    /// value of the range with the WARNING CMP121 (D358).
+    /// </summary>
+    /// <param name="millimetres">The [cycles] chip_break_lift; null when the machine sets none, which is 0 (D357).
+    /// </param>
+    public static bool HeidenhainChipBreakLiftOutOfRange(decimal? millimetres)
+    {
+        decimal lift = millimetres ?? 0m;
+        return lift < LeastChipBreakLift || lift > GreatestChipBreakLift;
+    }
+
     private static readonly Dictionary<string, string> s_cycle203Defaults =
         new() { ["Q210"] = "0", ["Q212"] = "0", ["Q208"] = "MAX" };
 

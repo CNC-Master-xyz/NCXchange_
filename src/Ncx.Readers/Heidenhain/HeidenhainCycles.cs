@@ -516,7 +516,7 @@ internal static partial class HeidenhainCycles
         }
 
         if ((!family && !languageWords)
-            || HeidenhainCycleMatch.FirstDiffering(block.Machine, entry, parameters) is not null)
+            || HeidenhainCycleMatch.FirstDiffering(block.Machine, block.Heidenhain.Inch, entry, parameters) is not null)
         {
             return Native(block, native, parameters);
         }

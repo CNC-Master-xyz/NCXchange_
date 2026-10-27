@@ -43,6 +43,7 @@ The sixteen decisions of W2-6 on the branch: the reader halves of D115, D154, D1
     - D213: RDR303 HeidenhainJumpLeavesRepeat (WARNING).
     - D362: CMP122 HeidenhainCycleWordLost; D358: CMP121 HeidenhainChipBreakLiftOutOfRange; D157: CMP140 HeidenhainSafeNotAboveClearance.
     - D358: without `[cycles] chip_break_lift` (no machine file) the compiler takes the VM's absent-key lift 0 (D357) and writes Q256=0.1 with CMP121; CMP121 is not reported for PECK, whose Q213=0 never lifts.
-    - D164: RDR301 retired; the reader compares Q256 with the key in millimetres as written, so an INCH program reads natively.
+    - D164: RDR301 retired; the reader compares Q256 with the value the compiler writes: the key clamped to the range, divided by 25.4 under an INCH program (BEGIN PGM units), rounded to the [format] decimals of Q256 or else its four input decimals (`DrillingFamily.HeidenhainChipBreakLift`, shared by both sides).
     - D253 (d): cycle 247 with an unknown chain (after a RAW transform or a subprogram call) stays RAW too.
+  - Review fixes: the shared Q256 helper with an INCH reader and compiler test; the cycle 247 markers of `HeidenhainChain.cs` and `HeidenhainChainArrivals.cs` become D253 (d) comments and open-questions row 18 (P3-04) is settled (the (c) markers stay); CMP104 and CMP122 summaries; a jump to a missing label no longer counts as leaving a repeat; a test for AXIS on BACK_BORE (CMP122).
   - Gate: build -warnaserror, test (filter `FullyQualifiedName!~TakesWellUnderASecond`) and format green.

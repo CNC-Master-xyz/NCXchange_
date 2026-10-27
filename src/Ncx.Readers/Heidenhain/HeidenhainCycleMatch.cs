@@ -13,23 +13,21 @@ internal static class HeidenhainCycleMatch
 {
     private const string ChipBreakLift = "Q256";
 
-    // D358: Q256 takes 0.1000 to 99999.9999 on the iTNC 530 (iTNC 530 Zyklen 670388-12, NC-SW 340490-07, cycle 203
-    // parameters, connector p.89-90), and the compiler writes the nearest value of that range.
-    private const decimal LeastLift = 0.1m;
-    private const decimal GreatestLift = 99999.9999m;
-
     /// <summary>
     /// The first unmapped Q parameter whose value differs from what the compiler writes, as "Q208=100"; null when
     /// every one of them holds that value.
     /// </summary>
     /// <param name="machine">The machine, with the [cycles] keys and the catalog.</param>
+    /// <param name="inch">Whether the program is in inches.</param>
     /// <param name="entry">The catalog entry the definition reads into.</param>
     /// <param name="parameters">The Q parameters of the definition, in source order.</param>
-    public static string? FirstDiffering(MachineConfig machine, CycleEntry entry, IReadOnlyList<SourceWord> parameters)
+    public static string? FirstDiffering(MachineConfig machine, bool inch, CycleEntry entry,
+        IReadOnlyList<SourceWord> parameters)
     {
         foreach (SourceWord parameter in parameters)
         {
-            if (!entry.Params.Values.Contains(parameter.Address) && !Holds(machine, entry, parameters, parameter))
+            if (!entry.Params.Values.Contains(parameter.Address)
+                && !Holds(machine, inch, entry, parameters, parameter))
             {
                 return parameter.Address + "=" + parameter.Text;
             }
@@ -42,9 +40,9 @@ internal static class HeidenhainCycleMatch
     // 203 equals Q202, Q208 of 201 equals Q206), Q256 from [cycles] chip_break_lift before the catalog (D358), the
     // catalog's defaults otherwise. A value the cycle does not use in that form is not compared: Q256 of PECK, whose
     // Q213=0 never breaks a chip, and Q205 while Q212=0 takes nothing off the infeed. Q213 chose PECK or CHIP_BREAK
-    // already (D163). The [cycles] key is in millimetres (D357), compared as written, so an INCH program whose Q256
-    // the compiler would convert reads natively.
-    private static bool Holds(MachineConfig machine, CycleEntry entry, IReadOnlyList<SourceWord> parameters,
+    // already (D163). Q256 is compared with the value the compiler writes, the key clamped, in inches under an INCH
+    // program and rounded (DrillingFamily.HeidenhainChipBreakLift).
+    private static bool Holds(MachineConfig machine, bool inch, CycleEntry entry, IReadOnlyList<SourceWord> parameters,
         SourceWord parameter)
     {
         decimal? value = HeidenhainNumbers.Parse(parameter.Text);
@@ -61,8 +59,8 @@ internal static class HeidenhainCycleMatch
             case "Q208" when entry.Native == "201":
                 return value is decimal retract && retract == NumberOf(parameters, entry.NativeOf("CYCLE_F"));
             case ChipBreakLift:
-                decimal lift = Math.Clamp(machine.Cycles?.ChipBreakLift ?? 0m, LeastLift, GreatestLift);
-                return entry.Name == "PECK" || value == lift;
+                return entry.Name == "PECK" || value == DrillingFamily.HeidenhainChipBreakLift(
+                    machine.Cycles?.ChipBreakLift, inch, machine.Format);
             default:
                 return Default(entry, parameter, value);
         }

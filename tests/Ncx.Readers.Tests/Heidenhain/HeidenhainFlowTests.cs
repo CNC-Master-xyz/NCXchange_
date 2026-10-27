@@ -168,6 +168,16 @@ public sealed class HeidenhainFlowTests
         Assert.Equal(4, program.Diagnostics.Items.Single().Line);
     }
 
+    // D213: a jump to a label the file does not hold leaves no repeat; the jump itself stays RAW.
+    [Fact]
+    public void FnJump_ToAMissingLabelInsideARepeatedPart_IsNoRdr303()
+    {
+        NcxProgram program = FramedProgram("1 LBL 1\n2 L IX+10 R0 F100\n3 FN 9: IF +Q1 EQU +1 GOTO LBL 7\n"
+            + "4 CALL LBL 1 REP 3");
+
+        Assert.DoesNotContain(DiagnosticCodes.HeidenhainJumpLeavesRepeat, Codes(program));
+    }
+
     // D213: a jump inside the repeated part, to its own label, leaves nothing.
     [Fact]
     public void FnJump_InsideARepeatedPart_IsNoWarning()
