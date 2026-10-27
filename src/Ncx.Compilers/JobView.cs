@@ -16,4 +16,10 @@ public sealed record JobView
     /// The channels of the job in ascending order, which a SYNC without WITH waits for (language 4.8).
     /// </summary>
     public required IReadOnlyList<int> Channels { get; init; }
+
+    /// <summary>
+    /// The library file of the job, &lt;job name&gt;_LIB without the extension, for the compile that writes the
+    /// subprograms of its file that no channel program calls (D316, D388 (13)); null for every other compile.
+    /// </summary>
+    public string? Library { get; init; }
 }

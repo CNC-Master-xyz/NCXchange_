@@ -13,20 +13,21 @@ public static partial class DiagnosticCodes
     public const string AxisSharedBetweenMarks = "VM850";
 
     /// <summary>
-    /// VM851: WITH, WAIT_CHANNEL or START_CHANNEL names a channel that the job does not run (language 4.8; virtual
-    /// machine 3.7).
+    /// VM851: WITH, WAIT_CHANNEL or START_CHANNEL names a channel that the machine does not have, [machine] channels;
+    /// without channels of its own the machine counts the job's (language 4.8; virtual machine 3.7; D306, D388 (8)).
     /// </summary>
     public const string ChannelNotInJob = "VM851";
 
     /// <summary>
-    /// VM852, a WARNING: START_CHANNEL of a channel that runs or has run already; nothing starts (language 4.8; virtual
-    /// machine 3.7).
+    /// VM852, a WARNING: START_CHANNEL of a channel that runs; nothing starts, as the control requires Reset or
+    /// interrupted (language 4.8; virtual machine 3.7; D309).
     /// </summary>
     public const string ChannelAlreadyStarted = "VM852";
 
     /// <summary>
-    /// VM853, a WARNING: the CHANNEL of the program's header names another channel than the job runs the program on;
-    /// the channel of the job applies (language 4.14; virtual machine 2.8; machine-config 8).
+    /// VM853: the CHANNEL of the program's header names another channel than the job manifest runs the program on; the
+    /// reader resolved T words and channel-bound functions for the header's channel (language 4.14; virtual machine
+    /// 2.8; machine-config 8; D307).
     /// </summary>
     public const string ChannelOtherThanHeader = "VM853";
 
@@ -35,4 +36,16 @@ public static partial class DiagnosticCodes
     /// virtual machine 2.8, 3.7).
     /// </summary>
     public const string ChannelTwiceInJob = "VM854";
+
+    /// <summary>
+    /// VM855, a WARNING: WITH, WAIT_CHANNEL or START_CHANNEL names a channel the machine has but the job does not run;
+    /// the word is taken as if that channel were not named (language 4.8; virtual machine 3.7; D306).
+    /// </summary>
+    public const string ChannelNotRunByJob = "VM855";
+
+    /// <summary>
+    /// VM856, a WARNING: START_CHANNEL of a channel that has finished; the control would restart it, but NCX runs one
+    /// program per channel per job, and nothing starts (language 4.8; virtual machine 3.7; D309).
+    /// </summary>
+    public const string FinishedChannelNotRestarted = "VM856";
 }

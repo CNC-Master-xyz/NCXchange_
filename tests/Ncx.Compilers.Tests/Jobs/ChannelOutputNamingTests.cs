@@ -1,11 +1,12 @@
 using Ncx.Core.Machine;
+using Ncx.Core.Model;
 
 namespace Ncx.Compilers.Tests.Jobs;
 
 /// <summary>
 /// The names of the files of a job, one per channel (implementation 16, P6-02; controller-mapping 7, CHANNEL): the
 /// Nakamura memory card convention O1000 and O1000.P-2, the channel suffix _C1 and _C2 of the STAMA, the program NAME
-/// of the DMG units, by [format] channel_files (the TODO(question) of OutputFormat.ChannelFiles).
+/// of the DMG units, by [format] channel_files (D310).
 /// </summary>
 public sealed class ChannelOutputNamingTests
 {
@@ -40,18 +41,38 @@ public sealed class ChannelOutputNamingTests
         Assert.Equal(["C1.nc", "C2.nc"], NamesOf("", 1000, 2000));
     }
 
-    // The TODO(question) of ChannelOutputNaming: two channels that would write one file are told apart by _C1, _C2.
+    // D310: two channels that would write one file are told apart by _C1, _C2, with the WARNING CMP721 per file, as
+    // D266 does for the programs of one file.
     [Fact]
-    public void ProgramName_TwoProgramsOfOneName_AreToldApartByTheChannel()
+    public void ProgramName_TwoProgramsOfOneName_AreToldApartByTheChannelWithCmp721()
     {
         Assert.Equal(["1000_C1.nc", "1000_C2.nc"], NamesOf("channel_files = \"program_name\"", 1000, 1000));
+        CompileResult result = Compile("channel_files = \"program_name\"", 1000, 1000);
+        var warnings = new List<Diagnostic>(result.Diagnostics.Items);
+        warnings.RemoveAll(diagnostic => diagnostic.Code != DiagnosticCodes.ChannelFileNameTaken);
+        Assert.Equal(2, warnings.Count);
+        Assert.Equal(Severity.Warning, warnings[0].Severity);
+        Assert.Contains("named 1000_C1.nc", warnings[0].Message, StringComparison.Ordinal);
     }
 
     // The names of the two files of a job whose channels run the programs NAME="1000" and NAME="2000" with these
     // numbers.
     private static List<string> NamesOf(string format, int first, int second)
     {
-        CompileResult result = JobCompile.Run(JobCompile.Machine(format: format),
+        CompileResult result = Compile(format, first, second);
+        Assert.False(result.Diagnostics.HasErrors, result.Diagnostics.ToText());
+        var names = new List<string>();
+        foreach (CompiledFile file in result.Files)
+        {
+            names.Add(file.Name);
+        }
+
+        return names;
+    }
+
+    private static CompileResult Compile(string format, int first, int second)
+    {
+        return JobCompile.Run(JobCompile.Machine(format: format),
             new JobManifest
             {
                 Name = "JOB",
@@ -67,14 +88,6 @@ public sealed class ChannelOutputNamingTests
                 ["C1.ncx"] = Named(first),
                 ["C2.ncx"] = Named(second),
             });
-        Assert.False(result.Diagnostics.HasErrors, result.Diagnostics.ToText());
-        var names = new List<string>();
-        foreach (CompiledFile file in result.Files)
-        {
-            names.Add(file.Name);
-        }
-
-        return names;
     }
 
     // A program whose NAME is its number.

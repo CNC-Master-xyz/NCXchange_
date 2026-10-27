@@ -46,6 +46,14 @@ public sealed record SourceBlock
     public IReadOnlyList<string> Continuation { get; init; } = [];
 
     /// <summary>
+    /// The source blocks that follow this one in its section, read only, in the order the reader reads them, up to the
+    /// next block of the file structure (O, M30, M99, a jump target), which stays with the structure pass; trivia lines
+    /// are left out. The reader fills it in only for the block it offers to a reader rule, which may claim a run of
+    /// them (D232); empty otherwise.
+    /// </summary>
+    public IReadOnlyList<SourceBlock> Following { get; init; } = [];
+
+    /// <summary>
     /// True for a blank or comment-only line: no words and no block skip, trivia rather than a block (D92).
     /// </summary>
     public bool IsTrivia => Words.Count == 0 && !BlockSkip;

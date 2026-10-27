@@ -68,7 +68,7 @@ internal static class ToolValidation
         ChannelState state = context.State;
         if (!MotionRules.IsMotion(context.Block)
             || state.LastHolder is not string holderId
-            || !state.Holders.TryGetValue(holderId, out HolderState? holder)
+            || !state.Offsets.TryGetValue(holderId, out HolderOffsets? holder)
             || holder.ActiveTipOffset == 0m
             || !TipRules.ToolAxisTilted(state.Frame.Chain, state.Frame.Tcpm))
         {

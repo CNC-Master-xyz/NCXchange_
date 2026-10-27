@@ -90,14 +90,14 @@ helix_feed = "arc"                 # optional: "path" | "arc", whether F is meas
 # plane_with_first_motion = false       # optional, Fanuc: G17 stands in the first motion block after it changes (D276)
 # motion_code_after_tool_change = false # optional, Fanuc: the first motion after a tool change writes its motion code (D276)
 # length_offset_with_tool_axis = false  # optional, Fanuc: G43 H stands in the first block that moves the tool axis (D276)
-# channel_files = "path_suffix"         # optional: "path_suffix" | "channel_suffix" | "program_name", the files of a job's channels (D310)
+# channel_files = "path_suffix"         # optional: "path_suffix" | "channel_suffix" | "program_name", the files of a job's channels (D310): O1000 and O1000.P-2 without extension (Nakamura), <job>_C1.<ext> (STAMA), NAME.<ext> (DMG)
 # external_call = "M198"          # optional, Fanuc: the code that calls a program outside the file, parameter 6030 on the control; the compiler writes it
                                   # in place of M98 for a CALL of an external program and the reader reads it as CALL. Without the key the compiler writes
                                   # M98 and the reader reads no external call; a machine that calls with M198 names it, and a machine whose [sync]
                                   # mark_range covers the code must not, because the code is a wait mark there (D322)
 ```
 
-A key left out takes the value of the controller family (D263): line endings LF; no block numbers, and start 10 step 10 when they are enabled, except Heidenhain, which numbers from 0 in steps of 1; `max_line_length` 0, except Siemens 512; `comment_charset` "ASCII" on every family. An overlong line is the WARNING CMP021, and a non-ASCII character without a transliteration becomes `?` with CMP022. `label_max` defaults to 999, the iTNC 530 from NC-SW 340 49x (254 for 340422, 65535 for the TNC 640, D271). `motion_code` defaults to the form each compiler writes: Fanuc "arcs" (G0 and G1 on change, G2 and G3 on every arc), Siemens and Heidenhain "every_block" (D299). `m_codes_per_block` defaults to 1, which every control accepts; whatever the keys say, the compiler writes M00, M01, M02, M30, M98, M99, M198, the `[sync]` wait codes and the configured macro calls each in a block of its own, and puts a spindle code in one block with another M code only when `m_codes_combinable` lists that code; codes beyond the limit move to the following lines (D339). `helix_feed` defaults to "arc" on Fanuc (parameter 1403#5 HTG = 0) and to "path" on Heidenhain and Siemens; under "arc" the compiler scales the `F` of a helix by the plane length over the path length and the reader scales it back (D354). An address that `decimals` leaves out takes a default per family, angle addresses four decimals on Heidenhain and three on Siemens and Fanuc, a linear address the decimals of `X` (D366).
+A key left out takes the value of the controller family (D263): line endings LF; no block numbers, and start 10 step 10 when they are enabled, except Heidenhain, which numbers from 0 in steps of 1; `max_line_length` 0, except Siemens 512; `comment_charset` "ASCII" on every family. An overlong line is the WARNING CMP021, and a non-ASCII character without a transliteration becomes `?` with CMP022. `label_max` defaults to 999, the iTNC 530 from NC-SW 340 49x (254 for 340422, 65535 for the TNC 640, D271). `motion_code` defaults to the form each compiler writes: Fanuc "arcs" (G0 and G1 on change, G2 and G3 on every arc), Siemens and Heidenhain "every_block" (D299). `m_codes_per_block` defaults to 1, which every control accepts; whatever the keys say, the compiler writes M00, M01, M02, M30, M98, M99, M198, the `[sync]` wait codes and the configured macro calls each in a block of its own, and puts a spindle code in one block with another M code only when `m_codes_combinable` lists that code; codes beyond the limit move to the following lines (D339). Without `channel_files` each channel of a job keeps the name its family gives the file; `path_suffix` writes `O<NUMBER>` with at least four digits for the first channel of `[machine] channels` and `O<NUMBER>.P-n` for channel n, a program without `NUMBER` taking the stem; two channels that would write one file each take `_C<n>` with the WARNING CMP721, as D266 does for the programs of one file (D310). A file the job renames renames its program as well, as D266 does: the unit header `%_N_<name>_MPF` on Siemens, `BEGIN PGM` and `END PGM` on Heidenhain, the comment of the `O` line on Fanuc when it carries the old name. A job compile of several channels writes every `SUB` that no channel program calls once into the library file `<job name>_LIB` with the family's extension, on Siemens one `<name>.spf` per `SUB` and on Heidenhain one program `<job name>_LIB_<sub>.h` per `SUB`; two library files holding one program are the WARNING CMP722 (D316, D388). `helix_feed` defaults to "arc" on Fanuc (parameter 1403#5 HTG = 0) and to "path" on Heidenhain and Siemens; under "arc" the compiler scales the `F` of a helix by the plane length over the path length and the reader scales it back (D354). An address that `decimals` leaves out takes a default per family, angle addresses four decimals on Heidenhain and three on Siemens and Fanuc, a linear address the decimals of `X` (D366).
 
 `decimals` gives the decimals each address is written with. Every number is rounded to them half away from zero on its decimal value as the NCX writes it (15.0175 becomes 15.018), silently: CMP020 is retired, and a program that wants to know states `ROUND_LIMIT`, above which the compiler reports the distance between the programmed point and the point the written file produces, over the linear axes of the block, as the WARNING CMP023, and an angle address that moves by more than `ROUND_LIMIT:ROTARY` the same way (D363). No address is ever written with all its digits: an address the key leaves out takes a default of the family, `ANGLE` (the one address of the sweep, which the Heidenhain compiler writes as `IPA` and Siemens as `AR=`) and the rotary axes four decimals on Heidenhain, its input resolution of 0.0001°, and three on Siemens and Fanuc; any other address the decimals of `X` (D366). Gap closed 2026-10-27 (delegated, W3-5): without `X` too a linear address takes three; a Klartext cycle parameter (`Q`, `QL`, `QR` with a number) four, its input range of 0.0001 to 99999.9999; a component of a tool or normal vector six, the precision of the virtual machine (D121). The decimal point of a whole number on Fanuc and the padding of `trailing_zeros` follow the decimals the key writes only.
 
@@ -145,7 +145,7 @@ When `change` contains `{next}`, a `PRELOAD` word that follows the `TOOL` block 
 ```toml
 [tool_points]
 form = "registers"                 # indexed_tool (Klartext) | edge (Siemens) | registers (Fanuc); any other value is an ERROR
-# indexed_tool: point k is the index k-1 of the called tool, TOOL CALL 5.1 for point 2; at most nine indices, so k <= 10 (CMP123 beyond).
+# indexed_tool: point k is the index k-1 of the called tool, TOOL CALL 5.1 for point 2; at most nine indices, so k <= 10 (the ERROR CMP124 beyond, D388).
 #   An indexed call carries a tool number, so the TNC 640 runs its change macro (Klartext 892903-18 p. 123), and on the iTNC 530 it depends on
 #   MP7480.0 and the builder's macro; a point change of the tool in the spindle is the WARNING CMP123 unless:
 point_change = "call"              # indexed_tool: the builder's macro accepts an indexed call of the tool in the spindle
@@ -166,7 +166,7 @@ radius = 12                        # registers: the D of the point
 # edge = 20                        # edge: the D of the point
 ```
 
-A machine file without `[tool_points]` writes nothing for a point other than 1 and reports the INFO CMP016 once per program, because a control that cannot select a point is doing nothing wrong; a point the form cannot map is the ERROR of its family, CMP123 Heidenhain, CMP341 Fanuc, CMP514 Siemens, naming the tool and k, because another point's registers would cut with the wrong offsets (D373). A compiler writes only the register the mapping gives, never `TIP_OFFSET` or `POINT_RADIUS` as a control value, and a tool whose program names no point compiles as before (D375, D393). An `OFFSET` word on a holder whose tool named its point writes its own register in place of the mapped one, with the WARNING CMP033 (D393).
+A machine file without `[tool_points]` writes nothing for a point other than 1 and reports the INFO CMP016 once per program, because a control that cannot select a point is doing nothing wrong; a point the form cannot map is the ERROR of its family, CMP124 Heidenhain (D388), CMP341 Fanuc, CMP514 Siemens, naming the tool and k, because another point's registers would cut with the wrong offsets (D373). A compiler writes only the register the mapping gives, never `TIP_OFFSET` or `POINT_RADIUS` as a control value, and a tool whose program names no point compiles as before (D375, D393). An `OFFSET` word on a holder whose tool named its point writes its own register in place of the mapped one, with the WARNING CMP033 (D393).
 
 ```toml
 [home]
@@ -212,9 +212,9 @@ letter = "X"                       # address written in the output; extended axi
 incremental_letter = "U"           # Fanuc lathes: U/W/H/V are the incremental forms of X/Z/C/Y; empty when the control uses G91
 kind = "linear"                    # linear | rotary
 limits = [-10, 650]                # min and max in machine coordinates (the G53 / M91 frame), for the travel-limit analytics (D100)
-rapid = 30000                      # mm/min, for the runtime estimate
+rapid = 30000                      # mm/min (deg/min on a rotary axis), for the runtime estimate (D290)
 max_feed = 10000                   # mm/min (deg/min on a rotary axis), the F this axis can follow; VM441 compares the path feed of the axes a block moves, the expander warns or clamps (D64, D192)
-acceleration = 3000                # mm/s^2, for the trapezoidal profile of the runtime estimate
+acceleration = 3000                # mm/s^2 (deg/s^2 on a rotary axis), for the trapezoidal profile of the runtime estimate (D290)
 programming = "diameter"           # X axis of a lathe: diameter | radius | switchable (D60); the reader interprets the source with it, the compiler writes it
 home = 0                           # reference point 1 in machine coordinates (the G53 / M91 frame), for HOME (D100)
 home2 = -50                        # reference point 2 (G30 P2), optional
@@ -246,7 +246,7 @@ program_end = { X = 0, Z = -120 }  # optional
 ```toml
 [dynamics]                         # control behaviour for the runtime estimate (D64)
 block_time = 0.001                 # seconds the control needs per block; a short segment cannot be faster than this
-path_mode = "continuous"           # continuous | exact_stop
+path_mode = "continuous"           # continuous | exact_stop: the start value of the PATH_MODE state (VM 2.1); left out, exact stop (D350)
 corner_speed = 2000                # mm/min carried through a corner in continuous mode
 # rapid_exact_stop = true          # optional: whether the end of a RAPID is a rest point of the path; left out, true on a Fanuc-family machine (G00 in-position check) and false otherwise (D286)
 
@@ -254,6 +254,10 @@ corner_speed = 2000                # mm/min carried through a corner in continuo
 ON = "DIAMON"                      # Siemens; Mori Seiki radius mode: ON = "M583", OFF = "M582"; Fanuc: none, the parameter decides
 OFF = "DIAMOF"
 ```
+
+The units of `rapid`, `max_feed` and `acceleration` follow the axis kind, in every plane: mm/min and mm/s^2 on a linear axis, deg/min and deg/s^2 on a rotary axis. The runtime estimate uses a rotary axis only where its word is a length: under `CYLINDER=r` its values convert at r (1 deg = pi r / 180 mm); under `POLAR=ON` at L, the closest approach of the tool centre to the centre of rotation along the block, refined for a line to the exact bound F <= max_feed x pi / 180 x r_min^2 / p, r_min its nearest distance from the centre and p the distance of its line (a radial line, p = 0, is not limited by C), and the X limits apply as well; acceleration converts the same way. Where L is 0, a block through the centre, the estimate takes the X limits alone and its report says "C clamp near centre not estimated"; a motion of C at an unknown or zero cylinder radius has a line of its own. A `RAPID` under `POLAR` is estimated with the rapid of X; under `CYLINDER` the rapid of C converts at r (D290; gap closed 2026-10-28, delegated).
+
+`path_mode` is only the start value of the path-control state (virtual machine 2.1); `PATH_MODE` in the program changes it, `PATH_MODE=DEFAULT` and `PROGRAM=END` restore it, and the runtime estimate reads the state of each motion. A `[dynamics]` without `path_mode` starts at exact stop; a machine file without `[dynamics]` keeps the estimate at distance over feed. Where the program asks for a mode the machine has no `[transform]` template for, the state still rules the estimate and the report says so (D350). Under `CONTINUOUS` the path comes to rest at the rest points of D286 (virtual machine 8), among them the end of a `RAPID` on a Fanuc-family machine, which `rapid_exact_stop` overrides.
 
 ## 5. Functions and coolant
 
@@ -270,7 +274,7 @@ CSS_OFF = "G97"
 RPM_MAX = "G50 S{value}"
 rpm_min = 45                       # machine limits, not the program's RPM_MAX clamp: the expander warns or clamps (D64)
 rpm_max = 6000
-accel_time = 2.5                   # seconds from stop to rpm_max, for the runtime estimate of starts and stops
+accel_time = 2.5                   # seconds from stop to rpm_max, for the runtime estimate of starts, stops and speed changes (D323)
 
 [spindle.SUB]                      # Nakamura: +50, Mori Seiki: +200, Doosan: P suffix, Siemens: spindle number
 CW = "M53"
@@ -307,9 +311,10 @@ SUB_frame = "datum"                # datum: the sub spindle datum runs Z the oth
 wait = "M{mark}"                   # Fanuc wait M code; with paths: "M{mark} P{paths}"
 paths = "list"                     # list: P12, P13, P123 (parameter 8103#1 = 1); bitmask: P3, P5, P6, P7 (8103#1 = 0)
 mark_range = [100, 199]            # Mori Seiki: [101, 197]; Siemens: [0, 99] with 95 taken by BARLOAD_SYNC
-start_mark = 199                   # optional: written as the first block of every channel program (Nakamura M199 program start sync)
-reserved_marks = [199]             # optional: marks of the range the job compiler never picks for a SYNC it generates (Nakamura G196 transfer cycle; DMG [0, 1, 10, 15, 20, 25, 80, 90, 95]); default empty (D315)
-# groups = [{ channels = [1, 2], range = [100, 199] }, { channels = [3, 4], range = [800, 849] }]   # Nakamura WTW: a second wait group between other units
+start_mark = 198                   # optional: written after the header of every channel program only when some channel program does not already pass it as its first mark with all channels, wherever that SYNC stands (D314); Nakamura NTJX M198, the WY template M199 (D388)
+reserved_marks = [199]             # optional: marks of the range the job compiler never picks for a SYNC it generates (Nakamura G196 transfer cycle; DMG [0, 1, 10, 15, 20, 25, 80, 90, 95]); default empty. The pick takes the first mark of the range of all the job's channels that no channel program uses, that is not start_mark and not reserved; when every mark is used, the first that is not reserved; when every mark is reserved, CMP711. Each generated wait stands in a block of its own (D315)
+# groups = [{ channels = [1, 4], range = [800, 839] }, { channels = [2, 3], range = [800, 839] }, { channels = [1, 3], range = [840, 849] }, { channels = [2, 4], range = [840, 849] }]
+#                                  # Nakamura WTW, with for example channels 1 L-upper, 2 L-lower, 3 R-upper, 4 R-lower: M800-839 for L-upper/R-lower and L-lower/R-upper, M840-849 for L-upper/R-upper and L-lower/R-lower; a SYNC takes the range of the first group in file order whose channels hold all its participants, every other SYNC mark_range, and a group range may lie outside mark_range (D329); Mori Seiki NTX1000 narrows mark_range to [101, 197]
 # Siemens: wait = "WAITM({mark},{channels})", channels written as "1,2" or as the template's variables "WAIT_K1,WAIT_K2"
 start_channel = ""                 # Siemens: "START({channel})"
 wait_channel = ""                  # Siemens: "WAITE({channel})"
@@ -328,7 +333,7 @@ DOOR = { OPEN = "M52", CLOSE = "M53", channel = 1 }   # D56: only channel 1 may 
 
 [func_meta]
 SUB_CHUCK.CLOSE = "workpiece_transfer_to = SUB"   # reader fallback rule for machines without a [workpiece] table (D40)
-# When neither table fits (a builder M code runs a hidden subprogram on this machine), a reader rule from a plugin decides; the tables are tried first (D40, D66)
+# When neither table fits (a builder M code runs a hidden subprogram on this machine), a reader rule from a plugin decides; a plugin's rules are asked before the tables, and D40's order is the order of the built-in mechanisms (D40, D66, D231)
 
 [transform]
 CYLINDER_ON = "G7.1 C{r}"          # written for CYLINDER=30, {r} is that value, the reference radius (D96); Siemens: "TRACYL({d})" (the working diameter), DMG per spindle: "TRACYL_S4({d})"
@@ -408,7 +413,7 @@ pre = ["FUNC:PECK_MODE=RETRACT"]   # Doosan M291 before G83, as an NCX word so t
 
 The triggering block of a catalog cycle is the block that names the cycle (`CYCLE=name` or `CYCLE:<controller>=n`), never a `CYCLE_CALL` block, and the rule covers the cycle while it is active: `@SAVE`, `requires` and `pre` stand before that block, `post` and `@RESTORE` directly after the `CYCLE=OFF` that ends the cycle, and directly before every other block that ends it (the next `CYCLE`, a `TOOL`, the `PROGRAM=END`, or the `SUB=END` of a subprogram, where generated blocks stay in their section). A required state therefore holds at every hole, and a `post` that moves cannot drill while the cycle is still modal on the control. The expander finds the end in the text of the section, without VM state, and a `JUMP` out of the range skips `post` and `@RESTORE` like any block it jumps over (D204).
 
-Readers use the same rules backwards: a source sequence `M5`, `M51`, `M3 S1500` on a machine whose rule says the spindle stop belongs to `COOLANT:THROUGH=ON` is read as the one NCX word, so the round trip does not accumulate stops. Plugins that need more than these four keys get the same insertion points in code (`ncx-virtual-machine.md`, section 7).
+Readers use the same rules backwards through a plugin's reader rule: a source sequence `M5`, `M51`, `M3 S1500` on a machine whose rule says the spindle stop belongs to `COOLANT:THROUGH=ON` is read as the one NCX word by a rule that claims the three blocks (`samples/plugins/ThroughCoolantSourceRule`), so the round trip does not accumulate stops. The rules see every block before the tables (D231) and the blocks that follow it (D232); 1.0 has no fold of its own from the configuration. Plugins that need more than these four keys get the same insertion points in code (`ncx-virtual-machine.md`, section 7).
 
 A named function is written as `FUNC:SUB_CHUCK=OPEN` in NCX and compiles to the M code of that state. Readers map M codes back to names; an M code that matches no entry becomes `MFUNC=n` with a WARNING. The states of a `[func]` entry are free identifiers, the values `FUNC:name=` takes (`OPEN_RUNNING`, `NORMAL`, `LOW` and the like); the states of the other function tables are fixed keys: `CW`, `CCW`, `OFF`, `ORIENT`, `RPM`, `VC`, `CSS_OFF`, `RPM_MAX` in `[spindle.ROLE]`, `AXIS` and `SPINDLE` in `[spindle_mode.ROLE]`, `ON`, `OFF` and `PHASE` in `[spindle_sync]`, `ON` and `OFF` in a `[coolant]` channel (F23). Readers and compilers map them to the words of the language the same way (D154): `[spindle.R]` `CW`, `CCW`, `OFF` give `SPINDLE:R=state`; `ORIENT` gives `ORIENT:R={angle}`, and where the template carries no angle (`M19`, `M219`, `M319`, `M419`) the reader writes `ORIENT:R=0` with the WARNING RDR021, the orientation angle set by the machine, while a compiler writes such a template only for `ORIENT:R=0` and needs a template with `{angle}` for any other angle (the ERROR CMP007 without one, nothing written); `RPM` gives `RPM:R={rpm}`; `VC` gives `CSS:R=ON VC:R={value}`; `CSS_OFF` gives `CSS:R=OFF`; `RPM_MAX` gives `RPM_MAX:R={value}`; `[spindle_mode.R]` gives `SPINDLE_MODE:R=state`; `[coolant] C` gives `COOLANT:C=state`, the channel `STANDARD` as a bare `COOLANT`. The address is written as the examples do: a spindle word carries its role on a machine with more than one spindle and none on a machine with one. `[spindle_sync]` `ON` couples the default spindle, the leader, with the other work spindle, `SPINDLE_SYNC=default,other` (`MAIN,SUB` in the example files), or the two roles of `pair`; `PHASE` gives the same plus `PHASE={angle}`, `PHASE=0` with RDR021 where the template has no angle (`M92`, `M213`, `M34`); `OFF` gives `SPINDLE_SYNC=OFF`.
 
@@ -575,6 +580,8 @@ Or, for a long tree: `[machine] kinematics = "dmu50.kin.toml"`.
 ```
 my-shop/
   ncx.toml                 # working directory settings, plugin DLLs, the machine file --machine defaults to (the built-in default machine of D103 applies only when neither names one)
+  plugins/
+    MyShopRules.dll          # every DLL here is a plugin; ncx plugin build puts a plugin here (D317, D330)
   machines/
     dmu50.toml
     fanuc-vmc.toml
@@ -591,7 +598,15 @@ my-shop/
 
 Every machine file and catalog file of the layout may begin with `ncx_schema = 1` (section 1, D348); the version is the schema's, so a file copied from another project keeps it.
 
-`ncx.toml` names the plugin assemblies (`plugins = ["MyShop.NcxPlugins.dll"]`) that subscribe to VM events (`ncx-virtual-machine.md`, section 7).
+`ncx.toml` names the plugin assemblies in the table `[plugins]`, `assemblies = ["MyShop.NcxPlugins.dll"]`, and holds the settings of each plugin in a section `[plugins.<name>]` below it (D80, D238); no plugin may be named `assemblies`, and a top-level list `plugins = [...]` is the ERROR CFG003 (wrong type). A listed name is a path from the working directory, else the file of that name in `plugins/`. The listed DLLs load first, in list order, then the other DLLs of `plugins/` in ordinal name order, each file once, and the classes of one DLL in ordinal order of their full names (D317); the plugins act in that order (`ncx-virtual-machine.md`, section 7). A DLL of `plugins/` without a plugin class is the WARNING PLG005. `ncx plugin build` copies a plugin that brings no other assembly into `plugins/` and lists its name; a plugin that brings assemblies stays in its build output, whose path it lists, so that its load context finds them beside its `.deps.json`, and an earlier copy of it in `plugins/` is removed (D330). A plugin name loads once: a second DLL of the name is the WARNING PLG007.
+
+```toml
+[plugins]
+assemblies = ["MyShopRules.dll", "Clutch/bin/ncx/Clutch.dll"]
+
+[plugins.MyShopRules]
+before_tool = "HOME Z"
+```
 
 A machine named without a path is looked up in `machines/` of the folder `ncx.toml` names, of the working directory and of the tool's own folder, in that order, and a catalog in the `cycles/` folders in the same order; a value that names an existing file, or has a folder in it, is a path (D206, D207). The installation of `ncx` holds the shipped machine files and catalogs twice: loose in `machines/` and `cycles/` beside the binary, to read and copy, and built into the binary as the fourth and last place of both lookups, so that a single-file `ncx` run on its own finds them (D371). A shop's own file of a shipped name wins; a shop that wants a shipped machine gone shadows it with its own file of that name, since deleting the loose copy falls back to the built-in one. A built-in file is named in a diagnostic as `built-in machines/<name>.toml`. The plugin template is no built-in file: `ncx plugin new` from a lone binary reports CLI552.
 

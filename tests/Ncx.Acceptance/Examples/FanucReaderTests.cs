@@ -106,6 +106,48 @@ public sealed partial class FanucReaderTests
         Assert.Empty(read.Diagnostics.Items);
     }
 
+    // D232: with a reader rule loaded, every block is offered with its look-ahead, and 3D_FRAESEN still converts in
+    // well under a second.
+    [Fact]
+    public void Convert_3DFraesenWithADecliningRule_TakesWellUnderASecond()
+    {
+        MachineConfig mill = Mill();
+        Read("3D_FRAESEN.fanuc.nc", mill, new DecliningRule());
+
+        var watch = Stopwatch.StartNew();
+        NcxProgram read = Read("3D_FRAESEN.fanuc.nc", mill, new DecliningRule());
+        watch.Stop();
+
+        Assert.True(watch.ElapsedMilliseconds < 500, $"3D_FRAESEN took {watch.ElapsedMilliseconds} ms.");
+        Assert.Empty(read.Diagnostics.Items);
+    }
+
+    // D232: the look-ahead costs constant time per block, so a rule that declines every block of a long program leaves
+    // the reading about as fast as without it; a look-ahead copied per block would make it quadratic.
+    [Fact]
+    public void Convert_LongProgramWithADecliningRule_TakesWellUnderASecond()
+    {
+        MachineConfig mill = Mill();
+        var text = new System.Text.StringBuilder("%\nO0001\nG90 G21 G17 G94\nT1 M6\nS1000 M3\nG0 X0. Y0. Z5.\n");
+        for (int index = 0; index < 20000; index++)
+        {
+            text.Append("G1 X").Append(index % 100).Append(". F100.\n");
+        }
+
+        text.Append("M30\n%\n");
+        var source = new SourceFile("LONG.nc", text.ToString());
+        new FanucReader().Read(source, mill, new ReadOptions());
+
+        var watch = Stopwatch.StartNew();
+        new FanucReader().Read(source, mill, new ReadOptions());
+        long without = watch.ElapsedMilliseconds;
+        watch.Restart();
+        new FanucReader().Read(source, mill, new ReadOptions { Rules = [new DecliningRule()] });
+        long with = watch.ElapsedMilliseconds;
+
+        Assert.True(with < 2 * without + 300, $"with a rule {with} ms, without {without} ms.");
+    }
+
     // The output of the reader is a program that ncx format gives back as it is and that check runs without an ERROR
     // (code-guidelines 4; D91).
     [Theory]
@@ -230,10 +272,10 @@ public sealed partial class FanucReaderTests
         Assert.True(crashes.Count == 0, $"{crashes.Count} of {files} files crash:\n" + string.Join('\n', crashes));
     }
 
-    private static NcxProgram Read(string source, MachineConfig machine)
+    private static NcxProgram Read(string source, MachineConfig machine, params ISourceRule[] rules)
     {
         return new FanucReader().Read(new SourceFile(source, Fixture.ReadText("sources/" + source)), machine,
-            new ReadOptions());
+            new ReadOptions { Rules = rules });
     }
 
     // The mill of the Fanuc sources, loaded by its path as ncx convert --machine fanuc-mill-30i will load it.

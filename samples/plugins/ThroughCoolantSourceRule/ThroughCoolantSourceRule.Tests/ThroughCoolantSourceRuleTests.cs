@@ -62,19 +62,78 @@ public sealed class ThroughCoolantSourceRuleTests
         Assert.Empty(Written(builder));
     }
 
-    // D231, D232: the reader offers Read one block and none after it, so Read claims nothing
-    // and the reader reads the block itself.
+    // D232: Read folds the block it is offered with the blocks the reader shows it after it,
+    // and claims the three.
     [Fact]
-    public void Read_M5_ClaimsNothingWithoutTheBlocksAfterIt()
+    public void Read_M5WithM51AndM3Following_ClaimsTheThreeBlocks()
     {
         var builder = new NcxBuilder(new Diagnostics("part.nc"));
         var state = new SourceState(null, new Dictionary<string, int>());
+        SourceBlock stop = Source(10, "M5") with { Following = [Source(11, "M51"), Source(12, "M3 S1500")] };
 
-        bool claimed = new ThroughCoolantSourceRule().Read(Source(10, "M5"), state, builder);
+        int claimed = new ThroughCoolantSourceRule().Read(stop, state, builder);
 
-        Assert.False(claimed);
-        Assert.Empty(Written(builder));
+        Assert.Equal(3, claimed);
+        Assert.Equal(["10: COOLANT:THROUGH=ON"], Written(builder));
     }
+
+    // D231, D232: the Fanuc reader offers the rule the M5 its spindle table names, with the
+    // two blocks after it, and the rule's word stands in place of the three.
+    [Fact]
+    public void Read_ByTheFanucReader_FoldsTheBlocksTheTablesName()
+    {
+        var machineDiagnostics = new Diagnostics("clutch.toml");
+        Ncx.Core.Machine.MachineConfig machine = Ncx.Config.MachineConfigLoader.LoadText(ClutchMill,
+            machineDiagnostics)!;
+        Assert.True(machineDiagnostics.Items.Count == 0, machineDiagnostics.ToText());
+        var options = new ReadOptions { Rules = [new ThroughCoolantSourceRule()] };
+
+        NcxProgram program = new Ncx.Readers.Fanuc.FanucReader().Read(
+            new SourceFile("O0001.nc", "%\nO0001\nG90 G21 G17 G94\nM3 S1500\nM5\nM51\nM3 S1500\nM30\n%\n"),
+            machine, options);
+
+        string text = NcxWriter.Write(program);
+        Assert.EndsWith("\nSPINDLE=CW RPM=1500\nCOOLANT:THROUGH=ON\nPROGRAM=END\nFILE=END\n", text,
+            StringComparison.Ordinal);
+    }
+
+    // A mill whose spindle and coolant tables name M3, M5 and M51 (machine-config 5).
+    private const string ClutchMill = """
+        [machine]
+        name = "Clutch mill"
+        controller = "fanuc"
+        channels = [1]
+        units_default = "MM"
+        default_spindle = "S1"
+        default_holder = "H1"
+
+        [roles]
+        MAIN = "S1"
+
+        [[resource]]
+        id = "S1"
+        type = "tool_spindle"
+
+        [[resource]]
+        id = "H1"
+        type = "tool_holder"
+        spindle = "S1"
+
+        [[axis]]
+        id = "Z1"
+        ncx = "Z"
+        letter = "Z"
+        kind = "linear"
+
+        [spindle.MAIN]
+        CW = "M3"
+        CCW = "M4"
+        OFF = "M5"
+
+        [coolant]
+        STANDARD = { ON = "M8", OFF = "M9" }
+        THROUGH = { ON = "M51", OFF = "M9" }
+        """;
 
     // A source block as a tokenizer reads it: "M3 S1500" is the words M3 and S1500.
     private static SourceBlock Source(int line, string text)

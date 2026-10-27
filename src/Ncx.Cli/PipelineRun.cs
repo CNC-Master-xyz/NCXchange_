@@ -26,12 +26,6 @@ internal sealed record PipelineRun
     public NcxProgram? Program { get; init; }
 
     /// <summary>
-    /// The byte order mark the NCX file began with, empty without one; it is no part of the text the parser reads
-    /// (wave-1 question #80).
-    /// </summary>
-    public string ByteOrderMark { get; init; } = "";
-
-    /// <summary>
     /// The exit code of the run: 2 when an input could not be read, which is decided before the run starts and takes
     /// precedence; otherwise 1 with an ERROR, or with a WARNING under --strict, and 0 without (D97, architecture 10).
     /// </summary>

@@ -543,7 +543,8 @@ internal sealed class ConfigTable
     /// <param name="key">The key of the table.</param>
     /// <param name="name">The name for messages; [key] at the top of the file, else this name and the key.</param>
     /// <param name="section">The section that defines it; by default the section of this table.</param>
-    public ConfigTable? Table(string key, string? name = null, string? section = null)
+    /// <param name="expected">What the message says the key takes; "a table" by default.</param>
+    public ConfigTable? Table(string key, string? name = null, string? section = null, string expected = "a table")
     {
         if (!_table.TryGetValue(key, out object? value))
         {
@@ -555,7 +556,7 @@ internal sealed class ConfigTable
             return new ConfigTable(table, name ?? ChildName(key), LineOf(key), section ?? Section, _document);
         }
 
-        WrongType(key, "a table", value);
+        WrongType(key, expected, value);
         return null;
     }
 

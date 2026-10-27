@@ -64,7 +64,7 @@ internal static class ToolHandlers
 
         // A TOOL resets its holder to point 1, a = 0, r = 0; the point words of the same block apply after TOOL in
         // step 3 and set the point of the tool that arrives (D372).
-        holder.ResetPoint();
+        context.State.OffsetsOf(holderId).ResetPoint();
         context.State.Unknown.Remove(BlockContext.StateKey("TIP_OFFSET", holderId));
         context.State.Unknown.Remove(BlockContext.StateKey("POINT_RADIUS", holderId));
         context.State.LastHolder = holderId;
@@ -79,8 +79,9 @@ internal static class ToolHandlers
         {
             // D393: a named point makes the compilers write the registers of the mapping, until the next TOOL or an
             // OFFSET word on the holder.
-            context.State.Holders[holderId].ToolPoint = point;
-            context.State.Holders[holderId].PointNamed = true;
+            HolderOffsets offsets = context.State.OffsetsOf(holderId);
+            offsets.ToolPoint = point;
+            offsets.PointNamed = true;
         }
     }
 
@@ -90,7 +91,7 @@ internal static class ToolHandlers
         if (context.ResourceOf.TryGetValue(word, out string? holderId)
             && context.TryNumber(word, BlockContext.StateKey(word.Key, holderId), out decimal offset))
         {
-            context.State.Holders[holderId].TipOffset = offset;
+            context.State.OffsetsOf(holderId).TipOffset = offset;
         }
     }
 
@@ -100,7 +101,7 @@ internal static class ToolHandlers
         if (context.ResourceOf.TryGetValue(word, out string? holderId)
             && context.TryNumber(word, BlockContext.StateKey(word.Key, holderId), out decimal radius))
         {
-            context.State.Holders[holderId].PointRadius = radius;
+            context.State.OffsetsOf(holderId).PointRadius = radius;
         }
     }
 
@@ -114,8 +115,9 @@ internal static class ToolHandlers
             return;
         }
 
-        // D393: an OFFSET word is the hand-written form of the registers and replaces those of a named point.
-        HolderState holder = context.State.Holders[holderId];
+        // D393: an OFFSET word is the hand-written form of the registers and replaces those of a named point. The
+        // registers are per channel also in a job (D308).
+        HolderOffsets holder = context.State.OffsetsOf(holderId);
         holder.PointNamed = false;
         switch (word.Addr)
         {

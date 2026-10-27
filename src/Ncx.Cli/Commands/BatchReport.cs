@@ -32,11 +32,11 @@ internal static class BatchReport
     /// <param name="files">The files, in the order they were converted.</param>
     public static string Write(string machine, IReadOnlyList<BatchFile> files)
     {
-        // TODO(question): implementation 13 asks for "a summary per file with blocks, RAW blocks per word, diagnostics
-        // per code, and totals" and names neither its form nor the word a RAW block is counted by. The report is
-        // aligned text, the files in the order of their paths, the words and codes in ordinal order, and a RAW block
-        // counted by its RAW word, RAW:FANUC or RAW:NAKAMURA, since the report holds no source text; the totals give
-        // the files each word and code stands in. Until that is answered.
+        // Implementation 13 asks for "a summary per file with blocks, RAW blocks per word, diagnostics per code, and
+        // totals". The report is aligned text, the files in the order of their paths, the words and codes in ordinal
+        // order, and a RAW block counted by its RAW word, RAW:FANUC or RAW:NAKAMURA; the constructs behind it stay in
+        // the standard error, so that the report holds no program text; the totals give the files each word and code
+        // stands in (D285, tests/corpus-reports/README.md).
         var text = new StringBuilder();
         text.Append("ncx convert --batch (implementation 13, P3-07)\n");
         text.Append("machine: ").Append(machine).Append('\n');

@@ -6,18 +6,17 @@ using Ncx.Core.VirtualMachine.State;
 namespace Ncx.Analytics;
 
 /// <summary>
-/// How the reports write their numbers and their title: distances with the three decimals of a position, angles with
-/// the three decimals of a sweep, seconds with one decimal and as hours, minutes and seconds, always with the invariant
-/// culture (code-guidelines 3.4).
+/// How the reports write their numbers and their title: distances and angles with three decimals, seconds with one
+/// decimal and as hours, minutes and seconds, always with the invariant culture (code-guidelines 3.4).
 /// </summary>
 internal static class ReportText
 {
-    // A distance keeps the three decimals of a position in millimetres (MotionRules.PositionDecimals of the virtual
-    // machine), without trailing zeros.
+    // D121: the virtual machine stores its coordinates with six decimals (Vec3.VmDecimals); a report prints a distance
+    // with three decimals of a millimetre, a micrometre, without trailing zeros. That is a choice of the report, not of
+    // the virtual machine (gap closed 2026-10-27, delegated: plan flag N13, the report digits stay as they were).
     private const string DistanceFormat = "0.###";
 
-    // An angle keeps the three decimals of a degree of the sweep of an arc (MotionEvents.SweepDecimals of the virtual
-    // machine), without trailing zeros.
+    // An angle with three decimals of a degree, without trailing zeros; the virtual machine keeps six (D121, N13).
     private const string AngleFormat = "0.###";
 
     // Seconds with one decimal: an estimate is no more exact than that.

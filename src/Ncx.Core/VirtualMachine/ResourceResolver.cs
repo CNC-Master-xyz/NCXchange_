@@ -555,6 +555,7 @@ internal sealed class ResourceResolver
         else if (resource.Type == ResourceType.ToolHolder)
         {
             state.Holders.TryAdd(resource.Id, new HolderState());
+            state.OffsetsOf(resource.Id);
         }
 
         if (resource.Axis is string axis && !state.Motion.Position.ContainsKey(axis))

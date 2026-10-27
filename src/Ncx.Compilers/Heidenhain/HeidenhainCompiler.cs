@@ -38,6 +38,70 @@ public sealed class HeidenhainCompiler : CompilerBase
     protected override string FileExtension => ".h";
 
     /// <summary>
+    /// D316, D388 (13): on Heidenhain each SUB that no channel program of a job calls becomes a program of its own,
+    /// &lt;job name&gt;_LIB_&lt;sub&gt;.h, which another program calls with CALL PGM: the body of its LBL section
+    /// between BEGIN PGM and END PGM, without M2 or M30, which a called program must not contain (D274; iTNC 530
+    /// Benutzerhandbuch Klartext 340490, connector p.523, Programmier-Hinweise). The units are the machine's
+    /// units_default, since a SUB no program calls runs from the default entry state (D99).
+    /// </summary>
+    private protected override List<CompiledFile> LibraryFiles(string library, IReadOnlyList<Section> subs)
+    {
+        string units = Machine.Machine.UnitsDefault == "INCH" ? "INCH" : "MM";
+        var files = new List<CompiledFile>();
+        foreach (Section sub in subs)
+        {
+            // Every SUB is written, also one whose walk wrote no lines; its program is then empty.
+            IReadOnlyList<OutputLine> lines = SubLines(sub);
+            Block begin = lines.Count > 0 ? lines[0].Block : SubBeginBlock(sub);
+            Block end = lines.Count > 0 ? lines[^1].Block : begin;
+            string name = library + "_" + sub.Name;
+            OutputBuffer output = NewOutput();
+            output.Line("BEGIN PGM " + name + " " + units, begin);
+            for (int index = 1; index < lines.Count - 1; index++)
+            {
+                output.Add([LibraryCall(lines[index], library, subs)]);
+            }
+
+            output.Line("END PGM " + name + " " + units, end);
+            files.Add(new CompiledFile
+            {
+                Name = name + FileExtension,
+                Text = output.ToText(Diagnostics),
+                Library = true,
+            });
+        }
+
+        return files;
+    }
+
+    // Inside a library program a call of another SUB of the library is a call of that program, CALL PGM
+    // <job name>_LIB_<sub>, since the LBL is in another program now (D316, D274); every other line stays.
+    private static OutputLine LibraryCall(OutputLine line, string library, IReadOnlyList<Section> subs)
+    {
+        if (!line.Text.StartsWith("CALL LBL ", StringComparison.Ordinal)
+            || line.Block.Find("CALL")?.Value is not Value target)
+        {
+            return line;
+        }
+
+        string called = target switch
+        {
+            StringValue text => text.Content,
+            IdentValue ident => ident.Name,
+            _ => target.ToCanonical(),
+        };
+        foreach (Section sub in subs)
+        {
+            if (sub.Name == called)
+            {
+                return line with { Text = "CALL PGM " + library + "_" + sub.Name };
+            }
+        }
+
+        return line;
+    }
+
+    /// <summary>
     /// An ARC with a tool vector is the ERROR CMP017: LN, the only Klartext block with a tool vector, has no arc form
     /// (D185).
     /// </summary>

@@ -28,7 +28,7 @@ public sealed class PluginFolderTests : IDisposable
         Assert.False(Directory.Exists(_workspace.PathOf("plugins")));
     }
 
-    // The TODO(question) of PluginFolder: without a folder, a working directory with no plugin that ncx plugin new
+    // D332: without a folder, a working directory with no plugin that ncx plugin new
     // made has nothing to build.
     [Fact]
     public void PluginBuild_NoFolderAndNoPlugin_IsReported()
@@ -39,7 +39,7 @@ public sealed class PluginFolderTests : IDisposable
         Assert.StartsWith("ncx: ERROR CLI553: ", _workspace.Error, StringComparison.Ordinal);
     }
 
-    // The TODO(question) of PluginFolder: without a folder, two plugins that ncx plugin new made in the working
+    // D332: without a folder, two plugins that ncx plugin new made in the working
     // directory are named, and the user chooses one.
     [Fact]
     public void PluginBuild_NoFolderAndTwoPlugins_NamesBothAndBuildsNeither()

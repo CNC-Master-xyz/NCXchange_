@@ -155,7 +155,7 @@ public sealed class JobCommandTests : IDisposable
 
     // Architecture 10, implementation 16 (P6-02): ncx compile --job writes one NC file per channel of the job into the
     // folder of --output, on the machine the manifest names, whose start_mark M198 is the first block of both programs
-    // (machine-config 5, D388 9).
+    // (machine-config 5, D388 9), named O1000 and O1000.P-2 by its [format] channel_files = "path_suffix" (D310).
     [Fact]
     public void CompileJob_TwoChannels_WritesOneFilePerChannel()
     {
@@ -166,9 +166,9 @@ public sealed class JobCommandTests : IDisposable
 
         Assert.True(exitCode == 0, _cli.Error);
         Assert.Equal("%\r\nO1000 (T)\r\nG21\r\nM198\r\nM110\r\nM30\r\n%\r\n",
-            File.ReadAllText(Path.Combine(folder, "one.nc")));
+            File.ReadAllText(Path.Combine(folder, "O1000")));
         Assert.Equal("%\r\nO1000 (T)\r\nG21\r\nM198\r\nM110\r\nM30\r\n%\r\n",
-            File.ReadAllText(Path.Combine(folder, "two.nc")));
+            File.ReadAllText(Path.Combine(folder, "O1000.P-2")));
     }
 
     // Virtual machine 3.8 rule 2a, D56: on the Nakamura the spindle synchronization is accepted only from path 2
@@ -185,9 +185,9 @@ public sealed class JobCommandTests : IDisposable
 
         Assert.True(exitCode == 0, _cli.Error);
         Assert.Equal("%\r\nO1000 (T)\r\nG21\r\nM198\r\nM110\r\nM111\r\nM30\r\n%\r\n",
-            File.ReadAllText(Path.Combine(folder, "one.nc")));
+            File.ReadAllText(Path.Combine(folder, "O1000")));
         Assert.Equal("%\r\nO1000 (T)\r\nG21\r\nM198\r\nM110\r\nM96\r\nM111\r\nM30\r\n%\r\n",
-            File.ReadAllText(Path.Combine(folder, "two.nc")));
+            File.ReadAllText(Path.Combine(folder, "O1000.P-2")));
     }
 
     // Virtual machine 3.8 rule 2a, D56: the same program of path 1 compiled alone is the ERROR of a single-channel

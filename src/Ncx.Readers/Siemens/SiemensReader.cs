@@ -117,25 +117,6 @@ public sealed class SiemensReader : ReaderBase
     }
 
     /// <summary>
-    /// A block leaves an M function undecided that neither the controller nor a table of the machine names (D40, D66).
-    /// </summary>
-    /// <param name="block">A source block with words.</param>
-    protected override bool LeavesUndecided(SourceBlock block)
-    {
-        SiemensState state = Facts();
-        var reading = new SiemensBlock(block, _tokenizer, state, Machine, _templates!, Diagnostics);
-        foreach (SourceWord word in block.Words)
-        {
-            if (word.Address == "M" && !SiemensFunctions.Names(reading, word))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
     /// A program starts from the initial state of the control with the complete header of D34, and GOTOS finds its
     /// label
     /// after it; a subprogram from what its callers agree on (virtual machine 3.9); an _INI unit has no header.

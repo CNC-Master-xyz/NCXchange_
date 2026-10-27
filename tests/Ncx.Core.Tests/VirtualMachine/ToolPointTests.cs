@@ -14,7 +14,7 @@ public sealed class ToolPointTests
     [Fact]
     public void Holder_AtStart_IsPointOneAtTheTip()
     {
-        HolderState holder = new VmHarness(VmMachines.Default()).State.Holders["H1"];
+        HolderOffsets holder = new VmHarness(VmMachines.Default()).State.Offsets["H1"];
 
         Assert.Equal(1, holder.ToolPoint);
         Assert.Equal(0m, holder.TipOffset);
@@ -28,7 +28,7 @@ public sealed class ToolPointTests
         VmHarness vm = new VmHarness(VmMachines.Default()).Execute("TOOL=5 TOOL_POINT=2 TIP_OFFSET=2 POINT_RADIUS=8");
 
         vm.AssertNoDiagnostics();
-        HolderState holder = vm.State.Holders["H1"];
+        HolderOffsets holder = vm.State.Offsets["H1"];
         Assert.Equal(2, holder.ToolPoint);
         Assert.Equal(2m, holder.TipOffset);
         Assert.Equal(8m, holder.PointRadius);
@@ -42,7 +42,7 @@ public sealed class ToolPointTests
         VmHarness vm = new VmHarness(VmMachines.Default())
             .Execute("TOOL=5 TOOL_POINT=2 TIP_OFFSET=2 POINT_RADIUS=8", "TOOL=6");
 
-        HolderState holder = vm.State.Holders["H1"];
+        HolderOffsets holder = vm.State.Offsets["H1"];
         Assert.Equal(1, holder.ToolPoint);
         Assert.Equal(0m, holder.TipOffset);
         Assert.Equal(0m, holder.PointRadius);
@@ -56,8 +56,8 @@ public sealed class ToolPointTests
         VmHarness vm = new VmHarness(VmMachines.Default())
             .Execute("TOOL=5 TOOL_POINT=2 TIP_OFFSET=2 POINT_RADIUS=8", "TOOL_POINT=3 TIP_OFFSET=1.5");
 
-        HolderState holder = vm.State.Holders["H1"];
-        Assert.Equal(new ToolRef(5), holder.SpindleTool);
+        HolderOffsets holder = vm.State.Offsets["H1"];
+        Assert.Equal(new ToolRef(5), vm.State.Holders["H1"].SpindleTool);
         Assert.Equal(3, holder.ToolPoint);
         Assert.Equal(1.5m, holder.TipOffset);
         Assert.Equal(8m, holder.PointRadius);
@@ -69,9 +69,9 @@ public sealed class ToolPointTests
     {
         VmHarness vm = new VmHarness(VmMachines.MillTurn()).Execute("TOOL:TURRET2=3", "TOOL_POINT=2 TIP_OFFSET=1");
 
-        Assert.Equal(2, vm.State.Holders["H2"].ToolPoint);
-        Assert.Equal(1m, vm.State.Holders["H2"].TipOffset);
-        Assert.Equal(1, vm.State.Holders["H1"].ToolPoint);
+        Assert.Equal(2, vm.State.Offsets["H2"].ToolPoint);
+        Assert.Equal(1m, vm.State.Offsets["H2"].TipOffset);
+        Assert.Equal(1, vm.State.Offsets["H1"].ToolPoint);
     }
 
     // D372, D391: TOOL_POINT with a role addresses that holder, and the tip offset of its block follows it.
@@ -81,10 +81,10 @@ public sealed class ToolPointTests
         VmHarness vm = new VmHarness(VmMachines.MillTurn())
             .Execute("TOOL:TURRET1=4", "TOOL:TURRET2=3", "TOOL_POINT:TURRET1=2 TIP_OFFSET=1");
 
-        Assert.Equal(2, vm.State.Holders["H1"].ToolPoint);
-        Assert.Equal(1m, vm.State.Holders["H1"].TipOffset);
-        Assert.Equal(1, vm.State.Holders["H2"].ToolPoint);
-        Assert.Equal(0m, vm.State.Holders["H2"].TipOffset);
+        Assert.Equal(2, vm.State.Offsets["H1"].ToolPoint);
+        Assert.Equal(1m, vm.State.Offsets["H1"].TipOffset);
+        Assert.Equal(1, vm.State.Offsets["H2"].ToolPoint);
+        Assert.Equal(0m, vm.State.Offsets["H2"].TipOffset);
     }
 
     // VM 1: a value from an expression is UNKNOWN in STATIC mode, named by its state key.

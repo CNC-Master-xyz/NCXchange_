@@ -171,8 +171,9 @@ public static partial class DiagnosticCodes
     public const string SyncInSingleChannelJob = "VM570";
 
     /// <summary>
-    /// VM571: deadlock at SYNC, every channel waiting with no releasable mark; raised by the job scheduler of a
-    /// multi-channel job (virtual machine 3.7, 5).
+    /// VM571: deadlock: no channel can execute a block and some channel has not finished, whether the others wait or
+    /// have finished; the ERROR names what each channel waits for; raised by the job scheduler of a multi-channel job
+    /// (virtual machine 3.7, 5; D305).
     /// </summary>
     public const string SyncDeadlock = "VM571";
 
@@ -181,4 +182,11 @@ public static partial class DiagnosticCodes
     /// multi-channel job (virtual machine 3.7, 5).
     /// </summary>
     public const string SpindleSharedBetweenMarks = "VM572";
+
+    /// <summary>
+    /// VM573: a channel reaches mark m while another participant of either list waits there with a different set of
+    /// participants; the job stops there instead of running into the deadlock VM571; raised by the job scheduler of a
+    /// multi-channel job (virtual machine 3.7, 5; D304).
+    /// </summary>
+    public const string SyncParticipantsDiffer = "VM573";
 }

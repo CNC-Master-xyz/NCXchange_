@@ -68,9 +68,8 @@ internal static class PluginCheck
     // Code-guidelines 11: the plugin, the Ncx assemblies it was built against with their version (implementation 17,
     // risks), and each of the four interfaces it implements with the number of its classes, in the order of
     // architecture 9: reader, expander, virtual machine, compiler.
-    // TODO(question): no document gives what the plugin commands write on the standard output: this listing, the
-    // files ncx plugin new writes, the DLL and the line of ncx.toml of ncx plugin build. Each is named on a line of its
-    // own, until that is answered.
+    // The plugin commands name one item per line on the standard output: this listing, the files ncx plugin new
+    // writes, the DLL and the line of ncx.toml of ncx plugin build (D331).
     private static string Listing(string dll, string path, PluginSet plugins)
     {
         var text = new StringBuilder();

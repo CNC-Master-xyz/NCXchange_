@@ -1,5 +1,6 @@
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.Events;
+using Ncx.Core.VirtualMachine.State;
 using Ncx.Core.VirtualMachine.Validation;
 
 namespace Ncx.Core.VirtualMachine;
@@ -62,7 +63,7 @@ public sealed partial class VirtualMachine
             return false;
         }
 
-        StartWalk(NewState(channelId ?? running.Channel), suppressCallerRules: false);
+        StartWalk(NewState(channelId ?? running.Channel, JobResources), suppressCallerRules: false);
         _state.Program.Section = running;
         RaiseFileEvent(program, EventPhase.Begin);
         _stepsEnd = new SectionEnd();
@@ -80,6 +81,7 @@ public sealed partial class VirtualMachine
     /// </summary>
     internal StepResult Step()
     {
+        TakeOverSharedChanges();
         if (_steps is not null && _steps.MoveNext())
         {
             Block executed = _steps.Current;
@@ -97,6 +99,43 @@ public sealed partial class VirtualMachine
 
         EndSteps();
         return new StepResult { Ended = true, Stopped = _stepsEnd.Exit == SectionExit.Stopped };
+    }
+
+    // D308: the spindle and holder rows are one per job, and another channel may have changed them since this
+    // channel's last events. The Before of the next block takes them as they stand now, so that a listener of this
+    // channel sees only the changes of this channel's blocks (virtual machine 7), not a tool change of another channel
+    // as one of its own.
+    private void TakeOverSharedChanges()
+    {
+        if (JobResources is null || _lastAfter is not ChannelSnapshot last || !ReferenceEquals(_eventState, _state))
+        {
+            return;
+        }
+
+        ChannelSnapshot now = _state.Snapshot();
+        if (!SameRows(last.Spindles, now.Spindles) || !SameRows(last.Holders, now.Holders))
+        {
+            _lastAfter = last with { Spindles = now.Spindles, Holders = now.Holders };
+        }
+    }
+
+    // Whether two tables of resource rows hold equal rows by resource id; the rows are records.
+    private static bool SameRows<TRow>(IReadOnlyDictionary<string, TRow> before, IReadOnlyDictionary<string, TRow> now)
+    {
+        if (before.Count != now.Count)
+        {
+            return false;
+        }
+
+        foreach (KeyValuePair<string, TRow> row in now)
+        {
+            if (!before.TryGetValue(row.Key, out TRow? old) || !Equals(old, row.Value))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>

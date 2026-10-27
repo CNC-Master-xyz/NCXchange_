@@ -25,6 +25,7 @@ trailing_zeros = false
 block_numbers = { enabled = false }
 line_ending = "CRLF"
 program_end = "M30"                # written for PROGRAM=END (D48)
+channel_files = "path_suffix"      # job output: O1000 for path 1 and O1000.P-2 for path 2, no extension (D310)
 sub_end = "M99"
 
 [roles]

@@ -31,6 +31,33 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
     protected override string FileExtension => ".mpf";
 
     /// <summary>
+    /// D316: on Siemens each SUB that no channel program of a job calls is an SPF of its own, &lt;name&gt;.spf, named
+    /// by the unit it writes (%_N_&lt;name&gt;_SPF), so that a later CALL finds it by its name; the library of the job
+    /// is the set of these files.
+    /// </summary>
+    private protected override List<CompiledFile> LibraryFiles(string library, IReadOnlyList<Section> subs)
+    {
+        var files = new List<CompiledFile>();
+        foreach (Section sub in subs)
+        {
+            IReadOnlyList<OutputLine> lines = SubLines(sub);
+            string name = sub.Name ?? library;
+            if (lines.Count > 0
+                && lines[0].Text.StartsWith("%_N_", StringComparison.Ordinal)
+                && lines[0].Text.EndsWith("_SPF", StringComparison.Ordinal))
+            {
+                name = lines[0].Text[4..^4];
+            }
+
+            OutputBuffer output = NewOutput();
+            output.Add(lines);
+            files.Add(new CompiledFile { Name = name + ".spf", Text = output.ToText(Diagnostics), Library = true });
+        }
+
+        return files;
+    }
+
+    /// <summary>
     /// An ARC with a tool vector is the ERROR CMP017: a G2 or G3 with A3= B3= C3= is not checked yet (D185).
     /// </summary>
     protected override bool WritesVectorArcs => false;

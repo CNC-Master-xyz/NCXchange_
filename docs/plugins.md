@@ -35,11 +35,11 @@ The template in `../templates/ncx-plugin/` is a plugin that builds and runs as i
    ```
 
    With more than one plugin in the folder, name the one to build: `ncx plugin build MyShopRules`.
-5. Copy nothing: the command has put the DLL into `plugins/` and added the line to `ncx.toml`, and says so:
+5. Copy nothing: the command has put the DLL into `plugins/` and added it to `[plugins] assemblies` of `ncx.toml`, and says so (a plugin that brings a package stays in its build output instead, and the line names that path, D330):
 
    ```text
    plugins/MyShopRules.dll
-   ncx.toml: plugins = ["MyShopRules.dll"]
+   ncx.toml: [plugins] assemblies = ["MyShopRules.dll"]
    ```
 
 6. Run the program through `ncx` and read what the plugin did, with `ncx compile` or with `ncx check`:
@@ -98,27 +98,27 @@ public sealed class CoolantClutchRule : IProgramRewriter
 
 The whole rule, with its comments, is `../templates/ncx-plugin/CoolantClutchRule.cs`, and `../samples/plugins/CoolantClutch/` is the same rule as a finished plugin with its tests. A block that does not parse rejects the whole answer with `PLG004` on the line of the block; the blocks a rewriter inserted are the INFO `PLG001`.
 
-### ISourceRule: an M code the machine file does not name
+### ISourceRule: what an M code or a run of blocks means on this machine
 
-A reader offers a rule the source blocks that the tables of the machine file leave undecided, one block at a time, with the source-side state read only. A rule that claims a block writes its NCX blocks with the builder and returns `true`; the reader then reads nothing more of it and keeps its comment. A rule that returns `false` leaves the block to the reader.
+A reader offers every source block to the rules of the loaded plugins before it tries the tables of the machine file, in the order the plugins are loaded, one block at a time, with the source-side state read only (D231). `block.Following` shows the blocks that follow it in its section, up to the next block of the file structure or of the control flow (`O`, `M30`, `M99`, a jump target, a jump, a call, a repeat), without the comment-only lines, so that a run never takes control flow (D232; gap closed 2026-10-28, delegated). A rule that claims blocks writes its NCX blocks for the whole run with the builder and returns how many source blocks it claimed, the offered one among them; the reader then reads nothing more of them, applies them to the source state and keeps their comments as comment-only lines after the rule's blocks. A rule that returns `0` leaves the block to the next rule, and then to the tables and the reader (D232). A count below 0 or beyond the blocks shown, or a claim for which the rule wrote no NCX block, is a `PLG003` failure of the plugin, which is then left out (D5). A plugin is written for one machine: claim only what you recognise, since a claimed block is no longer read by the tables.
 
 ```csharp
 public sealed class ShopCoolantCode : ISourceRule
 {
-    public bool Read(SourceBlock block, SourceState state, NcxBuilder builder)
+    public int Read(SourceBlock block, SourceState state, NcxBuilder builder)
     {
         if (block.Find("M")?.Number != 456m)
         {
-            return false;
+            return 0;
         }
 
         builder.Begin(block.Line).Word("COOLANT", null, new IdentValue("ON")).End();
-        return true;
+        return 1;
     }
 }
 ```
 
-`../samples/plugins/ThroughCoolantSourceRule/` folds the three blocks `M5`, `M51`, `M3 S1500` that a machine with a coolant clutch writes back into `COOLANT:THROUGH=ON` (D66). It cannot do so in a reader yet: the tables of the machine file are tried first and name all three codes (D231), and a rule sees the one block it is offered, none after it (D232). Its test shows the fold with the three blocks.
+`../samples/plugins/ThroughCoolantSourceRule/` folds the three blocks `M5`, `M51`, `M3 S1500` that a machine with a coolant clutch writes back into `COOLANT:THROUGH=ON` (D66): offered the `M5`, it looks at the two blocks in `block.Following`, writes the one word and returns 3. Its tests show the fold alone and through the Fanuc reader, whose tables name all three codes.
 
 ### IVmListener: reading the state around a block
 
@@ -167,7 +167,7 @@ The whole writer is `../samples/plugins/ZOnItsOwnLine/ZOnItsOwnLine.cs`, with it
 - Reach the state through the output. A block writer changes the lines of the NC file and nothing else; what it does to `Words` is not written.
 - Do what the machine file does. Limits of the machine (`rpm_max`, `max_feed`, travel limits) are configuration, applied by the expander.
 
-A plugin that fails is reported with its name and left out for the rest of the run, which goes on without it: a DLL that does not load is the ERROR `PLG002`, a class that throws in its method the ERROR `PLG003`, a text that does not parse the ERROR `PLG004`, a block that mixes a pseudo-word with other words the ERROR `PLG006` (pseudo-words stand in blocks of their own, D167), a DLL without a class of the four interfaces the WARNING `PLG005`. `ncx compile` writes no NC file after an ERROR of a plugin, because a program the plugin did not see must not reach the machine.
+A plugin that fails is reported with its name and left out for the rest of the run, which goes on without it: a DLL that does not load is the ERROR `PLG002`, a class that throws in its method the ERROR `PLG003`, a text that does not parse the ERROR `PLG004`, a block that mixes a pseudo-word with other words the ERROR `PLG006` (pseudo-words stand in blocks of their own, D167), a DLL without a class of the four interfaces the WARNING `PLG005`, a second DLL of a plugin name the WARNING `PLG007` (the first in load order loads). `ncx compile` writes no NC file after an ERROR of a plugin, because a program the plugin did not see must not reach the machine.
 
 ## Settings
 
@@ -185,11 +185,21 @@ if (context.Settings.TryGetValue("before_tool", out string? before))
 }
 ```
 
-A file cannot hold the list `plugins = [...]` beside such a section (D238, open). A plugin with a section of its own is found in `plugins/`, where every DLL is loaded anyway; `ncx plugin build` leaves an `ncx.toml` with sections as it is and says so (`CLI557`).
+The sections stand below the table `[plugins]`, whose `assemblies` lists the plugin DLLs; no plugin may be named `assemblies` (D238):
+
+```toml
+[plugins]
+assemblies = ["MyShopRules.dll"]
+
+[plugins.MyShopRules]
+before_tool = "HOME Z"
+```
+
+The old top-level list `plugins = [...]` is the ERROR `CFG003`. `ncx plugin build` adds to `assemblies`; a file it cannot join (a list over several lines, say) stays as it is, with the INFO `CLI557` for a DLL in `plugins/`, which loads anyway, and the WARNING `CLI560` for the path of a build output, which does not. When a plugin moves to its build output, `build` removes its earlier copy in `plugins/` (INFO `CLI561`).
 
 ## Where ncx finds plugins
 
-Every DLL of `plugins/` of the working directory is a plugin, and so is every DLL that the list `plugins = [...]` of `ncx.toml` names, by its path from the working directory or by its name in `plugins/` (`spec/machine-config.md`, section 10). The list comes first, then the DLLs of `plugins/` in the order of their names; the rewriters of several plugins act on a block in that order. A plugin is named after its DLL, `MyShopRules.dll` is `MyShopRules`. Each DLL loads into a context of its own, which shares the `Ncx` assemblies with `ncx` and keeps everything else the plugin brings apart from `ncx` and from the other plugins (D106).
+Every DLL of `plugins/` of the working directory is a plugin, and so is every DLL that `[plugins] assemblies` of `ncx.toml` names, by its path from the working directory or by its name in `plugins/` (`spec/machine-config.md`, section 10; D317). The list comes first, then the DLLs of `plugins/` in the order of their names; the rewriters of several plugins act on a block in that order. A plugin is named after its DLL, `MyShopRules.dll` is `MyShopRules`. Each DLL loads into a context of its own, which shares the `Ncx` assemblies with `ncx` and keeps everything else the plugin brings apart from `ncx` and from the other plugins (D106).
 
 ## Finding out what a plugin did
 
@@ -211,7 +221,7 @@ Every DLL of `plugins/` of the working directory is a plugin, and so is every DL
 | Command | What it does | Exit code |
 |---|---|---|
 | `ncx plugin new <name>` | copies the template next to `ncx` into `./<name>/` and renames it | 2 for a name that is no name of a plugin (`CLI550`), a folder that is there (`CLI551`), a missing template (`CLI552`) |
-| `ncx plugin build [<folder>]` | runs `dotnet build`, puts the DLL into `plugins/`, adds its line to `ncx.toml` | 1 when dotnet cannot be started (`CLI554`) or the build fails (`CLI555`, `CLI556`); 2 when there is no plugin (`CLI553`) |
+| `ncx plugin build [<folder>]` | runs `dotnet build`, puts the DLL into `plugins/` (or, for a plugin that brings assemblies, leaves it in its build output, D330), adds it to `[plugins] assemblies` of `ncx.toml` (D238) | 1 when dotnet cannot be started (`CLI554`) or the build fails (`CLI555`, `CLI556`); 2 when there is no plugin (`CLI553`) |
 | `ncx plugin check <dll>` | loads the DLL as a run does and lists its interfaces | 1 when it does not load (`PLG002`); 2 when the file is not there |
 | `ncx plugin test [<folder>]` | runs `dotnet test` on `<name>.Tests` of the plugin | 1 when a test fails (`CLI559`); 2 without a test project (`CLI558`) |
 

@@ -4,4 +4,4 @@ A reader rule (`ISourceRule`, `../../../docs/architecture/architecture.md`, sect
 
 `Fold(block, following, builder)` holds the rule, and `ThroughCoolantSourceRule.Tests/ThroughCoolantSourceRuleTests.cs` shows it with the three blocks: blocks with nothing but the three codes, a block number and the speed are folded; a stop with a move, or a stop that another code follows, is not.
 
-`Read` cannot use it yet. The reader offers a rule only the blocks its tables leave undecided, and a machine file names all three codes (D231); and a rule sees the one block it is offered and none after it (D232). Until these are answered, `Read` claims nothing and the reader reads the blocks as it always does.
+`Read` hands `Fold` the block it is offered and `block.Following`, and returns the number of blocks folded: 3, or 0 to decline. The reader offers every block to the plugins' rules before its tables, which name all three codes (D231), and shows a rule the blocks that follow, up to the next structure block (D232). The last test reads a Fanuc program with the Fanuc reader and the rule: the three blocks become the one word.

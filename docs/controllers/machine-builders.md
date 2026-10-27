@@ -73,5 +73,5 @@ Programs from the maintainer's TopSolid postprocessor for DMG mills: `%_N_1_MPF`
 | a native "which spindle the turret works on" code | `[workpiece]` with `SUB_frame = "datum"` or `"mirror"` | `WORKPIECE=ROLE` |
 | a mode M code before a cycle | expansion rule `pre = [...]` on the catalog entry | nothing in the program |
 | a sequence rule (stop the spindle before the clutch) | expansion rule with `requires` and `restore` | generated blocks with `@SAVE`/`@RESTORE` |
-| an M code that runs a hidden subprogram (a transfer, a datum cycle) | a reader rule in a plugin (`ISourceRule`) | the word the rule decides on |
+| an M code that runs a hidden subprogram (a transfer, a datum cycle) | a reader rule in a plugin (`ISourceRule`), asked before the tables of the machine file (D231) | the word the rule decides on |
 | macros nobody can express (`G411`, `G300`, `L730`, `NPL`, `DREH`) | nothing | `RAW:BUILDER`, WARNING on read, ERROR on compile for another machine |

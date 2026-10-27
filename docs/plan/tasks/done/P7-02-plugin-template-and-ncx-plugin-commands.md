@@ -20,7 +20,7 @@ The lowest hurdle for an NC programmer: a working plugin to change one method in
 
 ## Done when
 
-- The template builds and runs unchanged after `ncx plugin new`; the three samples build and their tests pass; `ncx compile` prints the INFO diagnostic (D98) `plugin <name>: inserted 2 blocks at line 12` for the clutch sample (M10).
+- The template builds and runs unchanged after `ncx plugin new`; the three samples build and their tests pass; `ncx compile` prints the INFO diagnostic (D98) `plugin <name>: inserted 3 blocks at line 12` for the clutch sample (M10; D318: every block the answer inserts before and after the block counts).
 
 ## Log
 
@@ -42,3 +42,9 @@ Decided while doing it (implementation, no specification change):
 Open questions recorded as TODO(question): the count of the INFO line (the clutch rule inserts three blocks where D98, code-guidelines 11 and this task print "inserted 2 blocks"; P7-01's question in `PluginRewriter`, cited in `TemplateTests` and the README of the template); the plugin that `ncx plugin build` and `test` take without a folder (`PluginFolder`: the working directory when it holds a project file, else the one folder of it that `ncx plugin new` made); what the plugin commands write on the standard output (`PluginCheck.Listing`); what `build` does with assemblies a plugin brings besides its own (`PluginBuild.CopyIntoPlugins`: only the plugin's DLL). D238 (the form of the line of `ncx.toml`, `NcxTomlPlugins.Add`) and D231, D232 (the fold of `ThroughCoolantSourceRule`) are cited where they apply. Plain TODO: the compile of `TemplateTests` runs with the `EchoCompiler` of the tests until a compiler of a controller family is registered in `Program.Compilers()` (P3-04, P3-06).
 
 Done when: the template builds and runs unchanged after `ncx plugin new` (`TemplateTests`: new, build without a folder, check lists `IProgramRewriter`, the test of the template passes under `ncx plugin test`), holds; the three samples build and their tests pass, holds (the source rule folds in `Fold`; its `Read` claims nothing until D231 and D232 are answered); `ncx compile` prints the INFO of the clutch plugin at line 12, holds as `plugin CoolantClutch: inserted 3 blocks at line 12` through `CompileCommand` with the compiler of the tests, and waits for the answer to the count question for the text "inserted 2 blocks" and for P3-04 or P3-06 for `ncx compile` on the command line. The task stays in `inbox/` until then.
+
+Claude (agent), 2026-10-27, code wave W3-2 (branch `w3-2`): the open questions are settled and the task is released to `done/` (D318).
+- D318: the INFO counts every block the answer inserts, `inserted 3 blocks at line 12`; the done-when above reads so. `TemplateTests` now compiles with `Program.Compilers()`, the Fanuc compiler, which adds the WARNING CMP310 for the program without a number; the INFO is the first line.
+- D231, D232: `ThroughCoolantSourceRule.Read` returns `Fold(block, block.Following, builder)`; its test reads `M5`, `M51`, `M3 S1500` through the Fanuc reader into `COOLANT:THROUGH=ON`.
+- D238, D330, D331, D332: `ncx plugin build` adds to `[plugins] assemblies`, prints `ncx.toml: [plugins] assemblies = [...]`, and lists a plugin that brings assemblies by the path of its build output (CLI560 WARNING when that path cannot join the file). The markers of `PluginFolder` and `PluginCheck` are comments.
+- Done when: holds. The template builds and runs unchanged after `ncx plugin new`; the three samples build and their tests pass; `ncx compile` prints `plugin CoolantClutch: inserted 3 blocks at line 12`.

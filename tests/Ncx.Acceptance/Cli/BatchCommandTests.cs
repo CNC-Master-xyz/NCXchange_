@@ -129,8 +129,8 @@ public sealed partial class BatchCommandTests : IDisposable
             + " +2\n", report);
     }
 
-    // The TODO(question) of BatchCommand.Run: every file of the folder and of its folders is converted, whatever its
-    // name, and the report lists them by their paths from the folder with forward slashes, in ordinal order.
+    // D284: every file of the folder and of its folders is converted, whatever its name, and the report lists them by
+    // their paths from the folder with forward slashes, in ordinal order.
     [Fact]
     public void Batch_FilesOfTheFolderAndItsFolders_AreListedByTheirPathsInOrder()
     {
@@ -146,6 +146,44 @@ public sealed partial class BatchCommandTests : IDisposable
         }
 
         Assert.Equal(["C.NC", "b.nc", "notes", "sub/a.nc"], names);
+    }
+
+    // D284: hidden files and folders, whose names start with a dot, hold no program and are skipped.
+    [Fact]
+    public void Batch_HiddenFilesAndFolders_AreSkipped()
+    {
+        string folder = WriteFolder(("a.nc", CleanProgram), (".DS_Store", "\0\0"), (".git/b.nc", CleanProgram),
+            ("sub/.hidden.nc", CleanProgram));
+
+        RunBatch(folder, "fanuc-mill-30i");
+
+        List<string> names = [];
+        foreach (Match row in FileRow().Matches(File.ReadAllText(ReportPath())))
+        {
+            names.Add(row.Groups["name"].Value);
+        }
+
+        Assert.Equal(["a.nc"], names);
+    }
+
+    // D284: the plugins of the working directory load once per batch and read along, as convert reads with them; a
+    // plugin's diagnostics go to the file being converted, and a plugin that fails is dropped for the rest of the
+    // batch. FaultyRules throws on the M457 of a.nc, and b.nc is read without it.
+    [Fact]
+    public void Batch_PluginThatFailsInAFile_IsReportedOnThatFileAndDroppedForTheRest()
+    {
+        const string withM457 = "%\nO0004\nG90 G21 G17 G94\nM457\nM30\n%\n";
+        Plugins.TestPlugins.CopyInto(Path.Combine(_project.WorkingDirectory, "plugins"),
+            Plugins.TestPlugins.FaultyRules);
+        string folder = WriteFolder(("a.nc", withM457), ("b.nc", withM457));
+
+        int exitCode = RunBatch(folder, "fanuc-mill-30i");
+
+        Assert.Equal(1, exitCode);
+        string a = Path.Join(folder, "a.nc");
+        Assert.Contains($"{a}(4): ERROR PLG003: plugin FaultyRules: Read threw InvalidOperationException", _error,
+            StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(_error, "PLG003"));
     }
 
     // D229, as recommended: a file that is no UTF-8 text is read as Windows-1252 with the WARNING CLI352, converted and

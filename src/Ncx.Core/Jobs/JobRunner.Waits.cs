@@ -32,11 +32,8 @@ public sealed partial class JobRunner
 
     // Marks are matched in execution order, not by uniqueness: the participants are released when each of them waits at
     // the mark now, however often it has waited at that mark before; two channels that wait at different marks with the
-    // same participants release nothing (virtual machine 3.7).
-    // TODO(question): virtual machine 3.7 releases "all participants (WITH, default all)" without saying whose WITH
-    // counts when the channels waiting at one mark name different participants; they are released only when every
-    // participant waits at the mark with the same participants, and otherwise wait on, which ends in the deadlock that
-    // names them, until that is answered.
+    // same participants release nothing (virtual machine 3.7). The participants of the channels waiting at one mark are
+    // the same, since a different set is the ERROR VM573 when the channel reaches the mark (D304).
     private bool MarkReleasable(ChannelRun channel, int mark)
     {
         foreach (int participant in channel.Participants)
@@ -69,13 +66,11 @@ public sealed partial class JobRunner
         _shared.Synchronized(participants);
     }
 
-    // No channel can execute a block and not all have finished: the deadlock ERROR, naming what every channel waits
-    // for, the marks among them (virtual machine 3.7, architecture 5.4). It stands on the block the first waiting
-    // channel waits at, in the file of that block.
-    // TODO(question): virtual machine 3.7 reports the deadlock when all channels wait, and architecture 5.4 finishes
-    // the job when not every channel waits; neither says what a channel is that waits at a mark with a channel that
-    // has finished, or for a START_CHANNEL that no channel can give, and so can never go on. It is the deadlock as
-    // well, the finished channels named in it, until that is answered.
+    // No channel can execute a block and not all have finished: the deadlock ERROR VM571, naming what every channel
+    // waits for, the marks among them (virtual machine 3.7, architecture 5.4). D305: whether the others wait or have
+    // finished, a channel that waits at a mark of a finished channel, or for a START_CHANNEL that no channel can give,
+    // is the deadlock too, the finished channels named in it. It stands on the block the first waiting channel waits
+    // at, in the file of that block.
     private void ReportDeadlock()
     {
         var waits = new List<string>();

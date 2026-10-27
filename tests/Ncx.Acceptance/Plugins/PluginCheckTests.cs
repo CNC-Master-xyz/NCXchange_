@@ -70,7 +70,7 @@ public sealed class PluginCheckTests : IDisposable
         Assert.Empty(_workspace.Output);
     }
 
-    // The TODO(question) of PluginLoader: an assembly without a class of the four interfaces is a WARNING; check names
+    // D330: an assembly without a class of the four interfaces is a WARNING; check names
     // it and lists no interface, and --strict makes the WARNING exit code 1 (D97).
     [Fact]
     public void PluginCheck_AssemblyWithoutPluginClass_WarnsAndListsNoInterface()

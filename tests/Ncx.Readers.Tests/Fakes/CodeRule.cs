@@ -36,17 +36,17 @@ internal sealed class CodeRule : ISourceRule
     /// </summary>
     public List<string?> MotionSeen { get; } = [];
 
-    public bool Read(SourceBlock block, SourceState state, NcxBuilder builder)
+    public int Read(SourceBlock block, SourceState state, NcxBuilder builder)
     {
         Offered.Add(block.Line);
         MotionSeen.Add(state.ActiveCode(1));
         SourceWord? code = block.Find("M");
         if (code?.Number != _code)
         {
-            return false;
+            return 0;
         }
 
         builder.Begin(block.Line).Word(_key, _addr, new IdentValue(_value)).End();
-        return true;
+        return 1;
     }
 }

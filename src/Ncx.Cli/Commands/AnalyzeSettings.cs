@@ -4,7 +4,8 @@ namespace Ncx.Cli.Commands;
 
 /// <summary>
 /// What the command line asks of ncx analyze beyond the run: the analytics of --analytic, the block range of --from
-/// and --to (D67) and the table format of --format (virtual machine 8).
+/// and --to (D67), the table format of --format (virtual machine 8) and the histogram bounds of --segment-bins and
+/// --vector-bins (D324).
 /// </summary>
 internal sealed record AnalyzeSettings
 {
@@ -22,4 +23,14 @@ internal sealed record AnalyzeSettings
     /// --format: aligned text, the default, or CSV (virtual machine 8).
     /// </summary>
     public TableFormat Format { get; init; } = TableFormat.Text;
+
+    /// <summary>
+    /// --segment-bins: the bounds of the segment histogram in mm (D324); null for the default bounds.
+    /// </summary>
+    public IReadOnlyList<decimal>? SegmentBins { get; init; }
+
+    /// <summary>
+    /// --vector-bins: the bounds of the tool-vector histogram in degrees (D324); null for the default bounds.
+    /// </summary>
+    public IReadOnlyList<decimal>? VectorBins { get; init; }
 }

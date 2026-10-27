@@ -39,6 +39,7 @@ internal static class SpindleHandlers
             "CCW" => SpindleDirection.Counterclockwise,
             _ => SpindleDirection.Off,
         };
+        spindle.StartedBy = context.State.ChannelId;
     }
 
     // RPM=n, per resource (language 4.5, virtual machine 2.4); UNKNOWN from an expression in STATIC mode (1).

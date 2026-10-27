@@ -15,4 +15,10 @@ public sealed record CompiledFile
     /// The text, block numbers and line endings as [format] writes them (machine-config 2).
     /// </summary>
     public required string Text { get; init; }
+
+    /// <summary>
+    /// True for a library file of a job, which holds the subprograms no channel program calls (D316); the job compiler
+    /// keeps it apart from the channel files.
+    /// </summary>
+    public bool Library { get; init; }
 }

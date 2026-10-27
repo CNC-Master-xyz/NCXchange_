@@ -78,9 +78,8 @@ public sealed class CoolantClutchPluginTests : IDisposable
         Assert.Empty(ruleEnd.Flow.RestoreStack);
     }
 
-    // D98, code-guidelines 11: the INFO line names the plugin, the blocks it inserted and the line.
-    // TODO(question): see PluginRewriter; the clutch rule inserts three blocks, where code-guidelines 11 and P7-02
-    // print "inserted 2 blocks".
+    // D98, code-guidelines 11, D318: the INFO line names the plugin, the blocks it inserted and the line; every block
+    // the answer inserts before and after the block counts, three for the clutch rule.
     [Fact]
     public void CoolantClutchRule_AsAPlugin_SaysWhatItInsertedAsInfo()
     {
@@ -123,5 +122,19 @@ public sealed class CoolantClutchPluginTests : IDisposable
                 BeforeProgramEnd = vmEvent.Before;
             }
         }
+    }
+
+    // D318: a Replace inserts no block and prints no INFO.
+    [Fact]
+    public void ReplacingRewriter_AsAPlugin_PrintsNoInfo()
+    {
+        var plugin = new Plugin("ShopLimit", new Dictionary<string, string>());
+        var rewriter = new PluginRewriter(plugin, new ReplacingRewriter("SPINDLE:MAIN=CW RPM:MAIN=1500",
+            "SPINDLE:MAIN=CW RPM:MAIN=1200"), new PluginDiagnostics(_diagnostics));
+
+        NcxProgram expanded = PluginMachines.Expand(s_program, PluginMachines.PlainMill, [rewriter]);
+
+        Assert.Contains("RPM:MAIN=1200", PluginMachines.WriteWithGenerated(expanded), StringComparison.Ordinal);
+        Assert.Empty(_diagnostics.Items);
     }
 }

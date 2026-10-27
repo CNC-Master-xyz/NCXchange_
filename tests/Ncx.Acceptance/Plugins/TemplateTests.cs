@@ -1,8 +1,6 @@
 using Ncx.Acceptance.Cli;
 using Ncx.Cli;
 using Ncx.Cli.Commands;
-using Ncx.Compilers;
-using Ncx.Core.Machine;
 
 namespace Ncx.Acceptance.Plugins;
 
@@ -23,17 +21,17 @@ public sealed class TemplateTests : IClassFixture<BuiltTemplate>
         _template = template;
     }
 
-    // Code-guidelines 11, steps 2 to 5: the template builds unchanged; the command puts the DLL into plugins/ and adds
-    // the line of machine-config 10 to ncx.toml, and names both.
+    // Code-guidelines 11, steps 2 to 5: the template builds unchanged; the command puts the DLL into plugins/, since it
+    // brings no assembly (D330), adds it to [plugins] assemblies of ncx.toml (D238), and names both (D331).
     [Fact]
     public void PluginBuild_TemplateAfterNew_BuildsUnchangedIntoPluginsAndAddsTheLine()
     {
         Assert.True(_template.NewExitCode == 0, _template.NewError);
         Assert.True(_template.BuildExitCode == 0, _template.BuildError + _template.BuildOutput);
         Assert.True(File.Exists(_template.Workspace.PathOf(s_dll)));
-        Assert.Equal("plugins = [\"CoolantClutch.dll\"]\n",
+        Assert.Equal("[plugins]\nassemblies = [\"CoolantClutch.dll\"]\n",
             File.ReadAllText(_template.Workspace.PathOf("ncx.toml")));
-        Assert.Equal($"{s_dll}\nncx.toml: plugins = [\"CoolantClutch.dll\"]\n", _template.BuildOutput);
+        Assert.Equal($"{s_dll}\nncx.toml: [plugins] assemblies = [\"CoolantClutch.dll\"]\n", _template.BuildOutput);
         Assert.Empty(_template.BuildError);
     }
 
@@ -53,10 +51,9 @@ public sealed class TemplateTests : IClassFixture<BuiltTemplate>
 
     // Code-guidelines 11, step 6; D98; M10: ncx compile of a program with COOLANT:THROUGH=ON on line 12 prints the
     // INFO of the plugin with its name, the blocks it inserted and the line.
-    // TODO(question): D98, code-guidelines 11 and P7-02 print "inserted 2 blocks at line 12"; the rule of the template
-    // inserts three blocks, and PluginRewriter counts every one (the TODO(question) of P7-01 there).
-    // TODO: the compile runs with the compiler of the tests, EchoCompiler, until a compiler of a controller family is
-    // registered in Program.Compilers() (P3-04, P3-06).
+    // The rule of the template inserts three blocks, and every one counts (D318).
+    // The compile runs with the compilers ncx registers, the Fanuc compiler for the plugin mill (P3-06), which adds the
+    // WARNING CMP310 for the program without a number (D257).
     [Fact]
     public void Compile_ClutchPluginOfTheTemplate_SaysWhatItInsertedAtLine12()
     {
@@ -74,8 +71,6 @@ public sealed class TemplateTests : IClassFixture<BuiltTemplate>
             "RAPID Z=50",
             "COOLANT:THROUGH=ON",
             "RAPID X=0 Y=0"));
-        var compilers = new CompilerRegistry();
-        compilers.Register(Controller.Fanuc, () => new EchoCompiler());
         var settings = new RunSettings
         {
             File = file,
@@ -85,11 +80,12 @@ public sealed class TemplateTests : IClassFixture<BuiltTemplate>
         };
 
         using var error = new StringWriter();
-        int exitCode = CompileCommand.Run(settings, null, compilers, error);
+        int exitCode = CompileCommand.Run(settings, null, Program.Compilers(), error);
 
         Assert.True(exitCode == 0, error.ToString());
-        Assert.Equal($"{file}(12): INFO PLG001: plugin CoolantClutch: inserted 3 blocks at line 12\n",
-            error.ToString());
+        Assert.StartsWith($"{file}(12): INFO PLG001: plugin CoolantClutch: inserted 3 blocks at line 12\n",
+            error.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("ERROR", error.ToString(), StringComparison.Ordinal);
     }
 
     // Code-guidelines 11, step 7: ncx plugin test runs the one test of the template, which passes unchanged.

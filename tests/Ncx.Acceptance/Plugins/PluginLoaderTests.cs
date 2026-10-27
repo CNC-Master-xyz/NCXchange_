@@ -115,7 +115,7 @@ public sealed class PluginLoaderTests : IDisposable
         Assert.Empty(plugins.Rewriters);
     }
 
-    // The TODO(question) of PluginLoader: an assembly without a public class of the four interfaces is a WARNING and
+    // D330: an assembly without a public class of the four interfaces is a WARNING and
     // gives nothing.
     [Fact]
     public void PluginLoader_AssemblyWithoutPluginClasses_WarnsAndGivesNothing()
@@ -135,9 +135,9 @@ public sealed class PluginLoaderTests : IDisposable
         Assert.Empty(plugins.BlockWriters);
     }
 
-    // Implementation 17, P7-01 and the TODO(question) of PluginLoader.Files: the assemblies the [plugins] list of
-    // ncx.toml names come first, in their order, then the DLLs of plugins/ in the order of their names; a name of the
-    // list that is no file of the working directory is looked for in plugins/, and every file comes once.
+    // Implementation 17, P7-01, D317: the assemblies [plugins] assemblies of ncx.toml names come first, in their order,
+    // then the DLLs of plugins/ in the order of their names; a name of the list that is no file of the working
+    // directory is looked for in plugins/, and every file comes once.
     [Fact]
     public void Files_ListAndPluginsFolder_GiveTheListFirstThenTheFolderEachFileOnce()
     {
@@ -148,6 +148,26 @@ public sealed class PluginLoaderTests : IDisposable
         IReadOnlyList<string> files = PluginLoader.Files(_folder.FullName, ["lib/C.dll", "B.dll"]);
 
         Assert.Equal(["lib/C.dll", Path.Combine("plugins", "B.dll"), Path.Combine("plugins", "A.dll")], files);
+    }
+
+    // D317, D330: a plugin name loads once; a second DLL of the name, here the copy in plugins/ after the listed one,
+    // is the WARNING PLG007 and is left out (gap closed 2026-10-28, delegated).
+    [Fact]
+    public void Load_TwoDllsOfOneName_LoadsTheFirstAndWarnsAboutTheOther()
+    {
+        TestPlugins.CopyInto(Path.Combine(_folder.FullName, "lib"), TestPlugins.ShopRules);
+        TestPlugins.CopyInto(Path.Combine(_folder.FullName, "plugins"), TestPlugins.ShopRules);
+        IReadOnlyList<string> files = PluginLoader.Files(_folder.FullName, ["lib/ShopRules.dll"]);
+
+        PluginSet plugins = PluginLoader.Load(_folder.FullName, files,
+            new Dictionary<string, IReadOnlyDictionary<string, string>>(), new PluginDiagnostics(_diagnostics));
+
+        Assert.Equal(["ShopCoolantCode"], TestPlugins.ClassNames(plugins.SourceRules));
+        Diagnostic warning = Assert.Single(_diagnostics.Items);
+        Assert.Equal("PLG007", warning.Code);
+        Assert.Equal(Severity.Warning, warning.Severity);
+        Assert.StartsWith("plugin ShopRules: " + Path.Combine("plugins", "ShopRules.dll"), warning.Message,
+            StringComparison.Ordinal);
     }
 
     // Implementation 17, P7-01: without a plugins/ folder and without a list there is no plugin to load.
