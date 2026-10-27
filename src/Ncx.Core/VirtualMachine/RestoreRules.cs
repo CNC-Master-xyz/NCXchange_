@@ -14,6 +14,9 @@ internal static class RestoreRules
     // The coolant channel that a bare COOLANT addresses (virtual machine 2.5, F29).
     private const string DefaultCoolantChannel = "STANDARD";
 
+    // TOLERANCE:ROTARY, the rotary tolerance (language 4.10).
+    private const string RotaryAddress = "ROTARY";
+
     /// <summary>
     /// The state variable a state key names: the key with the resource id, coolant channel or function name its address
     /// resolves to, SPINDLE:S1, COOLANT:STANDARD, FUNC:SUB_CHUCK, or the key alone for a variable of the channel, F.
@@ -32,11 +35,14 @@ internal static class RestoreRules
         // A state key names a state variable of the channel by the key that sets it, with the address that word takes
         // (virtual machine 3.10): a spindle role, a coolant channel, a function name, none for a variable of the
         // channel.
-        // TODO(question): virtual machine 3.10 gives SPINDLE:MAIN, COOLANT and F as examples and does not say which
-        // state variables the restore stack keeps. It keeps those that one word sets from one value of the state:
-        // SPINDLE (with the speed, as 3.10 shows), RPM, SPINDLE_MODE, CSS, VC, RPM_MAX, COOLANT, FUNC, F, FEED_MODE,
-        // COMP and DIAMETER. Any other key, a tool, a cycle, the frame chain, a variable or a synchronization, whose
-        // restore is more than one word written again, is an ERROR until D202 is answered.
+        // D202: the restore stack keeps SPINDLE (with the speed, as 3.10 shows), RPM, SPINDLE_MODE, CSS, VC, RPM_MAX,
+        // COOLANT, FUNC, F, FEED_MODE, COMP and DIAMETER, and WORKPLANE, TCPM, POLAR, CYLINDER, ROTARY_PATH,
+        // ROTARY_FEED and TOLERANCE (with TOLERANCE:ROTARY and TOLERANCE_MODE). TOOL, PRELOAD, OFFSET, CYCLE, ORIGIN,
+        // SETPOS, the chain words, SPINDLE_SYNC, PHASE, ORIENT, WORKPIECE, UNITS, variables and positions stay VM681.
+        // ORIGIN stays out on purpose: written again it empties the chain, so it would not bring back the frames that
+        // Siemens SAVE restores. UNITS too: a restored UNITS would change the unit of values already on the stack.
+        // Gap closed 2026-10-27 (delegated): TOLERANCE:ROTARY and TOLERANCE_MODE come back with TOLERANCE and are no
+        // state keys of their own.
         switch (key.Key)
         {
             case "SPINDLE" or "RPM" or "CSS" or "VC" or "RPM_MAX":
@@ -54,11 +60,15 @@ internal static class RestoreRules
                     : null;
             case "F" or "FEED_MODE" or "COMP" or "DIAMETER" when key.Addr is null:
                 return key.Key;
+            case "WORKPLANE" or "TCPM" or "POLAR" or "CYLINDER" or "ROTARY_PATH" or "ROTARY_FEED" or "TOLERANCE"
+                when key.Addr is null:
+                return key.Key;
             default:
                 diagnostics.Error(block, DiagnosticCodes.StateKeyNotKept,
                     $"{pseudoWord}={key.ToCanonical()} names no state variable the restore stack keeps; it keeps "
                     + "SPINDLE, RPM, SPINDLE_MODE, CSS, VC and RPM_MAX of a spindle, COOLANT of a channel, FUNC of a "
-                    + "function, F, FEED_MODE, COMP and DIAMETER (virtual machine 3.10).");
+                    + "function, F, FEED_MODE, COMP, DIAMETER, WORKPLANE, TCPM, POLAR, CYLINDER, ROTARY_PATH, "
+                    + "ROTARY_FEED and TOLERANCE (virtual machine 3.10, D202).");
                 return null;
         }
     }
@@ -118,9 +128,75 @@ internal static class RestoreRules
             case "DIAMETER":
                 words.Add(WordOf(key, "DIAMETER", OnOrOff(state.Frame.Diameter)));
                 break;
+            default:
+                SaveFrameKey(words, unknown, key, state);
+                break;
         }
 
         return new RestoreEntry(key, words) { Variable = variable, UnknownKeys = unknown };
+    }
+
+    // D202: the frame and path keys, each as the word that sets its current value.
+    private static void SaveFrameKey(List<Word> words, List<string> unknown, StateKeyValue key, ChannelState state)
+    {
+        FrameState frame = state.Frame;
+        switch (key.Key)
+        {
+            case "WORKPLANE":
+                words.Add(WordOf(key, "WORKPLANE", frame.Workplane.ToString().ToUpperInvariant()));
+                break;
+            case "TCPM":
+                words.Add(WordOf(key, "TCPM", OnOrOff(frame.Tcpm)));
+                break;
+            case "POLAR":
+                words.Add(WordOf(key, "POLAR", OnOrOff(frame.Polar)));
+                break;
+            case "CYLINDER" when frame.Cylinder is null && !state.Unknown.Contains("CYLINDER"):
+                words.Add(WordOf(key, "CYLINDER", "OFF"));
+                break;
+            case "CYLINDER":
+                AddNumber(words, unknown, key, "CYLINDER", frame.Cylinder, null, state);
+                break;
+            case "ROTARY_PATH":
+                words.Add(WordOf(key, "ROTARY_PATH", frame.RotaryPath == RotaryPath.Full ? "FULL" : "SHORTEST"));
+                break;
+            case "ROTARY_FEED":
+                words.Add(WordOf(key, "ROTARY_FEED", frame.RotaryFeed == RotaryFeed.DegMin ? "DEG_MIN" : "MM_MIN"));
+                break;
+            case "TOLERANCE":
+                SaveTolerance(words, unknown, key, state);
+                break;
+        }
+    }
+
+    // TOLERANCE comes back with TOLERANCE:ROTARY and TOLERANCE_MODE (D202); TOLERANCE=OFF alone when none is active,
+    // since TOLERANCE_MODE without an active TOLERANCE is an ERROR (virtual machine 5).
+    private static void SaveTolerance(List<Word> words, List<string> unknown, StateKeyValue key, ChannelState state)
+    {
+        ToleranceState tolerance = state.Frame.Tolerance;
+        if (tolerance.Value is null && !state.Unknown.Contains("TOLERANCE"))
+        {
+            words.Add(WordOf(key, "TOLERANCE", "OFF"));
+            return;
+        }
+
+        AddNumber(words, unknown, key, "TOLERANCE", tolerance.Value, null, state);
+        if (state.Unknown.Contains(BlockContext.StateKey("TOLERANCE", RotaryAddress)))
+        {
+            unknown.Add(BlockContext.StateKey("TOLERANCE", RotaryAddress));
+        }
+        else if (tolerance.Rotary is decimal rotary)
+        {
+            words.Add(new Word
+            {
+                Key = "TOLERANCE",
+                Addr = RotaryAddress,
+                Value = NumberValues.Of(rotary),
+                Definition = WordCatalog.Lookup("TOLERANCE"),
+            });
+        }
+
+        words.Add(WordOf(key, "TOLERANCE_MODE", tolerance.Mode == ToleranceMode.Rough ? "ROUGH" : "FINISH"));
     }
 
     /// <summary>
@@ -132,6 +208,14 @@ internal static class RestoreRules
         foreach (string unknownKey in entry.UnknownKeys)
         {
             state.Unknown.Add(unknownKey);
+        }
+
+        // D202: a TOLERANCE saved without TOLERANCE:ROTARY has none again; TOLERANCE=v leaves the rotary value as it
+        // stands, so it is cleared before the words are re-applied.
+        if (entry.Key.Key == "TOLERANCE" && !HasRotaryTolerance(entry))
+        {
+            state.Frame.Tolerance = state.Frame.Tolerance with { Rotary = null };
+            state.Unknown.Remove(BlockContext.StateKey("TOLERANCE", RotaryAddress));
         }
 
         if (entry.Words.Count > 0 || entry.UnknownKeys.Count > 0)
@@ -156,6 +240,19 @@ internal static class RestoreRules
                 state.Motion.Feed = null;
                 break;
         }
+    }
+
+    private static bool HasRotaryTolerance(RestoreEntry entry)
+    {
+        foreach (Word word in entry.Words)
+        {
+            if (word.Key == "TOLERANCE" && word.Addr == RotaryAddress)
+            {
+                return true;
+            }
+        }
+
+        return entry.UnknownKeys.Contains(BlockContext.StateKey("TOLERANCE", RotaryAddress));
     }
 
     // A number of the state as the word that sets it. A value from an expression is UNKNOWN in STATIC mode and no word

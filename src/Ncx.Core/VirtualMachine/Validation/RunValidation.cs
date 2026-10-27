@@ -64,11 +64,11 @@ internal sealed class RunValidation
     /// </summary>
     public void CheckFile(NcxProgram program)
     {
-        // A job knows how many channels it runs; a file checked on its own decides by its programs (virtual machine
-        // 3.7, ChannelValidation).
+        // A job knows how many channels it runs; a file checked on its own decides by the machine and its programs
+        // (virtual machine 3.7, ChannelValidation, D196).
         bool singleChannelJob = _jobChannels is int channels
             ? channels < 2
-            : ChannelValidation.IsSingleChannelJob(program);
+            : ChannelValidation.IsSingleChannelJob(program, _machine);
         foreach (Section section in program.Sections)
         {
             FlowValidation.CheckSection(program, section, _diagnostics);

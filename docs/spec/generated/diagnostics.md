@@ -197,7 +197,7 @@ Labels, jumps, calls and the reach of the blocks of a program (language 4.9, 4.1
 | `VM520` | ERROR | Duplicate LABEL in one program or subprogram. | language 4.9; VM 3.6, 5 |
 | `VM521` | ERROR | Missing jump target: a JUMP or REPEAT to a label its program or subprogram does not hold. | language 4.9; VM 3.6, 5 |
 | `VM522` | WARNING | JUMP=END from inside a subprogram: it ends the program from a call. | VM 3.6, 5 |
-| `VM523` | WARNING | Unreachable block of a program after an unconditional JUMP that no LABEL makes reachable. | language 4.13; VM 3.9, 5; D89 |
+| `VM523` | WARNING | Unreachable block of a program or subprogram after an unconditional JUMP that no LABEL makes reachable. | language 4.13; VM 3.9, 5; D89, D195 |
 | `VM524` | WARNING | RETURN in the main program; it is treated as JUMP=END. | language 4.9, 4.13; VM 3.6, 5 |
 | `VM750` | ERROR | Block cap exceeded: possible endless loop. INTERPRETED mode. | VM 3.6, 5; machine-config 7 |
 | `VM751` | ERROR | A REPEAT nested deeper than the configured depth, which calls and repeats share. INTERPRETED mode. | VM 3.6, 5; machine-config 7 |

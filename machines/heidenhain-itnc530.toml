@@ -137,6 +137,7 @@ mode = { FINISH = 0, ROUGH = 1 }   # value of {mode}: HSC-MODE 0 finish, 1 rough
 
 [cycles]
 catalog = "heidenhain.toml"        # the Heidenhain cycle catalog shipped with NCXchange (machine-config 6)
+chip_break_lift = 0.6              # Q256 of cycle 203, the lift of the chip break; the re-approach is the cycle's Q200, so no peck_clearance (D357)
 
 [variables]                        # Q, QL, QR and QS are the control's own names (heidenhain 6), so there is no map
 unassigned = "error"

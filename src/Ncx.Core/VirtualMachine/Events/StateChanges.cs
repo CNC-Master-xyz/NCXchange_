@@ -35,9 +35,11 @@ internal sealed class StateChanges
     // vector and the surface normal (2.2), which trace shows as well; the variables have VAR_CHANGE, and the program,
     // flow and channel rows (2.1, 2.7, 2.8) their events of their own; the block items (verb, FRAME, SKIP) end with
     // their block and never differ between Before and After.
-    // TODO(question): virtual machine 7 names "any modal change" and 6 "every changed state variable" without a list;
-    // STATE_CHANGE covers the variables above, without the program rows, lastHolder and the flow and channel rows,
-    // until D197 is answered.
+    // D197: STATE_CHANGE covers every VM 2 variable a word sets that outlives its block: the frame rows of 2.1, feed,
+    // mode, compensation, the position per axis, tool vector and normal of 2.2, tool, preload and offsets per holder,
+    // the spindle rows per spindle, coolant channels and functions, and the cycle; the variables go to VAR_CHANGE, and
+    // the program, flow and channel rows and lastHolder are out. Names are the state keys of VM 3.10 with the resource
+    // id as address, positions by axis.
     public static List<StateChangeEvent> Between(Block block, ChannelSnapshot before, ChannelSnapshot after)
     {
         var changes = new StateChanges(block, before, after);

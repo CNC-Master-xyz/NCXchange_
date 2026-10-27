@@ -18,11 +18,15 @@ internal static class CycleRules
     private const string CycleRetractKey = "CYCLE_RETRACT";
     private const string PeckKey = "PECK";
     private const string CycleFeedKey = "CYCLE_F";
+    private const string SurfaceKey = "SURFACE";
 
     // The built-in cycles whose names say how they move (language 4.7): CHIP_BREAK breaks the chip without leaving the
     // hole, TAP backs out along its thread behind the spindle reversal.
     private const string ChipBreakCycle = "CHIP_BREAK";
     private const string TapCycle = "TAP";
+
+    // D190 change 1: REAM feeds out at CYCLE_F like TAP.
+    private const string ReamCycle = "REAM";
 
     // D187: the Fanuc turning cycles that bring the tool back to their start point, so that after their call no axis
     // has moved and none becomes unknown. Operation 4 of G90, G92 and G94 (G77, G78, G79 in the G-code systems B and
@@ -71,11 +75,11 @@ internal static class CycleRules
             return [];
         }
 
-        // A built-in drilling cycle requires known DEPTH and CLEARANCE (virtual machine 3.3, 5), a cycle rule,
-        // suppressed inside a subprogram that no program of the file calls (3.9, D99).
-        // TODO(question): virtual machine 3.3 requires "known DEPTH and CLEARANCE", and 5 names the ERROR "without
-        // DEPTH/CLEARANCE"; a DEPTH or CLEARANCE from an expression, unknown in STATIC mode (virtual machine 1), is no
-        // ERROR here, and the positions that follow from it are unknown, until D188 is answered.
+        // A built-in drilling cycle requires DEPTH and CLEARANCE written (virtual machine 3.3, 5), a cycle rule,
+        // suppressed inside a subprogram that no program of the file calls (3.9, D99). D188: "known" means "written";
+        // a DEPTH or CLEARANCE from an expression, unknown in STATIC mode (virtual machine 1), is no ERROR here, it
+        // counts toward the WARNING "unresolved expression" like every expression of an executed block, and the
+        // positions that follow from it are unknown.
         if (ParameterOf(cycle, DepthKey) is null || ParameterOf(cycle, ClearanceKey) is null)
         {
             context.CallerRuleDiagnostics.Error(block, DiagnosticCodes.CycleCallWithoutDepthOrClearance,
@@ -104,12 +108,12 @@ internal static class CycleRules
         return Drill(context, name, drillingAxis, expandCycles);
     }
 
-    // The sequence of the built-in family (virtual machine 3.3): rapid in the plane to the axis words at the current
-    // drilling-axis position (if any), rapid to CLEARANCE, feed to DEPTH with CYCLE_F (pecking with PECK, dwell with
-    // CYCLE_DWELL, spindle reversal for TAP), retract to CLEARANCE or SAFE per CYCLE_RETRACT. Position afterwards:
-    // plane axes at the call point, drilling axis at the retract plane. The planes are absolute coordinates along the
-    // drilling axis in the active frame (language 4.7), and under DIAMETER=ON the X values of an AXIS=X cycle are
-    // halved like every other X (virtual machine 3.3, D59, D60).
+    // The sequence of the built-in family (virtual machine 3.3, D190): rapid in the plane to the axis words at the
+    // current drilling-axis position (if any), rapid to CLEARANCE, feed to DEPTH with CYCLE_F (pecking with PECK,
+    // dwell with CYCLE_DWELL, spindle reversal for TAP), retract to CLEARANCE or SAFE per CYCLE_RETRACT. Position
+    // afterwards: plane axes at the call point, drilling axis at the retract plane. The planes are absolute
+    // coordinates along the drilling axis in the active frame (language 4.7), and under DIAMETER=ON the X values of an
+    // AXIS=X cycle are halved like every other X (virtual machine 3.3, D59, D60).
     private static List<CycleMotion> Drill(BlockContext context, string name, string drillingAxis, bool expandCycles)
     {
         ChannelState state = context.State;
@@ -118,8 +122,9 @@ internal static class CycleRules
         AxisPosition clearance = PlaneAt(state, ClearanceKey, drillingAxis, frame);
         AxisPosition depth = PlaneAt(state, DepthKey, drillingAxis, frame);
 
-        // TODO(question): CYCLE_RETRACT=SAFE retracts to SAFE, and SAFE is optional (language 4.7); without SAFE the
-        // retract plane is not given, and the drilling axis is unknown after the call until D188 is answered.
+        // D188: "known" in virtual machine 3.3 means "written"; a plane without a value, from an expression in STATIC
+        // mode or SAFE missing under CYCLE_RETRACT=SAFE, makes the motions to it and the drilling axis after the call
+        // unknown. The ERROR for it falls to the compiler that must write the plane (Heidenhain Q204, Siemens RTP).
         bool toSafe = ParameterOf(cycle, CycleRetractKey) is Word retract && BlockContext.IdentOf(retract) == SafeKey;
         AxisPosition retractPlane = toSafe ? PlaneAt(state, SafeKey, drillingAxis, frame) : clearance;
 
@@ -134,14 +139,8 @@ internal static class CycleRules
         }
 
         // With the VM option ExpandCycles the call is raised as the individual MOTION events (virtual machine 3.3,
-        // D37).
-        // TODO(question): virtual machine 3.3 names the pecking with PECK, the dwell with CYCLE_DWELL, the spindle
-        // reversal for TAP and the retract without saying how each moves. Here a known PECK greater than 0 splits the
-        // feed into pecks of that depth; between the pecks the tool returns at rapid to CLEARANCE and back to the depth
-        // it reached (PECK, the deep hole cycle with full retract, language 4.7), except for CHIP_BREAK, which feeds on
-        // without leaving the hole (its chip-breaking retract is a setting of the control); the retract is a rapid,
-        // except for TAP, which feeds out at CYCLE_F behind the spindle reversal; the dwell moves nothing. This holds
-        // until D190 is answered.
+        // D37), as D190 states them; CYCLE_DWELL is time at DEPTH and moves nothing (the runtime estimate adds it,
+        // virtual machine 8).
         decimal? feed = ParameterOf(cycle, CycleFeedKey) is Word feedWord ? MotionRules.NumberOf(feedWord) : null;
         var motions = new List<CycleMotion>();
         if (hole.Count > 0)
@@ -150,28 +149,83 @@ internal static class CycleRules
         }
 
         motions.Add(Rapid(drillingAxis, clearance));
-        foreach (AxisPosition peck in Pecks(cycle, clearance, depth))
+        AxisPosition surface = PlaneAt(state, SurfaceKey, drillingAxis, frame);
+        AxisPosition start = ParameterOf(cycle, SurfaceKey) is null ? clearance : surface;
+        CycleDistances distances = CycleDistances.Of(context, clearance, surface, start, depth);
+        foreach (AxisPosition peck in Pecks(cycle, start, depth))
         {
             motions.Add(Feed(drillingAxis, peck, feed));
-            if (name != ChipBreakCycle)
+            if (name == ChipBreakCycle)
             {
+                // D190, D357: CHIP_BREAK lifts by chip_break_lift and feeds on without leaving the hole.
+                if (distances.ChipBreakLift > 0)
+                {
+                    motions.Add(Rapid(drillingAxis, Toward(peck, clearance, distances.ChipBreakLift)));
+                }
+            }
+            else
+            {
+                // D190, D357: between the steps the tool returns at rapid to CLEARANCE and comes back at rapid to
+                // peck_clearance above the depth reached.
                 motions.Add(Rapid(drillingAxis, clearance));
-                motions.Add(Rapid(drillingAxis, peck));
+                motions.Add(Rapid(drillingAxis, Toward(peck, clearance, distances.PeckClearance)));
             }
         }
 
         motions.Add(Feed(drillingAxis, depth, feed));
-        motions.Add(name == TapCycle ? Feed(drillingAxis, retractPlane, feed) : Rapid(drillingAxis, retractPlane));
+        Retract(motions, name, drillingAxis, feed, clearance, retractPlane, toSafe && distances.ReamFeedsOutToSafe);
         return motions;
     }
 
-    // The depths a PECK greater than 0 reaches before DEPTH, from CLEARANCE toward DEPTH in steps of PECK, a radius
-    // value (language 4.7, D60); none without a known PECK, CLEARANCE and DEPTH. The store holds both planes through
-    // the same setpos shift, so the steps are taken on the stored values.
-    private static List<AxisPosition> Pecks(CycleState cycle, AxisPosition clearance, AxisPosition depth)
+    // D190, D378: the retract is a rapid, for BORE after the spindle stop; TAP and REAM feed out at CYCLE_F. TAP feeds
+    // only to CLEARANCE on every family, and under CYCLE_RETRACT=SAFE the rest of the way to SAFE is a rapid; REAM
+    // feeds under SAFE up to the plane of ream_feed_out (reamToSafe) and rapids the rest.
+    private static void Retract(List<CycleMotion> motions, string name, string drillingAxis, decimal? feed,
+        AxisPosition clearance, AxisPosition retractPlane, bool reamToSafe)
+    {
+        if (name != TapCycle && name != ReamCycle)
+        {
+            motions.Add(Rapid(drillingAxis, retractPlane));
+            return;
+        }
+
+        if (name == ReamCycle && reamToSafe)
+        {
+            motions.Add(Feed(drillingAxis, retractPlane, feed));
+            return;
+        }
+
+        motions.Add(Feed(drillingAxis, clearance, feed));
+        if (retractPlane != clearance)
+        {
+            motions.Add(Rapid(drillingAxis, retractPlane));
+        }
+    }
+
+    // A position a distance from a plane toward another along the drilling axis: the lift of CHIP_BREAK above the
+    // depth reached, the end of the re-entry of PECK. It never passes the plane it goes toward, CLEARANCE, so a lift
+    // larger than the gap left ends there. Unknown when either plane is.
+    private static AxisPosition Toward(AxisPosition plane, AxisPosition toward, decimal distance)
+    {
+        if (!plane.Known || !toward.Known)
+        {
+            return AxisPosition.Unknown;
+        }
+
+        decimal gap = Math.Abs(toward.Value - plane.Value);
+        decimal direction = toward.Value < plane.Value ? -1m : 1m;
+        return plane with { Value = plane.Value + (direction * Math.Min(distance, gap)) };
+    }
+
+    // D355: the depths a PECK greater than 0 reaches before DEPTH, in steps of PECK from SURFACE, or from CLEARANCE
+    // where the block gives no SURFACE: the first ends one PECK from that plane in the drilling direction, each further
+    // one a PECK deeper, and the last stops at DEPTH. PECK is a radius value (language 4.7, D60); none without a known
+    // PECK, start plane and DEPTH. The store holds the planes through the same setpos shift, so the steps are taken on
+    // the stored values.
+    private static List<AxisPosition> Pecks(CycleState cycle, AxisPosition start, AxisPosition depth)
     {
         var pecks = new List<AxisPosition>();
-        if (!clearance.Known
+        if (!start.Known
             || !depth.Known
             || ParameterOf(cycle, PeckKey) is not Word peckWord
             || MotionRules.NumberOf(peckWord) is not decimal peck
@@ -180,8 +234,8 @@ internal static class CycleRules
             return pecks;
         }
 
-        decimal direction = depth.Value < clearance.Value ? -1m : 1m;
-        for (decimal reached = clearance.Value + (direction * peck);
+        decimal direction = depth.Value < start.Value ? -1m : 1m;
+        for (decimal reached = start.Value + (direction * peck);
             direction * (depth.Value - reached) > 0;
             reached += direction * peck)
         {

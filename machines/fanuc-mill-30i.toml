@@ -1,7 +1,7 @@
 # NCX machine configuration: plain vertical machining center on Fanuc Series 30i, one path, three linear axes X Y Z, one milling spindle (S1) with a tool magazine (H1), the table (TABLE1).
 # Written from controllers/fanuc.md and the Fanuc column of spec/controller-mapping.md with the generic words only: no builder tables, no RAW:BUILDER vocabulary. Schema draft 8. Not verified on a machine.
 # The point of this file: the machine of the Fanuc reader and compiler of phase 3 (sources/2.5D_FRAESEN.fanuc.nc, BOHREN.fanuc.nc, 3D_FRAESEN.fanuc.nc) and one of the two machines that 2.5D_FRAESEN, PATTERN_LOOP and INCREMENTAL_SUB check with (P2-04).
-# D100: every number under [[axis]], [positions], [dynamics] and the spindle limits is plausible for a machine of this class and not verified on the machine. The reference point is the machine zero, so the G91 G28 Z0 of the Fanuc sources and the M91 moves to Z0 and X0 Y0 of the Heidenhain sources end at the same place (2.5D_FRAESEN note 4).
+# D100: every number under [[axis]], [positions], [dynamics], [cycles] and the spindle limits is plausible for a machine of this class and not verified on the machine. The reference point is the machine zero, so the G91 G28 Z0 of the Fanuc sources and the M91 moves to Z0 and X0 Y0 of the Heidenhain sources end at the same place (2.5D_FRAESEN note 4).
 # The tables of lathes, rotary axes and several paths ([diameter], [spindle_mode], [spindle_sync], [workpiece], [sync], [transform]) have nothing to configure on this machine.
 
 ncx_schema = 1                     # the version of the machine-configuration schema, not of NCXchange (machine-config 1, D348)
@@ -153,12 +153,16 @@ OFF = "G5.1 Q0"
 
 [cycles]
 catalog = "fanuc.toml"             # the Fanuc cycle catalog shipped with NCXchange (machine-config 6)
+chip_break_lift = 0.5              # parameter 5114, the retract d of the G73 high-speed peck (30i-B B-64484GE-2, connector p.62, 75, 84; D357)
+peck_clearance = 1.0               # parameter 5115, the clearance d of the G83 re-approach above the last depth (same pages; D357)
+# surface_clearance is left out: SURFACE is read as 0 (D158)
 
 [variables]
 unassigned = "error"
 map = { Q = "#1{index:02}", QL = "#{index}", QR = "#5{index:02}" }   # Heidenhain-named variables to Fanuc ranges, each a template of the number: Q1 -> #101, QR1 -> #501 (machine-config 7, D173, PATTERN_LOOP)
 block_cap = 1000000
 call_depth = 8
+repeat_counters = ["#149", "#148"] # one counter per REPEAT nesting depth, from #100..#149, which exist without the extended-variables option (machine-config 7, D280)
 
 [system_variables]                 # NCX SYS_ names to native system variables (D51); X Y Z are the axes 1 to 3
 SYS_POS_X = "#5041"                # workpiece position (fanuc 7)

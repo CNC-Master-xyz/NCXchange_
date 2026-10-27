@@ -20,6 +20,10 @@ public sealed partial class VirtualMachine
     // The state at the first verb of the file's first program, the entry state of a subprogram nothing calls (D99).
     private ChannelSnapshot? _firstVerbState;
 
+    // D135: without a verb, the state at the first program's first CALL, before the callee, or without a CALL either,
+    // as the walk reaches its PROGRAM=END, before that block resets the feed mode.
+    private ChannelSnapshot? _entryWithoutVerb;
+
     /// <summary>
     /// Runs a parsed program: in STATIC mode every program of the file once, the calls of its subprograms followed, and
     /// every subprogram no program calls once from the default entry state (virtual machine 1, 3.9, D99); in
@@ -48,6 +52,7 @@ public sealed partial class VirtualMachine
         _homeWarnings.Clear();
         _calledSubs.Clear();
         _firstVerbState = null;
+        _entryWithoutVerb = null;
 
         // The pre-pass over the file: duplicate labels and missing jump targets are ERRORs before execution, and the
         // rules about a block as it is written are reported once per block (virtual machine 3.6, 5).
@@ -58,10 +63,9 @@ public sealed partial class VirtualMachine
             return new RunResult { Stopped = true };
         }
 
-        // One pass top to bottom over every program of the file (virtual machine 1).
-        // TODO(question): virtual machine 1 walks every program of the file and does not say which state a program
-        // after the first starts from; each starts from the state of a channel at the start of a run, as a program
-        // that the job enters on its channel does (language 4.13), until D134 is answered.
+        // One pass top to bottom over every program of the file (virtual machine 1). D134: every program starts from
+        // the initial state of its channel (virtual machine 2, positions per D100), as the job enters it, the tool in
+        // the spindle included; nothing is carried over from the previous program's PROGRAM=END.
         ChannelState? lastProgram = null;
         bool firstProgram = true;
         foreach (Section section in program.Programs)
@@ -106,10 +110,9 @@ public sealed partial class VirtualMachine
     {
         ChannelState state = NewState(channelId);
 
-        // TODO(question): D99 takes units, workplane, diameter and feed mode "as at the first verb of the file's first
-        // program" and does not say what they are when that program has no verb; they stay initial until D135 is
-        // answered.
-        if (_firstVerbState is ChannelSnapshot first)
+        // D135: without a verb in the first program's own blocks, as they stand at its first CALL, before the callee,
+        // or without a CALL either, as the walk reaches its PROGRAM=END, before that block resets the feed mode.
+        if ((_firstVerbState ?? _entryWithoutVerb) is ChannelSnapshot first)
         {
             state.Frame.Units = first.Frame.Units;
             state.Frame.Workplane = first.Frame.Workplane;
@@ -173,6 +176,15 @@ public sealed partial class VirtualMachine
         {
             Block block = program.Blocks[index];
             _state.Flow.Pc = index;
+
+            // D135: the PROGRAM=END of a first program without a verb or a CALL gives the entry state before it resets
+            // the feed mode.
+            bool recordsEntry = recordFirstVerb && _firstVerbState is null && _entryWithoutVerb is null;
+            if (recordsEntry && block.Has("PROGRAM", null, "END"))
+            {
+                _entryWithoutVerb = _state.Snapshot();
+            }
+
             BlockFlow flow = Execute(block);
 
             // Units, workplane, diameter and feed mode as at the first verb of the file's first program are the entry
@@ -180,6 +192,12 @@ public sealed partial class VirtualMachine
             if (recordFirstVerb && _firstVerbState is null && flow.Executed && block.Verb is not null)
             {
                 _firstVerbState = _state.Snapshot();
+            }
+
+            // D135: the first CALL of a first program without a verb so far, before the callee is entered.
+            if (recordsEntry && flow.FollowsCall && block.Verb is null && _entryWithoutVerb is null)
+            {
+                _entryWithoutVerb = _state.Snapshot();
             }
 
             // An ERROR stops the run (virtual machine 2.9).
@@ -252,7 +270,12 @@ public sealed partial class VirtualMachine
         }
 
         // TIMES=n walks the subprogram n times in sequence, each pass from the state the previous one left, so the
-        // caller continues with the state after the last pass (virtual machine 1, 3.9, D99).
+        // caller continues with the state after the last pass (virtual machine 1, 3.9, D99). D136: a TIMES from an
+        // expression walks it once with the caller's state, and afterwards every axis whose position that pass
+        // changed becomes unknown; the expression counts toward the WARNING "unresolved expression" like every
+        // expression of an executed block (virtual machine 5).
+        bool timesUnknown = block.Find("TIMES") is Word { Value: not IntegerValue };
+        var before = new Dictionary<string, AxisPosition>(_state.Motion.Position, StringComparer.Ordinal);
         int passes = PassesOf(block);
         for (int pass = 0; pass < passes; pass++)
         {
@@ -266,6 +289,28 @@ public sealed partial class VirtualMachine
                 yield break;
             }
         }
+
+        if (timesUnknown)
+        {
+            ForgetMovedAxes(before);
+        }
+    }
+
+    // D136: every axis whose position differs from the one it had before the call becomes unknown. The return to the
+    // caller has raised its events already, so the chain of Before and After goes on from the state with the axes
+    // forgotten, and the next block of the caller starts from it.
+    private void ForgetMovedAxes(Dictionary<string, AxisPosition> before)
+    {
+        Dictionary<string, AxisPosition> position = _state.Motion.Position;
+        foreach (string axis in new List<string>(position.Keys))
+        {
+            if (!before.TryGetValue(axis, out AxisPosition old) || old != position[axis])
+            {
+                position[axis] = AxisPosition.Unknown;
+            }
+        }
+
+        RestartEvents(_state);
     }
 
     // One pass through a subprogram with the caller's state at that point (D99).
@@ -318,10 +363,8 @@ public sealed partial class VirtualMachine
     }
 
     // The ARG words of the CALL block go to the callee's locals; an ARG from an expression is UNKNOWN in STATIC mode
-    // (language 4.9, virtual machine 1, 3.6). False when an ERROR stopped the run.
-    // TODO(question): language 4.9 names an argument by its address (ARG:A=1) and "the callee sees it as a local
-    // variable", while the locals a CALL pushes are V1 to V33 (virtual machine 3.6); an ARG is assigned under its own
-    // name, which is a local of the callee for V1 to V33 only, until D149 is answered.
+    // (language 4.9, virtual machine 1, 3.6). False when an ERROR stopped the run. D149: every name an ARG assigns is
+    // a local of that call, hiding a caller variable of that name until SUB=END or RETURN.
     private bool AssignArguments(Block callBlock)
     {
         foreach (Word word in callBlock.Words)
@@ -338,7 +381,7 @@ public sealed partial class VirtualMachine
                 return false;
             }
 
-            _state.Vars.Set(name, VariableHandlers.ValueOf(word.Value));
+            _state.Vars.SetArgument(name, VariableHandlers.ValueOf(word.Value));
         }
 
         return true;
@@ -455,9 +498,8 @@ public sealed partial class VirtualMachine
             return (int)Math.Clamp(count.Number, 0, int.MaxValue);
         }
 
-        // TODO(question): TIMES from an expression is not evaluated in STATIC mode (virtual machine 1), and D99 walks
-        // the subprogram n times; with n unknown it is walked once, so that its blocks are checked, until D136 is
-        // answered.
+        // D136: TIMES from an expression is not evaluated in STATIC mode (virtual machine 1); the subprogram is walked
+        // once, and FollowCall forgets the axes that pass moved.
         return 1;
     }
 }
