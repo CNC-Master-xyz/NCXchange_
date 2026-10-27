@@ -115,7 +115,7 @@ public sealed class PluginLoaderTests : IDisposable
         Assert.Empty(plugins.Rewriters);
     }
 
-    // The TODO(question) of PluginLoader: an assembly without a public class of the four interfaces is a WARNING and
+    // D330: an assembly without a public class of the four interfaces is a WARNING and
     // gives nothing.
     [Fact]
     public void PluginLoader_AssemblyWithoutPluginClasses_WarnsAndGivesNothing()
@@ -135,9 +135,9 @@ public sealed class PluginLoaderTests : IDisposable
         Assert.Empty(plugins.BlockWriters);
     }
 
-    // Implementation 17, P7-01 and the TODO(question) of PluginLoader.Files: the assemblies the [plugins] list of
-    // ncx.toml names come first, in their order, then the DLLs of plugins/ in the order of their names; a name of the
-    // list that is no file of the working directory is looked for in plugins/, and every file comes once.
+    // Implementation 17, P7-01, D317: the assemblies [plugins] assemblies of ncx.toml names come first, in their order,
+    // then the DLLs of plugins/ in the order of their names; a name of the list that is no file of the working
+    // directory is looked for in plugins/, and every file comes once.
     [Fact]
     public void Files_ListAndPluginsFolder_GiveTheListFirstThenTheFolderEachFileOnce()
     {

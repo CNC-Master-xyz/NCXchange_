@@ -573,6 +573,8 @@ Or, for a long tree: `[machine] kinematics = "dmu50.kin.toml"`.
 ```
 my-shop/
   ncx.toml                 # working directory settings, plugin DLLs, the machine file --machine defaults to (the built-in default machine of D103 applies only when neither names one)
+  plugins/
+    MyShopRules.dll          # every DLL here is a plugin; ncx plugin build puts a plugin here (D317, D330)
   machines/
     dmu50.toml
     fanuc-vmc.toml
@@ -589,7 +591,15 @@ my-shop/
 
 Every machine file and catalog file of the layout may begin with `ncx_schema = 1` (section 1, D348); the version is the schema's, so a file copied from another project keeps it.
 
-`ncx.toml` names the plugin assemblies (`plugins = ["MyShop.NcxPlugins.dll"]`) that subscribe to VM events (`ncx-virtual-machine.md`, section 7).
+`ncx.toml` names the plugin assemblies in the table `[plugins]`, `assemblies = ["MyShop.NcxPlugins.dll"]`, and holds the settings of each plugin in a section `[plugins.<name>]` below it (D80, D238); no plugin may be named `assemblies`, and a top-level list `plugins = [...]` is the ERROR CFG003 (wrong type). A listed name is a path from the working directory, else the file of that name in `plugins/`. The listed DLLs load first, in list order, then the other DLLs of `plugins/` in ordinal name order, each file once, and the classes of one DLL in ordinal order of their full names (D317); the plugins act in that order (`ncx-virtual-machine.md`, section 7). A DLL of `plugins/` without a plugin class is the WARNING PLG005. `ncx plugin build` copies a plugin that brings no other assembly into `plugins/` and lists its name; a plugin that brings assemblies stays in its build output, whose path it lists, so that its load context finds them beside its `.deps.json` (D330).
+
+```toml
+[plugins]
+assemblies = ["MyShopRules.dll", "Clutch/bin/ncx/Clutch.dll"]
+
+[plugins.MyShopRules]
+before_tool = "HOME Z"
+```
 
 A machine named without a path is looked up in `machines/` of the folder `ncx.toml` names, of the working directory and of the tool's own folder, in that order, and a catalog in the `cycles/` folders in the same order; a value that names an existing file, or has a folder in it, is a path (D206, D207). The installation of `ncx` holds the shipped machine files and catalogs twice: loose in `machines/` and `cycles/` beside the binary, to read and copy, and built into the binary as the fourth and last place of both lookups, so that a single-file `ncx` run on its own finds them (D371). A shop's own file of a shipped name wins; a shop that wants a shipped machine gone shadows it with its own file of that name, since deleting the loose copy falls back to the built-in one. A built-in file is named in a diagnostic as `built-in machines/<name>.toml`. The plugin template is no built-in file: `ncx plugin new` from a lone binary reports CLI552.
 

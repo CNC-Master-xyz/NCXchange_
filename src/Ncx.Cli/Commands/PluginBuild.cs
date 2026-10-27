@@ -8,15 +8,19 @@ namespace Ncx.Cli.Commands;
 
 /// <summary>
 /// ncx plugin build [&lt;folder&gt;]: runs dotnet build on a plugin against the Ncx assemblies of the ncx that runs,
-/// copies its DLL into plugins/ of the working directory and adds its line to ncx.toml, so that the user copies
-/// nothing (code-guidelines 11, step 5; implementation 17, P7-02). The DLL and the line of ncx.toml are named on the
-/// standard output. Exit code 0; 1 when the build fails or its result cannot be written; 2 when there is no plugin to
-/// build or ncx.toml cannot be read (D97).
+/// copies its DLL into plugins/ of the working directory and adds it to [plugins] assemblies of ncx.toml, so that the
+/// user copies nothing (code-guidelines 11, step 5; implementation 17, P7-02; D238). A plugin that brings assemblies
+/// is not copied: ncx.toml lists the DLL in its build output, where the load context finds what it brings (D330). The
+/// DLL and the line of ncx.toml are named on the standard output (D331). Exit code 0; 1 when the build fails or its
+/// result cannot be written; 2 when there is no plugin to build or ncx.toml cannot be read (D97).
 /// </summary>
 internal static class PluginBuild
 {
     // A DLL is named after its project: MyShopRules.dll.
     private const string DllExtension = ".dll";
+
+    // The assemblies of ncx, which a run shares with every plugin and which are no assemblies a plugin brings (D106).
+    private const string NcxAssemblyPrefix = "Ncx.";
 
     // The symbols of a DLL, which the plugin loader reads with it when they lie next to it (implementation 17, P7-01).
     private const string SymbolsExtension = ".pdb";
@@ -84,13 +88,25 @@ internal static class PluginBuild
             return ExitCodes.Error;
         }
 
+        // D330: a plugin that brings assemblies stays in its build output, beside its .deps.json, which the load
+        // context resolves them from (D106); ncx.toml lists it by its path from the working directory. A copy in
+        // plugins/ would load a second time without them.
+        if (BroughtAssemblies(buildFolder, project.Name).Count > 0)
+        {
+            string entry = Path.GetRelativePath(settings.WorkingDirectory, dll).Replace('\\', '/');
+            output.Write(entry + "\n");
+            AddLine(ncxToml, entry, ncxTomlPath, inPluginsFolder: false, output, diagnostics);
+            error.Write(diagnostics.ToText());
+            return ExitCodes.OfRun(diagnostics, settings.Strict);
+        }
+
         // Code-guidelines 11, step 5: the command puts the DLL into plugins/ of the working directory, where every run
-        // loads it (implementation 17, P7-01), and adds its line to ncx.toml.
+        // loads it (implementation 17, P7-01), and adds it to [plugins] assemblies of ncx.toml (D238).
         string plugin = Path.Combine(PluginLoader.PluginsFolder, project.Name + DllExtension);
         if (CopyIntoPlugins(dll, Path.Combine(settings.WorkingDirectory, plugin), plugin, diagnostics))
         {
             output.Write(plugin + "\n");
-            AddLine(ncxToml, project.Name + DllExtension, ncxTomlPath, output, diagnostics);
+            AddLine(ncxToml, project.Name + DllExtension, ncxTomlPath, inPluginsFolder: true, output, diagnostics);
         }
 
         error.Write(diagnostics.ToText());
@@ -129,11 +145,31 @@ internal static class PluginBuild
         return true;
     }
 
-    // The DLL, and its symbols when the build left them, into plugins/; a file that cannot be written is an ERROR of
-    // the run, which has started (D97).
-    // TODO(question): no document says what ncx plugin build does with the assemblies a plugin brings, a package it
-    // references among them (D106: the load context isolates everything else the plugin brings). Only the DLL of the
-    // plugin goes into plugins/, where every DLL is a plugin (implementation 17, P7-01), until that is answered.
+    /// <summary>
+    /// The assemblies a plugin brings: the DLLs of its build output other than its own and those of ncx, a package it
+    /// references among them (D330, D106).
+    /// </summary>
+    /// <param name="buildFolder">The build output of the plugin.</param>
+    /// <param name="name">The name of the plugin, its DLL without the extension.</param>
+    /// <returns>The file names, in ordinal order; empty when the plugin brings none.</returns>
+    internal static IReadOnlyList<string> BroughtAssemblies(string buildFolder, string name)
+    {
+        var brought = new List<string>();
+        foreach (string file in Directory.GetFiles(buildFolder, "*" + DllExtension))
+        {
+            string fileName = Path.GetFileName(file);
+            if (fileName != name + DllExtension && !fileName.StartsWith(NcxAssemblyPrefix, StringComparison.Ordinal))
+            {
+                brought.Add(fileName);
+            }
+        }
+
+        brought.Sort(StringComparer.Ordinal);
+        return brought;
+    }
+
+    // The DLL, and its symbols when the build left them, into plugins/, for a plugin that brings no assemblies (D330);
+    // a file that cannot be written is an ERROR of the run, which has started (D97).
     private static bool CopyIntoPlugins(string dll, string target, string plugin, Diagnostics diagnostics)
     {
         try
@@ -157,10 +193,12 @@ internal static class PluginBuild
         }
     }
 
-    // Code-guidelines 11, step 5: the command adds the line of the plugin to ncx.toml, the list of the plugin
-    // assemblies of machine-config 10 (NcxTomlPlugins, and its TODO(question) of D238). A file the line cannot join
-    // stays as it is, with an INFO, since the DLL in plugins/ loads without it (implementation 17, P7-01).
-    private static void AddLine(string? ncxToml, string dll, string path, TextWriter output, Diagnostics diagnostics)
+    // Code-guidelines 11, step 5: the command adds the plugin to [plugins] assemblies of ncx.toml (D238). A file the
+    // entry cannot join stays as it is: with an INFO when the DLL lies in plugins/, which loads without the entry
+    // (implementation 17, P7-01), with a WARNING when the entry is the path of a build output, which nothing else
+    // loads (D330).
+    private static void AddLine(string? ncxToml, string dll, string path, bool inPluginsFolder, TextWriter output,
+        Diagnostics diagnostics)
     {
         bool hasByteOrderMark = ncxToml is not null
             && ncxToml.StartsWith(InputFile.ByteOrderMark, StringComparison.Ordinal);
@@ -173,11 +211,19 @@ internal static class PluginBuild
         }
 
         string? changed = NcxTomlPlugins.Add(text, dll);
-        if (changed is null)
+        if (changed is null && inPluginsFolder)
         {
             Report(diagnostics, Severity.Info, ProjectSettings.FileName, DiagnosticCodes.PluginLineNotAdded,
                 $"ncx.toml holds its plugins in a form the line of {dll} cannot join, so it stays as it is; the plugin "
                 + "loads from plugins/ without the line (machine-config 10; D238).");
+            return;
+        }
+
+        if (changed is null)
+        {
+            Report(diagnostics, Severity.Warning, ProjectSettings.FileName, DiagnosticCodes.PluginPathNotAdded,
+                $"ncx.toml holds its plugins in a form the path {dll} cannot join, so it stays as it is and the plugin "
+                + "does not load; add the path to [plugins] assemblies yourself (machine-config 10; D238, D330).");
             return;
         }
 

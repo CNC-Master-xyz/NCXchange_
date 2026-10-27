@@ -28,10 +28,11 @@ The template uses it anyway, because every NC programmer has met a machine like 
    ```
 
    With more than one plugin in the folder, name the one to build: `ncx plugin build MyShopRules`.
-5. Copy nothing: the command has put `MyShopRules.dll` into `plugins/` and added the line to `ncx.toml`:
+5. Copy nothing: the command has put `MyShopRules.dll` into `plugins/` and added it to `ncx.toml`:
 
    ```toml
-   plugins = ["MyShopRules.dll"]
+   [plugins]
+   assemblies = ["MyShopRules.dll"]
    ```
 
 6. Compile a program and read what the plugin did:
@@ -43,8 +44,6 @@ The template uses it anyway, because every NC programmer has met a machine like 
    ```text
    part.ncx(12): INFO PLG001: plugin MyShopRules: inserted 3 blocks at line 12
    ```
-
-   <!-- TODO(question): code-guidelines 11 and D98 print "inserted 2 blocks" for this rule, which inserts three. -->
 
 7. Optional: run the test of the plugin, and change it together with the rule:
 

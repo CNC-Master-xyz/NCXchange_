@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.Writing;
+using Ncx.Plugins;
 using Ncx.Readers;
 
 namespace Ncx.Cli.Commands;
@@ -64,11 +65,12 @@ internal static class BatchCommand
         // ERROR of a file is reported on the file and counted, a crash as well (implementation 13, P3-07).
         // The batch writes nothing but its report where the command line names it, and no NCX file, as convert writes
         // only where the command line names a file (architecture 10; D209).
-        // TODO(question): implementation 13 converts "every file of a folder" with one machine and does not say whether
-        // the files of its folders count, whether a file whose name is no program of the machine's controller does, nor
-        // whether the plugins of the working directory read along. Every file of the folder and of its folders counts,
-        // whatever its name, read by the reader of the machine's controller, and the plugins are not loaded, since a
-        // plugin reports on the file it was loaded with; until that is answered.
+        // Every file of the folder and of its folders counts, whatever its name, read by the reader of the machine's
+        // controller (D284). The plugins of the working directory load once per batch, as convert loads them, and read
+        // along: what they report goes to the file being converted, and a plugin that fails is dropped for the rest of
+        // the batch (D284; implementation 17, P7-01). What they report while they load is the batch's.
+        var pluginDiagnostics = new PluginDiagnostics(diagnostics);
+        PluginSet plugins = RunPlugins.Load(settings, runMachine.Project, pluginDiagnostics);
         error.Write(diagnostics.ToText());
 
         // A run that has started ends with 1 when the machine, a file or the report had an ERROR, a crash among them,
@@ -78,7 +80,8 @@ internal static class BatchCommand
         foreach (string name in files)
         {
             var fileDiagnostics = new Diagnostics(Path.Join(folder, name));
-            converted.Add(ConvertFile(name, machine, readers, fileDiagnostics));
+            pluginDiagnostics.ReportInto(fileDiagnostics);
+            converted.Add(ConvertFile(name, machine, readers, plugins, fileDiagnostics));
             error.Write(fileDiagnostics.ToText());
             exitCode = Math.Max(exitCode, ExitCodes.OfRun(fileDiagnostics, settings.Strict));
         }
@@ -94,7 +97,7 @@ internal static class BatchCommand
     // One file: read, converted and checked as ncx convert does it, the canonical text written in memory only. A crash
     // is reported on the file with the name of its exception; the report never holds its message, which may quote the
     // program (implementation 13, risks).
-    private static BatchFile ConvertFile(string name, MachineConfig machine, ReaderRegistry readers,
+    private static BatchFile ConvertFile(string name, MachineConfig machine, ReaderRegistry readers, PluginSet plugins,
         Diagnostics diagnostics)
     {
         string? text = ControllerProgram.Read(diagnostics.File, diagnostics);
@@ -106,8 +109,8 @@ internal static class BatchCommand
         try
         {
             IReader reader = readers.Create(machine.Machine.Controller!.Value)!;
-            NcxProgram program = ConvertCommand.Convert(new SourceFile(diagnostics.File, text), machine, reader, null,
-                diagnostics);
+            NcxProgram program = ConvertCommand.Convert(new SourceFile(diagnostics.File, text), machine, reader,
+                plugins, diagnostics);
             NcxWriter.Write(program);
             return BatchFile.Of(name, BatchOutcome.Converted, null, program, diagnostics);
         }
@@ -122,9 +125,10 @@ internal static class BatchCommand
         }
     }
 
-    // Every file of the folder and of its folders, hidden files included, by its path from the folder with forward
-    // slashes, in ordinal order, so that two reports of one folder list the files alike. A folder that cannot be read
-    // or listed is an input that cannot be read, exit code 2 (D97).
+    // Every file of the folder and of its folders, by its path from the folder with forward slashes, in ordinal order,
+    // so that two reports of one folder list the files alike; a file or folder whose name starts with a dot is hidden
+    // and holds no program, .DS_Store or .git, and is skipped (D284). A folder that cannot be read or listed is an
+    // input that cannot be read, exit code 2 (D97).
     private static List<string>? FilesOf(string folder, Diagnostics diagnostics)
     {
         var options = new EnumerationOptions
@@ -138,7 +142,11 @@ internal static class BatchCommand
             var names = new List<string>();
             foreach (string path in Directory.EnumerateFiles(folder, "*", options))
             {
-                names.Add(Path.GetRelativePath(folder, path).Replace('\\', '/'));
+                string name = Path.GetRelativePath(folder, path).Replace('\\', '/');
+                if (!IsHidden(name))
+                {
+                    names.Add(name);
+                }
             }
 
             names.Sort(StringComparer.Ordinal);
@@ -151,6 +159,20 @@ internal static class BatchCommand
                 + "P3-07).");
             return null;
         }
+    }
+
+    // A path from the folder with a part that starts with a dot, a hidden file or one in a hidden folder (D284).
+    private static bool IsHidden(string name)
+    {
+        foreach (string part in name.Split('/'))
+        {
+            if (part.StartsWith('.'))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // What a defect of a reader, the writer, the expander or the virtual machine throws; an exception that says the

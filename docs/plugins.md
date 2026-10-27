@@ -35,11 +35,11 @@ The template in `../templates/ncx-plugin/` is a plugin that builds and runs as i
    ```
 
    With more than one plugin in the folder, name the one to build: `ncx plugin build MyShopRules`.
-5. Copy nothing: the command has put the DLL into `plugins/` and added the line to `ncx.toml`, and says so:
+5. Copy nothing: the command has put the DLL into `plugins/` and added it to `[plugins] assemblies` of `ncx.toml`, and says so (a plugin that brings a package stays in its build output instead, and the line names that path, D330):
 
    ```text
    plugins/MyShopRules.dll
-   ncx.toml: plugins = ["MyShopRules.dll"]
+   ncx.toml: [plugins] assemblies = ["MyShopRules.dll"]
    ```
 
 6. Run the program through `ncx` and read what the plugin did, with `ncx compile` or with `ncx check`:
@@ -185,11 +185,21 @@ if (context.Settings.TryGetValue("before_tool", out string? before))
 }
 ```
 
-A file cannot hold the list `plugins = [...]` beside such a section (D238, open). A plugin with a section of its own is found in `plugins/`, where every DLL is loaded anyway; `ncx plugin build` leaves an `ncx.toml` with sections as it is and says so (`CLI557`).
+The sections stand below the table `[plugins]`, whose `assemblies` lists the plugin DLLs; no plugin may be named `assemblies` (D238):
+
+```toml
+[plugins]
+assemblies = ["MyShopRules.dll"]
+
+[plugins.MyShopRules]
+before_tool = "HOME Z"
+```
+
+The old top-level list `plugins = [...]` is the ERROR `CFG003`. `ncx plugin build` adds to `assemblies`; a file it cannot join (a list over several lines, say) stays as it is, with the INFO `CLI557` for a DLL in `plugins/`, which loads anyway, and the WARNING `CLI560` for the path of a build output, which does not.
 
 ## Where ncx finds plugins
 
-Every DLL of `plugins/` of the working directory is a plugin, and so is every DLL that the list `plugins = [...]` of `ncx.toml` names, by its path from the working directory or by its name in `plugins/` (`spec/machine-config.md`, section 10). The list comes first, then the DLLs of `plugins/` in the order of their names; the rewriters of several plugins act on a block in that order. A plugin is named after its DLL, `MyShopRules.dll` is `MyShopRules`. Each DLL loads into a context of its own, which shares the `Ncx` assemblies with `ncx` and keeps everything else the plugin brings apart from `ncx` and from the other plugins (D106).
+Every DLL of `plugins/` of the working directory is a plugin, and so is every DLL that `[plugins] assemblies` of `ncx.toml` names, by its path from the working directory or by its name in `plugins/` (`spec/machine-config.md`, section 10; D317). The list comes first, then the DLLs of `plugins/` in the order of their names; the rewriters of several plugins act on a block in that order. A plugin is named after its DLL, `MyShopRules.dll` is `MyShopRules`. Each DLL loads into a context of its own, which shares the `Ncx` assemblies with `ncx` and keeps everything else the plugin brings apart from `ncx` and from the other plugins (D106).
 
 ## Finding out what a plugin did
 
@@ -211,7 +221,7 @@ Every DLL of `plugins/` of the working directory is a plugin, and so is every DL
 | Command | What it does | Exit code |
 |---|---|---|
 | `ncx plugin new <name>` | copies the template next to `ncx` into `./<name>/` and renames it | 2 for a name that is no name of a plugin (`CLI550`), a folder that is there (`CLI551`), a missing template (`CLI552`) |
-| `ncx plugin build [<folder>]` | runs `dotnet build`, puts the DLL into `plugins/`, adds its line to `ncx.toml` | 1 when dotnet cannot be started (`CLI554`) or the build fails (`CLI555`, `CLI556`); 2 when there is no plugin (`CLI553`) |
+| `ncx plugin build [<folder>]` | runs `dotnet build`, puts the DLL into `plugins/` (or, for a plugin that brings assemblies, leaves it in its build output, D330), adds it to `[plugins] assemblies` of `ncx.toml` (D238) | 1 when dotnet cannot be started (`CLI554`) or the build fails (`CLI555`, `CLI556`); 2 when there is no plugin (`CLI553`) |
 | `ncx plugin check <dll>` | loads the DLL as a run does and lists its interfaces | 1 when it does not load (`PLG002`); 2 when the file is not there |
 | `ncx plugin test [<folder>]` | runs `dotnet test` on `<name>.Tests` of the plugin | 1 when a test fails (`CLI559`); 2 without a test project (`CLI558`) |
 

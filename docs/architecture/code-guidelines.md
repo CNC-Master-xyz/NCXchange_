@@ -253,7 +253,7 @@ templates/ncx-plugin/
     CoolantClutchRuleTests.cs one string-in string-out test to copy from
 ```
 
-The six steps of the README: install the .NET SDK (one download), run `ncx plugin new MyShopRules`, open the one `.cs` file and change the words in it, run `ncx plugin build`, copy nothing (the command puts the DLL into `plugins/` and adds the line to `ncx.toml`), run `ncx compile` and read the line `plugin MyShopRules: inserted 2 blocks at line 12` in the output. Step seven, optional: run `ncx plugin test`.
+The six steps of the README: install the .NET SDK (one download), run `ncx plugin new MyShopRules`, open the one `.cs` file and change the words in it, run `ncx plugin build`, copy nothing (the command puts the DLL into `plugins/` and adds it to `[plugins] assemblies` of `ncx.toml`, D238), run `ncx compile` and read the line `plugin MyShopRules: inserted 3 blocks at line 12` in the output: every block the answer inserts counts, before and after the block, here `@SAVE=SPINDLE:MAIN`, `SPINDLE:MAIN=OFF` and `@RESTORE=SPINDLE:MAIN`, and a Replace prints no INFO (D318). Step seven, optional: run `ncx plugin test`.
 
 The example in the template is the rule from the shop floor, chosen because every NC programmer has met a machine like it. It could be written as a TOML expansion rule as well; the template says so and uses it anyway, because the reader should see the mechanism with a case he understands.
 

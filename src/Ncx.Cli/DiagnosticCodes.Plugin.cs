@@ -66,4 +66,11 @@ public static partial class DiagnosticCodes
     /// output; exit code 1 (implementation 17, P7-02; D97).
     /// </summary>
     public const string PluginTestsFailed = "CLI559";
+
+    /// <summary>
+    /// CLI560, a WARNING: the plugin brings assemblies, so ncx plugin build copies nothing into plugins/ and lists the
+    /// path of its build output in [plugins] assemblies; ncx.toml holds its plugins in a form that path cannot join, so
+    /// it stays as it is and the plugin does not load (D330, D238).
+    /// </summary>
+    public const string PluginPathNotAdded = "CLI560";
 }

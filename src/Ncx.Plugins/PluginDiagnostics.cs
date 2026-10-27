@@ -7,12 +7,12 @@ namespace Ncx.Plugins;
 /// What the plugins of a run report, into the diagnostics of the run (implementation 17, P7-01; D98). Every message
 /// begins with the name of the plugin, "plugin MyShopRules: ...", so that the user knows whose it is: a plugin that
 /// fails to load or throws is an ERROR and is left out while the run goes on, a block of a rewriter that does not
-/// parse is an ERROR, and the blocks a rewriter inserted are the INFO "plugin MyShopRules: inserted 2 blocks at line
-/// 12".
+/// parse is an ERROR, and the blocks a rewriter inserted are the INFO "plugin MyShopRules: inserted 3 blocks at line
+/// 12", every block before and after the block counted (D318).
 /// </summary>
 public sealed class PluginDiagnostics
 {
-    private readonly Diagnostics _diagnostics;
+    private Diagnostics _diagnostics;
 
     /// <summary>
     /// Reports into the diagnostics of a run.
@@ -20,6 +20,16 @@ public sealed class PluginDiagnostics
     /// <param name="diagnostics">The diagnostics of the run; their file is the file whose blocks the plugins see, the
     /// NCX file or the controller program (D98).</param>
     public PluginDiagnostics(Diagnostics diagnostics)
+    {
+        _diagnostics = diagnostics;
+    }
+
+    /// <summary>
+    /// Reports from now on into the diagnostics of another file: ncx convert --batch loads the plugins once and hands
+    /// their diagnostics to the file being converted (D284).
+    /// </summary>
+    /// <param name="diagnostics">The diagnostics of the file the plugins see next.</param>
+    public void ReportInto(Diagnostics diagnostics)
     {
         _diagnostics = diagnostics;
     }
@@ -45,7 +55,7 @@ public sealed class PluginDiagnostics
             + "D106).");
     }
 
-    // An assembly without a class of the four interfaces does nothing (the TODO(question) of PluginLoader.Load).
+    // An assembly without a class of the four interfaces does nothing, a WARNING (D330).
     internal void NoPluginClass(string plugin, string file)
     {
         Add(Severity.Warning, file, DiagnosticCodes.NoPluginClass,

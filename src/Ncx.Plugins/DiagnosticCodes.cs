@@ -18,7 +18,7 @@ public static class DiagnosticCodes
 {
     /// <summary>
     /// PLG001, an INFO: a program rewriter of a plugin inserted generated blocks around a block, "plugin MyShopRules:
-    /// inserted 2 blocks at line 12" (D98, code-guidelines 11).
+    /// inserted 3 blocks at line 12", every block before and after it counted (D98, code-guidelines 11, D318).
     /// </summary>
     public const string InsertedBlocks = "PLG001";
 

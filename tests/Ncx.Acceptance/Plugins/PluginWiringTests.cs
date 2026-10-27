@@ -84,13 +84,13 @@ public sealed class PluginWiringTests : IDisposable
         Assert.Equal($"{file}(4): INFO PLG001: plugin ShopRules: inserted 1 block at line 4\n", _project.Error);
     }
 
-    // Machine-config 10, implementation 17 P7-01: the [plugins] list of ncx.toml names an assembly by its path from
-    // the working directory, outside plugins/.
+    // Machine-config 10, implementation 17 P7-01, D238: [plugins] assemblies of ncx.toml names an assembly by its path
+    // from the working directory, outside plugins/.
     [Fact]
     public void Check_AssemblyTheListOfNcxTomlNames_IsLoadedFromItsPath()
     {
         TestPlugins.CopyInto(Path.Combine(_project.WorkingDirectory, "lib"), TestPlugins.ShopRules);
-        _project.WriteInWorkingDirectory("ncx.toml", "plugins = [\"lib/ShopRules.dll\"]\n");
+        _project.WriteInWorkingDirectory("ncx.toml", "[plugins]\nassemblies = [\"lib/ShopRules.dll\"]\n");
         string file = _project.WriteInWorkingDirectory("part.ncx", s_clutchProgram);
 
         int exitCode = _project.Check(file, "plugin-mill");
