@@ -8,9 +8,9 @@ namespace Ncx.Plugins;
 /// <summary>
 /// Stands in the expander for a program rewriter of a plugin (architecture 5.5, 9): it gives the rewriter the context
 /// with the plugin's own settings (D80), lets through only an answer whose every block parses under the option of
-/// generated text (D95) and holds a pseudo-word only alone (D167), says how many blocks the rewriter inserted, and reports and leaves out a plugin that throws,
-/// so that the expansion goes on without it (implementation 17, P7-01). The blocks of its answers carry the name of
-/// the plugin (architecture 9: trace shows the plugin's name).
+/// generated text (D95) and holds a pseudo-word only alone (D167), says how many blocks the rewriter inserted, and
+/// reports and leaves out a plugin that throws, so that the expansion goes on without it (implementation 17, P7-01).
+/// The blocks of its answers carry the name of the plugin (architecture 9: trace shows the plugin's name).
 /// </summary>
 internal sealed class PluginRewriter : INamedRewriter
 {
