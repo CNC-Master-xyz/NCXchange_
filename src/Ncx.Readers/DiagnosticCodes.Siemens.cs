@@ -43,9 +43,30 @@ public static partial class DiagnosticCodes
     public const string SiemensStructureNotClosed = "RDR505";
 
     /// <summary>
-    /// RDR506, a WARNING: a DIV with an operand that is not a number literal of 0 or more keeps its block as RAW, since
-    /// how the control rounds the integer division of a negative operand, towards zero or towards minus infinity, is
-    /// not documented (D346; manual audit 2026-10-26).
+    /// RDR506, a WARNING: a DIV with an operand that is no number literal, or with a negative literal whose quotient is
+    /// not exact, keeps its block as RAW, since how the control rounds the integer division of a negative operand,
+    /// towards zero or towards minus infinity, is not documented; integer-valued literals whose quotient is exact
+    /// convert whatever their sign (D346, D382; manual audit 2026-10-26).
     /// </summary>
     public const string SiemensDivisionRoundingUnknown = "RDR506";
+
+    /// <summary>
+    /// RDR507, a WARNING: a feed under G70 or G71 whose unit differs from the basic system of the machine (base_units,
+    /// MD10240) stays in the basic system on the control, so the reader converts it into the unit UNITS names and names
+    /// the code (D292).
+    /// </summary>
+    public const string SiemensFeedInTheBasicSystem = "RDR507";
+
+    /// <summary>
+    /// RDR509, a WARNING: G75 FP=1, or G75 without FP, which the control reads as FP=1, approaches fixed point 1, and
+    /// NCX has no POINT for it, since POINT=1 is the reference point G74 approaches; the block is kept as RAW (D260).
+    /// </summary>
+    public const string SiemensFixedPoint1HasNoPoint = "RDR509";
+
+    /// <summary>
+    /// RDR510, a WARNING: $AA_IM[X], the machine position, reads a radius on the control by default (MD20360 bits 6/7
+    /// off), half the diameter NCX $SYS_MPOS_X reads, so under DIAMON the reader writes the NCX name halved; the factor
+    /// is not yet measured on a machine, and frames_in_diameter on the X axis turns it off (D240).
+    /// </summary>
+    public const string SiemensMachinePositionDoubled = "RDR510";
 }

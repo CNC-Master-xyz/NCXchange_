@@ -11,15 +11,15 @@ using Ncx.Readers;
 namespace Ncx.Cli.Commands;
 
 /// <summary>
-/// ncx convert &lt;file&gt; --machine &lt;toml&gt; [--output &lt;file&gt;] [--strict]: reads a controller program into
-/// NCX with the reader that the controller of the machine file chooses, writes it with the canonical writer and ends
-/// with a STATIC check over the produced program, whose diagnostics are reported together with the reader's
-/// (architecture 7, 10). convert always needs a machine file, from --machine or from ncx.toml, never the built-in
-/// default machine (D77, D103). The NCX text goes to the standard output or into the file of --output, the diagnostics
-/// to the standard error (D98). Exit code 0 without an ERROR, 1 with one or with a WARNING under --strict, 2 when the
-/// program or the machine file cannot be read or no machine file is named (D97). ncx convert --batch &lt;folder&gt;
-/// --machine &lt;toml&gt; --report &lt;file&gt; converts every file of a folder instead (BatchCommand; implementation
-/// 13, P3-07).
+/// ncx convert &lt;file&gt; --machine &lt;toml&gt; [--output &lt;file&gt;] [--channel n] [--strict]: reads a controller
+/// program into NCX with the reader that the controller of the machine file chooses, writes it with the canonical
+/// writer and ends with a STATIC check over the produced program, whose diagnostics are reported together with the
+/// reader's (architecture 7, 10). convert always needs a machine file, from --machine or from ncx.toml, never the
+/// built-in default machine (D77, D103). The NCX text goes to the standard output or into the file of --output, the
+/// diagnostics to the standard error (D98). Exit code 0 without an ERROR, 1 with one or with a WARNING under --strict,
+/// 2 when the program or the machine file cannot be read or no machine file is named (D97). With --channel n the reader
+/// writes CHANNEL=n on the program (D223). ncx convert --batch &lt;folder&gt; --machine &lt;toml&gt; --report
+/// &lt;file&gt; converts every file of a folder instead (BatchCommand; implementation 13, P3-07).
 /// </summary>
 internal static class ConvertCommand
 {
@@ -50,6 +50,12 @@ internal static class ConvertCommand
             Description = "Write the NCX text into this file instead of the standard output.",
             HelpName = "file",
         };
+        var channelOption = new Option<int?>("--channel")
+        {
+            Description = "The channel the program runs on: CHANNEL=n on its PROGRAM=BEGIN, which wins over a channel "
+                + "the file name gives (.P-n).",
+            HelpName = "n",
+        };
         var batchOption = new Option<string>("--batch")
         {
             Description = "Convert every file of this folder and of its folders instead of one program, never stopping "
@@ -74,6 +80,7 @@ internal static class ConvertCommand
             fileArgument,
             machineOption,
             outputOption,
+            channelOption,
             batchOption,
             reportOption,
             strictOption,
@@ -109,6 +116,17 @@ internal static class ConvertCommand
             {
                 result.AddError("--batch writes no NCX text, so it takes no --output");
             }
+
+            // --channel names the channel of one program (D223), so a batch of files takes none.
+            if (batch && result.GetValue(channelOption) is not null)
+            {
+                result.AddError("--channel names the channel of one program, so --batch takes none");
+            }
+
+            if (result.GetValue(channelOption) is int channel && channel < 1)
+            {
+                result.AddError("--channel takes a channel number of 1 or more");
+            }
         });
 
         command.SetAction(parseResult =>
@@ -122,7 +140,8 @@ internal static class ConvertCommand
             };
             return folder is not null
                 ? BatchCommand.Run(settings, parseResult.GetRequiredValue(reportOption), readers, error)
-                : Run(settings, parseResult.GetValue(outputOption), readers, output, error);
+                : Run(settings, parseResult.GetValue(outputOption), parseResult.GetValue(channelOption), readers,
+                    output, error);
         });
         return command;
     }
@@ -140,6 +159,23 @@ internal static class ConvertCommand
     /// <returns>The exit code (D97).</returns>
     internal static int Run(RunSettings settings, string? outputFile, ReaderRegistry readers, TextWriter output,
         TextWriter error)
+    {
+        return Run(settings, outputFile, null, readers, output, error);
+    }
+
+    /// <summary>
+    /// Converts one controller program on the channel of --channel (D223): the reader writes CHANNEL=n on its
+    /// PROGRAM=BEGIN, whatever the file name says (controller-mapping 7; architecture 10).
+    /// </summary>
+    /// <param name="settings">The program, the machine, the folders and --strict.</param>
+    /// <param name="outputFile">The file for the NCX text; null for the standard output.</param>
+    /// <param name="channel">The channel of --channel; null without it.</param>
+    /// <param name="readers">The readers by controller family.</param>
+    /// <param name="output">The standard output.</param>
+    /// <param name="error">The standard error.</param>
+    /// <returns>The exit code (D97).</returns>
+    internal static int Run(RunSettings settings, string? outputFile, int? channel, ReaderRegistry readers,
+        TextWriter output, TextWriter error)
     {
         var diagnostics = new Diagnostics(settings.File);
 
@@ -181,7 +217,8 @@ internal static class ConvertCommand
         PluginSet plugins = RunPlugins.Load(settings, runMachine.Project, diagnostics);
 
         // The reader and the STATIC check over what it produced, then the canonical writer (architecture 7, 10; D5).
-        NcxProgram program = Convert(new SourceFile(settings.File, text), machine, reader, plugins, diagnostics);
+        NcxProgram program = Convert(new SourceFile(settings.File, text), machine, reader, plugins, channel,
+            diagnostics);
         string canonical = NcxWriter.Write(program);
 
         // The NCX text goes to the standard output, or into the file of --output (architecture 10).
@@ -216,9 +253,26 @@ internal static class ConvertCommand
     internal static NcxProgram Convert(SourceFile source, MachineConfig machine, IReader reader, PluginSet? plugins,
         Diagnostics diagnostics)
     {
+        return Convert(source, machine, reader, plugins, null, diagnostics);
+    }
+
+    /// <summary>
+    /// Converts the text of one controller program on the channel of --channel (D223), as the overload without it.
+    /// </summary>
+    /// <param name="source">The program, named as the diagnostics name it.</param>
+    /// <param name="machine">The machine the program was written for.</param>
+    /// <param name="reader">The reader of the machine's controller.</param>
+    /// <param name="plugins">The plugins of the working directory; null for none.</param>
+    /// <param name="channel">The channel of --channel; null without it.</param>
+    /// <param name="diagnostics">Where the diagnostics of the reader and of the check go, in that order (D98).</param>
+    /// <returns>The program the reader produced.</returns>
+    internal static NcxProgram Convert(SourceFile source, MachineConfig machine, IReader reader, PluginSet? plugins,
+        int? channel, Diagnostics diagnostics)
+    {
         // The reader turns the program into NCX, keeping as RAW what it cannot express (architecture 7; D5); the reader
         // rules of the plugins read what the tables of the machine leave undecided (D40, D66).
-        NcxProgram program = reader.Read(source, machine, new ReadOptions { Rules = plugins?.SourceRules ?? [] });
+        NcxProgram program = reader.Read(source, machine,
+            new ReadOptions { Rules = plugins?.SourceRules ?? [], Channel = channel });
 
         // convert ends with a STATIC pass over the produced program, expanded as ncx check expands it, and reports its
         // diagnostics together with the reader's, the reader's first (architecture 7, 10; virtual machine 1; D91, D98).

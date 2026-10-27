@@ -1,4 +1,6 @@
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
+using Ncx.Core.Writing;
 using static Ncx.Readers.Tests.Fanuc.FanucRead;
 
 namespace Ncx.Readers.Tests.Fanuc;
@@ -139,15 +141,72 @@ public sealed class FanucProgramTests
     {
         Assert.Contains("\nPROGRAM=BEGIN NUMBER=1000\n", TextOfFile("O1000", "%\nO1000\nG0 X1.\nM30\n%\n", Lathe()),
             StringComparison.Ordinal);
-        Assert.Contains("\nPROGRAM=BEGIN NUMBER=1000\n", TextOfFile("O1000.P-2", "%\nO1000\nG0 X1.\nM30\n%\n"),
+    }
+
+    // D223: the suffix .P-n names the channel on any Fanuc machine, not only on one of the builder nakamura, with or
+    // without a further extension (controller-mapping 7).
+    [Fact]
+    public void Channel_FileOfPath2OnAFanucMillWithTwoChannels_IsChannel2()
+    {
+        MachineConfig mill = FromToml(MillToml.Replace("units_default", "channels = [1, 2]\nunits_default",
+            StringComparison.Ordinal));
+
+        NcxProgram program = ProgramOfFile("O1000.P-2.nc", "%\nO1000\nG0 X1.\nM30\n%\n", mill, new ReadOptions());
+
+        Assert.Contains("\nPROGRAM=BEGIN NUMBER=1000 CHANNEL=2\n", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Empty(Codes(program));
+    }
+
+    // D223: .P-1 is read as CHANNEL=1, not as "no channel".
+    [Fact]
+    public void Channel_FileOfPath1_IsChannel1()
+    {
+        Assert.Contains("\nPROGRAM=BEGIN NUMBER=1000 CHANNEL=1\n",
+            TextOfFile("O1000.P-1", "%\nO1000\nG0 X1.\nM30\n%\n", Lathe()), StringComparison.Ordinal);
+    }
+
+    // D223: a channel the machine file does not have is an ERROR, RDR107; .P-10 is channel 10, which the two-path
+    // lathe has not, and the mill names no channels, so it has channel 1 only (language 4.1).
+    [Theory]
+    [InlineData("O1000.P-10", true)]
+    [InlineData("O1000.P-2", false)]
+    public void Channel_PathTheMachineHasNot_IsAnErrorRdr107(string fileName, bool lathe)
+    {
+        NcxProgram program = ProgramOfFile(fileName, "%\nO1000\nG0 X1.\nM30\n%\n", lathe ? Lathe() : Mill(),
+            new ReadOptions());
+
+        Diagnostic error = Assert.Single(program.Diagnostics.Items);
+        Assert.Equal((Severity.Error, "RDR107", 2), (error.Severity, error.Code, error.Line));
+    }
+
+    // D223: ncx convert --channel n sets CHANNEL=n on any file, and wins over the suffix of the file name.
+    [Theory]
+    [InlineData("O1000", 2, "CHANNEL=2")]
+    [InlineData("O1000.P-2", 1, "CHANNEL=1")]
+    public void Channel_OfTheCommandLine_WinsOverTheFileName(string fileName, int channel, string expected)
+    {
+        NcxProgram program = ProgramOfFile(fileName, "%\nO1000\nG0 X1.\nM30\n%\n", Lathe(),
+            new ReadOptions { Channel = channel });
+
+        Assert.Contains("\nPROGRAM=BEGIN NUMBER=1000 " + expected + "\n", NcxWriter.Write(program),
             StringComparison.Ordinal);
+        Assert.Empty(Codes(program));
+    }
+
+    // D349: G61 is PATH_MODE=EXACT_STOP and G64 PATH_MODE=CONTINUOUS; G62, G63 and G61.1 are not PATH_MODE.
+    [Fact]
+    public void G61AndG64_ArePathMode()
+    {
+        Assert.Equal(
+            Lines("LINE X=1 F=100 PATH_MODE=EXACT_STOP", "PATH_MODE=CONTINUOUS", "RAW:FANUC=\"G62\""),
+            Body("G1 G61 X1. F100\nG64\nG62"));
     }
 
     // The reader keeps what it cannot express as RAW and its output formats to itself (D5, D91).
     [Fact]
     public void Output_WithRawAndComments_FormatsToItself()
     {
-        NcxProgram program = FramedProgram("G0 X1. (A)\nG64\n(B)\nG1 X2. F100");
+        NcxProgram program = FramedProgram("G0 X1. (A)\nG63\n(B)\nG1 X2. F100");
 
         AssertFormatsToItself(Core.Writing.NcxWriter.Write(program));
         Assert.Equal([DiagnosticCodes.KeptAsRaw], Codes(program));

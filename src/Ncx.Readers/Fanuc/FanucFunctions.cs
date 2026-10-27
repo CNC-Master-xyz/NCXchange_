@@ -46,33 +46,37 @@ internal static class FanucFunctions
     }
 
     /// <summary>
-    /// The words of an M code that several states of the tables write, chosen with what holds (D155): the states the
-    /// source state rules out - a table of another channel, the OFF of a resource that is not on - and those that hold
-    /// already are dropped, and the first state in file order stands where nothing remains (FunctionChoice). Records
-    /// what holds after them. Empty when no table names the code.
+    /// The states of the machine an M code writes, the [workpiece] selection first: every state that writes it, less
+    /// those of a table bound to another channel (D56), the OFF of a resource that is not on and a state that holds
+    /// already, as FanucState.FunctionHolding records them, or the first in file order, with RDR020 where two resources
+    /// of one word would be switched on (D155; FunctionChoice).
     /// </summary>
     /// <param name="block">The block being read.</param>
     /// <param name="code">The M word.</param>
-    /// <param name="parameter">The P word that belongs to the M code; null when none does.</param>
-    public static List<FanucFunction> AllOf(FanucBlock block, SourceWord code, out SourceWord? parameter)
+    /// <param name="parameter">The P word that belongs to the M code, M3 P11 on the Doosan; null when none
+    /// does.</param>
+    public static IReadOnlyList<FunctionMatch> Choose(FanucBlock block, SourceWord code, out SourceWord? parameter)
     {
         parameter = null;
-        var functions = new List<FanucFunction>();
         if (NativeCode.Of(code) is not string native)
         {
-            return functions;
+            return [];
         }
 
         IReadOnlyList<FunctionMatch> matches = [];
-        if (block.Find("P") is SourceWord pWord && pWord.Number is not null)
+        string text = native;
+        SourceWord? pWord = block.Find("P");
+        if (pWord?.Number is not null)
         {
             matches = block.Templates.FindFunctionsByCode(native + " P" + pWord.Text);
-            parameter = matches.Count > 0 ? pWord : null;
+            parameter = matches.Count == 0 ? null : pWord;
+            text = native + " P" + pWord.Text;
         }
 
         if (matches.Count == 0)
         {
             matches = block.Templates.FindFunctionsByCode(native);
+            text = native;
         }
 
         var context = new FunctionContext
@@ -80,21 +84,17 @@ internal static class FanucFunctions
             Channel = block.Fanuc.Channel is long channel ? (int)channel : null,
             Holding = block.Fanuc.FunctionHolding,
         };
-        foreach (FunctionMatch match in FunctionChoice.Choose(matches, context, block.Line, native,
-            block.Diagnostics))
-        {
-            if (match.Table is not null && WordOf(block, match.Key) is FanucFunction function)
-            {
-                functions.Add(function);
-                block.Fanuc.FunctionHolding?.Remove(match.Word);
-                if (match.State != "OFF")
-                {
-                    block.Fanuc.FunctionHolding?.Add(match.Word, match.State);
-                }
-            }
-        }
+        return FunctionChoice.Choose(matches, context, block.Line, text, block.Diagnostics);
+    }
 
-        return functions;
+    /// <summary>
+    /// The word of a state of a function table; null for a state NCX writes otherwise.
+    /// </summary>
+    /// <param name="block">The block being read.</param>
+    /// <param name="match">The state.</param>
+    public static FanucFunction? WordOf(FanucBlock block, FunctionMatch match)
+    {
+        return WordOf(block, match.Key);
     }
 
     /// <summary>
@@ -141,8 +141,8 @@ internal static class FanucFunctions
             case "SPINDLE" when s_spindleStates.Contains(value):
                 return new FanucFunction(key, SpindleAddress(block, addr), new IdentValue(value), addr);
             case "SPINDLE" when value == "ORIENT":
-                // TODO(question): ORIENT takes the angle as its value (language 4.5) and a bare M19 gives none
-                // (wave-1 question #62); the reader writes ORIENT=0, the reference angle of the spindle.
+                // D154: ORIENT takes the angle as its value (language 4.5); the angle of the template or of the block
+                // is FanucBuilder's, and a bare M19 is ORIENT:role=0 with RDR021.
                 return new FanucFunction("ORIENT", SpindleAddress(block, addr), new IntegerValue(0, "0"), addr);
             case "SPINDLE_MODE":
                 return new FanucFunction(key, addr, new IdentValue(value), null);
@@ -158,12 +158,10 @@ internal static class FanucFunctions
         }
     }
 
-    // SPINDLE_SYNC takes the two spindles it couples or OFF (language 4.5); [spindle_sync] names the codes and not the
-    // spindles.
-    // TODO(question): the documents do not say which spindles the ON code of [spindle_sync] couples (wave-1 question
-    // #62); the reader takes the two work spindles of the machine in the order of [roles], MAIN,SUB, and writes the
-    // code as MFUNC when the machine has not two. PHASE needs the angle as its value, which the code does not carry
-    // (FanucBuilder keeps the PHASE code as RAW).
+    // SPINDLE_SYNC takes the two spindles it couples or OFF (language 4.5). D154: [spindle_sync] ON and PHASE couple
+    // the default spindle, the leader, with the other work spindle, or the pair the table names,
+    // SPINDLE_SYNC=MAIN,SUB (MachineConfig.SpindleSyncRoles); the code is MFUNC where the machine has no such pair.
+    // PHASE adds its angle, which FanucBuilder writes.
     private static FanucFunction? SyncOf(FanucBlock block, string value)
     {
         if (value == "OFF")
@@ -171,22 +169,12 @@ internal static class FanucFunctions
             return new FanucFunction("SPINDLE_SYNC", null, new IdentValue(value), null);
         }
 
-        if (value != "ON")
+        if (value is not ("ON" or "PHASE"))
         {
             return null;
         }
 
-        var workSpindles = new List<string>();
-        foreach (KeyValuePair<string, string> role in block.Machine.Roles)
-        {
-            if (block.Machine.FindResource(role.Value)?.Type == ResourceType.WorkSpindle)
-            {
-                workSpindles.Add(role.Key);
-            }
-        }
-
-        return workSpindles.Count == 2
-            ? new FanucFunction("SPINDLE_SYNC", null, new ListValue(workSpindles), null)
-            : null;
+        IReadOnlyList<string> pair = block.Machine.SpindleSyncRoles();
+        return pair.Count == 2 ? new FanucFunction("SPINDLE_SYNC", null, new ListValue(pair), null) : null;
     }
 }

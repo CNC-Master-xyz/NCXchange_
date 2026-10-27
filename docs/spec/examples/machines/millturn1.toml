@@ -35,7 +35,7 @@ tool_name_allowed = true           # T="NAME" is accepted by the control under t
 
 [home]
 template = "G74 {axes}"            # reference point approach with machine axis names, own block, no transformation active (siemens 3)
-point = "G75 {axes} FP={point}"    # fixed points 1..4 for the second and further reference points
+point = "G75 {axes} FP={point}"    # fixed points 2..4 for POINT=2 and further; FP=1 is not written (D260)
 
 [setpos]
 template = "PRESETON({axis},{value})"   # declares the current position of one axis; one call per axis of the SETPOS block
@@ -229,7 +229,7 @@ POLAR_ON = "TRANSMIT"              # face transformation
 POLAR_OFF = "TRAFOOF"
 TCPM_ON = "TRAORI"
 TCPM_OFF = "TRAFOOF"
-TILT_ON = "CYCLE800(1,\"TC1\",{move},27,0,0,0,{c},{b},{a},0,0,0,{dir},100,1)"   # axis-wise Z Y X (mode 27), the order of TILT with the angles reversed (D335); kinematics name TC1; {move} is _ST and {dir} is _DIR (D262)
+TILT_ON = "CYCLE800(1,\"TC1\",{move},27,{x},{y},{z},{c},{b},{a},0,0,0,{dir},100,1)"   # axis-wise Z Y X (mode 27), the order of TILT with the angles reversed (D335); kinematics name TC1; {move} is _ST and {dir} is _DIR (D262); {x} {y} {z} in _X0 _Y0 _Z0, a SHIFT before the tilt (D333)
 TILT_OFF = "CYCLE800()"
 TILT_AXIS_ON = ""                  # empty: TILT_AXIS needs the kinematics module (ERROR at compile time, D82)
 move = { TURN = "0", MOVE = "10", STAY = "0" }   # _ST per MOVE option: the tens digit 1 tracks the tool tip (D262); {dir} comes from MOVE alone, TURN and MOVE -1, STAY 0

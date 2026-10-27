@@ -246,9 +246,8 @@ internal static class FanucFrames
         write.Write(Absolute(write) + "G52 " + string.Join(" ", words));
     }
 
-    // ROTATE turns about the current origin (language 4.2).
-    // TODO(question): D245: what G68 without X Y turns about is open; G68 is written with the origin of the plane,
-    // which means ROTATE whatever the answer, until D245 is answered.
+    // ROTATE turns about the current origin (language 4.2), and a G68 without X Y about the tool position (D245), so
+    // G68 is written with the origin of the plane as its centre.
     private static void WriteRotation(FanucBlock write, TransformEntry entry)
     {
         Word? word = write.Block.Find("ROTATE");

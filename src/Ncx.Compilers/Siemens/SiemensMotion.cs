@@ -35,9 +35,8 @@ internal static class SiemensMotion
     /// FEED_MODE as G94 or G95, WORKPLANE as G17 to G19, COMP as G40 to G42; G90 where the control's group 14 is not
     /// known (controllers siemens.md 2, 12; controller-mapping 1, 2).
     /// </summary>
-    // TODO(question): siemens 2 names G70 and G71 (geometry only) and G700 and G710 (also feeds and offsets), and no
-    // document says which pair the compiler writes for UNITS (phase 5, decisions needed first; the P5-01 question of
-    // the pair); G71 and G70 are written, until that is answered.
+    // D292: the pair comes from SiemensFeedUnits, G71/G70 against the basic system of the machine, G710/G700 where it
+    // differs and the machine has them, else G71/G70 with every feed converted into the basic system.
     public static void WriteModalWords(SiemensBlock write)
     {
         Block block = write.Block;
@@ -45,12 +44,7 @@ internal static class SiemensMotion
         if (block.Has("UNITS"))
         {
             write.Written("UNITS");
-            string? units = after.Frame.Units switch
-            {
-                Units.Mm => "G71",
-                Units.Inch => "G70",
-                _ => null,
-            };
+            string? units = SiemensFeedUnits.UnitsCode(write);
             if (units is not null)
             {
                 Change(write, UnitsGroup, SiemensLine.UnitsRank, units);
@@ -329,12 +323,12 @@ internal static class SiemensMotion
         if (write.Block.Find("F") is Word word)
         {
             write.Written(word);
-            feed = SiemensExpressions.ValueText(write, word.Value, "F");
+            feed = SiemensFeedUnits.Text(write, word.Value);
             expression = word.Value is ExprValue;
         }
         else if (write.After.Motion.Feed is decimal known)
         {
-            feed = write.Format("F", known);
+            feed = SiemensFeedUnits.Text(write, known);
         }
 
         if (feed is not null && write.Target.Changes(Feed, feed))

@@ -258,6 +258,19 @@ public sealed class FanucMacroTests
         Assert.Equal(Lines("VAR:V1={$SYS_POS_X}", "VAR:V2={$SYS_WEAR_Z[99]}"), Body("#1=#5041\n#2=#11099"));
     }
 
+    // D240: #5041 maps 1:1 onto $SYS_POS_X; on an X axis programmed in diameters the reader warns, RDR108, since
+    // whether the control gives the diameter there is not measured yet; on the mill it does not.
+    [Fact]
+    public void SystemVariables_PositionOfADiameterAxis_WarnsRdr108()
+    {
+        NcxProgram lathe = FramedProgram("#1=#5041", FromToml(LatheToml.Replace("SYS_WEAR_Z =",
+            "SYS_POS_X = \"#5041\"\nSYS_WEAR_Z =", StringComparison.Ordinal)));
+        Assert.Equal(Lines("VAR:V1={$SYS_POS_X}"), BodyOf(NcxWriter.Write(lathe)));
+        Diagnostic warning = Assert.Single(lathe.Diagnostics.Items);
+        Assert.Equal((Severity.Warning, "RDR108"), (warning.Severity, warning.Code));
+        Assert.Empty(FramedProgram("#1=#5041").Diagnostics.Items);
+    }
+
     // GOTO n to the block of the M30 is JUMP=END, the early end of language 4.9 (controller-mapping 1, JUMP=END).
     [Fact]
     public void GotoToTheM30Block_IsJumpEnd()

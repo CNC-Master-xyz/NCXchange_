@@ -52,7 +52,54 @@ internal static partial class SiemensAxes
     /// </summary>
     public static string LetterOf(SiemensBlock write, string axis)
     {
-        return Resolve(write, axis)?.Letter ?? axis;
+        return CylinderLetter(write, axis) ?? Resolve(write, axis)?.Letter ?? axis;
+    }
+
+    /// <summary>
+    /// True for the rotary word of the cylinder plane under CYLINDER=n, which TRACYL writes as the linear Y, a length
+    /// on the circumference (D146): a word that names the rotary axis of the workpiece holder, the axis C resolves to
+    /// (virtual machine 3.8 rule 3). Another rotary word under CYLINDER is no length of this cylinder (ReportCylinder).
+    /// </summary>
+    public static bool IsCylinderLength(SiemensBlock write, string axis)
+    {
+        return write.After.Frame.Cylinder is not null
+            && Resolve(write, axis) is { Kind: AxisKind.Rotary } named
+            && Resolve(write, "C") is AxisDef holderAxis && named.Id == holderAxis.Id;
+    }
+
+    /// <summary>
+    /// True for a rotary axis word, whatever axis it names (machine-config 4).
+    /// </summary>
+    public static bool IsRotary(SiemensBlock write, string axis)
+    {
+        return Resolve(write, axis)?.Kind == AxisKind.Rotary;
+    }
+
+    // D146: under TRACYL the control takes the developed surface in the axes of the transformation: Y around the
+    // circumference, Z along the cylinder axis and X the infeed perpendicular to it (840D sl/828D Arbeitsvorbereitung
+    // 2013, connector p.352-353; the example writes N100 G1 Y10 for a groove parallel to the circumference). The NCX
+    // C word, a length on the circumference (D102), is Y; on a cylinder about X or Y (a table axis with [[axis]]
+    // parallel) the cylinder axis is written as Z and the radial Z as X. A compiler never passes the NCX letter
+    // through.
+    private static string? CylinderLetter(SiemensBlock write, string axis)
+    {
+        if (write.After.Frame.Cylinder is null)
+        {
+            return null;
+        }
+
+        if (IsCylinderLength(write, axis))
+        {
+            return "Y";
+        }
+
+        string cylinderAxis = write.After.Frame.CylinderAxis;
+        if (cylinderAxis == "Z")
+        {
+            return null;
+        }
+
+        return axis == cylinderAxis ? "Z" : axis == "Z" ? "X" : null;
     }
 
     /// <summary>
@@ -99,6 +146,75 @@ internal static partial class SiemensAxes
         }
 
         return axis == "X" && WritesDiameter(write) ? 2m : 1m;
+    }
+
+    /// <summary>
+    /// The factor from a word of a SHIFT to the value of TRANS, ATRANS or the _X0 of CYCLE800: as for a motion word,
+    /// except on a diameter X axis whose frames the control keeps in radii, which takes the radius of the diameter
+    /// the program wrote (D125: "a Siemens reader keeps TRANS X as a radius unless the machine file sets the MD20360
+    /// bit 3 equivalent"; [[axis]] frames_in_diameter, D388; Funktionshandbuch Grundfunktionen 2012 p.901-903).
+    /// </summary>
+    public static decimal FrameWordFactor(SiemensBlock write, string axis)
+    {
+        if (axis != "X")
+        {
+            return WordFactor(write, axis);
+        }
+
+        // MD20360 bit 3: frames of a facing axis are diameters "ohne Umrechnung", under DIAMOF too (Funktionshandbuch
+        // Grundfunktionen 2012 p.903), so a radius word is doubled; without it they are radii, so a diameter word is
+        // halved.
+        bool diameterWord = write.After.Frame.Diameter;
+        return FramesInDiameter(write) ? (diameterWord ? 1m : 2m) : (diameterWord ? 0.5m : 1m);
+    }
+
+    /// <summary>
+    /// The factor from a frame value of the virtual machine, a radius (D28), to the value of TRANS or ATRANS: 2 only
+    /// where the X axis keeps its frames in diameters (D125, D388).
+    /// </summary>
+    public static decimal FrameStateFactor(SiemensBlock write, string axis)
+    {
+        if (axis != "X")
+        {
+            return StateFactor(write, axis);
+        }
+
+        return FramesInDiameter(write) ? 2m : 1m;
+    }
+
+    /// <summary>
+    /// The factor from a machine-frame actual value of X, $AA_IM[X], to the NCX value: 2 under DIAMETER=ON on an X axis
+    /// written in diameters whose control keeps actual values in radii (MD20360 bits 6 and 7 off, [[axis]]
+    /// frames_in_diameter = false), 1/2 under DIAMETER=OFF where they are diameters (frames_in_diameter = true), else 1
+    /// (D240, D388; Funktionshandbuch Grundfunktionen 2012 p.901-903).
+    /// </summary>
+    public static decimal ActualValueFactor(SiemensBlock write)
+    {
+        // MD20360 bits 6/7 set: actual values are diameters under DIAMOF too, so a radius of the program is half of
+        // them; off: they are radii, so a diameter of the program is twice them.
+        bool diameterWord = write.After.Frame.Diameter;
+        if (FramesInDiameter(write))
+        {
+            return diameterWord ? 1m : 0.5m;
+        }
+
+        return diameterWord && WritesDiameter(write) ? 2m : 1m;
+    }
+
+    /// <summary>
+    /// The value of a SHIFT word on an axis as TRANS writes it, with the frame factor of the axis (D125).
+    /// </summary>
+    public static string? FrameValueOf(SiemensBlock write, string axis, Value value, string letter)
+    {
+        decimal factor = FrameWordFactor(write, axis);
+        string decimals = DecimalsAddress(write, letter);
+        return value switch
+        {
+            IntegerValue integer => Number(write, decimals, integer.Number, factor),
+            DecimalValue number => Number(write, decimals, number.Number, factor),
+            ExprValue expression => Scaled(SiemensExpressions.Text(write, expression), factor),
+            _ => null,
+        };
     }
 
     /// <summary>
@@ -150,6 +266,7 @@ internal static partial class SiemensAxes
         // DC() takes the shortest way of a rotary axis where ROTARY_PATH=SHORTEST is active: "rotary axes with DC() by
         // the compiler" (machine-config 5, ROTARY_PATH_SHORTEST; controller-mapping 1, D86).
         bool shortest = !axis.Incremental
+            && !IsCylinderLength(write, axis.Axis)
             && write.After.Frame.RotaryPath == RotaryPath.Shortest
             && Resolve(write, axis.Axis)?.Kind == AxisKind.Rotary;
         string function = axis.Incremental ? "IC" : shortest ? "DC" : "";
@@ -212,6 +329,13 @@ internal static partial class SiemensAxes
             2m => "(" + text + ")*2",
             _ => "(" + text + ")/2",
         };
+    }
+
+    // The frames of X are diameters where the machine sets frames_in_diameter, whatever DIAMON says (MD20360 bit 3;
+    // D125, D388); a radius otherwise, the default of the control.
+    private static bool FramesInDiameter(SiemensBlock write)
+    {
+        return write.Machine.ResolveAxis("X")?.FramesInDiameter == true;
     }
 
     // The X axis is written in diameters where it is programmed so, or switchable and switched on (D60).

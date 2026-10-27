@@ -11,7 +11,7 @@ Small, licensed for the repository, and each one the acceptance test of a milest
 | `2.5D_FRAESEN.fanuc.nc`, `2.5D_FRAESEN.h` | Fanuc, Heidenhain iTNC 530 | M4, M5, M6: both must read to `../spec/examples/2.5D_FRAESEN.ncx` and compile back without loss |
 | `BOHREN.fanuc.nc`, `BOHREN.h` | Fanuc, Heidenhain | M4, M6: the drilling cycles of both controllers into the same `CYCLE=` words |
 | `3D_FRAESEN.fanuc.nc`, `3D_FRAESEN.h` | Fanuc, Heidenhain | M6, M7: long point lists, the segment length analytic |
-| `NAKAMURA_WY250L_O1000.path1.nc`, `.path2.nc` | Fanuc 31i-B, Nakamura dialect, two paths | M9: a job with wait marks, transfer and `RAW:BUILDER` |
+| `NAKAMURA_WY250L_O1000.nc`, `NAKAMURA_WY250L_O1000.P-2.nc` | Fanuc 31i-B, Nakamura dialect, two paths | M9: a job with wait marks, transfer and `RAW:BUILDER` |
 
 The five `.ncx` files next to them are the language examples and the acceptance tests of M1 and M2 (parse and format to themselves; check with no ERROR without a machine file, D103, and with their machine files from M3 on).
 

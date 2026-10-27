@@ -7,11 +7,11 @@ machine = "nakamura-ntjx.toml"
 
 [[channel]]
 id = 1
-file = "NAKAMURA_WY250L_O1000.path1.ncx"
+file = "NAKAMURA_WY250L_O1000.ncx"
 
 [[channel]]
 id = 2
-file = "NAKAMURA_WY250L_O1000.path2.ncx"
+file = "NAKAMURA_WY250L_O1000.P-2.ncx"
 
 [shared]
 spindles = ["S1", "S2"]            # the main and the sub spindle, which both paths command

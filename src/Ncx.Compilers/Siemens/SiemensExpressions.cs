@@ -249,7 +249,19 @@ internal static partial class SiemensExpressions
             values.Set("index", register);
         }
 
-        return write.TemplateOf(template).Render(values, write.Block, write.Diagnostics) ?? variable.Name;
+        string text = write.TemplateOf(template).Render(values, write.Block, write.Diagnostics) ?? variable.Name;
+
+        // D240: $AA_IW[X] reads a diameter under DIAMON and maps one to one; $AA_IM[X], the machine frame, reads a
+        // radius unless MD20360 bits 6/7 are set, so under DIAMETER=ON its NCX value, a diameter, is twice the
+        // control's; with the bits set it is a diameter under DIAMOF too, half of it the NCX radius (840D sl
+        // Grundlagen 2013 p.169-170; Funktionshandbuch Grundfunktionen 2012 p.901-903).
+        if (!MachineXActual().IsMatch(text))
+        {
+            return text;
+        }
+
+        decimal factor = SiemensAxes.ActualValueFactor(write);
+        return factor == 2m ? "(" + text + "*2)" : factor == 0.5m ? "(" + text + "/2)" : text;
     }
 
     /// <summary>
@@ -377,4 +389,8 @@ internal static partial class SiemensExpressions
     // and the Heidenhain names QL5, QR5 and QS5 beside it, which no SINUMERIK program declares (language 4.9; D173).
     [GeneratedRegex("^(?:Q[LRS]|[A-Z])[0-9]+$", RegexOptions.CultureInvariant)]
     private static partial Regex NeedsMapping();
+
+    // The machine-frame actual value of the X axis, $AA_IM[X], the letter with an extension too (D240).
+    [GeneratedRegex(@"^\$AA_IM\[X[0-9]*\]$", RegexOptions.CultureInvariant)]
+    private static partial Regex MachineXActual();
 }

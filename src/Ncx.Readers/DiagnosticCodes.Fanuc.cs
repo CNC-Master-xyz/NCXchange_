@@ -48,6 +48,32 @@ public static partial class DiagnosticCodes
     public const string FanucSharedLocalWritten = "RDR106";
 
     /// <summary>
+    /// RDR107, an ERROR: the channel of the file, from ncx convert --channel or from the suffix .P-n of its name, is
+    /// not a channel of the machine file; CHANNEL=n is written as given (D223; controller-mapping 7).
+    /// </summary>
+    public const string FanucChannelNotOfTheMachine = "RDR107";
+
+    /// <summary>
+    /// RDR108, a WARNING: a position variable, #5021.. or #5041.., is mapped 1:1 onto $SYS_MPOS_ or $SYS_POS_ of an
+    /// axis programmed in diameters or switchable, while whether the control gives a diameter or a radius there is not
+    /// measured yet (D240; language 4.12).
+    /// </summary>
+    public const string FanucPositionOfADiameterAxis = "RDR108";
+
+    /// <summary>
+    /// RDR109, a WARNING: a G2 or G3 carries both its radius R and its centre I J K; the control takes R and ignores
+    /// I J K, and the reader writes the radius form (D186; controllers fanuc.md 4).
+    /// </summary>
+    public const string FanucArcRadiusOverCentre = "RDR109";
+
+    /// <summary>
+    /// RDR110, a WARNING: a helix moves with the F along the arc in the plane ([format] helix_feed = "arc", parameter
+    /// 1403#5), and the reader does not know its geometry or its F, so the F is not scaled back to the feed along the
+    /// path (D354; machine-config 2).
+    /// </summary>
+    public const string FanucHelixFeedNotScaled = "RDR110";
+
+    /// <summary>
     /// RDR120, a WARNING: a drilling cycle of a mill outside G17, whose drilling axis the reader derives from the
     /// plane; on the control it depends on parameter 5101#0 FXY, 0 always Z, 1 by the plane and the axis address
     /// (D157).

@@ -26,6 +26,7 @@ public abstract class ReaderBase : IReader
     private SourceState? _state;
     private TemplateSet? _templates;
     private IReadOnlyList<ISourceRule> _rules = [];
+    private ReadOptions? _options;
 
     // The comment of the source block being read, until an NCX block takes it (controller-mapping 1).
     private string? _pendingComment;
@@ -53,6 +54,11 @@ public abstract class ReaderBase : IReader
     /// The machine of the file being read, while Read reads it.
     /// </summary>
     protected MachineConfig Machine => _machine ?? throw NotReading();
+
+    /// <summary>
+    /// The options of the file being read, while Read reads it: the channel of ncx convert --channel (D223).
+    /// </summary>
+    protected ReadOptions Options => _options ?? throw NotReading();
 
     /// <summary>
     /// The diagnostics of the file being read, while Read reads it (D98).
@@ -270,6 +276,7 @@ public abstract class ReaderBase : IReader
         _builder = new NcxBuilder(_diagnostics);
         _state = new SourceState(machine.Machine.GcodeSystem, ModalGroupOfCode);
         _rules = options.Rules;
+        _options = options;
         _pendingComment = null;
         _contours = ContourLayout.None;
 

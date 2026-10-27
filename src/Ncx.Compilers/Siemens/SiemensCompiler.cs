@@ -228,8 +228,10 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
         SiemensFlow.WriteLabel(write);
         SiemensFrames.WriteChain(write);
         WriteTools(write);
+        SiemensCycles.EndModalCallBeforeBareFeed(write);
         SiemensSpindles.Write(write);
         SiemensFrames.WriteTransformations(write);
+        SiemensFrames.ReportCylinder(write);
         SiemensCycles.WriteBefore(write);
         SiemensMotion.WriteModalWords(write);
         SiemensFrames.WriteOrigin(write);
@@ -272,6 +274,7 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
             return;
         }
 
+        SiemensTools.ReportNames(write);
         if (change)
         {
             WriteToolChange(SiemensTools.ChangeValues(write));

@@ -37,14 +37,14 @@ internal static class FanucModalGroups
     /// <summary>Group 10: G98, G99, the return level of a drilling cycle (mills, systems B and C).</summary>
     public const int ReturnLevel = 10;
 
-    /// <summary>Group 12: G54 to G59, G54.1.</summary>
-    public const int Origin = 12;
+    /// <summary>Group 14: G54 to G59, G54.1 (B-64484EN-2 p.27-28).</summary>
+    public const int Origin = 14;
 
-    /// <summary>Group 13: G61 to G64.</summary>
-    public const int CuttingMode = 13;
+    /// <summary>Group 15: G61 to G64 (B-64484EN-2 p.27-28).</summary>
+    public const int CuttingMode = 15;
 
-    /// <summary>Group 14: G66, G67.</summary>
-    public const int MacroCall = 14;
+    /// <summary>Group 12: G66, G67 (B-64484EN-2 p.27-28).</summary>
+    public const int MacroCall = 12;
 
     /// <summary>Group 16: G68, G69.</summary>
     public const int Rotation = 16;

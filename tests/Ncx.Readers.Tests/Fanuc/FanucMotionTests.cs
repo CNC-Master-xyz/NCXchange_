@@ -1,3 +1,5 @@
+using Ncx.Core.Model;
+using Ncx.Core.Writing;
 using static Ncx.Readers.Tests.Fanuc.FanucRead;
 
 namespace Ncx.Readers.Tests.Fanuc;
@@ -30,6 +32,32 @@ public sealed class FanucMotionTests
         Assert.Equal(Lines("ARC=CW X=10 Y=0 R=5 F=100"), Body("G2 X10. Y0 R5. F100"));
     }
 
+    // D186: with both R and I J K the control takes R and ignores I J K; the reader writes the radius form with the
+    // WARNING RDR109 instead of keeping the block RAW.
+    [Fact]
+    public void G2_WithRAndACentre_IsTheRadiusFormWithRdr109()
+    {
+        NcxProgram program = FramedProgram("G0 X0 Y0\nG2 X10. Y0 I5. J0 R5. F100");
+
+        Assert.Equal(Lines("RAPID X=0 Y=0", "ARC=CW X=10 Y=0 R=5 F=100"), BodyOf(NcxWriter.Write(program)));
+        Diagnostic warning = Assert.Single(program.Diagnostics.Items);
+        Assert.Equal((Severity.Warning, "RDR109", 4), (warning.Severity, warning.Code, warning.Line));
+    }
+
+    // D185: under G43.5 the I J K of G0 are the tool vector, RAPID with TX TY TZ, and those of G2 and G3 with R the
+    // radius form ARC R with TX TY TZ; without R the arc stays RAW.
+    [Fact]
+    public void G435_RapidAndArcWithIJK_CarryTheToolVector()
+    {
+        Assert.Equal(
+            Lines(
+                "OFFSET:LEN=1 TCPM=ON",
+                "RAPID X=0 Y=0 TX=0 TY=0 TZ=1",
+                "ARC=CW X=10 Y=0 TX=0 TY=0.5 TZ=0.866 R=5 F=100",
+                "RAW:FANUC=\"G3 X0 Y0 I0 J0 K1.\""),
+            Body("G43.5 H1\nG0 X0 Y0 I0 J0 K1.\nG2 X10. Y0 R5. I0 J0.5 K0.866 F100\nG3 X0 Y0 I0 J0 K1."));
+    }
+
     // CENTER:X is computed from I J K and the start point (controller-mapping 2; language 6, the centre arc of
     // 2.5D_FRAESEN).
     [Fact]
@@ -49,13 +77,40 @@ public sealed class FanucMotionTests
             Body("G91 G3 X10. Y10. I10. J0 F100"));
     }
 
-    // A centre word left out is 0, and a third axis in the arc block makes a helix (controllers fanuc.md 4).
+    // A centre word left out is 0, and a third axis in the arc block makes a helix (controllers fanuc.md 4); on a
+    // control that measures F along the path the F stays (D354).
     [Fact]
     public void G3_WithoutJAndWithZ_IsAHelixAboutTheCentre()
     {
         Assert.Equal(
             Lines("RAPID X=10 Y=0 Z=0", "ARC=CCW X=10 Y=0 Z=-5 CENTER:X=0 CENTER:Y=0 F=100"),
-            Body("G0 X10. Y0 Z0\nG3 X10. Y0 Z-5. I-10. F100"));
+            Body("G0 X10. Y0 Z0\nG3 X10. Y0 Z-5. I-10. F100", MillWith("[format]\nhelix_feed = \"path\"")));
+    }
+
+    // D354: under helix_feed = "arc", the Fanuc default, the F of a helix is along the arc in the plane; the reader
+    // scales it by the path length over the plane length, written or modal, and the next line writes the control's
+    // feed again: a quarter circle of radius 10 rising 5 is 15.708 in the plane and 16.485 along the path, a half
+    // circle of radius 5 rising 2 15.708 and 15.835.
+    [Fact]
+    public void Helix_UnderHelixFeedArc_ScalesTheFeedBackToThePath()
+    {
+        Assert.Equal(
+            Lines(
+                "RAPID X=10 Y=0 Z=0",
+                "ARC=CCW X=0 Y=10 Z=-5 R=10 F=104.944",
+                "LINE X=5 F=100",
+                "ARC=CCW X=15 Y=10 Z=-7 CENTER:X=10 CENTER:Y=10 F=100.807"),
+            Body("G0 X10. Y0 Z0\nG3 X0 Y10. Z-5. R10. F100\nG1 X5.\nG3 X15. Y10. Z-7. I5. J0 F100"));
+    }
+
+    // D354: where the reader does not know the start of the helix, the F stays with the WARNING RDR110.
+    [Fact]
+    public void Helix_FromAnUnknownStart_KeepsTheFeedWithRdr110()
+    {
+        NcxProgram program = FramedProgram("G91 G3 X-10. Y10. Z-5. R10. F100");
+
+        Assert.Contains("F=100\n", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains(program.Diagnostics.Items, diagnostic => diagnostic.Code == "RDR110");
     }
 
     // A G91 block becomes IX, IY words; G90 is absolute again and writes no word (controller-mapping 2).

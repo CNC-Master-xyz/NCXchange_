@@ -169,7 +169,7 @@ program_end = { X = 0, Y = 0, Z = 0 }   # the reference point
 
 [dynamics]                         # control behaviour for the runtime estimate (D64)
 block_time = 0.001                 # seconds per block
-path_mode = "continuous"           # G64 cutting mode (fanuc 3, group 13)
+path_mode = "continuous"           # G64 cutting mode (fanuc 3, group 15)
 corner_speed = 2000                # mm/min carried through a corner
 
 [tool_change]

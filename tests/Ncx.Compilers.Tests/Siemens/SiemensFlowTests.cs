@@ -1,3 +1,4 @@
+using Ncx.Core.Machine;
 using static Ncx.Compilers.Tests.Siemens.SiemensCompile;
 
 namespace Ncx.Compilers.Tests.Siemens;
@@ -84,15 +85,15 @@ public sealed class SiemensFlowTests
         Assert.Contains("PROGRAM_END:", TextOf(result));
     }
 
-    // D344 and the 840D sl manual (NC-Programmierung SW4.92, p.523): RET "can only be used in subprograms that were
-    // not defined with the attribute SAVE", and the parameterized form is no exception the manual names (p.524-526),
-    // so JUMP=END in a subprogram whose RAW PROC line declares SAVE, as the reader keeps PROC NAME SAVE, is the ERROR
-    // CMP597 naming the block.
+    // D381: RET is allowed in a SAVE subprogram, plain and parameterized (SAVE only takes away RET's continuous-path
+    // benefit, 840D/810D Arbeitsvorbereitung 2006 p.92; Siemens's own PROC ... SAVE DISPLOF ... RET, NC-Programmierung
+    // SW4.92 p.518), so JUMP=END in a subprogram whose RAW PROC line declares SAVE is the parameterized return
+    // RET("<end label>",,$P_STACK) as in any other subprogram, with no CMP597, and the plain end stays M17.
     [Theory]
     [InlineData("PROC CHECK SAVE")]
     [InlineData("N5 PROC CHECK SAVE")]
     [InlineData("PROC CHECK SBLOF SAVE DISPLOF")]
-    public void JumpToEndInASubprogram_DeclaredSave_IsTheErrorCmp597(string proc)
+    public void JumpToEndInASubprogram_DeclaredSave_IsTheParameterizedReturn(string proc)
     {
         string program = $$"""
             FILE=BEGIN NCX=1
@@ -110,17 +111,20 @@ public sealed class SiemensFlowTests
             """;
         CompileResult result = Run(program, Mill());
 
-        Assert.Equal(["CMP597"], CompilerCodes(result));
+        Assert.Empty(CompilerCodes(result));
+        Assert.Contains("IF NOT (R1==1) GOTOF SKIP_CALL_", TextOf(result), StringComparison.Ordinal);
+        Assert.Contains("RET(\"PROGRAM_END\",,$P_STACK)", TextOf(result), StringComparison.Ordinal);
+        Assert.Equal("M17", LinesOf(TextOf(result))[^1]);
     }
 
-    // D344: the CMP597 of a SAVE subprogram stands after a parameter list too, PROC CHECK(REAL WERT1) SAVE with the
-    // parameter its call gives, with no blank after the parenthesis and with a default that holds parentheses, the
-    // spellings the reader keeps as RAW (NC-Programmierung SW4.92, p.511-512, p.523).
+    // D381: SAVE after a parameter list, PROC CHECK(REAL WERT1) SAVE with the parameter its call gives, with no blank
+    // after the parenthesis and with a default that holds parentheses (the spellings the reader keeps as RAW,
+    // NC-Programmierung SW4.92, p.511-512), takes the parameterized return too.
     [Theory]
     [InlineData("PROC CHECK(REAL WERT1) SAVE")]
     [InlineData("PROC CHECK(REAL WERT1)SAVE")]
     [InlineData("PROC CHECK(REAL WERT1=SIN(30)) SAVE")]
-    public void JumpToEndInASubprogram_DeclaredSaveAfterParameters_IsTheErrorCmp597(string proc)
+    public void JumpToEndInASubprogram_DeclaredSaveAfterParameters_IsTheParameterizedReturn(string proc)
     {
         string program = $$"""
             FILE=BEGIN NCX=1
@@ -136,7 +140,10 @@ public sealed class SiemensFlowTests
             FILE=END
             """;
 
-        Assert.Equal(["CMP597"], CompilerCodes(Run(program, Mill())));
+        CompileResult result = Run(program, Mill());
+
+        Assert.Empty(CompilerCodes(result));
+        Assert.Contains("RET(\"PROGRAM_END\",,$P_STACK)", TextOf(result), StringComparison.Ordinal);
     }
 
     // D344: SAVE inside the name of a subprogram, SAVE_CHECK or CHECKSAVE, is no attribute, so the parameterized
@@ -276,6 +283,86 @@ public sealed class SiemensFlowTests
 
         Assert.Equal(Lines("%_N_T_MPF", "DEF REAL LEN", "G17 G40 G90 G94 G71", "LEN=10 R1=1", "G0 X=LEN+R1", "M30"),
             TextOf(result));
+    }
+
+    // D169: == and != compare two strings, and the control compares only STRING variables with == and <>
+    // (Arbeitsvorbereitung 2013 p.71), so a name the unit assigns a string is declared DEF STRING[200], the longest
+    // string of the control (NC-Programmierung SW4.92 p.431), and != is written <>.
+    [Fact]
+    public void StringComparison_OfTwoStringVariables_IsEqualsAndNotEqualsOnDefString()
+    {
+        CompileResult result = Run(Program(MillHeader, "VAR:NAME1=\"DRILL\" VAR:NAME2=\"MILL\"",
+            "JUMP=SAME IF={$NAME1 == $NAME2}", "JUMP=OTHER IF={$NAME1 != $NAME2}", "LABEL=SAME", "LABEL=OTHER"),
+            Mill());
+
+        Assert.Empty(CompilerCodes(result));
+        Assert.Equal(Lines("%_N_T_MPF", "DEF STRING[200] NAME1", "DEF STRING[200] NAME2", "G17 G40 G90 G94 G71",
+            "NAME1=\"DRILL\" NAME2=\"MILL\"", "IF NAME1==NAME2 GOTOF SAME", "IF NAME1<>NAME2 GOTOF OTHER", "SAME:",
+            "OTHER:", "M30"), TextOf(result));
+    }
+
+    // D240: under DIAMETER=ON $SYS_MPOS_X is a diameter and $AA_IM[X] reads a radius (MD20360 bits 6/7 off), so it
+    // is written twice; $AA_IW[X] reads a diameter under DIAMON and maps one to one.
+    [Fact]
+    public void MachinePositionOfX_UnderDiameterOn_IsTwiceAaIm()
+    {
+        Assert.Equal(Lines("R1=($AA_IM[X]*2)", "R2=$AA_IW[X]"),
+            Body(Run(Program(MillTurnHeader, "VAR:R1={$SYS_MPOS_X}", "VAR:R2={$SYS_POS_X}"), WithActualValues(""))));
+    }
+
+    // D240, D388: under DIAMETER=OFF on an axis that keeps actual values in radii, or under DIAMETER=ON on one that
+    // keeps them in diameters (frames_in_diameter), $AA_IM[X] maps one to one.
+    [Theory]
+    [InlineData("DIAMETER=OFF", "")]
+    [InlineData("DIAMETER=ON", "frames_in_diameter = true\n")]
+    public void MachinePositionOfX_InRadiiOrWithFramesInDiameter_IsAaImAsItStands(string diameter, string key)
+    {
+        CompileResult result = Run(Program(MillTurnHeader, diameter, "VAR:R1={$SYS_MPOS_X}"), WithActualValues(key));
+
+        Assert.Contains("R1=$AA_IM[X]", LinesOf(Body(result)));
+    }
+
+    // D240, D388: with frames_in_diameter (MD20360 bits 6/7) $AA_IM[X] reads a diameter under DIAMOF too, so the
+    // NCX radius under DIAMETER=OFF is half of it.
+    [Fact]
+    public void MachinePositionOfX_UnderDiameterOffWithFramesInDiameter_IsHalfAaIm()
+    {
+        CompileResult result = Run(Program(MillTurnHeader, "DIAMETER=OFF", "VAR:R1={$SYS_MPOS_X}"),
+            WithActualValues("frames_in_diameter = true\n"));
+
+        Assert.Contains("R1=($AA_IM[X]/2)", LinesOf(Body(result)));
+    }
+
+    // millturn1.toml with the actual values of X in [system_variables] and a key after programming of the X axis.
+    private static MachineConfig WithActualValues(string key)
+    {
+        return Variant(MillTurnFile, text => text.Replace("programming = \"switchable\"",
+            "programming = \"switchable\"\n" + key, StringComparison.Ordinal)
+            + "\n[system_variables]\nSYS_POS_X = \"$AA_IW[X]\"\nSYS_MPOS_X = \"$AA_IM[X]\"\n");
+    }
+
+    // D169: a name assigned a string in one place and a number in another would be DEF STRING with a number the
+    // control refuses (SW4.92 p.431), so the numeric assignment is the ERROR CMP599, in the same unit or another.
+    [Theory]
+    [InlineData("VAR:NAMEA=5", "VAR:NAMEC=1")]
+    [InlineData("VAR:NAMEC=1", "VAR:NAMEA={$NAMEC + 1}")]
+    public void StringVariable_AssignedANumberToo_IsTheErrorCmp599(string inMain, string inSub)
+    {
+        string program = $$"""
+            FILE=BEGIN NCX=1
+            PROGRAM=BEGIN NAME="MAIN"
+            FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF
+            VAR:NAMEA="A"
+            {{inMain}}
+            CALL=SUBA
+            PROGRAM=END
+            SUB=BEGIN NAME=SUBA
+            {{inSub}}
+            SUB=END
+            FILE=END
+            """;
+
+        Assert.Contains("CMP599", CompilerCodes(Run(program, Mill())));
     }
 
     // D261: a name a RAW DEF of the unit declares itself is not declared a second time, which would be alarm 12200.

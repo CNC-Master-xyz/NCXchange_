@@ -1,3 +1,4 @@
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.Writing;
 using static Ncx.Readers.Tests.Siemens.SiemensRead;
@@ -45,6 +46,78 @@ public sealed class SiemensFrameTests
     {
         Assert.Equal(Lines("SHIFT X=10", "SHIFT Y=5", "SHIFT=RESET", "SHIFT=RESET", "SHIFT X=20", "SHIFT=RESET"),
             CheckedBody("TRANS X10\nATRANS Y5\nTRANS X20\nTRANS"));
+    }
+
+    // D125: a Siemens facing axis keeps its frame offsets as radii (MD20360 bit 3 off), while NCX reads SHIFT X under
+    // DIAMETER=ON as a diameter, so the reader doubles the X of TRANS, ATRANS and G58/G59 under DIAMON; under DIAMOF,
+    // and where the machine file sets frames_in_diameter, X is taken as written.
+    [Fact]
+    public void TransX_UnderDiamon_IsDoubledIntoTheDiameter()
+    {
+        Assert.Equal(Lines("DIAMETER=ON", "SHIFT X=20 Z=5", "SHIFT X=4", "DIAMETER=OFF", "SHIFT X=3"),
+            CheckedBody("DIAMON\nTRANS X10 Z5\nATRANS X2\nDIAMOF\nATRANS X3", MillTurn()));
+    }
+
+    // D125, D388: with frames_in_diameter the control keeps the frame offsets of X as diameters, which NCX writes as
+    // they are.
+    [Fact]
+    public void TransX_WithFramesInDiameter_IsTakenAsWritten()
+    {
+        MachineConfig machine = MillTurnWith("programming = \"switchable\"",
+            "programming = \"switchable\"\nframes_in_diameter = true");
+
+        Assert.Equal(Lines("DIAMETER=ON", "SHIFT X=10 Z=5"), CheckedBody("DIAMON\nTRANS X10 Z5", machine));
+    }
+
+    // D125: only an X axis whose programming is diameter or switchable has radius frames to double; the mill's X is
+    // taken as written under DIAMON.
+    [Fact]
+    public void TransX_OnARadiusAxis_IsTakenAsWritten()
+    {
+        Assert.Equal(Lines("DIAMETER=ON", "SHIFT X=10"), Body("DIAMON\nTRANS X10"));
+    }
+
+    // D125, D333: under DIAMON the unit of _X0 and _X1 of CYCLE800 depends on MD20360 bit 14, which no machine key
+    // carries, so a CYCLE800 with a non-zero X reference point stays RAW.
+    [Fact]
+    public void CYCLE800_WithAnXReferencePointUnderDiamon_StaysRaw()
+    {
+        const string Swivel = "CYCLE800(0,\"TABLE\",0,27,1,0,0,0,45,0,0,0,0,-1,100,1)";
+
+        Assert.Equal(Lines("DIAMETER=ON", Raw(Swivel)), Body("DIAMON\n" + Swivel, MillTurn()));
+    }
+
+    // D333, D5: after a CYCLE800 kept as RAW the chain holds a swivel the reader does not know, so a later TRANS and
+    // CYCLE800() stay RAW instead of being written without that swivel.
+    [Fact]
+    public void FrameBlocks_AfterARawCYCLE800_StayRaw()
+    {
+        const string Swivel = "CYCLE800(0,\"TABLE\",0,27,10,0,0,0,45,0,4,0,0,-1,100,1)";
+
+        Assert.Equal(Lines("DIAMETER=ON", Raw(Swivel), Raw("TRANS X5"), Raw("CYCLE800()")),
+            Body("DIAMON\n" + Swivel + "\nTRANS X5\nCYCLE800()", MillTurn()));
+    }
+
+    // D240: $AA_IW[X] reads a diameter under DIAMON and maps one to one; $AA_IM[X] reads a radius (MD20360 bits 6/7
+    // off), half the diameter $SYS_MPOS_X reads under DIAMETER=ON (language 4.12), so the reader writes the NCX name
+    // halved under DIAMON with the WARNING RDR510, the factor not yet measured, and takes it as written under DIAMOF
+    // or with frames_in_diameter. The compiler writes $SYS_MPOS_X back as ($AA_IM[X]*2), so R1 keeps its value.
+    [Fact]
+    public void AaImX_UnderDiamon_IsTheNcxNameHalved()
+    {
+        const string variables = "call_depth = 8\n\n[system_variables]\nSYS_POS_X = \"$AA_IW[X]\"\n"
+            + "SYS_MPOS_X = \"$AA_IM[X]\"\n";
+        MachineConfig machine = MillTurnWith("call_depth = 8\n", variables);
+        MachineConfig inDiameter = MillTurnWith("call_depth = 8\n", variables, "programming = \"switchable\"",
+            "programming = \"switchable\"\nframes_in_diameter = true");
+
+        NcxProgram program = FramedProgram("DIAMON\nR1=$AA_IM[X]\nR2=$AA_IW[X]\nDIAMOF\nR3=$AA_IM[X]", machine);
+
+        Assert.Equal(Lines("DIAMETER=ON", "VAR:R1={($SYS_MPOS_X / 2)}", "VAR:R2={$SYS_POS_X}", "DIAMETER=OFF",
+                "VAR:R3={$SYS_MPOS_X}"),
+            BodyOf(NcxWriter.Write(program)));
+        Assert.Equal([DiagnosticCodes.SiemensMachinePositionDoubled], Codes(program));
+        Assert.Equal(Lines("DIAMETER=ON", "VAR:R1={$SYS_MPOS_X}"), Body("DIAMON\nR1=$AA_IM[X]", inDiameter));
     }
 
     // Rule 4: ROT and MIRROR cut the chain like TRANS, AROT and AMIRROR append; MIRROR=OFF resets a mirror (D124).
@@ -104,6 +177,31 @@ public sealed class SiemensFrameTests
             CheckedBody("CYCLE800(1,\"TABLE\",0,57,0,0,0,0,30,0,0,0,0,-1,100,1)\n"
                 + "CYCLE800(1,\"TABLE\",1,57,0,0,0,0,0,10,0,0,0,-1,100,1)\n"
                 + "CYCLE800(1,\"TABLE\",0,57,0,0,0,0,20,0,0,0,0,-1,100,1)\nCYCLE800()"));
+    }
+
+    // D333: CYCLE800 writes system frames, not the programmable frame, so TRANS, ROT, MIRROR and SCALE cut only the
+    // programmable entries after the last tilt of CYCLE800 and the tilt survives; a programmable entry before such a
+    // tilt keeps the block RAW, since NCX cannot remove it without the tilt.
+    [Fact]
+    public void Trans_AfterCYCLE800_CutsOnlyTheProgrammableEntries()
+    {
+        const string Tilt = "CYCLE800(0,\"TABLE\",0,27,0,0,0,0,45,0,0,0,0,-1,100,1)";
+        const string Additive = "CYCLE800(0,\"TABLE\",1,27,0,0,0,0,45,0,0,0,0,-1,100,1)";
+
+        Assert.Equal(Lines("TILT A=0 B=45 C=0 MOVE=TURN", "SHIFT X=5", "SHIFT=RESET", "ROTATE=30"),
+            CheckedBody(Tilt + "\nTRANS X5\nROT RPL=30"));
+        Assert.Equal(Lines("SHIFT X=5", "TILT A=0 B=45 C=0 MOVE=TURN", Raw("TRANS Y2")),
+            Body("ATRANS X5\n" + Additive + "\nTRANS Y2"));
+    }
+
+    // D333: a new CYCLE800 (_ST ones digit 0) resets the earlier tilts and every programmable entry before its TILT;
+    // _X0, _Y0, _Z0 are a SHIFT before the TILT and _X1, _Y1, _Z1 one after it, which CYCLE800() removes with the tilt.
+    [Fact]
+    public void CYCLE800_New_ResetsTheChain_ReferencePointsAreShifts()
+    {
+        Assert.Equal(Lines("SHIFT X=5", "SHIFT=RESET", "SHIFT X=1 Y=2 Z=3", "TILT A=0 B=45 C=0 MOVE=TURN", "SHIFT X=4",
+                "SHIFT=RESET", "TILT=RESET", "SHIFT=RESET"),
+            CheckedBody("ATRANS X5\nCYCLE800(0,\"TABLE\",0,27,1,2,3,0,45,0,4,0,0,-1,100,1)\nCYCLE800()"));
     }
 
     // D335: _A is the first rotation of the order the mode gives, not the angle about X; _MODE 39 is the order Z X Y,
@@ -196,6 +294,27 @@ public sealed class SiemensFrameTests
     {
         Assert.Equal(Lines("HOME Z", "HOME Z POINT=2", "SETPOS X=0"),
             CheckedBody("G74 Z1=0\nG75 FP=2 Z1=0\nPRESETON(X,0)"));
+    }
+
+    // D260: G75 FP=2 to FP=4 are the fixed points of MD30600, HOME POINT=2..4; G75 FP=1, and G75 without FP, which
+    // the manual defines as FP=1, have no NCX POINT, since POINT=1 is the reference point G74 approaches: RAW with
+    // the WARNING RDR509.
+    [Theory]
+    [InlineData("G75 FP=1 Z1=0")]
+    [InlineData("G75 Z1=0")]
+    public void G75FixedPoint1_StaysRawWithTheWarning(string source)
+    {
+        NcxProgram program = FramedProgram(source);
+
+        Assert.Equal(Lines(Raw(source)), BodyOf(NcxWriter.Write(program)));
+        Assert.Equal([DiagnosticCodes.SiemensFixedPoint1HasNoPoint, DiagnosticCodes.KeptAsRaw], Codes(program));
+    }
+
+    // D260: G75 FP=4 is HOME POINT=4; a fixed point above 4 names none the control has (MD30600).
+    [Fact]
+    public void G75FixedPoints_AreHomePoint2To4()
+    {
+        Assert.Equal(Lines("HOME X POINT=4", Raw("G75 FP=5 X1=0")), Body("G75 FP=4 X1=0\nG75 FP=5 X1=0"));
     }
 
     // DIAMON and DIAMOF switch the diameter programming, DIAM90 doubles the incremental X (controller-mapping 1,

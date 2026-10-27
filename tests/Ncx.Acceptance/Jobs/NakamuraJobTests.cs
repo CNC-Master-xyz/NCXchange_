@@ -97,7 +97,7 @@ public sealed class NakamuraJobTests
     // (machine-config 8).
     private static IReadOnlyDictionary<string, Value>? StartValues(string file)
     {
-        if (!file.EndsWith(".path2.ncx", StringComparison.Ordinal))
+        if (!file.EndsWith(".P-2.ncx", StringComparison.Ordinal))
         {
             return null;
         }

@@ -330,6 +330,22 @@ internal static class FanucRead
     }
 
     /// <summary>
+    /// The program of a Fanuc source read from a file of this name with these options, ncx convert --channel n.
+    /// </summary>
+    public static NcxProgram ProgramOfFile(string fileName, string source, MachineConfig machine, ReadOptions options)
+    {
+        return new FanucReader().Read(new SourceFile(fileName, source), machine, options);
+    }
+
+    /// <summary>
+    /// A machine file given as its whole text, for a test that changes a key of [machine].
+    /// </summary>
+    public static MachineConfig FromToml(string toml)
+    {
+        return Load(toml, "machine.toml");
+    }
+
+    /// <summary>
     /// What ncx check finds in the text the reader wrote: the diagnostics of a STATIC run of the parsed text on the
     /// machine; a reader produces a program that check can run (code-guidelines 4, virtual machine 1).
     /// </summary>

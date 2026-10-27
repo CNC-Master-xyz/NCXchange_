@@ -26,6 +26,9 @@ internal static partial class SiemensFrames
     private const string ProgrammableFrame = "TRANS";
     private const string Swivel = "CYCLE800";
 
+    // The target key of the plane, group 6, as SiemensMotion keeps it (controllers siemens.md 2).
+    private const string PlaneGroup = "G17";
+
     // The words of the transform chain (language 4.2).
     private static readonly string[] s_chainWords = ["SHIFT", "ROTATE", "MIRROR", "TILT", "TILT_AXIS", "MOVE", "ROT"];
 
@@ -98,8 +101,62 @@ internal static partial class SiemensFrames
         IReadOnlyList<TransformEntry> chain = write.After.Frame.Chain;
         for (int index = kept; index < chain.Count; index++)
         {
-            WriteEntry(write, chain[index], index == 0, appended: true);
+            WriteEntry(write, chain, index, StartsProgrammableFrame(chain, index), appended: true);
         }
+    }
+
+    // D333: CYCLE800 writes system frames, and a swivel to a new plane (_ST ones digit 0) deletes the programmable
+    // frames (840D sl/828D Bedienhandbuch Fräsen 2013, connector p.481, 483). A shift before a tilt is therefore
+    // written into the _X0/_Y0/_Z0 of the next CYCLE800, the reference point before the rotation (Arbeitsvorbereitung
+    // 2013, connector p.712-713), and not again as TRANS: true for a shift a later tilt of the chain carries.
+    private static bool IsFoldedIntoTilt(IReadOnlyList<TransformEntry> chain, int index)
+    {
+        return IsFoldedIntoTilt(chain, index, chain.Count);
+    }
+
+    // The same within the first count entries of the chain, the part a RESET keeps.
+    private static bool IsFoldedIntoTilt(IReadOnlyList<TransformEntry> chain, int index, int count)
+    {
+        if (chain[index].Kind != TransformKind.Shift)
+        {
+            return false;
+        }
+
+        for (int later = index + 1; later < count; later++)
+        {
+            if (IsTilt(chain[later]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // True where no programmable entry stands on the control before this one: every entry before it back to the last
+    // tilt, whose new swivel deleted the programmable frame (D333), is a shift folded into a tilt, so TRANS, ROT or
+    // MIRROR is written rather than ATRANS, AROT or AMIRROR.
+    private static bool StartsProgrammableFrame(IReadOnlyList<TransformEntry> chain, int index)
+    {
+        for (int before = index - 1; before >= 0; before--)
+        {
+            if (IsTilt(chain[before]))
+            {
+                return true;
+            }
+
+            if (!IsFoldedIntoTilt(chain, before))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsTilt(TransformEntry entry)
+    {
+        return entry.Kind is TransformKind.Tilt or TransformKind.TiltAxis;
     }
 
     /// <summary>
@@ -277,6 +334,20 @@ internal static partial class SiemensFrames
         }
 
         IReadOnlyList<TransformEntry> chain = write.After.Frame.Chain;
+
+        // D333: CYCLE800() clears the swivel and its _X0/_Y0/_Z0 with it, so a removed tilt writes the programmable
+        // frame that stays again, the shifts it carried among it.
+        bool tiltRemoved = false;
+        foreach (TransformEntry entry in change.Removed)
+        {
+            tiltRemoved |= IsTilt(entry);
+        }
+
+        for (int index = 0; index < kept && tiltRemoved; index++)
+        {
+            programmable |= !IsTilt(chain[index]);
+        }
+
         if (tilt)
         {
             TransformTable? transform = write.Machine.Transform;
@@ -288,14 +359,27 @@ internal static partial class SiemensFrames
         }
 
         bool rewritesProgrammable = false;
+        bool startsFrame = true;
         for (int index = 0; index < kept; index++)
         {
             TransformEntry entry = chain[index];
-            bool isTilt = entry.Kind is TransformKind.Tilt or TransformKind.TiltAxis;
+            bool isTilt = IsTilt(entry);
+
+            // A shift a kept tilt carries in its _X0/_Y0/_Z0 is not written as TRANS (D333).
+            if (!isTilt && IsFoldedIntoTilt(chain, index, kept))
+            {
+                continue;
+            }
+
             if ((isTilt && tilt) || (!isTilt && programmable))
             {
-                WriteEntry(write, entry, first: !isTilt && !rewritesProgrammable, appended: false);
+                WriteEntry(write, chain, index, first: !isTilt && startsFrame, appended: false);
                 rewritesProgrammable |= !isTilt;
+                startsFrame = isTilt;
+            }
+            else if (isTilt)
+            {
+                startsFrame = true;
             }
         }
 
@@ -312,8 +396,10 @@ internal static partial class SiemensFrames
     // One entry of the chain: TRANS, ROT RPL= or MIRROR for the first of the programmable frame, ATRANS, AROT RPL= or
     // AMIRROR for the rest, CYCLE800 for a tilt (controllers siemens.md 4, 12 rule 4; controller-mapping 1, SHIFT,
     // ROTATE, MIRROR, TILT).
-    private static void WriteEntry(SiemensBlock write, TransformEntry entry, bool first, bool appended)
+    private static void WriteEntry(SiemensBlock write, IReadOnlyList<TransformEntry> chain, int index, bool first,
+        bool appended)
     {
+        TransformEntry entry = chain[index];
         switch (entry.Kind)
         {
             case TransformKind.Shift:
@@ -326,7 +412,7 @@ internal static partial class SiemensFrames
                 WriteMirror(write, entry, first);
                 break;
             case TransformKind.Tilt:
-                WriteTilt(write, entry, write.Machine.Transform?.TiltOn, "[transform] TILT_ON", appended);
+                WriteTilt(write, chain, index, write.Machine.Transform?.TiltOn, "[transform] TILT_ON", appended);
                 break;
             case TransformKind.TiltAxis:
                 // TILT_AXIS needs the kinematics module where the machine has no TILT_AXIS_ON (D82).
@@ -339,15 +425,16 @@ internal static partial class SiemensFrames
                     return;
                 }
 
-                WriteTilt(write, entry, template, "[transform] TILT_AXIS_ON", appended);
+                WriteTilt(write, chain, index, template, "[transform] TILT_AXIS_ON", appended);
                 break;
         }
     }
 
     // TRANS X Y Z or ATRANS X Y Z, the values of the SHIFT block as written where it appends the entry, else of the
     // entry (controllers siemens.md 4). The entry holds what the virtual machine stores: under DIAMETER=ON its X is the
-    // radius of the diameter the SHIFT wrote (D125), so it is written with the state factor of the axis, as a computed
-    // position is, while a word of the block is written with the factor of an X word.
+    // radius of the diameter the SHIFT wrote (D125). A frame of the control on a facing axis is a radius unless the
+    // machine keeps frames in diameters ([[axis]] frames_in_diameter, MD20360 bit 3; D125, D388), so the frame
+    // factors of SiemensAxes apply, not those of a motion word.
     private static void WriteShift(SiemensBlock write, TransformEntry entry, bool first, bool appended)
     {
         var words = new List<string>();
@@ -359,10 +446,10 @@ internal static partial class SiemensFrames
             Value? value = word?.Value
                 ?? (axis.Value is decimal known ? new DecimalValue(known, Invariant(known)) : null);
             string? text = word is not null
-                ? SiemensAxes.ValueOf(write, axis.Key, word.Value, letter)
+                ? SiemensAxes.FrameValueOf(write, axis.Key, word.Value, letter)
                 : axis.Value is decimal stored
                     ? write.FormatComputed(SiemensAxes.DecimalsAddress(write, letter),
-                        stored * SiemensAxes.StateFactor(write, axis.Key))
+                        stored * SiemensAxes.FrameStateFactor(write, axis.Key))
                     : null;
             if (text is null)
             {
@@ -422,13 +509,14 @@ internal static partial class SiemensFrames
     // _ST of each MOVE option with its tens digit, and {dir} from MOVE alone and never from that table. A template
     // without {dir} cannot write STAY or MOVE, because its constant _DIR turns the rotary axes (machine-config 5,
     // TILT_ON and move; controller-mapping 1, TILT and MOVE; controllers siemens.md 4, 12 rule 4; decisions.md D262).
-    private static void WriteTilt(SiemensBlock write, TransformEntry entry, string? template, string what,
-        bool appended)
+    private static void WriteTilt(SiemensBlock write, IReadOnlyList<TransformEntry> chain, int index,
+        string? template, string what, bool appended)
     {
+        TransformEntry entry = chain[index];
         var values = new TemplateValues();
-        foreach (string axis in new[] { "x", "y", "z" })
+        if (!SetReferencePoint(write, chain, index, template, what, values))
         {
-            values.Set(axis, 0m);
+            return;
         }
 
         bool fromBlock = appended && write.Block.Verb?.Key is "TILT" or "TILT_AXIS";
@@ -465,6 +553,144 @@ internal static partial class SiemensFrames
         if (write.Render(template, what + " (machine-config 5)", values) is string text)
         {
             write.Write(text);
+        }
+    }
+
+    // D333: {x} {y} {z}, the _X0/_Y0/_Z0 of CYCLE800, the sum of the shifts between the last tilt before this one and
+    // it, which the new swivel would delete as TRANS (Bedienhandbuch Fräsen 2013, connector p.481, 483;
+    // Arbeitsvorbereitung 2013, connector p.712-713: "Bezugspunkt vor der Drehung"). A frame value of X is a radius
+    // unless the machine keeps frames in diameters (D125, D388). A ROTATE, a MIRROR or another tilt before it is the
+    // ERROR CMP535 until a rule for additive swivels is drafted; a shift the template has no placeholder for is
+    // CMP532. False where the tilt cannot be written.
+    private static bool SetReferencePoint(SiemensBlock write, IReadOnlyList<TransformEntry> chain, int index,
+        string? template, string what, TemplateValues values)
+    {
+        var sums = new Dictionary<string, decimal> { ["X"] = 0m, ["Y"] = 0m, ["Z"] = 0m };
+        for (int before = index - 1; before >= 0; before--)
+        {
+            TransformEntry entry = chain[before];
+
+            // A second swivel to a new plane deletes the earlier swivel with the programmed frames (Bedienhandbuch
+            // Fräsen 2013, connector p.483), so a tilt on a tilt would lose the first one silently (D333).
+            if (IsTilt(entry))
+            {
+                write.Error(DiagnosticCodes.SiemensFrameBeforeTilt,
+                    "Another tilt stands before this tilt in the chain, and CYCLE800 with a new swivel plane deletes "
+                    + "the earlier swivel and the programmed frames; no rule for an additive swivel is drafted "
+                    + "(Bedienhandbuch Fräsen 2013, p.483; D333).");
+                return false;
+            }
+
+            if (entry.Kind != TransformKind.Shift)
+            {
+                write.Error(DiagnosticCodes.SiemensFrameBeforeTilt,
+                    $"A {entry.Kind.ToString().ToUpperInvariant()} stands before the tilt in the chain, and CYCLE800 "
+                    + "with a new swivel plane deletes the programmable frame; no rule for an additive swivel is "
+                    + "drafted (Bedienhandbuch Fräsen 2013, p.481, 483; D333).");
+                return false;
+            }
+
+            foreach (KeyValuePair<string, decimal?> axis in entry.Shift)
+            {
+                if (!sums.ContainsKey(axis.Key))
+                {
+                    write.Error(DiagnosticCodes.SiemensTiltNotWritable,
+                        $"The shift of {axis.Key} before the tilt has no place in CYCLE800, whose reference point "
+                        + "_X0 _Y0 _Z0 takes X, Y and Z only (Arbeitsvorbereitung 2013, p.712-713; D333).");
+                    return false;
+                }
+
+                if (axis.Value is not decimal known)
+                {
+                    write.Error(DiagnosticCodes.SiemensChainNotWritable,
+                        $"The shift of {axis.Key} before the tilt is not known, so the reference point of CYCLE800 "
+                        + "cannot be written (virtual machine 1; language 4.2; D333).");
+                    return false;
+                }
+
+                sums[axis.Key] += known;
+            }
+        }
+
+        // MD20360 bit 14 may make the values of the cycle masks diameters, which is not verified; the radius is
+        // written and the X of the reference point is a WARNING under DIAMETER=ON (D125, D333).
+        if (sums["X"] != 0m && write.After.Frame.Diameter)
+        {
+            write.Warning(DiagnosticCodes.SiemensTiltShiftUnderDiameter,
+                "The shift of X before the tilt is written into _X0 of CYCLE800 as a frame value under DIAMETER=ON; "
+                + "whether the cycle takes it as a radius or, with MD20360 bit 14, as a diameter is not verified "
+                + "(Funktionshandbuch Grundfunktionen 2012, p.901-903; D125, D333).");
+        }
+
+        foreach (KeyValuePair<string, decimal> sum in sums)
+        {
+            string placeholder = sum.Key.ToLowerInvariant();
+            if (sum.Value != 0m && !write.HasPlaceholder(template, placeholder))
+            {
+                write.Error(DiagnosticCodes.SiemensTiltNotWritable,
+                    $"A shift of {sum.Key} stands before the tilt, and {what} of the machine writes _{sum.Key}0 as a "
+                    + $"constant: the template needs {{{placeholder}}} there, since a new swivel deletes TRANS "
+                    + "(machine-config 5; D333).");
+                return false;
+            }
+
+            string letter = SiemensAxes.LetterOf(write, sum.Key);
+            values.Set(placeholder, sum.Value == 0m
+                ? "0"
+                : write.FormatComputed(SiemensAxes.DecimalsAddress(write, letter),
+                    sum.Value * SiemensAxes.FrameStateFactor(write, sum.Key)));
+        }
+
+        return true;
+    }
+
+    // D146: TRACYL works in the plane of the developed surface, G19 with Y around the circumference and Z along the
+    // cylinder (840D sl/828D Arbeitsvorbereitung 2013, connector p.352: N40 TRACYL(40), N50 G19); TRAFOOF returns
+    // to the plane of the program, which the WORKPLANE group writes again.
+    private static void WriteCylinderPlane(SiemensBlock write, bool off)
+    {
+        string plane = !off
+            ? "G19"
+            : write.After.Frame.Workplane switch
+            {
+                Workplane.ZX => "G18",
+                Workplane.YZ => "G19",
+                _ => "G17",
+            };
+        write.Write(plane);
+        write.Target.Set(PlaneGroup, plane);
+    }
+
+    /// <summary>
+    /// The words a block under CYLINDER=n cannot carry on TRACYL (D146): an ARC, whose direction in the cylinder plane
+    /// (NCX Z then C) against G19 (Y then Z) waits on W3-5; a Y word, which TRACYL takes for the circumference; and a
+    /// rotary word other than the rotary axis of the workpiece holder, which is no length on this cylinder. Each is
+    /// the ERROR CMP536.
+    /// </summary>
+    public static void ReportCylinder(SiemensBlock write)
+    {
+        if (write.After.Frame.Cylinder is null)
+        {
+            return;
+        }
+
+        if (write.Block.Verb?.Key == "ARC")
+        {
+            write.Error(DiagnosticCodes.SiemensCylinderNotWritable,
+                "An ARC under CYLINDER: its direction in the cylinder plane (Z, then C) against the G19 of TRACYL (Y, "
+                + "then Z) is not settled, so it is not written (Arbeitsvorbereitung 2013, p.352; D146).");
+        }
+
+        foreach (SiemensAxisWord axis in SiemensAxes.Of(write.Block))
+        {
+            if (axis.Axis == "Y" || (SiemensAxes.IsRotary(write, axis.Axis)
+                && !SiemensAxes.IsCylinderLength(write, axis.Axis)))
+            {
+                write.Error(DiagnosticCodes.SiemensCylinderNotWritable,
+                    $"{axis.Word.ToCanonical()} under CYLINDER: TRACYL takes Y for the circumference, the length of "
+                    + "the C word on the rotary axis of the workpiece holder, so another rotary word or a Y word "
+                    + "has no place (Arbeitsvorbereitung 2013, p.352-353; D146).");
+            }
         }
     }
 
@@ -513,6 +739,7 @@ internal static partial class SiemensFrames
         if (write.Render(off ? transform?.CylinderOff : transform?.CylinderOn, what, values) is string text)
         {
             write.Write(text);
+            WriteCylinderPlane(write, off);
         }
     }
 
