@@ -20,7 +20,7 @@ Heidenhain controls are programmed in Klartext (conversational format): every bl
 ```
 
 - `BEGIN PGM name MM` (or `INCH`) opens and `END PGM name MM` closes; the name is the file name without `.h`. One program per file. Blocks are numbered consecutively from 0 by the editor; the numbers are part of the text and `LBL`, not block numbers, are the jump targets.
-- `BLK FORM 0.1`/`0.2` describe the blank for the graphic (kept as header information, `RAW`). The reader keeps them `RAW` in release 1 although the `STOCK` word exists, which the compiler writes back through the `[stock]` template; `BLK FORM CYLINDER`, the rotationally symmetric blank and the hollow cylinder have no `STOCK` form (D351, D352).
+- `BLK FORM 0.1`/`0.2` describe the blank for the graphic (kept as header information, `RAW`). The reader keeps them `RAW` in release 1 although the `STOCK` word exists, which the compiler writes back through the `[stock]` template (D351); `BLK FORM CYLINDER`, the rotationally symmetric blank and the hollow cylinder stay `RAW` as well, as every `BLK FORM` does in release 1 (D352).
 - `;` starts a comment at the end of a block or a comment block; `* - TEXT` is a structuring block shown in the program outline.
 - `~` at the end of a line continues the block on the next line (cycle definitions are written this way by CAM systems).
 - `/` at the block start is the optional skip.

@@ -131,6 +131,28 @@ public sealed class FrameValidationTests
         Assert.Contains("MAX:Z", diagnostic.Message);
     }
 
+    // VM 5, D351: VM423 names the missing corner words X Y Z first, then the MAX words.
+    [Fact]
+    public void Stock_WithoutCornerWords_NamesTheCornerFirstThenTheMaxWords()
+    {
+        VmHarness vm = new VmHarness(VmMachines.Default())
+            .Execute("ORIGIN=1", "STOCK=BOX X=0 Z=-20 MAX:X=100 MAX:Z=0");
+
+        Diagnostic diagnostic = RuleAssert.Only(vm, DiagnosticCodes.StockWithoutItsCorners);
+        Assert.Contains("lacks Y, MAX:Y;", diagnostic.Message);
+    }
+
+    // Language 4.2, D351: the X Y Z of STOCK are the corners of the blank, not machine axes, so a machine without a Y
+    // axis checks a STOCK clean.
+    [Fact(Skip = "needs W1-C's STOCK skip in ResolveAxisWords")]
+    public void Stock_OnAMachineWithoutAYAxis_ChecksClean()
+    {
+        string text = VmHarness.File("ORIGIN=1", "STOCK=BOX X=0 Y=0 Z=-20 MAX:X=100 MAX:Y=100 MAX:Z=0",
+            "PROGRAM=END");
+
+        VmHarness.Run(text, ValidationMachines.MillWithoutY()).AssertNoDiagnostics();
+    }
+
     // VM 5, D351: a side of zero or negative extent, or a cylinder whose two sides across the tool axis of the
     // WORKPLANE differ, is VM424.
     [Theory]

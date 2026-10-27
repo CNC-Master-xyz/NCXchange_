@@ -99,9 +99,9 @@ internal static class BlockRules
     // Axis words require a verb that carries them: a motion verb carries every axis word, RETRACT none. SHIFT, TILT,
     // TILT_AXIS and SETPOS carry their own axis words, the axis names of their rows, so CENTER, R, ANGLE, TX TY TZ and
     // NX NY NZ, which name no axis, still require a motion verb under them; STOCK carries X Y Z and the MAX words of
-    // its bounding box, and MAX stands under STOCK only (D351). HOME carries bare axis names; under any
-    // other verb an axis word has a value. A machine axis word counts as an axis word; a native parameter is none
-    // (language 5 rule 2; 4.2, 4.3; D93, D94).
+    // its bounding box, and MAX stands under STOCK only (D351). HOME carries bare axis names; under any other verb an
+    // axis word has a value. A machine axis word counts as an axis word; a native parameter is none (language 5 rule
+    // 2; 4.2, 4.3; D93, D94).
     // D117: the four frame verbs take absolute axis words only, each the kinds language 4.2 gives it (decisions.md).
     // TILT carries the spatial angles A, B and C alone; TILT_AXIS carries A, B, C and the machine axis names of the
     // D93 form, the virtual machine reporting an axis that is not rotary; SHIFT and SETPOS carry every absolute axis

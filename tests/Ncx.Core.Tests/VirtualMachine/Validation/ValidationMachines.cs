@@ -121,4 +121,22 @@ internal static class ValidationMachines
 
         return machine with { Axes = axes };
     }
+
+    /// <summary>
+    /// The three-axis mill without its Y axis, X and Z alone, for the corners of STOCK that are no machine axes (D351).
+    /// </summary>
+    public static MachineConfig MillWithoutY()
+    {
+        MachineConfig machine = ThreeAxisMill();
+        var axes = new List<AxisDef>();
+        foreach (AxisDef axis in machine.Axes)
+        {
+            if (axis.NcxName != "Y")
+            {
+                axes.Add(axis);
+            }
+        }
+
+        return machine with { Axes = axes };
+    }
 }
