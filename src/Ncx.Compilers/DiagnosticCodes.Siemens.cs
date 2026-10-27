@@ -215,6 +215,12 @@ public static partial class DiagnosticCodes
     public const string SiemensProcLineNotOwn = "CMP598";
 
     /// <summary>
+    /// CMP599: a variable that the file assigns a string in one place and a number in another: the compiler declares
+    /// it DEF STRING, and a STRING takes no number (840D sl NC-Programmierung SW4.92 p.431; D169, D261).
+    /// </summary>
+    public const string SiemensVariableTypeMixed = "CMP599";
+
+    /// <summary>
     /// CMP610: SYNC without a wait template in [sync], or with a mark outside its mark_range (machine-config 5;
     /// controllers siemens.md 9).
     /// </summary>

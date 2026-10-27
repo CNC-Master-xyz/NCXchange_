@@ -51,3 +51,8 @@ Claude (agent), 2026-10-27, review fixes.
 - Still open for the merge of main: D292 on the positional cycle feeds in W2-7's `CycleFeed` (review item 3).
 
 Gap closed 2026-10-27 (delegated): D146's CMP536 SiemensCylinderNotWritable; D333's WARNING CMP537 SiemensTiltShiftUnderDiameter.
+
+Claude (agent), 2026-10-27, review fix 2.
+- D169: a name the file assigns a string in one place and a number in another is the new ERROR CMP599 `SiemensVariableTypeMixed` at the numeric assignment, instead of a DEF STRING[200] the control refuses. siemens 12 rule 7.
+
+Gap closed 2026-10-27 (delegated): D169's mixed string and number assignment is the ERROR CMP599.

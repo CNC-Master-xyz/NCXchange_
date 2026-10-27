@@ -341,6 +341,30 @@ public sealed class SiemensFlowTests
             + "\n[system_variables]\nSYS_POS_X = \"$AA_IW[X]\"\nSYS_MPOS_X = \"$AA_IM[X]\"\n");
     }
 
+    // D169: a name assigned a string in one place and a number in another would be DEF STRING with a number the
+    // control refuses (SW4.92 p.431), so the numeric assignment is the ERROR CMP599, in the same unit or another.
+    [Theory]
+    [InlineData("VAR:NAMEA=5", "VAR:NAMEC=1")]
+    [InlineData("VAR:NAMEC=1", "VAR:NAMEA={$NAMEC + 1}")]
+    public void StringVariable_AssignedANumberToo_IsTheErrorCmp599(string inMain, string inSub)
+    {
+        string program = $$"""
+            FILE=BEGIN NCX=1
+            PROGRAM=BEGIN NAME="MAIN"
+            FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF
+            VAR:NAMEA="A"
+            {{inMain}}
+            CALL=SUBA
+            PROGRAM=END
+            SUB=BEGIN NAME=SUBA
+            {{inSub}}
+            SUB=END
+            FILE=END
+            """;
+
+        Assert.Contains("CMP599", CompilerCodes(Run(program, Mill())));
+    }
+
     // D261: a name a RAW DEF of the unit declares itself is not declared a second time, which would be alarm 12200.
     [Fact]
     public void Declarations_OfANameARawDefOfTheUnitDeclares_AreLeftOut()

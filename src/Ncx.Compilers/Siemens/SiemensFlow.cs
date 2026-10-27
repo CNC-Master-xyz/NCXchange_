@@ -61,6 +61,18 @@ internal static partial class SiemensFlow
             }
 
             write.Written(word);
+
+            // D169: a name the file assigns a string is DEF STRING, which takes no number; NCX keeps no type, so the
+            // mix is an ERROR here rather than a program the control refuses (SW4.92 p.431).
+            if (word.Value is not StringValue && write.File.HoldsString(variable))
+            {
+                write.Error(DiagnosticCodes.SiemensVariableTypeMixed,
+                    $"{variable} is assigned a string elsewhere in the file and is declared DEF STRING, and here a "
+                    + "number, which a STRING variable does not take (840D sl NC-Programmierung SW4.92, p.431; D169, "
+                    + "D261).");
+                continue;
+            }
+
             string? name = SiemensExpressions.VariableName(write, variable);
             string? value = word.Value switch
             {
