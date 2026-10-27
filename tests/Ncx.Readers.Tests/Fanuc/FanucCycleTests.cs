@@ -693,17 +693,23 @@ public sealed class FanucCycleTests
         Assert.False(Check(text, Lathe()).HasErrors, Check(text, Lathe()).ToText());
     }
 
-    // D175 gives the taper R of G90, G92 and G94 the catalog word TAPER, which cycles/fanuc-lathe.toml maps, but the
-    // parser takes no parameter name of a catalog entry yet (D114): the reader keeps such a block RAW, so nothing is
-    // lost
-    // (D5) and the text it writes is one that check can run (code-guidelines 4).
+    // D114, D175: the taper R of G90, G92 and G94 is the catalog word TAPER, which cycles/fanuc-lathe.toml maps
+    // and the parser takes as a parameter name of the catalog entry; R is modal data, so a new R is a new CYCLE.
     [Fact]
-    public void Taper_OnASimpleTurningCycle_KeepsItsBlockRawUntilTheParserTakesTheCatalogWord()
+    public void Taper_OnASimpleTurningCycle_IsTheCatalogWordTaper()
     {
-        string text = Text("%\nO0001\nG0 X70. Z2.\nG90 X60. Z-70. R-2. F0.3\nM30\n%\n", Lathe());
+        string text = Text("%\nO0001\nG0 X70. Z2.\nG90 X60. Z-70. R-2. F0.3\nX50. R-1.\nG0 X100.\nM30\n%\n", Lathe());
 
-        Assert.Contains("RAW:FANUC=\"G90 X60. Z-70. R-2. F0.3\"", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("TAPER", text, StringComparison.Ordinal);
+        Assert.Equal(
+            Lines(
+                "RAPID X=70 Z=2",
+                "CYCLE=TURN_OD CYCLE_F=0.3 TAPER=-2",
+                "CYCLE_CALL X=60 Z=-70",
+                "CYCLE=TURN_OD CYCLE_F=0.3 TAPER=-1",
+                "CYCLE_CALL X=50 Z=-70",
+                "RAPID X=100 CYCLE=OFF"),
+            BodyOf(text));
+        Assert.False(Check(text, Lathe()).HasErrors, Check(text, Lathe()).ToText());
     }
 
     // G70 to G76 of system A name the contour that follows them with P and Q: the reader turns the range into a SUB

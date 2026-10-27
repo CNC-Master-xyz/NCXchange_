@@ -116,7 +116,7 @@ The multiple repetitive cycles are written as two blocks, and the same letter me
 
 `G70`, the finishing cycle, is one block: `P(ns)` `Q(nf)`, the contour block range.
 
-The manual warns for `G71`, `G73`, `G74` and `G76` that the same address means different things depending on which other words stand in the block, which is why the reader keeps a cycle block with a word its catalog entry does not map as `RAW` (D5). NCX maps the taper `R` of the simple cycles as the catalog word `TAPER` and the thread lead `F` of `G92` and `G76` as `PITCH` (D175); the other words of `G71`..`G76` and the two-block form wait for a later catalog decision.
+The manual warns for `G71`, `G73`, `G74` and `G76` that the same address means different things depending on which other words stand in the block, which is why the reader keeps a cycle block with a word its catalog entry does not map as `RAW` (D5). NCX maps the taper `R` of the simple cycles as the catalog word `TAPER`, a parameter name of the entry that the parser takes in a block whose `CYCLE` is a catalog name (D114), and the thread lead `F` of `G92` and `G76` as `PITCH` (D175); since `R` is modal data of the three cycles, a repeat block with a new `R` is a new `CYCLE` block; the other words of `G71`..`G76` and the two-block form wait for a later catalog decision.
 
 ## 7. Custom macro B
 

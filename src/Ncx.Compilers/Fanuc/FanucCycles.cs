@@ -133,12 +133,22 @@ internal static class FanucCycles
     // is CMP380 at its call.
     // D157: the words a rule carries follow from the params of every entry (CycleEntry.RuleWords), an entry of a name
     // of its own included.
-    // TODO(question): D175: the lead of G92 and G76 is the word PITCH, written through the address the entry
-    // maps; the taper R of G90, G92 and G94 is the catalog word TAPER, which no program can carry until D114 lets the
-    // parser take a parameter name of a catalog entry.
+    // D175: the lead of G92 and G76 is the word PITCH, written through the address the entry maps. D114: the taper R
+    // of G90, G92 and G94 is the catalog word TAPER, a parameter name of the entry, carried through its address.
     private static void CheckCarried(FanucBlock write, CycleEntry? entry)
     {
         write.Written("CYCLE");
+        if (entry is not null)
+        {
+            foreach (string parameter in CatalogParameters(entry))
+            {
+                if (write.Block.Find(parameter) is Word catalogWord)
+                {
+                    write.Written(catalogWord);
+                }
+            }
+        }
+
         foreach (string key in s_cycleWords)
         {
             if (key == "CYCLE" || write.Block.Find(key) is not Word word)
@@ -197,6 +207,21 @@ internal static class FanucCycles
     {
         CycleCatalog catalog = write.Machine.CycleCatalog;
         return catalog.ChannelEntries.Count == 0 ? catalog : catalog.ForChannel(write.After.ChannelId);
+    }
+
+    // D114: the params of an entry whose key is no word of a CYCLE block of language 4.7, TAPER of the turning cycles.
+    private static List<string> CatalogParameters(CycleEntry entry)
+    {
+        var parameters = new List<string>();
+        foreach (string key in entry.Params.Keys)
+        {
+            if (!s_cycleWords.Contains(key))
+            {
+                parameters.Add(key);
+            }
+        }
+
+        return parameters;
     }
 
     // Whether a word's value is the number 0 (D362).
@@ -544,6 +569,11 @@ internal static class FanucCycles
         }
 
         AddMapped(write, entry, cycle, "PECK", "Q", address, 1m);
+        foreach (string parameter in CatalogParameters(entry))
+        {
+            // D114: a parameter name of the catalog entry, TAPER of G90 as R (D175).
+            AddMapped(write, entry, cycle, parameter, entry.Params[parameter], entry.Params[parameter], 1m);
+        }
 
         // D177: P stands where the entry maps CYCLE_DWELL, G82, G84, G89 on a machining centre and every lathe entry.
         // D159: a cycle P is round(seconds / dwell_increment), an integer ([machine] dwell_increment, 0.001 s).

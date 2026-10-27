@@ -544,6 +544,27 @@ public sealed class FanucCyclesTests
         Assert.EndsWith(written, body, StringComparison.Ordinal);
     }
 
+    // D114, D175: TAPER, a parameter name of the catalog entry, is the taper R of G90 (fanuc-lathe.toml).
+    [Fact]
+    public void TurnOd_WithTaper_WritesTheTaperAsR()
+    {
+        string program = FanucCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+            "FEED_MODE=PER_REV COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
+            "RAPID X=70 Z=2",
+            "CYCLE=TURN_OD CYCLE_F=0.3 TAPER=-2",
+            "CYCLE_CALL X=60 Z=-70",
+            "CYCLE=OFF",
+            "PROGRAM=END",
+            "FILE=END");
+
+        CompileResult result = FanucCompile.Run(program, FanucCompile.Lathe());
+
+        Assert.Empty(FanucCompile.CompilerDiagnostics(result));
+        Assert.Contains("\nG90 X60. Z-70. R-2. F0.3\n", FanucCompile.TextOf(result), StringComparison.Ordinal);
+    }
+
     // D177: a DRILL with a dwell other than 0 is written as G82 (DRILL_DWELL), a REAM with one as its dwell_native
     // G89; P is round(seconds / dwell_increment), 0.001 by default (D159).
     [Theory]

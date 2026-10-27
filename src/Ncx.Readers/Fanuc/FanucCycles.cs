@@ -46,6 +46,9 @@ internal static class FanucCycles
 
     // The word of the thread lead F of a simple turning cycle (D175).
     private const string PitchWord = "PITCH";
+
+    // The catalog word of the taper R of a simple turning cycle (D114, D175).
+    private const string TaperWord = "TAPER";
     private static readonly IntegerValue s_zero = new(0, "0");
 
     /// <summary>
@@ -1255,15 +1258,17 @@ internal static class FanucCycles
             return;
         }
 
-        // D175 gives the taper R of G90, G92 and G94 the catalog word TAPER, which cycles/fanuc.toml maps.
-        // TODO(question): the parser takes no parameter name of a catalog entry yet
-        // (WordCatalog.IsNativeParameterAllowed), so a block with R would read into text that check rejects with
-        // PAR010; the reader keeps such a block RAW until D114 is answered, which loses nothing (D5).
-        if (block.Find("R") is not null)
+        // D114, D175: the taper R of G90, G92 and G94 is the catalog word TAPER, a parameter name of the entry, which
+        // the parser takes in a block whose CYCLE is a catalog name (language 4.7.1, the third provisional form).
+        string? taperAddress = entry.Params.GetValueOrDefault(TaperWord);
+        if (taperAddress is not null && block.Take(taperAddress) is SourceWord taper)
         {
-            block.Draft.KeepAsRaw($"R, the taper of {cycle.Code}, is the catalog word TAPER of D175, which the "
-                + "parser does not take yet (D114)");
-            return;
+            if (FanucMacro.ValueOf(block, taper) is not Value value)
+            {
+                return;
+            }
+
+            cycle.Taper = value;
         }
 
         SourceWord? feed = block.Take("F");
@@ -1304,6 +1309,11 @@ internal static class FanucCycles
         if (entry.Params.ContainsKey(PitchWord) && cycle.Pitch is Value cyclePitch)
         {
             definition.Add(PitchWord, cyclePitch);
+        }
+
+        if (taperAddress is not null && cycle.Taper is Value cycleTaper)
+        {
+            definition.Add(TaperWord, cycleTaper);
         }
 
         Write(block, cycle, definition);

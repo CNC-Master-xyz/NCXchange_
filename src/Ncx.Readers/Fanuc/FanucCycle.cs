@@ -83,6 +83,12 @@ internal sealed class FanucCycle
     public Value? Pitch { get; set; }
 
     /// <summary>
+    /// The taper R of G90, G92 and G94, the catalog word TAPER, a radius value; modal data the three cycles share
+    /// (D114, D175); null while the source has given none.
+    /// </summary>
+    public Value? Taper { get; set; }
+
+    /// <summary>
     /// The end point of the last pass of a simple turning cycle, by NCX axis name: X(U) and Z(W) are modal data G90,
     /// G92 and G94 share, so an omitted word repeats the previous value, and the reader writes both end-point words
     /// on every CYCLE_CALL (D187).
@@ -130,6 +136,7 @@ internal sealed class FanucCycle
             Dwell = Dwell,
             Feed = Feed,
             Pitch = Pitch,
+            Taper = Taper,
             InitialLevel = InitialLevel,
             ReturnsToInitialLevel = ReturnsToInitialLevel,
             Written = Written,
@@ -162,6 +169,7 @@ internal sealed class FanucCycle
             Dwell?.ToCanonical() ?? "",
             Feed?.ToCanonical() ?? "",
             Pitch?.ToCanonical() ?? "",
+            Taper?.ToCanonical() ?? "",
             TurningEndKey(),
             InitialLevel?.ToString(CultureInfo.InvariantCulture) ?? "",
             ReturnsToInitialLevel ? "G98" : "G99",
