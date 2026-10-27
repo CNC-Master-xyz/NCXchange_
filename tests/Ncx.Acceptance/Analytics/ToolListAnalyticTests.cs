@@ -23,9 +23,9 @@ public sealed class ToolListAnalyticTests
     // the example: cutting, the LINE and ARC moves of lines 19 to 30, 2 + 9.025 + 43.4 + 7.854 + 86 + 7.854 + 86 +
     // 7.854 + 86 + 7.854 + 43.4 + 9.025 = 396.266, and of lines 37 to 45, 2 + 5.025 + 2.119 + 5.785 + 94.782 + 31.95 +
     // 5.785 + 2.119 + 5.025 = 154.59, 550.856 in all, 550.856466 at the six decimals of the VM (D121); rapid, lines
-    // 18, 31, 35, 36 and 46: 10 + 12 + 69.906769 + 10 + 12 = 113.906769; unknown: the RAPIDs of lines 15 and 16 from the
-    // unknown start and the machine-frame moves of lines 48 and 49; blocks: lines 10 to 51 without the blank lines 13
-    // and 32, 40.
+    // 18, 31, 35, 36 and 46: 10 + 12 + 69.906769 + 10 + 12 = 113.906769; unknown: the RAPIDs of lines 15 and 16
+    // from the unknown start and the machine-frame moves of lines 48 and 49; blocks: lines 10 to 51 without the blank
+    // lines 13 and 32, 40.
     [Fact]
     public void ToolList_Fraesen25D_NamesToolOneWithTheDistancesOfTheExample()
     {

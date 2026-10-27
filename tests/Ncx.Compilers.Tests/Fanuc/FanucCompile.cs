@@ -337,9 +337,28 @@ internal static partial class FanucCompile
     }
 
     /// <summary>
-    /// A rotary axis C on the table TABLE1 of the mill, about which CYLINDER=n turns (D146).
+    /// The linear axes X Y Z and a rotary axis C on the table TABLE1 of the mill, about which CYLINDER=n turns
+    /// (D146); a file that lists [[axis]] lists every axis.
     /// </summary>
     public const string TableRotaryAxis = """
+        [[axis]]
+        id = "X1"
+        ncx = "X"
+        letter = "X"
+        kind = "linear"
+
+        [[axis]]
+        id = "Y1"
+        ncx = "Y"
+        letter = "Y"
+        kind = "linear"
+
+        [[axis]]
+        id = "Z1"
+        ncx = "Z"
+        letter = "Z"
+        kind = "linear"
+
         [[axis]]
         id = "C1"
         ncx = "C"

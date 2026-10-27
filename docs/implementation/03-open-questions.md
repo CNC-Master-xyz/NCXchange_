@@ -11,7 +11,7 @@ The tasks of wave 1 (P0-01 to P0-06, P2-01 to P2-04a, P1-01 to P1-03a and P4-01a
 | 1 | P0-01 | The analyzers do not report CA1305 while InvariantGlobalization is true; which setting gives way? | D108 | `Directory.Build.props:17`; `.editorconfig:43` |
 | 2 | P0-01 | Nothing enforces the 120-character line of code-guidelines 3.3 | D109 | `.editorconfig:145` |
 | 3 | P0-01 | Who is the copyright holder in LICENSE? | D165 | `LICENSE` (placeholder "the NCXchange authors", no marker) |
-| 4 | P2-04a | Are home, limits and [positions] of a diameter-programmed X axis diameters or radii? | D137 | `docs/spec/examples/machines/doosan-puma-2600sy.toml:55`, `mori-ntx1000-mapps.toml:63`, `nakamura-ntjx.toml:63`, `dmg-ctx-840d.toml:67` |
+| 4 | P2-04a | Are home, limits and [positions] of a diameter-programmed X axis diameters or radii? | settled 2026-10-27 (D137) | `docs/spec/examples/machines/doosan-puma-2600sy.toml:55`, `mori-ntx1000-mapps.toml:63`, `nakamura-ntjx.toml:63`, `dmg-ctx-840d.toml:67` |
 | 5 | P2-04a | Address of the sub spindle C axis on the Nakamura NTJX: C or C2=? | D179 | `docs/spec/examples/machines/nakamura-ntjx.toml:130` |
 | 6 | P2-04a | Does a preload template use {tool} or {next}? | D150 | `machines/fanuc-mill-30i.toml:41`, `heidenhain-itnc530.toml:39`, `siemens-840dsl-mill.toml:40` |
 | 7 | P2-04a | Which tolerance template applies when TOLERANCE:ROTARY is not set? | D151 | `machines/heidenhain-itnc530.toml:130`, `siemens-840dsl-mill.toml:136` |
@@ -53,14 +53,14 @@ The tasks of wave 1 (P0-01 to P0-06, P2-01 to P2-04a, P1-01 to P1-03a and P4-01a
 | 43 | P2-02a | Is the placeholder list of the machine-config introduction closed? | D152 | `src/Ncx.Config/Templates/Placeholder.cs:10` |
 | 44 | P2-02a | Which placeholders hold words rather than numbers? | answered by the machine-config introduction ({name}, {axis}, {axes}, {position:NAME}), 3 ({axes} is "U0 W0") and 5 ({move}, {channels}); Placeholder.IsText matches; code: the marker becomes a comment. Document fix: in implementation 12 P2-02, "a signed decimal group otherwise" first exempts those six; applied 2026-09-14 | `src/Ncx.Config/Templates/Placeholder.cs:51` |
 | 45 | P2-02a | How does a padded placeholder match T101 for T0101, and what does a wider number render? | settled 2026-10-01 (D153) | `src/Ncx.Config/Templates/TemplatePattern.cs:55` |
-| 46 | P1-03a | How many decimals does a coordinate the VM computes keep? | D121 | `src/Ncx.Core/Geometry/Vec3.cs:42` |
+| 46 | P1-03a | How many decimals does a coordinate the VM computes keep? | settled 2026-10-27 (D121) | `src/Ncx.Core/Geometry/Vec3.cs:42` |
 | 47 | P1-03a | Is start = end of a CENTER arc compared within the tolerance; what is a radius 0? | settled 2026-10-01 (D122) | `src/Ncx.Core/Geometry/ArcResolver.cs:39` |
-| 48 | P1-03a | Cylinder plane on a machine whose cylinder turns about an axis other than Z | D146 | `src/Ncx.Core/Geometry/Plane.cs:37` |
+| 48 | P1-03a | Cylinder plane on a machine whose cylinder turns about an axis other than Z | settled 2026-10-27 (D146) | `src/Ncx.Core/Geometry/Plane.cs:37` |
 | 49 | P2-01 | Which keys must a machine file and a job manifest contain? | D138 | `src/Ncx.Config/MachineConfigLoader.cs:60` |
 | 50 | P2-01 | Is the "kind" of VM 3.8 rule 2 the resource type or what the default serves? | answered by language 4.5 (SPINDLE row), 4.10 (TOOL is "the only spindle on a mill") and VM 3.8 rule 2: default_spindle serves work and tool spindles alike; main matches; code: the marker becomes a comment citing them; applied 2026-09-14 | `src/Ncx.Config/MachineConfigLoader.Resources.cs:192` |
 | 51 | P2-01 | Should A and B also resolve to the workpiece holder's C axis? | settled 2026-10-01 (D147) | `src/Ncx.Core/Machine/MachineConfig.cs:293` |
 | 52 | P2-01 | Which resource of the default machine gets the role TOOL, holder or spindle? | D128 | `src/Ncx.Config/DefaultMachine.cs:19` |
-| 53 | P2-01 | Which spindle do bare SPINDLE and RPM target on the default machine? | D129 | `src/Ncx.Config/DefaultMachine.cs:22` |
+| 53 | P2-01 | Which spindle do bare SPINDLE and RPM target on the default machine? | settled 2026-10-27 (D129) | `src/Ncx.Config/DefaultMachine.cs:22` |
 | 54 | P2-01 | Which machine-config key holds the arc tolerance of D36? | D139 | `src/Ncx.Config/DefaultMachine.cs:24` |
 | 55 | P2-01 | Address of the Doosan Puma 2600SY sub spindle C axis | D179 | `docs/spec/examples/machines/doosan-puma-2600sy.toml:122` |
 | 56 | P0-04 | Does a ';' inside braces start the comment? | implementation: a ';' inside braces is an ERROR under either reading, and only the diagnostics of that invalid line differ (no output, state or plugin surface); the marker becomes a comment citing P0-04 and the prose of architecture 4.1 ("honouring quoted strings and {...} expressions"); applied 2026-09-14 | `src/Ncx.Core/Parsing/Lexer.cs:118` |
@@ -99,26 +99,26 @@ The tasks of wave 1 (P0-01 to P0-06, P2-01 to P2-04a, P1-01 to P1-03a and P4-01a
 | 89 | P4-01a | How does a vars file name an indexed SYS_ register (SYS_WEAR_Z[99])? | D120 | `src/Ncx.Core/Expressions/Evaluator.cs:163` (plain TODO) |
 | 90 | P1-02 | Does a switch list of skip_blocks also skip a bare SKIP? | settled 2026-10-01 (D133) | `src/Ncx.Core/VirtualMachine/SkipBlocks.cs:59` |
 | 91 | P1-02 | Which machine-config key holds the arc tolerance of D36? | D139 | `src/Ncx.Core/VirtualMachine/VmOptions.cs:52` |
-| 92 | P1-02 | Type, id and axis name of a resource D103 creates on the spot | D170 | `src/Ncx.Core/VirtualMachine/ResourceResolver.cs:58`, `:415` |
+| 92 | P1-02 | Type, id and axis name of a resource D103 creates on the spot | settled 2026-10-27 (D170) | `src/Ncx.Core/VirtualMachine/ResourceResolver.cs:58`, `:415` |
 | 93 | P1-02 | Is a coolant channel the machine file does not name an ERROR? | D130 | `src/Ncx.Core/VirtualMachine/ResourceResolver.cs:205` |
 | 94 | P1-02 | Which verbs does the C= check of VM 3.8 rule 4 cover? | settled 2026-10-01 (D131) | `src/Ncx.Core/VirtualMachine/ResourceResolver.cs:333` |
 | 95 | P1-02 | SHIFT=RESET removes "the shifts", VM 2.1 cuts at the last entry of the kind: which? | answered by VM 2.1, the chain paragraph of language 4.2 ("a RESET of a kind removes that entry and everything after it"), D31 and P1-02; main matches; code: the marker becomes a comment. Document fix: the SHIFT=RESET row of language 4.2 and the SHIFT description in `src/Ncx.Core/Catalog/FrameWords.cs` (rank 90 of `generated/word-catalog.md`) say the last shift and what follows it; the catalog description applied 2026-09-14, the marker in FrameRules.cs is left to the residual review RR-P1-03 and the language 4.2 row to the maintainer | `src/Ncx.Core/VirtualMachine/FrameRules.cs:53` |
-| 96 | P1-02 | What does ORIGIN do to the position? | D123 | `src/Ncx.Core/VirtualMachine/FrameRules.cs:71` |
-| 97 | P1-02 | Is a different preload kept after TOOL=k? | D132 | `src/Ncx.Core/VirtualMachine/ToolChangeRules.cs:50` |
+| 96 | P1-02 | What does ORIGIN do to the position? | settled 2026-10-27 (D123) | `src/Ncx.Core/VirtualMachine/FrameRules.cs:71` |
+| 97 | P1-02 | Is a different preload kept after TOOL=k? | settled 2026-10-27 (D132) | `src/Ncx.Core/VirtualMachine/ToolChangeRules.cs:50` |
 | 98 | P1-02 | Is SAFE halved under AXIS=X with DIAMETER=ON? | answered by D60, VM 3.3 ("the X values of an AXIS=X cycle are halved like every other X"), language 4.2 and the opening of 4.7 (SAFE is an absolute coordinate along the drilling axis); main matches; code: the marker becomes a comment citing D60 and VM 3.3. Document fix: the AXIS row of language 4.7 adds SAFE; the marker applied 2026-09-14, the language 4.7 row stays for the maintainer | `src/Ncx.Core/VirtualMachine/DiameterRules.cs:37` |
 | 99 | P1-02 | Does "PROGRAM=END sets OFF" of VM 4 also set CSS OFF? | answered by VM 4 (the spindle row: "sets OFF" applies to the items that have an OFF value, the direction and CSS), language 4.11 and VM 2.4; main matches; code: the marker becomes a comment. Document fix (optional): the row reads "PROGRAM=END sets direction and css OFF, mode SPINDLE, sync OFF"; the marker applied 2026-09-14, the VM 4 wording stays for the maintainer | `src/Ncx.Core/VirtualMachine/ProgramEndRules.cs:31` |
 | 100 | P1-02 | How is an expression value in SHIFT, TILT, TILT_AXIS or ROTATE kept in STATIC mode? | answered by VM 1 (STATIC: "a state variable set from an expression becomes UNKNOWN"; the chain is a state variable, VM 2.1); main does not match; code: TransformEntry holds a value as UNKNOWN (nullable value, or a key in ChannelState.Unknown as SETPOS:C has), and a RESET or ORIGIN that removes an unknown shift makes its axes unknown outside the MACHINE frame instead of folding back 0 (reproducer: HOME X, SHIFT X={$Q1}, SETPOS X=100, SHIFT=RESET leaves X known at 100); the architecture 5 diagram follows | `src/Ncx.Core/VirtualMachine/VirtualMachine.cs:377`, `:417`; `Handlers/FrameHandlers.cs:117`; `FrameRules.cs` CutAt, Fold; `State/TransformEntry.cs` |
 | 101 | P1-02 | Is MIRROR=OFF the reset form of the mirror? | D124 | `src/Ncx.Core/VirtualMachine/Handlers/FrameHandlers.cs:126` |
 | 102 | P1-02 | On which spindle do syncPartner and syncPhase stand? | settled 2026-10-01 (D171) | `src/Ncx.Core/VirtualMachine/Handlers/SpindleHandlers.cs:89` |
 | 103 | P1-02 | Do SHIFT, TILT, TILT_AXIS and SETPOS take incremental axis words? | settled 2026-10-01 (D117) | `src/Ncx.Core/VirtualMachine/VirtualMachine.cs:339` |
-| 104 | P1-02 | Is the X of a SHIFT a diameter under DIAMETER=ON? | D125 | `src/Ncx.Core/VirtualMachine/VirtualMachine.cs:363` |
-| 105 | P1-02 | In which frame are the rotary positions known after TILT_AXIS with MOVE=TURN or MOVE? | D126 | `src/Ncx.Core/VirtualMachine/VirtualMachine.cs:454` |
+| 104 | P1-02 | Is the X of a SHIFT a diameter under DIAMETER=ON? | settled 2026-10-27 (D125) | `src/Ncx.Core/VirtualMachine/VirtualMachine.cs:363` |
+| 105 | P1-02 | In which frame are the rotary positions known after TILT_AXIS with MOVE=TURN or MOVE? | settled 2026-10-27 (D126) | `src/Ncx.Core/VirtualMachine/VirtualMachine.cs:454` |
 | 106 | P1-02 | Does "directly after a HOME" (D101) allow blocks in between? | settled 2026-10-01 (D127) | `src/Ncx.Core/VirtualMachine/VirtualMachine.cs:524` |
 | 107 | P1-02 | Which state does a later program of the file start from in STATIC mode? | D134 | `src/Ncx.Core/VirtualMachine/VirtualMachine.Static.cs:51` |
 | 108 | P1-02 | D99 entry state when the file's first program has no verb | D135 | `src/Ncx.Core/VirtualMachine/VirtualMachine.Static.cs:102` |
 | 109 | P1-02 | Where does an ARG with a name outside V1..V33 go? | D149 | `src/Ncx.Core/VirtualMachine/VirtualMachine.Static.cs:251` |
 | 110 | P1-02 | How many passes does a CALL get when TIMES is an expression in STATIC mode? | D136 | `src/Ncx.Core/VirtualMachine/VirtualMachine.Static.cs:368` |
-| 111 | P1-02 | At ORIGIN, what happens to an axis known in the workpiece frame of the datum, not through SETPOS? | D123 (with 96) | `src/Ncx.Core/VirtualMachine/FrameRules.cs:71` |
+| 111 | P1-02 | At ORIGIN, what happens to an axis known in the workpiece frame of the datum, not through SETPOS? | settled 2026-10-27 (D123) | `src/Ncx.Core/VirtualMachine/FrameRules.cs:71` |
 
 ## Wave 2
 
@@ -126,10 +126,10 @@ The tasks of wave 2 (P1-03 to P1-07, P2-04, P3-01, P3-02 with its part P3-02c, P
 
 | # | Task | Question | Disposition | Code location |
 |---|---|---|---|---|
-| 1 | P1-03 | Can IX add to a value known only in another frame than the one the block programs in, as after HOME? | D183 | `src/Ncx.Core/VirtualMachine/MotionRules.cs:159` |
+| 1 | P1-03 | Can IX add to a value known only in another frame than the one the block programs in, as after HOME? | settled 2026-10-27 (D183) | `src/Ncx.Core/VirtualMachine/MotionRules.cs:159` |
 | 2 | P1-03 | Is an ARC without a feed an ERROR, as a LINE is? | settled 2026-10-01 (D184) | `src/Ncx.Core/VirtualMachine/MotionRules.cs:80` |
-| 3 | P1-03 | What do the vector words mean under RAPID, ARC and CYCLE_CALL, and Heidenhain LN with FMAX? | D185 | `src/Ncx.Core/VirtualMachine/ToolVectorRules.cs:44` |
-| 4 | P1-03 | What is an ARC block with both CENTER and R? | D186 | `src/Ncx.Core/VirtualMachine/ArcRules.cs:222` |
+| 3 | P1-03 | What do the vector words mean under RAPID, ARC and CYCLE_CALL, and Heidenhain LN with FMAX? | settled 2026-10-27 (D185) | `src/Ncx.Core/VirtualMachine/ToolVectorRules.cs:44` |
+| 4 | P1-03 | What is an ARC block with both CENTER and R? | settled 2026-10-27 (D186) | `src/Ncx.Core/VirtualMachine/ArcRules.cs:222` |
 | 5 | P1-03 | What is CENTER on an axis outside the working plane (CENTER:Z in XY)? | answered by language 4.3 (the CENTER rows: the address is a plane axis) and VM 3.2 ("only in the working plane", "both plane axes required"), read the same way by the open D143; main matches (VM222; the Fanuc reader keeps a centre word outside the plane RAW); code: the marker becomes a comment citing the 4.3 rows, and the VM222 rule in `src/Ncx.Core/VirtualMachine/Validation/ArcValidation.cs` adds language 4.3 to its sources, so that the row of generated/diagnostics.md cites it. Document fix: VM 5 names "CENTER on an axis outside the working plane", "CENTER on one plane axis only" (VM221) and "ANGLE without CENTER" (VM226) among the ARC ERRORs; the code applied 2026-09-18 (the message of VM222 cites language 4.3 as well), the VM 5 wording stays for the maintainer | `src/Ncx.Core/VirtualMachine/ArcRules.cs:229` |
 | 6 | P1-03 | Is an ARC from an unknown start suppressed in a subprogram nothing calls, as IX is? | answered by D99 (its decisions.md row suppresses the caller-dependent validations of an uncalled subprogram, and the answer names the positions as caller state), VM 3.9 and 3.2 (an ARC starts at the current position); main matches (ArcRules.StartUnknown reports through CallerRuleDiagnostics; an absolute end word is known afterwards, the rest unknown; ArcTests.UncalledSub_ArcFromAnUnknownStart_IsSuppressedAndTheAbsoluteEndIsKnown; generated/diagnostics.md already lists VM227 as suppressed); code: the marker becomes a comment citing D99. Document fix: the VM 5 ERROR list names "ARC from a start not known in the working plane" (VM227), and the suppressed lists of VM 3.9 and VM 5 add "an ARC whose start is not known in the plane (absolute end words are known afterwards)"; the marker applied 2026-09-18, the VM 3.9 and VM 5 wording stays for the maintainer | `src/Ncx.Core/VirtualMachine/ArcRules.cs:255` |
 | 7 | P1-03 | What does CYCLE_CALL of a catalog cycle (CYCLE=RECT_POCKET, the Fanuc turning cycles) do to the position? | settled 2026-10-01 (D187): the call positions the plane axes and leaves the drilling axis unknown, except after a Fanuc turning cycle the control ends at its start point | `src/Ncx.Core/VirtualMachine/CycleRules.cs` (no marker for D187 left) |
@@ -137,7 +137,7 @@ The tasks of wave 2 (P1-03 to P1-07, P2-04, P3-01, P3-02 with its part P3-02c, P
 | 9 | P1-03 | Where does the tool end under CYCLE_RETRACT=SAFE without SAFE? | D188 (with 8) | `src/Ncx.Core/VirtualMachine/CycleRules.cs:109` |
 | 10 | P1-03 | What does a word on the drilling axis do in a CYCLE_CALL block? | settled 2026-10-01 (D189): it is the ERROR VM253 | `src/Ncx.Core/VirtualMachine/CycleRules.cs:114` |
 | 11 | P1-03 | Which motions does ExpandCycles give: pecks, retract between pecks, CHIP_BREAK, retract at rapid or at feed? | D190 | `src/Ncx.Core/VirtualMachine/CycleRules.cs:126` |
-| 12 | P1-03 | Does a rotary axis word under TILT or TILT_AXIS move the machine axis by as much as its workpiece coordinate? | D230 | `src/Ncx.Core/VirtualMachine/FrameRules.cs:472` (Turns) |
+| 12 | P1-03 | Does a rotary axis word under TILT or TILT_AXIS move the machine axis by as much as its workpiece coordinate? | settled 2026-10-27 (D230) | `src/Ncx.Core/VirtualMachine/FrameRules.cs:472` (Turns) |
 | 13 | P3-01 | Which comes first for a source block, the configuration tables or a plugin's reader rule (the fold of M5, M51, M3 S1500)? | D231 | `src/Ncx.Readers/ReaderBase.cs:286` |
 | 14 | P3-01 | A file that holds only Onnnn ... M99: a subprogram, or a program that loops? | settled 2026-10-01 (D210): the program of the file, its `M99` the loop, with the INFO `RDR012` naming that reading | `src/Ncx.Readers/StructurePass.cs` (no marker left) |
 | 15 | P3-01 | Is a Fanuc or Siemens program without M30, M2 or M17 a WARNING, as Klartext is? | settled 2026-10-01 (D211): yes, the same `RDR010` in every family | `src/Ncx.Readers/StructurePass.Sections.cs` (no marker left) |
@@ -145,7 +145,7 @@ The tasks of wave 2 (P1-03 to P1-07, P2-04, P3-01, P3-02 with its part P3-02c, P
 | 17 | P3-01 | How does a reader rule claim a sequence of source blocks through its one method Read? | D232 | `src/Ncx.Readers/ISourceRule.cs:14`; `src/Ncx.Readers/ReaderBase.cs:299` |
 | 18 | P3-01 | Is an uncalled Fanuc O section a program of its own or a subprogram that another file calls? | settled 2026-10-01 (D210, with 14) | `src/Ncx.Readers/StructurePass.cs` and the doc of StructureRole.SectionBegin (no marker left) |
 | 19 | P1-04 | What is table kinematics for the ROT WARNING, and is the rule checked without a machine file? | D191 | `src/Ncx.Core/VirtualMachine/Validation/FrameValidation.cs:97` |
-| 20 | P1-04 | Which axes is F compared with for max_feed, and how do INCH and PER_REV compare with mm/min? | D192 | `src/Ncx.Core/VirtualMachine/Validation/MotionValidation.cs:72`; pointer in `tests/Ncx.Core.Tests/VirtualMachine/Validation/MotionValidationTests.cs:80` |
+| 20 | P1-04 | Which axes is F compared with for max_feed, and how do INCH and PER_REV compare with mm/min? | settled 2026-10-27 (D192) | `src/Ncx.Core/VirtualMachine/Validation/MotionValidation.cs:72`; pointer in `tests/Ncx.Core.Tests/VirtualMachine/Validation/MotionValidationTests.cs:80` |
 | 21 | P1-04 | No key tells a modulo rotary axis from one with travel limits | settled 2026-10-01 (D193) | `src/Ncx.Core/VirtualMachine/Validation/MotionValidation.cs:114` |
 | 22 | P1-04 | Does "spindle OFF before a LINE" also cover ARC and CYCLE_CALL? | settled 2026-10-01 (D194): `ARC` yes, `CYCLE_CALL` of the built-in drilling family other than `TAP` yes, a catalog or native cycle no | `src/Ncx.Core/VirtualMachine/Validation/SpindleValidation.cs` (no marker left) |
 | 23 | P1-04 | Are the blocks of a subprogram after an unconditional JUMP also checked as unreachable? | D195 | `src/Ncx.Core/VirtualMachine/Validation/FlowValidation.cs:154` |
@@ -161,8 +161,8 @@ The tasks of wave 2 (P1-03 to P1-07, P2-04, P3-01, P3-02 with its part P3-02c, P
 | 33 | P1-06 | Which line does a generated block carry in a diagnostic? | D200 | `src/Ncx.Core/Expander/GeneratedText.cs:149` |
 | 34 | P1-06 | Is a generated block skipped with the SKIP block it was generated for? | D201 | `src/Ncx.Core/Expander/GeneratedText.cs:102` |
 | 35 | P1-06 | Which state variables may @SAVE and @RESTORE name? | D202 | `src/Ncx.Core/VirtualMachine/RestoreRules.cs:35` |
-| 36 | P1-06 | Under limits = "clamp", what is F compared against? | D192 (with 20) | `src/Ncx.Core/Expander/LimitClamp.cs:121` |
-| 37 | P1-06 | How does the expander clamp a target in the workpiece frame? | D203 | `src/Ncx.Core/Expander/LimitClamp.cs:151` |
+| 36 | P1-06 | Under limits = "clamp", what is F compared against? | settled 2026-10-27 (D192) | `src/Ncx.Core/Expander/LimitClamp.cs:121` |
+| 37 | P1-06 | How does the expander clamp a target in the workpiece frame? | settled 2026-10-27 (D203) | `src/Ncx.Core/Expander/LimitClamp.cs:151` |
 | 38 | P1-06 | Are rotary targets clamped? | settled 2026-10-01 (D193) | `src/Ncx.Core/Expander/LimitClamp.cs:155` |
 | 39 | P1-06 | Which block triggers a catalog cycle's expansion rule: the definition, each CYCLE_CALL, or both? | settled 2026-10-01 (D204) | `src/Ncx.Core/Expander/ExpansionRules.cs:69`; pointer in `tests/Ncx.Core.Tests/Expander/ExpansionRuleTests.cs:89` |
 | 40 | P1-07 | Trace: header row, default format, CSV quoting, the block column of a generated block | D237 | `src/Ncx.Cli/History/TraceTable.cs:11` |
@@ -171,7 +171,7 @@ The tasks of wave 2 (P1-03 to P1-07, P2-04, P3-01, P3-02 with its part P3-02c, P
 | 43 | P2-04 | Plugins in ncx.toml as an array (machine-config 10) or as `[plugins.<name>]` sections (D80)? | D238 | `src/Ncx.Config/ProjectSettingsLoader.cs:67` |
 | 44 | P2-04 | --machine: which wins, the file at the path or the machine of that name? | D206 | `src/Ncx.Cli/ProjectFolders.cs:71` |
 | 45 | P2-04 | Where is the cycle catalog of a machine looked for, and what is a catalog that cannot be found? | D207 | `src/Ncx.Cli/RunMachine.cs:171` |
-| 46 | P2-04 | The turning LINEs 13 and 14 of MILLTURN_TRANSFER get VM500 against millturn1, whose turret H1 carries the tool spindle S3 | repeats D129, which names this case: its option (the rule passes while the workpiece holder's spindle runs) removes the two WARNINGs, and an answer "as recommended" leaves them, so the answer has to take the option up explicitly. The tool-kind variant (D52) cannot replace it. The expected file stays as it is until D129 is answered; D194, settled 2026-10-01, did not take that option up, so the two WARNINGs stand and the rule now covers `ARC` and a drilling `CYCLE_CALL` as well | `tests/Ncx.Acceptance/Examples/ExampleMachineCheckTests.cs:23`; `tests/Ncx.Acceptance/Expected/MILLTURN_TRANSFER.millturn1.check.txt` |
+| 46 | P2-04 | The turning LINEs 13 and 14 of MILLTURN_TRANSFER get VM500 against millturn1, whose turret H1 carries the tool spindle S3 | settled 2026-10-27 (D129) | `tests/Ncx.Acceptance/Examples/ExampleMachineCheckTests.cs:23`; `tests/Ncx.Acceptance/Expected/MILLTURN_TRANSFER.millturn1.check.txt` |
 | 47 | P2-04 | The catalog lookup restated after the review fix: which folders, whether the value may be a path, a catalog not found | D207 (with 45) | `src/Ncx.Cli/RunMachine.cs:171`; `src/Ncx.Cli/ProjectFolders.cs:93` FindCatalog |
 | 48 | P4-01 | What does a REPEAT without TIMES do? | settled 2026-10-01 (D212): it repeats the blocks once more | `src/Ncx.Core/VirtualMachine/VirtualMachine.Interpreted.cs:269` |
 | 49 | P4-01 | What becomes of a repeat that a JUMP leaves before its passes are used? | D213 | `src/Ncx.Core/VirtualMachine/VirtualMachine.Interpreted.cs:310` |
