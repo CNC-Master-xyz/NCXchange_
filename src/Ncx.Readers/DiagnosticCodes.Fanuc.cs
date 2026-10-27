@@ -48,8 +48,9 @@ public static partial class DiagnosticCodes
     public const string FanucSharedLocalWritten = "RDR106";
 
     /// <summary>
-    /// RDR120, a WARNING: a drilling cycle of a mill outside G17, whose drilling axis the reader derives from the plane;
-    /// on the control it depends on parameter 5101#0 FXY, 0 always Z, 1 by the plane and the axis address (D157).
+    /// RDR120, a WARNING: a drilling cycle of a mill outside G17, whose drilling axis the reader derives from the
+    /// plane; on the control it depends on parameter 5101#0 FXY, 0 always Z, 1 by the plane and the axis address
+    /// (D157).
     /// </summary>
     public const string FanucDrillingAxisByParameter = "RDR120";
 

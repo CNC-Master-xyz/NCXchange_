@@ -69,18 +69,19 @@ public sealed class FanucCycleTests
             Body("G0 X0 Y0 Z10.\nG82 G99 Z-5. R2. P500 F100\nG80"));
     }
 
-    // D256: a G84 without the rigid-tapping line of the TAP entry in front of it is tapping with a compensating
-    // chuck, which is another machining than CYCLE=TAP and has no entry in the Fanuc catalog, so the blocks of the
-    // cycle stay RAW and no compiler writes the M29 of rigid tapping in front of them (decisions.md; fanuc 6; D5).
+    // D256, D359: a G84 without the rigid-tapping line of the TAP entry in front of it is tapping with a
+    // compensating chuck, CYCLE=TAP_COMPENSATING, the entry of the same word set with no before key, so no compiler
+    // writes the M29 of rigid tapping in front of it (fanuc 6, 9 rule 9; machine-config 6).
     [Fact]
-    public void TapWithoutItsRigidTapLine_IsAnotherMachining_KeepsItsBlocksAsRaw()
+    public void TapWithoutItsRigidTapLine_IsTheFloatingTapTapCompensating()
     {
         Assert.Equal(
             Lines(
                 "SPINDLE=CW RPM=500",
                 "RAPID X=0 Y=0 Z=10",
-                "RAW:FANUC=\"G84 G99 Z-20. R5. F750\"",
-                "RAW:FANUC=\"X30.\"",
+                "CYCLE=TAP_COMPENSATING SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE CYCLE_F=750 PITCH=1.5",
+                "CYCLE_CALL",
+                "CYCLE_CALL X=30",
                 "CYCLE=OFF"),
             Body("S500 M3\nG0 X0 Y0 Z10.\nG84 G99 Z-20. R5. F750\nX30.\nG80"));
     }
@@ -190,8 +191,8 @@ public sealed class FanucCycleTests
     {
         NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\nS600\nG84 G99 Z-20. R5. F750\nG80\n"
             + "M30\n%\n");
-        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", NcxWriter.Write(program), StringComparison.Ordinal);
-        Assert.Contains("G84 without the line", program.Diagnostics.ToText(), StringComparison.Ordinal);
+        Assert.Contains("CYCLE=TAP_COMPENSATING SURFACE=0 CLEARANCE=5 DEPTH=-20", NcxWriter.Write(program),
+            StringComparison.Ordinal);
     }
 
     // D256: an axis movement between M29 and G84 is alarm PS0203 (B-64484EN-2 p.104), so the line does not reach the
@@ -201,8 +202,8 @@ public sealed class FanucCycleTests
     {
         NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\nX5.\nG84 G99 Z-20. R5. F750\nG80\n"
             + "M30\n%\n");
-        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", NcxWriter.Write(program), StringComparison.Ordinal);
-        Assert.Contains("G84 without the line", program.Diagnostics.ToText(), StringComparison.Ordinal);
+        Assert.Contains("CYCLE=TAP_COMPENSATING SURFACE=0 CLEARANCE=5 DEPTH=-20", NcxWriter.Write(program),
+            StringComparison.Ordinal);
     }
 
     // D256: a call between M29 and G84 runs blocks the reader does not see at that place, so it can tell neither that
@@ -230,8 +231,7 @@ public sealed class FanucCycleTests
         NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\n" + snippet + "\nM30\n%\n");
         string text = NcxWriter.Write(program);
         Assert.Contains("CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20", text, StringComparison.Ordinal);
-        Assert.Contains("RAW:FANUC=\"G84 G99 Z-25. R5. F750\"", text, StringComparison.Ordinal);
-        Assert.Contains("G84 without the line", program.Diagnostics.ToText(), StringComparison.Ordinal);
+        Assert.Contains("CYCLE=TAP_COMPENSATING SURFACE=0 CLEARANCE=5 DEPTH=-25", text, StringComparison.Ordinal);
     }
 
     // D256: G80 or a group-01 code between M29 and G84 cancels the mode the line set (0i-D Connection Manual
@@ -243,8 +243,8 @@ public sealed class FanucCycleTests
     {
         NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\n" + cancel
             + "\nG84 G99 Z-20. R5. F750\nG80\nM30\n%\n");
-        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", NcxWriter.Write(program), StringComparison.Ordinal);
-        Assert.Contains("G84 without the line", program.Diagnostics.ToText(), StringComparison.Ordinal);
+        Assert.Contains("CYCLE=TAP_COMPENSATING SURFACE=0 CLEARANCE=5 DEPTH=-20", NcxWriter.Write(program),
+            StringComparison.Ordinal);
     }
 
     // D256: the line in a block with a group-01 code, "G0 Z10. M29 S500;", the manuals do not settle (0i-D Connection
@@ -286,7 +286,8 @@ public sealed class FanucCycleTests
         string text = NcxWriter.Write(program);
         Assert.DoesNotContain("CYCLE=TAP", text, StringComparison.Ordinal);
         Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", text, StringComparison.Ordinal);
-        Assert.Contains("a spindle command between M29 and G84", program.Diagnostics.ToText(), StringComparison.Ordinal);
+        Assert.Contains("a spindle command between M29 and G84", program.Diagnostics.ToText(),
+            StringComparison.Ordinal);
         Assert.Contains(spindle + " stands between", program.Diagnostics.ToText(), StringComparison.Ordinal);
     }
 
@@ -354,9 +355,8 @@ public sealed class FanucCycleTests
         NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\n" + end
             + "\nG84 G99 Z-20. R5. F750\nG80\nM30\n%\n");
         string text = NcxWriter.Write(program);
-        Assert.DoesNotContain("CYCLE=TAP", text, StringComparison.Ordinal);
-        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", text, StringComparison.Ordinal);
-        Assert.Contains("G84 without the line", program.Diagnostics.ToText(), StringComparison.Ordinal);
+        Assert.DoesNotContain("CYCLE=TAP ", text, StringComparison.Ordinal);
+        Assert.Contains("CYCLE=TAP_COMPENSATING SURFACE=0 CLEARANCE=5 DEPTH=-20", text, StringComparison.Ordinal);
     }
 
     // D256: a line block the reader keeps as RAW is not read into the cycle - the RAW text carries the M29 S to the
@@ -394,20 +394,32 @@ public sealed class FanucCycleTests
         Assert.Contains(Body("/M29 S500"), text, StringComparison.Ordinal);
     }
 
-    // D256: a jump into the cycle block, or into a block between the line and the cycle block, reaches the G84
-    // without passing the line, so the reader cannot tell whether the line is in force (wave-3 question #195).
+    // D360: a jump into the cycle block, or into a block between the line and the cycle block, is decided from the
+    // flow as the control does: the jump back from the run of the same cycle reaches the G84 in the mode the line
+    // set, and the block in front of it carries the line, so on every path the mode is in force and the cycle is TAP.
     [Theory]
     [InlineData("M29 S500\nN10 G84 G99 Z-20. R5. F750\n")]
     [InlineData("M29 S500\nN10 M8\nG84 G99 Z-20. R5. F750\n")]
-    public void RigidTapLine_WithAJumpTargetUpToTheCycle_KeepsTheCycleRawUnseen(string lines)
+    public void RigidTapLine_WithAJumpTargetUpToTheCycle_IsDecidedFromTheFlow(string lines)
     {
         NcxProgram program = Program("%\nO0001\n#1=2\nS500 M3\nG0 X0 Y0 Z10.\n" + lines
             + "#1=#1-1\nIF[#1 GT 0] GOTO 10\nG80\nM30\n%\n");
         string text = NcxWriter.Write(program);
+        Assert.Contains("CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("RAW:", text, StringComparison.Ordinal);
+    }
+
+    // D360: where one path reaches the cycle block without the line, a jump from behind the G80 that ended the run,
+    // the blocks stay RAW with the reason.
+    [Fact]
+    public void RigidTapLine_WithAJumpFromBehindTheCancel_KeepsTheCycleRawWithTheReason()
+    {
+        NcxProgram program = Program("%\nO0001\n#1=2\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\n"
+            + "N10 G84 G99 Z-20. R5. F750\nG80\n#1=#1-1\nIF[#1 GT 0] GOTO 10\nM30\n%\n");
+        string text = NcxWriter.Write(program);
         Assert.DoesNotContain("CYCLE=TAP", text, StringComparison.Ordinal);
-        Assert.Contains("G84 G99 Z-20. R5. F750\"", text, StringComparison.Ordinal);
-        Assert.Contains("the reader does not see which block runs before this one",
-            program.Diagnostics.ToText(), StringComparison.Ordinal);
+        Assert.Contains("RAW:FANUC=\"N10 G84 G99 Z-20. R5. F750\"", text, StringComparison.Ordinal);
+        Assert.Contains("one path reaches", program.Diagnostics.ToText(), StringComparison.Ordinal);
     }
 
     // D256: a call in the line block itself runs blocks the reader does not see after the M29, so it cannot tell
@@ -422,18 +434,27 @@ public sealed class FanucCycleTests
             program.Diagnostics.ToText(), StringComparison.Ordinal);
     }
 
-    // D256 requires the rigid-tapping line immediately before the cycle block, and a call may stand between the two:
-    // where the cycle block begins a section a block of the file calls, the reader does not see which block runs
-    // before it, so it can say neither that the line stands there nor that the source programmed the other
-    // machining, and the blocks of the cycle stay RAW with that reason (D5; wave-3 question #195).
+    // D360: where the cycle block begins a section a block of the file calls, the mode is in force when the line
+    // stands directly before each CALL of the section, and the cycle is TAP.
     [Fact]
-    public void TapAtTheHeadOfACalledSubprogram_WhoseLineTheReaderCannotSee_KeepsItsBlocksAsRaw()
+    public void TapAtTheHeadOfACalledSubprogram_WithTheLineBeforeEveryCall_IsTheTapCycle()
     {
         NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\nM98 P100\nG80\nM30\n"
             + "O0100\nG84 G99 Z-20. R5. F750\nM99\n%\n");
+        string text = NcxWriter.Write(program);
+        Assert.Contains("CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("RAW:FANUC=\"G84", text, StringComparison.Ordinal);
+    }
+
+    // D360: a second call of the section without the line in front of it is a path without the line, so the blocks
+    // of the cycle stay RAW with the reason.
+    [Fact]
+    public void TapAtTheHeadOfACalledSubprogram_WithACallWithoutTheLine_KeepsItsBlocksAsRaw()
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\nM98 P100\nG80\nM98 P100\n"
+            + "G80\nM30\nO0100\nG84 G99 Z-20. R5. F750\nM99\n%\n");
         Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", NcxWriter.Write(program), StringComparison.Ordinal);
-        Assert.Contains("the reader does not see which block runs before this one",
-            program.Diagnostics.ToText(), StringComparison.Ordinal);
+        Assert.Contains("one path reaches", program.Diagnostics.ToText(), StringComparison.Ordinal);
     }
 
     // D256: the S of the before line is the speed the tapping runs at, so a speed other than the running one is RPM.

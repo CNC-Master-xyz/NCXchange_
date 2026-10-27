@@ -107,7 +107,7 @@ internal static class FanucCycles
             // against the G87 entry under AXIS=X (machine-config 6, for_axis).
             CycleEntry? defined = name == "OFF"
                 ? null
-                : write.Machine.CycleCatalog.Find(name, write.After.Cycle.Axis);
+                : CatalogOf(write).Find(name, write.After.Cycle.Axis);
             CheckCarried(write, defined);
             if (name == "OFF" && write.Target.ActiveOf(FanucCodes.Cycle) != "G80")
             {
@@ -158,6 +158,16 @@ internal static class FanucCycles
                     + "(machine-config 6; controller-mapping 5; language 2 rule 8).");
             }
         }
+    }
+
+    // D361, D377: the catalog of the channel compiled, the [[cycle]] tables of the machine file that name it over the
+    // channel-less entries (CycleCatalog.ForChannel), so that the rigid-tapping line WriteBefore writes is the line of
+    // that channel; a Fanuc-family machine that names no rigid-tapping code keeps the catalog's M29 S{rpm}, the Fanuc
+    // standard (parameter 5210 = 0). A cycle available = false on the channel is CMP004 of the compiler framework.
+    private static CycleCatalog CatalogOf(FanucBlock write)
+    {
+        CycleCatalog catalog = write.Machine.CycleCatalog;
+        return catalog.ChannelEntries.Count == 0 ? catalog : catalog.ForChannel(write.After.ChannelId);
     }
 
     // Whether a word's value is the number 0 (D362).
@@ -241,7 +251,7 @@ internal static class FanucCycles
         // D160: the compiler looks an entry up by its name together with the drilling axis, so that a lathe takes
         // the G87 entry under AXIS=X and the G83 entry under AXIS=Z (machine-config 6, for_axis).
         CycleEntry? entry = cycle.Controller is null
-            ? write.Machine.CycleCatalog.Find(name, cycle.Axis)
+            ? CatalogOf(write).Find(name, cycle.Axis)
             : null;
         // D144: n of CYCLE:FANUC=n is the native cycle as the family's catalog writes it (G71, "G83.5"), so the
         // block carries it as written; every native parameter follows as its address with its value in source order.
@@ -272,6 +282,7 @@ internal static class FanucCycles
             FanucMotion.Change(write, FanucCodes.Distance, "G90");
         }
 
+        EndAnotherTappingRun(write, entry, code);
         if (entry is not null && !WriteBefore(write, entry, code))
         {
             return;
@@ -342,6 +353,26 @@ internal static class FanucCycles
 
         write.Write(text);
         return true;
+    }
+
+    // D359: TAP and TAP_COMPENSATING share G84 and differ by the before line, so a run of the one does not continue
+    // into the other: G80 ends the run first, since the rigid mode the line set holds for the run (D256) and an M29
+    // inside a running tapping cycle alarms PS0204.
+    private static void EndAnotherTappingRun(FanucBlock write, CycleEntry? entry, string code)
+    {
+        if (entry is null || write.Target.ActiveOf(FanucCodes.Cycle) != code
+            || write.Target.ActiveOf(Definition) is not string active
+            || active.StartsWith(entry.Name + " ", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        string activeName = active.Substring(0, active.IndexOf(' ', StringComparison.Ordinal));
+        CycleEntry? previous = CatalogOf(write).Find(activeName, write.After.Cycle.Axis);
+        if (!string.IsNullOrEmpty(entry.Before) || !string.IsNullOrEmpty(previous?.Before))
+        {
+            Cancel(write);
+        }
     }
 
     // The native code of a catalog entry for the machine (machine-config 6): on a mill the drilling entries along the

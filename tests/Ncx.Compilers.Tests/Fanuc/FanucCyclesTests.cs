@@ -9,6 +9,9 @@ namespace Ncx.Compilers.Tests.Fanuc;
 /// </summary>
 public sealed class FanucCyclesTests
 {
+    // The cycle catalog of the Fanuc mills, which carries TAP_COMPENSATING (D359) beside the built-in family.
+    private const string MillCatalog = "[cycles]\ncatalog = \"fanuc.toml\"";
+
     // The drilling of BOHREN.fanuc.nc: tool, spindle, the position and the approach before the cycle.
     private const string Approach = "TOOL=1\nSPINDLE=CW RPM=1000\nRAPID X=10 Y=10\nRAPID Z=5";
 
@@ -97,6 +100,58 @@ public sealed class FanucCyclesTests
 
         Assert.EndsWith("M29 S500\nG84 G99 Z-20. R5. F750.\nG84 G99 Z-25. R5.\nG80\n", body,
             StringComparison.Ordinal);
+    }
+
+    // D361, D377: the rigid-tapping line is the machine's, and a [[cycle]] table that names the compiled channel
+    // overrides the channel-less entry for that channel.
+    [Fact]
+    public void Tap_WithATableOfTheCompiledChannel_WritesThatChannelsLine()
+    {
+        string body = FanucCompile.Body("TOOL=1\nSPINDLE=CW RPM=500\nRAPID X=10 Y=10\nRAPID Z=5"
+            + "\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL",
+            "[[cycle]]\nname = \"TAP\"\nchannel = 1\nnative = \"G84\"\nmodal = true\nbefore = \"M329 S{rpm}\"");
+
+        Assert.EndsWith("M329 S500\nG84 G99 Z-20. R5. F750.\n", body, StringComparison.Ordinal);
+    }
+
+    // D359: TAP_COMPENSATING, the floating tap, is G84 without the rigid-tapping line.
+    [Fact]
+    public void TapCompensating_IsG84WithoutTheRigidTappingLine()
+    {
+        string body = FanucCompile.Body("TOOL=1\nSPINDLE=CW RPM=500\nRAPID X=10 Y=10\nRAPID Z=5"
+            + "\nCYCLE=TAP_COMPENSATING CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL", MillCatalog);
+
+        Assert.EndsWith("Z5.\nG84 G99 Z-20. R5. F750.\n", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("M29", body, StringComparison.Ordinal);
+    }
+
+    // D359: where the machine's TAP sets before = "", its G84 is always rigid and TAP_COMPENSATING is not in its
+    // catalog: CMP380.
+    [Fact]
+    public void TapCompensating_OnAMachineWhoseG84IsAlwaysRigid_IsTheErrorCmp380()
+    {
+        CompileResult result = FanucCompile.Run(FanucCompile.Program(("TOOL=1\nSPINDLE=CW RPM=500\nRAPID Z=5"
+            + "\nCYCLE=TAP_COMPENSATING CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL").Split('\n')),
+            FanucCompile.Mill(extra: MillCatalog
+                + "\n\n[[cycle]]\nname = \"TAP\"\nnative = \"G84\"\nmodal = true\nbefore = \"\""));
+
+        Assert.Contains(FanucCompile.CompilerDiagnostics(result),
+            diagnostic => diagnostic.Code == DiagnosticCodes.FanucCycleNotInCatalog);
+    }
+
+    // D359, D256: a TAP_COMPENSATING after a TAP run on the same G84 ends the rigid mode with G80 first, and a TAP
+    // after a TAP_COMPENSATING run writes its line only after G80, since an M29 inside a running tapping cycle
+    // alarms PS0204.
+    [Fact]
+    public void TapAndTapCompensating_OnOneG84_EndTheRunWithG80BetweenThem()
+    {
+        string body = FanucCompile.Body("TOOL=1\nSPINDLE=CW RPM=500\nRAPID X=10 Y=10\nRAPID Z=5"
+            + "\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL"
+            + "\nCYCLE=TAP_COMPENSATING CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL X=20"
+            + "\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL X=30", MillCatalog);
+
+        Assert.EndsWith("M29 S500\nG84 G99 Z-20. R5. F750.\nG80\nG84 G99 X20. Z-20. R5.\nG80\nM29 S500\n"
+            + "G84 G99 X30. Z-20. R5.\n", body, StringComparison.Ordinal);
     }
 
     // Language 4.7 CYCLE_DWELL (seconds), controllers fanuc.md 6 (P in milliseconds) and 7: an expression dwell is P

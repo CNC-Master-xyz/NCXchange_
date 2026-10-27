@@ -103,6 +103,12 @@ internal sealed class FanucState
     public Dictionary<int, string> BeforeLineSpindle { get; } = [];
 
     /// <summary>
+    /// The lines of the cycle blocks that one path of the flow reaches with the "before" line and another without
+    /// it, so that the blocks stay RAW (D360; FanucBeforeLineWalk). Each is in BeforeLineUnseen as well.
+    /// </summary>
+    public HashSet<int> BeforeLineNotOnEveryPath { get; } = [];
+
+    /// <summary>
     /// The lines of the drilling cycle blocks with a group-01 code, which the reader keeps RAW and after which it
     /// writes CYCLE=OFF, since the control cancels the cycle as G80 does (D386; FanucCycles.Read).
     /// </summary>

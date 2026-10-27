@@ -629,7 +629,16 @@ internal static class FanucCycles
         string? problem = matched is null || string.IsNullOrEmpty(matched.Before) || before
             ? null
             : WithoutItsBeforeLine(block, matched);
-        if (problem is not null)
+        if (problem is not null && LineSurelyAbsent(block)
+            && catalog.FindNativeByBeforeLine(code, lineReaches: false) is CycleEntry withoutLine
+            && catalog.Find(withoutLine.Name, axis) is not null)
+        {
+            // D359: a G84 the line reaches in none of D256's three ways is the floating tap, the entry of its native
+            // with no before key, TAP_COMPENSATING (an amendment of D160, machine-config 6).
+            matched = withoutLine;
+            problem = null;
+        }
+        else if (problem is not null)
         {
             matched = null;
         }
@@ -701,22 +710,13 @@ internal static class FanucCycles
 
     // Why a cycle block whose code the catalog maps is not read as the entry's cycle, although the entry carries a
     // "before" line, the native line of the machining itself (machine-config 6; controllers fanuc.md 6; D256).
-    // Where the reader sees the block that runs before the cycle block and the line stands in neither of the places
+    // Where the reader sees the block that runs before the cycle block and the line stands in none of the places
     // D256 names, the source programmed the other machining, which Fanuc states apart as a fact of the control: a
     // G84 with M29 S in front of it taps rigidly, and "G84(G88) cycle that don't use the M29 code will be activated
-    // with normal tapping", tapping with a compensating chuck (D256, the ANSWER and its evidence). The catalog of the
-    // family has no entry for that other machining, so the blocks of the cycle stay RAW with the reason (D5,
-    // controller-mapping 9): the Fanuc text round-trips as the source wrote it, and no compiler writes the entry's
-    // "before" line in front of it.
-    // TODO(question): which NCX cycle the other machining is has no answer yet; D256 names TAP_COMPENSATING "once the
-    // Fanuc catalog has that entry (D162)", and D162 is open, so until it is answered the reader names no cycle and
-    // keeps the blocks as RAW rather than reading a machining the source did not program (wave-3 question #193).
-    // TODO(question): where a block that runs before the cycle block, back to the place of the line, is none the
-    // reader sees - a cycle block that begins a section a block of the file calls, or one a jump enters, or a call
-    // between the line and the cycle block - the reader can say neither that the line stands in front of it nor that
-    // the source programmed the other machining, since a call may stand between the two. It keeps the blocks of the
-    // cycle as RAW with that reason, the least it can defend, until the answer says what such a cycle reads as
-    // (wave-3 question #195).
+    // with normal tapping", tapping with a compensating chuck. D359 names it TAP_COMPENSATING, the entry of the same
+    // native with no before key, which Start then reads (LineSurelyAbsent). Where the reader cannot tell - a block
+    // it does not see past, a line block kept RAW, a cancel or a spindle code at the line, or a flow that reaches the
+    // block with the line on one path and without it on another (D360) - the blocks stay RAW with the reason (D5).
     private static string? WithoutItsBeforeLine(FanucBlock block, CycleEntry entry)
     {
         if (block.Fanuc.BeforeLineWithACancel.Contains(block.Line))
@@ -745,6 +745,14 @@ internal static class FanucCycles
                 + "not read into the cycle (machine-config 6, D256, D5); its blocks stay RAW";
         }
 
+        if (block.Fanuc.BeforeLineNotOnEveryPath.Contains(block.Line))
+        {
+            // D360: one path reaches the cycle block without the line.
+            return $"one path reaches {entry.Native} with the line \"{entry.Before}\" of the cycle {entry.Name} and "
+                + "one path reaches it without the line, so the mode is not in force on every path (machine-config 6, "
+                + "D256, D360); its blocks stay RAW";
+        }
+
         if (!SeesWhatRunsBefore(block))
         {
             return $"the reader does not see which block runs before this one, or what a block between it and the "
@@ -757,6 +765,18 @@ internal static class FanucCycles
             + "the catalog but another machining, which NCX cannot name (machine-config 6, D256); its blocks stay RAW";
     }
 
+    // Whether the reader sees that the "before" line reaches the cycle block in none of D256's ways, so that the block
+    // is the machining without the line (D359): it sees what runs before it, and no RAW line block, cancel or
+    // spindle code stands at the place of the line.
+    private static bool LineSurelyAbsent(FanucBlock block)
+    {
+        FanucState fanuc = block.Fanuc;
+        return SeesWhatRunsBefore(block) && !fanuc.BeforeLineWithACancel.Contains(block.Line)
+            && !fanuc.BeforeLineSpindle.ContainsKey(block.Line)
+            && !(fanuc.BeforeLinesOf.TryGetValue(block.Line, out List<int>? lines)
+                && lines.Exists(fanuc.BeforeLineRaw.Contains));
+    }
+
     // Whether the reader sees the blocks that run before a cycle block back to the place of its "before" line: the
     // blocks in front of it in the file run before it, unless a jump enters the cycle block, or the walk back of
     // FanucReader.MarkBeforeLines ended at a block it does not see past - the head of a section a block of the file
@@ -764,13 +784,9 @@ internal static class FanucCycles
     // first block of the file, which the reader sees as well.
     private static bool SeesWhatRunsBefore(FanucBlock block)
     {
-        FanucState fanuc = block.Fanuc;
-        if (block.Source.Find("N") is SourceWord label && fanuc.JumpTargets.Contains(FanucState.LabelOf(label)))
-        {
-            return false;
-        }
-
-        return !fanuc.BeforeLineUnseen.Contains(block.Line);
+        // D360: a jump into the cycle block is decided from the flow (FanucBeforeLineWalk), which leaves the block in
+        // BeforeLineUnseen where it cannot decide.
+        return !block.Fanuc.BeforeLineUnseen.Contains(block.Line);
     }
 
     // The entry of a native cycle that stays active after its block, as the drilling cycles and the simple turning
