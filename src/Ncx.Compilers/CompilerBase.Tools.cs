@@ -51,15 +51,43 @@ public abstract partial class CompilerBase
         // for every other change (machine-config 3, virtual machine 3.5).
         bool wasPreloaded = step.Before.Holders.TryGetValue(holder, out HolderSnapshot? before)
             && before.Preloaded == after.SpindleTool;
+        // D172: a tool called by name, the TOOL value or the preloaded tool of a bare TOOL, takes change_named; change
+        // stays numeric.
         bool asPreloaded = wasPreloaded && config?.ChangePreloaded is not null;
-        string? text = asPreloaded ? config?.ChangePreloaded : config?.Change;
+        bool named = !asPreloaded && after.SpindleTool.Name is not null && config?.ChangeNamed is not null;
+        if (!asPreloaded && NamedTemplateMissing(after.SpindleTool, config?.ChangeNamed, "change_named"))
+        {
+            return;
+        }
+
+        string? text = asPreloaded ? config?.ChangePreloaded : named ? config?.ChangeNamed : config?.Change;
         if (TemplateOf(text) is Template template)
         {
             FillToolValues(filled, template, step, holder, after);
         }
 
-        string what = asPreloaded ? "[tool_change] change_preloaded" : "[tool_change] change";
+        string what = asPreloaded ? "[tool_change] change_preloaded"
+            : named ? "[tool_change] change_named" : "[tool_change] change";
         WriteTemplate(text, what + " (machine-config 3)", filled, suffix);
+    }
+
+    // D172: a tool called by name on a machine with tool_name_allowed = true needs the named template; without it the
+    // block is the ERROR CMP008 and nothing is written for it. A machine that takes no names keeps its numeric
+    // template, whose {tool} has no value to write.
+    private bool NamedTemplateMissing(ToolRef tool, string? namedTemplate, string key)
+    {
+        if (tool.Name is not string name
+            || namedTemplate is not null
+            || Machine.ToolChange is not { ToolNameAllowed: true })
+        {
+            return false;
+        }
+
+        Diagnostics.Error(Step.Block, DiagnosticCodes.NamedToolTemplateMissing,
+            $"The tool \"{name}\" is called by name, and the machine \"{Machine.Machine.Name}\" takes tool names "
+            + $"(tool_name_allowed = true) but has no [tool_change] {key} to write it, so nothing is written for it "
+            + "(machine-config 3, D172).");
+        return true;
     }
 
     /// <summary>
@@ -137,13 +165,19 @@ public abstract partial class CompilerBase
     }
 
     // PRELOAD=n writes the preload template; on a machine without one PRELOAD is dropped with a WARNING
-    // (machine-config 3).
-    // TODO(question): D150: machine-config defines {tool} as the tool in the spindle after the block and {next} as
-    // the preloaded next tool, while its preload templates write {tool} and those of the Nakamura {next}; both carry
-    // the tool the block preloads, as D150 recommends, until it is answered.
+    // (machine-config 3). D150: in the preload template {tool} and {next} both mean the n of PRELOAD=n (machine-config
+    // introduction); {next} is the preferred spelling in new files.
     private void WritePreloadOf(ToolRef tool, TemplateValues? values)
     {
-        if (Machine.ToolChange?.Preload is not string text)
+        ToolChangeConfig? config = Machine.ToolChange;
+        if (NamedTemplateMissing(tool, config?.PreloadNamed, "preload_named"))
+        {
+            return;
+        }
+
+        // D172: a tool called by name takes preload_named; preload stays numeric.
+        bool named = tool.Name is not null && config?.PreloadNamed is not null;
+        if ((named ? config?.PreloadNamed : config?.Preload) is not string text)
         {
             Diagnostics.Warning(Step.Block, DiagnosticCodes.PreloadDropped,
                 $"PRELOAD={tool} is dropped: the machine \"{Machine.Machine.Name}\" has no [tool_change] preload, so "
@@ -159,7 +193,8 @@ public abstract partial class CompilerBase
             filled.Set("name", name);
         }
 
-        WriteTemplate(text, "[tool_change] preload (machine-config 3)", filled);
+        WriteTemplate(text, named ? "[tool_change] preload_named (machine-config 3)"
+            : "[tool_change] preload (machine-config 3)", filled);
     }
 
     // The placeholders of a change command that the virtual machine and the look-ahead give (machine-config
@@ -210,9 +245,10 @@ public abstract partial class CompilerBase
     // {next} of a change command (machine-config 3, D52): a PRELOAD that follows the TOOL block before the next motion,
     // in the same program, is folded into the command and not written again; with auto_preload, in a program without
     // PRELOAD words, the next tool of the program from the STATIC look-ahead; otherwise the preloaded next tool
-    // (machine-config introduction).
-    // TODO(question): with auto_preload the last change of a program has no next tool, and no document gives its
-    // {next}; it is 0, the PRELOAD=0 that clears a pending preload (language 4.4), until that is answered.
+    // (machine-config introduction). D267 (a): at the last change {next} takes the program's first tool, the builder's
+    // own example (G340 T0303. A01.); a change with no preload pending outside auto_preload fills {next} the same way,
+    // the next tool changed in, else the first tool. Where that is the tool being changed in, the number is written all
+    // the same with the WARNING CMP006; never 0. Only where the look-ahead knows no tool at all {next} stays empty.
     private ToolRef? NextOf(BlockStep step, string holder, HolderSnapshot after)
     {
         if (LookAhead.FollowingPreload(step, holder) is BlockStep following
@@ -222,12 +258,21 @@ public abstract partial class CompilerBase
             return folded;
         }
 
-        if (Machine.ToolChange is { AutoPreload: true } && !LookAhead.ProgramHasPreload(step))
+        bool auto = Machine.ToolChange is { AutoPreload: true } && !LookAhead.ProgramHasPreload(step);
+        if (!auto && after.Preloaded is ToolRef preloaded)
         {
-            return LookAhead.NextTool(step, holder) ?? s_emptySpindle;
+            return preloaded;
         }
 
-        return after.Preloaded;
+        ToolRef? next = LookAhead.NextTool(step, holder) ?? LookAhead.FirstTool(step, holder);
+        if (next is ToolRef same && same == after.SpindleTool)
+        {
+            Diagnostics.Warning(step.Block, DiagnosticCodes.NoOtherToolToPrepare,
+                $"{{next}} of the tool change to {same} has no other tool to prepare: the program changes in no other "
+                + "tool, so the change prepares the tool it changes in (machine-config 3, D267).");
+        }
+
+        return next;
     }
 
     // {kind}: the kind of the tool from the tool table, mapped per machine by kind_map; without the table, or for a
@@ -275,10 +320,8 @@ public abstract partial class CompilerBase
         return Machine.ResolveAxis(toolAxis)?.Letter ?? toolAxis;
     }
 
-    // A tool by number is the number of its placeholder; a tool by name has no number to write.
-    // TODO(question): D172: a template with {tool} or {next} for a tool a program calls by name has no value to write;
-    // the placeholder stays without one, which leaves the template unusable (machine-config introduction), until it is
-    // answered.
+    // A tool by number is the number of its placeholder; a tool by name has no number to write, and writes through
+    // change_named and preload_named with {name} (D172).
     private static void SetTool(TemplateValues values, string name, ToolRef tool)
     {
         if (tool.Number is int number && !values.Has(name))

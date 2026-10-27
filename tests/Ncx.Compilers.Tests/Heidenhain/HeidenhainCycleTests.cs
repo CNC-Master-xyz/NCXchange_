@@ -1,3 +1,6 @@
+using Ncx.Core.Machine;
+using Ncx.Core.Model;
+
 namespace Ncx.Compilers.Tests.Heidenhain;
 
 /// <summary>
@@ -52,8 +55,9 @@ public sealed class HeidenhainCycleTests
             HeidenhainCompile.Body(result), StringComparison.Ordinal);
     }
 
-    // Controller-mapping 5, PECK: cycle 203 with Q213=0, which retracts fully after every infeed (D163); the
-    // TODO(question) D164 of HeidenhainCycleValues: Q205 equal to Q202, Q208=MAX, Q256 0.6, Q210 and Q212 zero.
+    // Controller-mapping 5, PECK: cycle 203 with Q213=0, which retracts fully after every infeed (D163); D164: Q205
+    // equal to Q202 by rule, Q208=MAX, Q210 and Q212 zero from the catalog's defaults; D358: Q256 from the machine's
+    // [cycles] chip_break_lift = 0.6.
     [Fact]
     public void Rule7_Peck_IsCycle203WithQ213Zero()
     {
@@ -79,7 +83,7 @@ public sealed class HeidenhainCycleTests
     }
 
     // Controller-mapping 5, TAP: cycle 207 with the pitch Q239; its signature has no Q206 and no Q211, so CYCLE_F is
-    // not written, with the WARNING CMP105 (machine-config 6).
+    // not written, with the WARNING CMP105, since the cycle takes the feed from the pitch (D362).
     [Fact]
     public void Rule7_Tap_IsCycle207AndItsFeedIsNotWrittenWithAWarning()
     {
@@ -93,7 +97,7 @@ public sealed class HeidenhainCycleTests
         Assert.Equal(6, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainCycleWordNotWritten).Line);
     }
 
-    // Controller-mapping 5, REAM; the TODO(question) D164 of HeidenhainCycleValues: Q208 of cycle 201 equals Q206.
+    // Controller-mapping 5, REAM; D164: Q208 of cycle 201 equals Q206.
     [Fact]
     public void Rule7_Ream_IsCycle201WithTheRetractionFeedOfThePlungeFeed()
     {
@@ -118,6 +122,129 @@ public sealed class HeidenhainCycleTests
         var reported = HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainCycleParameterWithoutValue);
         Assert.Equal(6, reported.Line);
         Assert.Contains("Q208 of cycle 202", reported.Message, StringComparison.Ordinal);
+    }
+
+    // D362: CYCLE_DWELL=0 is the behaviour cycle 207 has anyway and is dropped silently, beside the CMP105 of CYCLE_F.
+    [Fact]
+    public void D362_TapWithZeroDwell_DropsTheDwellSilently()
+    {
+        CompileResult result = Run(
+            "CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE CYCLE_F=750 CYCLE_DWELL=0 PITCH=1.5");
+
+        Assert.NotEmpty(result.Files);
+        Assert.Equal([DiagnosticCodes.HeidenhainCycleWordNotWritten], Codes(result));
+    }
+
+    // D362: a dwell cycle 207 cannot write is lost, the ERROR CMP122 at the CYCLE block.
+    [Fact]
+    public void D362_TapWithADwell_IsTheErrorCmp122()
+    {
+        CompileResult result = Run(
+            "CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE CYCLE_DWELL=0.5 PITCH=1.5");
+
+        Assert.Empty(result.Files);
+        Assert.Equal(6, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainCycleWordLost).Line);
+    }
+
+    // D358: Q256 is the machine's [cycles] chip_break_lift.
+    [Fact]
+    public void D358_Q256_IsTheChipBreakLiftOfTheMachine()
+    {
+        MachineConfig machine = HeidenhainCompile.MillWith("chip_break_lift = 0.6", "chip_break_lift = 0.4");
+
+        CompileResult result = HeidenhainCompile.Run(Program(
+            "CYCLE=CHIP_BREAK SURFACE=0 CLEARANCE=5 DEPTH=-21.732 CYCLE_RETRACT=CLEARANCE PECK=1.2 CYCLE_F=565"),
+            machine);
+
+        Assert.EndsWith("    Q256=+0,4", HeidenhainCompile.Body(result), StringComparison.Ordinal);
+        Assert.Empty(Codes(result));
+    }
+
+    // D358: a chip_break_lift below the 0.1 the iTNC 530 accepts writes 0.1 with the WARNING CMP121.
+    [Fact]
+    public void D358_ChipBreakLiftBelowTheRange_WritesTheLeastValueWithCmp121()
+    {
+        MachineConfig machine = HeidenhainCompile.MillWith("chip_break_lift = 0.6", "chip_break_lift = 0.05");
+
+        CompileResult result = HeidenhainCompile.Run(Program(
+            "CYCLE=CHIP_BREAK SURFACE=0 CLEARANCE=5 DEPTH=-21.732 CYCLE_RETRACT=CLEARANCE PECK=1.2 CYCLE_F=565"),
+            machine);
+
+        Assert.EndsWith("    Q256=+0,1", HeidenhainCompile.Body(result), StringComparison.Ordinal);
+        Assert.Equal(6, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainChipBreakLiftOutOfRange).Line);
+    }
+
+    // D358: in an INCH program Q256 is chip_break_lift / 25.4, rounded to the four decimals of Q256.
+    [Fact]
+    public void D358_Q256InAnInchProgram_IsTheLiftInInches()
+    {
+        string program = Program(
+            "CYCLE=CHIP_BREAK SURFACE=0 CLEARANCE=0.2 DEPTH=-0.8 CYCLE_RETRACT=CLEARANCE PECK=0.05 CYCLE_F=20")
+            .Replace("UNITS=MM", "UNITS=INCH", StringComparison.Ordinal);
+
+        Assert.EndsWith("    Q256=+0,0236", HeidenhainCompile.Body(HeidenhainCompile.Run(program)),
+            StringComparison.Ordinal);
+    }
+
+    // D157, D362: AXIS is a rule word only of an entry that maps DEPTH; BACK_BORE (cycle 204) maps none, so an AXIS
+    // on it would be lost, the ERROR CMP122.
+    [Fact]
+    public void D362_AxisOnAnEntryWithoutDepth_IsTheErrorCmp122()
+    {
+        CompileResult result = Run("CYCLE=BACK_BORE SURFACE=0 CLEARANCE=5 SAFE=50 CYCLE_RETRACT=SAFE AXIS=Z");
+
+        Assert.Empty(result.Files);
+        Assert.Contains("AXIS", HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainCycleWordLost).Message,
+            StringComparison.Ordinal);
+    }
+
+    // D164: a position no word carries takes the defaults of the catalog entry, which a machine file may override.
+    [Fact]
+    public void D164_DefaultsOfTheEntry_FillThePositionNoWordCarries()
+    {
+        MachineConfig machine = HeidenhainCompile.MillAnd(
+            "[[cycle]]\nname = \"DRILL\"\nnative = 200\ndefaults = { Q210 = 1.5 }\n");
+
+        CompileResult result = HeidenhainCompile.Run(Program(
+            "CYCLE=DRILL SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE CYCLE_F=100"), machine);
+
+        Assert.Contains("    Q210=+1,5 ~\n", HeidenhainCompile.Body(result), StringComparison.Ordinal);
+    }
+
+    // D270: CYCL DEF n takes the title of the catalog entry.
+    [Fact]
+    public void D270_CyclDef_TakesTheTitleOfTheEntry()
+    {
+        MachineConfig machine = HeidenhainCompile.MillAnd(
+            "[[cycle]]\nname = \"DRILL\"\nnative = 200\ntitle = \"DRILLING\"\n");
+
+        CompileResult result = HeidenhainCompile.Run(Program(
+            "CYCLE=DRILL SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=CLEARANCE CYCLE_F=100"), machine);
+
+        Assert.Contains("CYCL DEF 200 DRILLING ~\n", HeidenhainCompile.Body(result), StringComparison.Ordinal);
+    }
+
+    // D157: CYCLE_RETRACT=SAFE with SAFE at or below CLEARANCE is the WARNING CMP140, since Q204 acts only above Q200.
+    [Fact]
+    public void D157_SafeNotAboveClearance_IsTheWarningCmp140()
+    {
+        CompileResult result = Run(
+            "CYCLE=DRILL SURFACE=0 CLEARANCE=5 DEPTH=-20 SAFE=3 CYCLE_RETRACT=SAFE CYCLE_F=100");
+
+        Assert.Contains("    Q204=+3 ~\n", HeidenhainCompile.Body(result), StringComparison.Ordinal);
+        Assert.Equal(6, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainSafeNotAboveClearance).Line);
+    }
+
+    // D188: CYCLE_RETRACT=SAFE without SAFE leaves Q204 without a value, the ERROR CMP104 of the compiler.
+    [Fact]
+    public void D188_CycleRetractSafeWithoutSafe_IsTheErrorCmp104()
+    {
+        CompileResult result = Run("CYCLE=DRILL SURFACE=0 CLEARANCE=5 DEPTH=-20 CYCLE_RETRACT=SAFE CYCLE_F=100");
+
+        Assert.Empty(result.Files);
+        var reported = HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainCycleParameterWithoutValue);
+        Assert.Contains("Q204", reported.Message, StringComparison.Ordinal);
+        Assert.Contains("D188", reported.Message, StringComparison.Ordinal);
     }
 
     // Controllers heidenhain.md 8 rule 7, heidenhain 5: Q203 is the surface every plane is relative to, so a cycle
@@ -157,6 +284,16 @@ public sealed class HeidenhainCycleTests
             StringComparison.Ordinal);
     }
 
+    // D338: a formula in a Q parameter of a native cycle is spilled into a QL parameter before the CYCL DEF.
+    [Fact]
+    public void Rule7_NativeCycleWithAFormula_SpillsItIntoAQlParameter()
+    {
+        CompileResult result = Run("CYCLE:HEIDENHAIN=251 Q218={$Q1 * 2} Q215=0 Q219=40");
+
+        Assert.EndsWith("QL499 = Q1 * 2\nCYCL DEF 251 ~\n    Q218=+QL499 ~\n    Q215=+0 ~\n    Q219=+40",
+            HeidenhainCompile.Body(result), StringComparison.Ordinal);
+    }
+
     // Controller-mapping 1, DWELL: cycle 9 with the seconds.
     [Fact]
     public void Dwell_IsCycle9WithTheSeconds()
@@ -168,8 +305,24 @@ public sealed class HeidenhainCycleTests
 
     private static CompileResult Run(params string[] blocks)
     {
+        return HeidenhainCompile.Run(Program(blocks));
+    }
+
+    private static string Program(params string[] blocks)
+    {
         var lines = new List<string> { "TOOL=1 RPM=1000", "RAPID X=10 Y=10 Z=5" };
         lines.AddRange(blocks);
-        return HeidenhainCompile.Run(HeidenhainCompile.Program(lines.ToArray()));
+        return HeidenhainCompile.Program(lines.ToArray());
+    }
+
+    private static List<string> Codes(CompileResult result)
+    {
+        var codes = new List<string>();
+        foreach (Diagnostic diagnostic in result.Diagnostics.Items)
+        {
+            codes.Add(diagnostic.Code);
+        }
+
+        return codes;
     }
 }

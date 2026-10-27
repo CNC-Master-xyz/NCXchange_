@@ -27,10 +27,11 @@ internal sealed class HeidenhainCalls
     }
 
     // A subprogram runs with the state of its caller at the CALL (virtual machine 3.9), and a reader reads it once.
-    // TODO(question): the documents do not say how a reader reads a block of a subprogram whose meaning depends on its
-    // caller (the pole of a C, the cycle an M99 calls, the plane of an arc) where the callers leave different states;
-    // P3-02 asks the same for Fanuc. The reader takes what every call agrees on, fact by fact; a fact the calls do not
-    // agree on is unknown, and a block that depends on it stays RAW, until D225 is answered.
+    // D225: a subprogram starts from the facts every call agrees on, fact by fact, TIMES passes included (the pole of a
+    // C, the cycle an M99 calls, the plane of an arc). A fact is unknown when calls disagree, when a call is not
+    // reached yet or when nothing calls the subprogram; a block that depends on an unknown fact stays RAW with its
+    // WARNING (D5), and after the call the caller continues with what the subprogram may change unknown (decisions.md;
+    // virtual machine 3.9).
 
     /// <summary>
     /// Starts the facts of a subprogram section from what every call of it agrees on.

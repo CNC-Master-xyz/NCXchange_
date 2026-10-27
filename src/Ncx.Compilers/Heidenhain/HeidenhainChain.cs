@@ -43,10 +43,11 @@ internal static class HeidenhainChain
             HeidenhainSetpos.CheckRemoved(writing, change);
         }
 
-        // TODO(question): D253: whether cycle 247 ends an active cycle 7, 8, 10 or tilted plane on the control is
-        // open; the compiler cancels every entry that ORIGIN removes from the chain before cycle 247, and the cycle 7
-        // of the setpos shifts that ORIGIN clears (virtual machine 3.4), which holds whichever the answer. The chain
-        // is unwound from the end, the cycle 7 of a SETPOS where it stands among the entries (D31).
+        // D253 (d): the TNC 640 resets shift, mirror, rotation and scaling at cycle 247, the iTNC 530 manual names the
+        // datum shift (iTNC 530 Zyklen p.286; TNC 640 Bedienung 1261174-11 p.208); the compiler cancels every entry
+        // that ORIGIN removes from the chain before cycle 247, which holds on both controls, and the cycle 7 of the
+        // setpos shifts that ORIGIN clears (virtual machine 3.4). The chain is unwound from the end, the cycle 7 of a
+        // SETPOS where it stands among the entries (D31).
         int? setposPlace = origin ? HeidenhainSetpos.PlaceBefore(writing) : null;
         int index = writing.Before.Frame.Chain.Count;
         foreach (TransformEntry removed in change.Removed)

@@ -30,7 +30,28 @@ internal static class HeidenhainFrames
         WriteMode(writing, "ROTARY_FEED", "MM_MIN", transform?.RotaryFeedMmMin, "M116", transform?.RotaryFeedDegMin,
             "M117");
         WriteTolerance(writing);
+        WritePathMode(writing, transform);
         RefuseCylinder(writing);
+    }
+
+    // PATH_MODE after the tolerance words through [transform] (D349); Klartext has no modal switch, so the shipped
+    // file leaves both templates empty, and an empty or missing one is the WARNING CMP120.
+    private static void WritePathMode(HeidenhainBlock writing, TransformTable? transform)
+    {
+        if (writing.Take("PATH_MODE") is not Word word)
+        {
+            return;
+        }
+
+        string? template = PathModeTemplate.Of(transform, writing.After.Frame);
+        if (string.IsNullOrEmpty(template))
+        {
+            writing.Warning(DiagnosticCodes.HeidenhainPathModeNotWritten,
+                PathModeTemplate.NotWritten(word.ToCanonical(), writing.After.Frame));
+            return;
+        }
+
+        writing.Template(template, "[transform] PATH_MODE (machine-config 5, D349)", new TemplateValues());
     }
 
     // CYLINDER maps to cycle 27, ZYLINDER-MANTEL (controller-mapping 1, CYLINDER): an SL cycle whose contour stands in
@@ -215,10 +236,10 @@ internal static class HeidenhainFrames
             values.Set("rotary", rotary);
         }
 
-        bool rotaryTemplate = state.Rotary is not null && table?.OnRotary is not null;
-        string what = rotaryTemplate
-            ? "[tolerance] ON_ROTARY (machine-config 5, D151)"
-            : "[tolerance] ON (machine-config 5, D85)";
-        writing.Template(rotaryTemplate ? table?.OnRotary : table?.On, what, values);
+        writing.Template(ToleranceTemplate.On(table, state), ToleranceTemplate.What(table, state), values);
+        if (ToleranceTemplate.Comment(table, state) is string comment)
+        {
+            writing.Line(HeidenhainProgramFrame.CommentLine(writing.CommentText(comment)));
+        }
     }
 }

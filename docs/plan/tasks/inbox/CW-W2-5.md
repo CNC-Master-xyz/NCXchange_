@@ -67,8 +67,6 @@ Left over / for other owners:
 - D338: SETPOS formulas are not spilled yet (a later SETPOS rewrites every standing shift, so the register would have
   to stay reserved while the shift stands); they stay CMP102 with a plain TODO. F and S formulas keep the
   `HeidenhainParameters` marker.
-- D266: the framework's file name (`CompilerBase.Layout.FileNameOf`, W2-1) still compares names ordinally; W2-1 makes
-  it case-insensitive (CMP005), after which file name and BEGIN PGM agree.
 - W1-F gap note (BLK FORM signs, `X+0 Y+0 Z-40`): the `[stock]` hook is W2-1's; not touched here.
 
 Review fixes (2026-10-27, one commit):
@@ -84,3 +82,11 @@ Review fixes (2026-10-27, one commit):
   CALL PGM is not CMP125, QL being program-local.
 - controller-mapping 6 (REPEAT, CALL + ARG), heidenhain 7 rule 3 (the D272 jump reads back as JUMP plus LABEL), the
   Heidenhain README, 03 row 234 moved after 233, the STRCOMP case-sensitivity note.
+
+Merge of main (W2-1, W2-6), 2026-10-27: BEGIN/END PGM take W2-1's `writing.ProgramName` (one naming rule, CMP005);
+the own name calculation of `HeidenhainProgramFrame` is dropped and CMP127 is checked on the final name. Kept both
+sides in `HeidenhainFrames.cs` (PATH_MODE of W2-1, CYLINDER refusal), `DiagnosticCodes.Heidenhain.cs` (CMP120-123,
+CMP125-130, CMP140), heidenhain 7 and 8 (W2-6's rules with the D266, D269, D272, D274, D320, D338, D169 sentences;
+the CALL PGM option struck), controller-mapping 6 (W2-6's reader notes with the D149 and D213 compiler notes) and
+03 (rows 35 and 36 both settled). No golden or generated file changed. W2-6's native cycles spill formulas through
+`SignedValue` (new test `Rule7_NativeCycleWithAFormula_SpillsItIntoAQlParameter`).

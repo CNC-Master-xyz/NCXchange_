@@ -176,8 +176,9 @@ internal static class HeidenhainChainArrivals
 
         // ORIGIN empties the chain of the program (language 4.2), and the compiler cancels before cycle 247 what the
         // program removes on the way the text runs (HeidenhainChain.Write).
-        // TODO(question): D253: whether cycle 247 ends an active cycle 7, 8 or 10 or tilted plane on the control is
-        // open; a transform the jump brings that the cancels of the text leave stays active after cycle 247 here.
+        // D253 (d): the TNC 640 resets shift, mirror, rotation and scaling at cycle 247, the iTNC 530 manual names the
+        // datum shift (iTNC 530 Zyklen p.286; TNC 640 Bedienung 1261174-11 p.208), so a transform the jump brings that
+        // the cancels of the text leave is taken as active after cycle 247 here, which holds on both controls.
         if (block.Has("ORIGIN"))
         {
             way.Program.Clear();

@@ -286,11 +286,12 @@ public sealed class HeidenhainCornerTests
     }
 
     // The same for an M function of a table of the machine whose state NCX writes with a value the M function does not
-    // carry, M19 for ORIENT on an iTNC 530 whose spindle table names it (wave-1 question #62; D58, D5).
+    // carry, M19 for RPM on an iTNC 530 whose spindle table names it so (wave-1 question #62; D58, D5). An ORIENT
+    // without an angle reads as ORIENT at 0 (D154).
     [Fact]
     public void Rnd_BeforeALineWithATableStateThatStaysRaw_IsKeptAsRaw()
     {
-        MachineConfig machine = MillWith("OFF = \"M5\"", "OFF = \"M5\"\nORIENT = \"M19\"");
+        MachineConfig machine = MillWith("RPM = \"TOOL CALL S{rpm}\"", "RPM = \"M19\"");
 
         Assert.EndsWith(Lines("LINE X=10 F=100", "RAW:HEIDENHAIN=\"3 RND R2\"", "RAW:HEIDENHAIN=\"4 L IY+10 M19\""),
             Body("1 L X+0 Y+0 FMAX\n2 L X+10 F100\n3 RND R2\n4 L IY+10 M19", machine), StringComparison.Ordinal);

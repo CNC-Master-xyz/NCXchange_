@@ -139,6 +139,55 @@ public sealed class HeidenhainFlowTests
         Assert.Equal(Lines("CALL=\"DRILL\""), Body("5 CALL PGM DRILL"));
     }
 
+    // D215: CALL PGM drops the path and a .h or .H, so the name is the bare file name the VM opens as <name>.ncx.
+    [Theory]
+    [InlineData("5 CALL PGM TNC:\\NC\\PARTS\\DRILL.H")]
+    [InlineData("5 CALL PGM PARTS/DRILL.h")]
+    [InlineData("5 CALL PGM \"DRILL.h\"")]
+    public void CallPgm_WithPathAndKlartextExtension_IsTheBareName(string snippet)
+    {
+        Assert.Equal(Lines("CALL=\"DRILL\""), Body(snippet));
+    }
+
+    // D215: any other extension, a DIN/ISO program .I, keeps the block RAW with its WARNING.
+    [Fact]
+    public void CallPgm_OfAnotherExtension_IsKeptAsRaw()
+    {
+        Assert.Equal([DiagnosticCodes.KeptAsRaw], Codes(FramedProgram("5 CALL PGM TNC:\\NC\\DRILL.I")));
+    }
+
+    // D213: an FN jump that leaves the part a CALL LBL REP repeats is the WARNING RDR303, since the control may keep
+    // the remaining REP count while NCX ends the repeat.
+    [Fact]
+    public void FnJump_LeavingARepeatedPart_IsTheWarningRdr303()
+    {
+        NcxProgram program = FramedProgram("1 LBL 1\n2 L IX+10 R0 F100\n3 FN 9: IF +Q1 EQU +1 GOTO LBL 2\n"
+            + "4 CALL LBL 1 REP 3\n5 LBL 2\n6 L X+0 FMAX");
+
+        Assert.Equal([DiagnosticCodes.HeidenhainJumpLeavesRepeat], Codes(program));
+        Assert.Equal(4, program.Diagnostics.Items.Single().Line);
+    }
+
+    // D213: a jump to a label the file does not hold leaves no repeat; the jump itself stays RAW.
+    [Fact]
+    public void FnJump_ToAMissingLabelInsideARepeatedPart_IsNoRdr303()
+    {
+        NcxProgram program = FramedProgram("1 LBL 1\n2 L IX+10 R0 F100\n3 FN 9: IF +Q1 EQU +1 GOTO LBL 7\n"
+            + "4 CALL LBL 1 REP 3");
+
+        Assert.DoesNotContain(DiagnosticCodes.HeidenhainJumpLeavesRepeat, Codes(program));
+    }
+
+    // D213: a jump inside the repeated part, to its own label, leaves nothing.
+    [Fact]
+    public void FnJump_InsideARepeatedPart_IsNoWarning()
+    {
+        NcxProgram program = FramedProgram("1 LBL 1\n2 L IX+10 R0 F100\n3 FN 9: IF +Q1 EQU +1 GOTO LBL 1\n"
+            + "4 CALL LBL 1 REP 3");
+
+        Assert.Empty(Codes(program));
+    }
+
     // CALL LBL of a label that is no subprogram stays RAW.
     [Fact]
     public void CallLbl_OfNoSubprogram_IsKeptAsRaw()

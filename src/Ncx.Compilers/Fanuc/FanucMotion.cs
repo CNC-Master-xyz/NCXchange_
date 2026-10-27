@@ -124,6 +124,18 @@ internal static class FanucMotion
             }
         }
 
+        // Under G43.5 I J K of an arc are its tool vector, so a vector arc has the radius form only (D185; controllers
+        // fanuc.md 4; 30i-B B-64484EN p.785-787: under G43.5 I J K are the tool direction, only R can be given); an
+        // arc by its centre with a vector is the ERROR CMP017.
+        if (verb == "ARC" && (block.Has("TX") || block.Has("TY") || block.Has("TZ")) && !block.Has("R"))
+        {
+            write.Error(DiagnosticCodes.VectorArcNotWritable,
+                "An ARC with a tool vector is written in its radius form on Fanuc, as I J K of G43.5 are the vector; "
+                + "this one has its centre and no R (D185).");
+            write.WrittenAll();
+            return;
+        }
+
         FanucCycles.CancelBeforeMotion(write);
         WriteMotionCode(write, verb, block.Verb!.Value);
         if (machineFrame)
@@ -189,9 +201,9 @@ internal static class FanucMotion
     /// <param name="write">The block being written.</param>
     /// <param name="axes">The axis words of the block.</param>
     /// <param name="machineFrame">True under G53, which takes absolute words only.</param>
-    // TODO(question): fanuc 10 rule 1 writes absolute values, or G91 blocks where the NCX block had incremental words,
-    // "a machine setting" that machine-config does not name; the compiler writes G91 blocks, which keep an incremental
-    // subprogram right at every call (language 4.13), until that is answered.
+    // No machine key chooses between absolute values and G91 blocks (D282 (b)): G91 blocks keep an incremental
+    // subprogram right at every call (language 4.13); a mixed block, a G53 block and a canned-cycle position are
+    // written absolute from the reached point (controllers fanuc.md 10 rule 1).
     public static bool AddAxisWords(FanucBlock write, List<FanucAxisWord> axes, bool machineFrame)
     {
         if (axes.Count == 0)
@@ -255,11 +267,10 @@ internal static class FanucMotion
     }
 
     /// <summary>
-    /// G4 with P in milliseconds for DWELL, which NCX gives in seconds (controllers fanuc.md 4; controller-mapping 1,
-    /// DWELL; language 4.1).
+    /// G4 X with the seconds of DWELL and a decimal point, which the control reads as seconds whatever the increment
+    /// system and parameter 1015#7 (D159; 30i-B B-64484EN p.188, cnc-manuals connector page 188: X "decimal point
+    /// permitted"; controllers fanuc.md 4; controller-mapping 1, DWELL; language 4.1).
     /// </summary>
-    // TODO(question): D159: the unit of G4 P is milliseconds or seconds by a parameter that no key of the machine file
-    // carries; P is written in milliseconds, as fanuc 4 writes it and the reader reads it, until D159 is answered.
     public static void WriteDwell(FanucBlock write)
     {
         if (write.Block.Find("DWELL") is not Word dwell)
@@ -268,16 +279,15 @@ internal static class FanucMotion
         }
 
         write.Written(dwell);
-        if (FanucExpressions.WordValue(write, "P", dwell.Value, 1000m) is string milliseconds)
+        if (FanucExpressions.WordValue(write, "X", dwell.Value, 1m) is string seconds)
         {
-            write.Write("G4 P" + milliseconds);
+            write.Write("G4 X" + seconds);
         }
     }
 
-    // G0 and G1 are written only when the verb changes (controllers fanuc.md 10 rule 1), and the first motion after a
-    // tool change writes its code under motion_code_after_tool_change (the TODO(question) of OutputFormat).
-    // TODO(question): fanuc 10 rule 1 names G0 and G1 and not G2 and G3; an arc writes G2 or G3 on every block, as the
-    // sources write it, which is right whatever the control has active, until that is answered.
+    // The code is written as [format] motion_code says, "arcs" by default: G0 and G1 where they change, G2 and G3 on
+    // every arc block (D282 (a), D299; controllers fanuc.md 10 rule 1), and the first motion after a tool change writes
+    // its code under motion_code_after_tool_change (the TODO(question) of OutputFormat).
     private static void WriteMotionCode(FanucBlock write, string verb, Value value)
     {
         string code = verb switch
@@ -286,7 +296,7 @@ internal static class FanucMotion
             "LINE" => "G1",
             _ => value.ToCanonical() == "CCW" ? "G3" : "G2",
         };
-        if (verb == "ARC" || write.Target.ActiveOf(FanucCodes.Motion) != code)
+        if (MotionCodeRule.Writes(write.Machine.Format, verb == "ARC", write.Target.ActiveOf(FanucCodes.Motion), code))
         {
             write.Main.Code(FanucCodes.RankOf(FanucCodes.Motion), code);
         }
