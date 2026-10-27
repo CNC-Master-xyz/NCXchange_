@@ -132,7 +132,7 @@ public sealed class GeneratedBlockTests
         Diagnostic error = Assert.Single(expanded.Diagnostics.Items);
         Assert.Equal(DiagnosticCodes.UnknownKey, error.Code);
         Assert.Equal(4, error.OriginLine);
-        Assert.StartsWith("[tool_change] pre \"FOO=1\": ", error.Message, StringComparison.Ordinal);
+        Assert.StartsWith("[tool_change] (pre): \"FOO=1\": ", error.Message, StringComparison.Ordinal);
     }
 
     // A rule text must be a block: a comment-only line is none (language 3, Block; machine-config 5a).

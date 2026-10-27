@@ -136,6 +136,17 @@ public sealed class ProjectFoldersTests : IDisposable
         Assert.Equal(Ncx.Config.BuiltInFiles.Machine("fanuc-mill-30i.toml"), found.Text);
     }
 
+    // D10, D371: a tool table in a machine folder is no machine file, so its name finds no machine.
+    [Fact]
+    public void MachineByName_ToolTableOfAMachineFolder_IsNoMachine()
+    {
+        _project.WriteInWorkingDirectory("machines/mill.tools.toml", "[[tool]]\nnumber = 1\n");
+        var folders = new ProjectFolders(_project.WorkingDirectory, _project.ToolFolder, null);
+
+        Assert.Null(folders.FindMachine("mill.tools"));
+        Assert.Null(folders.FindMachine("fanuc-mill-30i.tools.toml"));
+    }
+
     // D206, D371: a shop's own file of a shipped name wins over the built-in copy, in the tool's own folder as well.
     [Fact]
     public void MachineByName_ShopFileOfAShippedName_WinsOverTheBuiltInCopy()

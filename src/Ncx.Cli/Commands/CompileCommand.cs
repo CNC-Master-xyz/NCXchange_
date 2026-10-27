@@ -228,7 +228,7 @@ internal static class CompileCommand
 
     // The tool table that [machine] tool_table names lies next to the machine file (D10), and the warning block of D10
     // names it as the user finds it. Null when it is there and cannot be read. A built-in machine file lies in no
-    // folder, so no tool table lies next to it (D371).
+    // folder: its tool table is the built-in one of that name, beside it in machines/ (D371).
     internal static CompileOptions? OptionsWithToolTable(MachineConfig machine, FoundFile? machineFile,
         Diagnostics diagnostics)
     {
@@ -239,7 +239,10 @@ internal static class CompileCommand
 
         if (machineFile.Text is not null)
         {
-            return new CompileOptions { ToolTableFile = toolTable };
+            string builtInName = BuiltInFiles.NameOf(BuiltInFiles.MachinesFolder, toolTable);
+            return BuiltInFiles.ToolTable(toolTable) is string builtInText
+                ? WithToolTable(builtInText, builtInName, diagnostics)
+                : new CompileOptions { ToolTableFile = builtInName };
         }
 
         string path = Path.Combine(Path.GetDirectoryName(machineFile.FullPath) ?? "", toolTable);
@@ -256,6 +259,12 @@ internal static class CompileCommand
             return null;
         }
 
+        return WithToolTable(text, name, diagnostics);
+    }
+
+    // The options with the tool table loaded from its text; its diagnostics name it as the user finds it (D10).
+    private static CompileOptions WithToolTable(string text, string name, Diagnostics diagnostics)
+    {
         var tableDiagnostics = new Diagnostics(name);
         ToolTable? table = ToolTable.LoadText(WithoutByteOrderMark(text), tableDiagnostics);
         foreach (Diagnostic diagnostic in tableDiagnostics.Items)

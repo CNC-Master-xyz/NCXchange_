@@ -145,8 +145,8 @@ internal sealed class GeneratedText
     }
 
     // A generated block has no line of its own in the file: it takes the line of the block it was generated for, which
-    // reads file(12, from 12), and a diagnostic about its text names that block and the rule or rewriter that wrote it
-    // (language 4.15, D98, D200).
+    // reads file(12, from 12), and a diagnostic about its text starts as one on the block would, with the rule or
+    // rewriter that wrote it and its reason, then names the text (language 4.15, D98, D200).
     private Block? Parse(string text, string parsedText, string writer, GeneratedBlock generated)
     {
         Block origin = generated.Origin;
@@ -157,7 +157,7 @@ internal sealed class GeneratedText
             _diagnostics.Add(diagnostic with
             {
                 OriginLine = origin.Line,
-                Message = $"{writer} \"{text}\": {diagnostic.Message}",
+                Message = $"{generated.Source} ({generated.Reason}): \"{text}\": {diagnostic.Message}",
             });
         }
 

@@ -26,8 +26,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       # Code-guidelines 3.3: at most 120 characters per line in every C# file of src/ and tests/ (D109). Run with
-      # bash on the Linux job only: the Windows job's default shell is PowerShell, and its checkout ends lines with
-      # CR LF. The UTF-8 locale makes grep count characters, not bytes.
+      # bash on the Linux job only, since the Windows job's default shell is PowerShell; .gitattributes keeps every
+      # checkout LF, so one job is enough. The UTF-8 locale makes grep count characters, not bytes.
       - name: Lines of at most 120 characters
         if: runner.os == 'Linux'
         shell: bash
@@ -118,10 +118,18 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           dotnet pack src/Ncx.Cli/Ncx.Cli.csproj -c Release -p:Version="$version" -o release/
+          # The artifacts lose the executable bit; the Linux and macOS binaries get it back before they are zipped.
+          chmod +x publish/*-linux-*/Ncx.Cli publish/*-osx-*/Ncx.Cli
           for folder in publish/*/; do
             name="$(basename "$folder")"
             (cd publish && zip -qr "../release/$name.zip" "$name")
           done
       - name: Create the release of the tag
         shell: bash
-        run: gh release create "$GITHUB_REF_NAME" release/* --title "$GITHUB_REF_NAME" --generate-notes
+        # A version with a pre-release part (1.0.0-alpha.1) is a pre-release on GitHub as well.
+        run: |
+          prerelease=""
+          if [[ "${GITHUB_REF_NAME#v}" == *-* ]]; then
+            prerelease="--prerelease"
+          fi
+          gh release create "$GITHUB_REF_NAME" release/* --title "$GITHUB_REF_NAME" --generate-notes $prerelease

@@ -78,6 +78,12 @@ internal sealed class ProjectFolders
             return new FoundFile { FullPath = atPath, Name = value };
         }
 
+        // A tool table of a machine folder is no machine file, by name neither in a folder nor built in (D10, D371).
+        if (BuiltInFiles.IsToolTable(WithExtension(value)))
+        {
+            return null;
+        }
+
         return FindInFolders(value, _machineFolders, BuiltInFiles.MachinesFolder, BuiltInFiles.Machine);
     }
 

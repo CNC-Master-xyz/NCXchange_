@@ -196,6 +196,15 @@ internal static class Pipeline
     internal static NcxProgram? LoadExternalProgram(string name, string workingDirectory, MachineConfig machine,
         IReadOnlyList<IProgramRewriter> rewriters)
     {
+        // A name with a folder in it, or a rooted one, names no file of the working directory (D215).
+        if (name.Length == 0
+            || name.Contains('/', StringComparison.Ordinal)
+            || name.Contains('\\', StringComparison.Ordinal)
+            || Path.IsPathRooted(name))
+        {
+            return null;
+        }
+
         string path = Path.Combine(workingDirectory, name + NcxExtension);
         string fileName = Path.GetFileName(path);
         var reading = new Diagnostics(fileName);

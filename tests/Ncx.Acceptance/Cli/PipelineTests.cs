@@ -120,6 +120,21 @@ public sealed class PipelineTests : IDisposable
         Assert.Null(Pipeline.LoadExternalProgram("O9011", WorkingDirectory(), DefaultMachine.Create(), []));
     }
 
+    // D215: the working directory and no other folder: a name with a folder in it, or a rooted one, names no external
+    // program even where the file exists, so the virtual machine reports the missing target (VM752).
+    [Fact]
+    public void LoadExternalProgram_NameWithAFolderOrRooted_IsNoExternalProgram()
+    {
+        Directory.CreateDirectory(_cli.PathOf("sub"));
+        string file = _cli.WriteFile(Path.Combine("sub", "O9010.ncx"), CliHarness.OneProgram("UNITS=MM"));
+        string rooted = file.Substring(0, file.Length - ".ncx".Length);
+
+        Assert.Null(Pipeline.LoadExternalProgram("sub/O9010", WorkingDirectory(), DefaultMachine.Create(), []));
+        Assert.Null(Pipeline.LoadExternalProgram("sub\\O9010", WorkingDirectory(), DefaultMachine.Create(), []));
+        Assert.Null(Pipeline.LoadExternalProgram(rooted, WorkingDirectory(), DefaultMachine.Create(), []));
+        Assert.Null(Pipeline.LoadExternalProgram("", WorkingDirectory(), DefaultMachine.Create(), []));
+    }
+
     // The temporary folder of the test, the working directory of an external program.
     private string WorkingDirectory()
     {
