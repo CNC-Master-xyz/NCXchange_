@@ -3,8 +3,8 @@
 # translate the numbers to the system of the machine through gcode_system (controllers fanuc.md 3, D174).
 # Written from controllers/fanuc.md 3 and 6, controller-mapping.md 5, language 4.7 and 4.7.1 and the Fanuc lathe manual (B-64484GE-1/02, tables 4.3 (a) and
 # 4.3 (b), sections 4.1 and 4.2), the pages the evidence of D160, D161 and D174 names. Not verified on a machine.
-# TODO(question): machine-config 6 has no key for the kind of a parameter ("Params with their kinds", phase 2 P2-03); every parameter of this file is a number
-# or an expression (D115).
+# D115: no kind key in 1.0; every parameter of this file that is not a word of language 4.7 takes a number or an expression, and the words of 4.7 keep
+# their kinds.
 
 ncx_schema = 1                     # the version of the machine-configuration schema, not of NCXchange (machine-config 6, D348)
 
@@ -55,6 +55,8 @@ name = "TAP"
 native = "G84"
 modal = true
 params = { DEPTH = "Z", CLEARANCE = "R", CYCLE_DWELL = "P", CYCLE_F = "F" }           # the spindle reverses at the bottom (fanuc lathe manual 4.3.2)
+# The rigid-tapping line "M29 S{rpm}" of the built-in TAP stands before G84 and G88 alike: M29 S before the tapping block makes either rigid (Fanuc
+# B-64484EN-1 p. 112, 4.5.1; D256, D361). A machine file overrides it with its builder's code.
 
 [[cycle]]
 name = "TAP"
@@ -62,12 +64,29 @@ for_axis = "X"
 native = "G88"
 modal = true
 params = { DEPTH = "X", CLEARANCE = "R", CYCLE_DWELL = "P", CYCLE_F = "F" }
+before = "M29 S{rpm}"                                                                # side face rigid tapping, as G84 (B-64484EN-1 p. 112)
+
+[[cycle]]
+name = "TAP_COMPENSATING"
+native = "G84"
+modal = true
+params = { DEPTH = "Z", CLEARANCE = "R", CYCLE_DWELL = "P", CYCLE_F = "F" }           # G84 without the rigid-tapping line: conventional mode (D359)
+
+[[cycle]]
+name = "TAP_COMPENSATING"
+for_axis = "X"
+native = "G88"
+modal = true
+params = { DEPTH = "X", CLEARANCE = "R", CYCLE_DWELL = "P", CYCLE_F = "F" }
+# D359: tapping in conventional mode, the spindle started and reversed by M03/M04/M05 with a compensating chuck (B-64484EN-1 p. 110), the floating tap of
+# every family; no before key, so the reader takes it for a G84 or G88 the rigid-tapping line does not reach.
 
 [[cycle]]
 name = "REAM"
 native = "G85"
 modal = true
 params = { DEPTH = "Z", CLEARANCE = "R", CYCLE_DWELL = "P", CYCLE_F = "F" }           # feed in, dwell, feed out at twice the cutting feedrate (4.3.3)
+dwell_native = "G85"                                                                 # a lathe G85 takes P itself: no G89 of the mill (D177)
 
 [[cycle]]
 name = "REAM"
@@ -90,8 +109,8 @@ params = { DEPTH = "X", CLEARANCE = "R", CYCLE_DWELL = "P", CYCLE_F = "F" }
 # are modal data the three cycles share, so a repeat block with a new R is a new CYCLE block, because a new CYCLE replaces all parameters (language 4.7).
 # F is the cutting feed on G90 and G94 (CYCLE_F) and the thread lead on G92 and G76 (PITCH, language 4.7). The lead equals the pitch on a single-start thread; a
 # multi-start thread is cut by shifting the thread start angle with Q, which has no NCX word and keeps its block RAW (D175).
-# TODO(question): TAPER is a parameter name of a catalog entry, and the parser takes none yet, so a block with R reads as RAW and no program can carry TAPER
-# until D114 is answered; the mapping stands here because D175 decided it.
+# D114: TAPER is a parameter name of a catalog entry, the third provisional form of the parser: in a block whose CYCLE is not a built-in name, a key the word
+# catalog does not know is a cycle parameter, checked against the machine's catalog by the VM; the mapping stands here because D175 decided it.
 
 [[cycle]]
 name = "TURN_OD"

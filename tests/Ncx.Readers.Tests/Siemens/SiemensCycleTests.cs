@@ -265,4 +265,15 @@ public sealed class SiemensCycleTests
 
         Assert.Contains("CYCLE_DWELL=0.12", body, StringComparison.Ordinal);
     }
+
+    // D379, D5: CIRC_SLOT is the sl SLOT2 only, NUM = 1 with the _DMODE thousands digit 1 ("Funktionen SLOT2 ab SW
+    // 2.5", SW4.92 p.1057); a SLOT2 without it is no CIRC_SLOT, so its geometry is never dropped.
+    [Fact]
+    public void Slot2_WithoutTheSlFormDigit_IsNoCircSlot()
+    {
+        string body = Body("G0 X0 Y0 Z10\nSLOT2(10,0,2,-5,,1,30,8,0,0,20,0,0,100,200,2)\nG0 Z50");
+
+        Assert.DoesNotContain("CIRC_SLOT", body, StringComparison.Ordinal);
+        Assert.Contains(Raw("SLOT2(10,0,2,-5,,1,30,8,0,0,20,0,0,100,200,2)"), body, StringComparison.Ordinal);
+    }
 }

@@ -243,7 +243,7 @@ EJECTOR = { FORWARD = "M484" }
 BAR_LOADER = { CHANGE = "M58", FEED = "M61" }
 DOOR = { OPEN = "M62", CLOSE = "M63" }
 Y_REFERENCE = { CLAMP = "M370", FREE = "M371" }
-TAP_REVERSE = { ON = "M94", OFF = "M95" }   # M29, the rigid tapping line, is the "before" of the TAP entry of the catalog (D256)
+TAP_REVERSE = { ON = "M94", OFF = "M95" }   # M29 S{rpm}, the rigid tapping line of both paths, is the "before" of the catalog's TAP (D256); M29 is its only rigid-tapping code (4810004EDG-1 p.312), M429 the work counter (p.148-149; D377)
 THREAD_CHAMFER = { ON = "M23", OFF = "M24" }
 LOAD_MONITOR = { ON = "M300", OFF = "M301" }
 TOOL_COUNTER = { ON = "M303", OFF = "M304" }

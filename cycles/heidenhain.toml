@@ -3,7 +3,7 @@
 # examples/sources/BOHREN.h (the Q parameters of the cycles 200, 201, 203 and 207 in the control's order). Not verified on a machine.
 # The drilling family (DRILL, DRILL_DWELL, PECK, CHIP_BREAK, TAP, REAM, BORE) is defined in code; its entries here say which cycle and which Q parameters
 # carry it. The other entries are catalog cycles (language 4.7.1). A machine file overrides an entry in its own [cycles] table (machine-config 6).
-# TODO(question): machine-config 6 has no key for the kind of a parameter ("Params with their kinds", phase 2 P2-03); every parameter of this file is a number or an expression (D115).
+# D115: no kind key in 1.0; every parameter of this file that is not a word of language 4.7 takes a number or an expression, and the words of 4.7 keep their kinds.
 #
 # The Q parameters (heidenhain 5): Q200 safety clearance above the surface, Q201 depth (incremental, negative), Q202 infeed depth, Q203 surface coordinate
 # (absolute), Q204 second clearance (retract height after the cycle, acting only above Q200), Q206 plunge feed, Q210/Q211 dwells at the top and at the bottom,
@@ -20,8 +20,12 @@
 #   of its own: the NCX words of a drilling entry are its params plus this rule, and the words that CYCL DEF 200, G81 and CYCLE81 share (phase 2 P2-03) are
 #   compared with the rules of each family included (see cycles/fanuc.toml).
 # - The compiler writes the Q parameters in the order of signature (heidenhain 8.7).
-# TODO(question): heidenhain.md does not say which value the compiler writes for a Q parameter of the signature that no NCX word carries (Q202 of a DRILL, Q210,
-# Q212, Q213, Q205, Q208); BOHREN.h writes 0 for the dwells, Q202 equal to the depth for a simple drilling, Q208=MAX or the feed (D164).
+# D164: `defaults` gives the value the compiler writes for a Q parameter of the signature that no NCX word carries: Q210=0 (no dwell above), Q212=0 (no
+# degression) and Q208=MAX on 203 (rapid retract, as the Fanuc G83/G73). Three values depend on the block and are compiler rules of heidenhain 8 rule 7, as
+# BOHREN.h writes them: Q202 of 200 is the full depth (one infeed), Q205 of 203 equals Q202, Q208 of 201 equals Q206; Q213 is D163. Q256 is no default: it
+# is the chip-break lift the control holds, written from the machine key [cycles] chip_break_lift, its one source; a machine whose catalog writes Q256
+# without that key is the loader ERROR CFG158, and a key beside a `defaults` entry of the same Q parameter the WARNING CFG156 (D358).
+# D270: `title` is the text the compiler writes after CYCL DEF n, the four BOHREN.h names; an entry without one is written as CYCL DEF n alone.
 # D178: the signatures below are the orders of the NC-example blocks of the iTNC 530 cycle manual, which is the order the control writes (heidenhain 5,
 # decisions.md). A Q parameter of a signature that no NCX word carries still needs a value from the compiler, which D164 settles.
 
@@ -33,32 +37,40 @@ ncx_schema = 1                     # the version of the machine-configuration sc
 [[cycle]]
 name = "DRILL"
 native = 200                                                                           # CYCL DEF 200 BOHREN
+title = "BOHREN"
 signature = ["Q200", "Q201", "Q206", "Q202", "Q210", "Q203", "Q204", "Q211"]           # heidenhain 5, BOHREN.h
 params = { CLEARANCE = "Q200", DEPTH = "Q201", CYCLE_F = "Q206", SURFACE = "Q203", SAFE = "Q204", CYCLE_DWELL = "Q211" }
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
+defaults = { Q210 = 0 }
 
 [[cycle]]
 name = "DRILL_DWELL"
 native = 200                                                                           # CYCL DEF 200 with Q211 (controller-mapping 5)
+title = "BOHREN"
 signature = ["Q200", "Q201", "Q206", "Q202", "Q210", "Q203", "Q204", "Q211"]
 params = { CLEARANCE = "Q200", DEPTH = "Q201", CYCLE_F = "Q206", SURFACE = "Q203", SAFE = "Q204", CYCLE_DWELL = "Q211" }
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
+defaults = { Q210 = 0 }
 # D163: DRILL and DRILL_DWELL are both cycle 200 and differ by Q211, the dwell at the hole bottom: Q211=0 is DRILL, any other Q211 is DRILL_DWELL with
 # CYCLE_DWELL=Q211 (decisions.md). The rule lives in the reader and the compiler, not in a key of this file.
 
 [[cycle]]
 name = "PECK"
 native = 203                                                                           # CYCL DEF 203 UNIVERSALBOHREN, Q213=0 (controller-mapping 5)
+title = "UNIVERSALBOHREN"
 signature = ["Q200", "Q201", "Q206", "Q202", "Q210", "Q203", "Q204", "Q212", "Q213", "Q205", "Q211", "Q208", "Q256"]   # BOHREN.h
 params = { CLEARANCE = "Q200", DEPTH = "Q201", CYCLE_F = "Q206", PECK = "Q202", SURFACE = "Q203", SAFE = "Q204", CYCLE_DWELL = "Q211" }
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
+defaults = { Q210 = 0, Q212 = 0, Q208 = "MAX" }                                       # D164; Q256 from [cycles] chip_break_lift (D358)
 
 [[cycle]]
 name = "CHIP_BREAK"
 native = 203                                                                           # CYCL DEF 203 with Q213 at least the number of infeeds (controller-mapping 5)
+title = "UNIVERSALBOHREN"
 signature = ["Q200", "Q201", "Q206", "Q202", "Q210", "Q203", "Q204", "Q212", "Q213", "Q205", "Q211", "Q208", "Q256"]
 params = { CLEARANCE = "Q200", DEPTH = "Q201", CYCLE_F = "Q206", PECK = "Q202", SURFACE = "Q203", SAFE = "Q204", CYCLE_DWELL = "Q211" }
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
+defaults = { Q210 = 0, Q212 = 0, Q208 = "MAX" }                                       # D164; Q256 from [cycles] chip_break_lift (D358)
 # Q212 (decrement), Q213 (number of chip breaks) and Q205 (minimum infeed) are in the signature as BOHREN.h writes them; heidenhain.md does not describe them.
 # D163: PECK and CHIP_BREAK are told apart by Q213, the number of chip breaks before the control retracts, not by Q256: Q213=0 retracts fully after every
 # infeed (G83, PECK), a Q213 of at least ceil(|Q201|/Q202) never retracts (G73, CHIP_BREAK), anything between is the mixed form and stays native (decisions.md).
@@ -66,6 +78,7 @@ absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
 [[cycle]]
 name = "TAP"
 native = 207                                                                           # CYCL DEF 207 GEW.-BOHREN GS NEU, rigid tapping
+title = "GEW.-BOHREN GS NEU"
 signature = ["Q200", "Q201", "Q239", "Q203", "Q204"]                                   # BOHREN.h
 params = { CLEARANCE = "Q200", DEPTH = "Q201", PITCH = "Q239", SURFACE = "Q203", SAFE = "Q204" }
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
@@ -74,6 +87,7 @@ absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]
 [[cycle]]
 name = "REAM"
 native = 201                                                                           # CYCL DEF 201 REIBEN
+title = "REIBEN"
 signature = ["Q200", "Q201", "Q206", "Q211", "Q208", "Q203", "Q204"]                   # BOHREN.h
 params = { CLEARANCE = "Q200", DEPTH = "Q201", CYCLE_F = "Q206", CYCLE_DWELL = "Q211", SURFACE = "Q203", SAFE = "Q204" }
 absolute_from_surface = ["CLEARANCE", "DEPTH", "SAFE"]

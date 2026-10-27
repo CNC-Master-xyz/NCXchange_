@@ -1,3 +1,4 @@
+using System.Globalization;
 using Ncx.Core.Model;
 
 namespace Ncx.Core.Machine;
@@ -23,6 +24,12 @@ public sealed record CycleCatalog
     public IReadOnlyList<CycleEntry> Entries { get; init; } = [];
 
     /// <summary>
+    /// The [[cycle]] tables of the machine file that name a channel, in file order, kept apart from Entries until
+    /// ForChannel applies those of the channel compiled (machine-config 6, D361).
+    /// </summary>
+    public IReadOnlyList<CycleEntry> ChannelEntries { get; init; } = [];
+
+    /// <summary>
     /// The entry of an NCX cycle name, CYCLE=RECT_POCKET (language 4.7.1); null when the catalog has none, which the
     /// caller reports.
     /// </summary>
@@ -34,7 +41,7 @@ public sealed record CycleCatalog
         {
             if (entry.Name == ncxName)
             {
-                return entry;
+                return IsHidden(entry) ? null : entry;
             }
         }
 
@@ -59,13 +66,13 @@ public sealed record CycleCatalog
 
             if (entry.ForAxis == axis)
             {
-                return entry;
+                return IsHidden(entry) ? null : entry;
             }
 
             defaultAxis ??= entry.ForAxis is null ? entry : null;
         }
 
-        return defaultAxis;
+        return defaultAxis is not null && IsHidden(defaultAxis) ? null : defaultAxis;
     }
 
     /// <summary>
@@ -75,7 +82,8 @@ public sealed record CycleCatalog
     public CycleEntry? FindNative(string native)
     {
         // A reader turns a native cycle into the entry that maps it; of two entries of one cycle, DRILL and
-        // DRILL_DWELL on cycle 200, the first in catalog order (controller-mapping 5).
+        // DRILL_DWELL on cycle 200, the first in catalog order (controller-mapping 5). A native no entry writes as its
+        // own is the dwell_native of an entry, the Fanuc mill G89 of REAM (D177).
         foreach (CycleEntry entry in Entries)
         {
             if (entry.Native == native)
@@ -84,12 +92,20 @@ public sealed record CycleCatalog
             }
         }
 
+        foreach (CycleEntry entry in Entries)
+        {
+            if (entry.DwellNative == native)
+            {
+                return entry;
+            }
+        }
+
         return null;
     }
 
-    // TODO(question): a Siemens position without a value takes the default of the cycle (siemens 7), and that default
-    // is not in the documents (VARI of CYCLE83); a block that leaves out a fixed value fits no entry that fixes it
-    // (D181).
+    // D181, D164: a Siemens position without a value takes the value zero, which the entry records in defaults (VARI
+    // of CYCLE83 = 0, chip breaking); a block that leaves out a fixed value is compared through that default, and
+    // fits no entry that fixes it where the entry has none.
 
     /// <summary>
     /// The entry of a native cycle whose fixed values the source block carries: CYCLE83 with VARI=1 is PECK, with
@@ -108,16 +124,62 @@ public sealed record CycleCatalog
         // (machine-config 6, D160).
         foreach (CycleEntry entry in Entries)
         {
-            if (entry.Native == native
-                && (forAxis is null || entry.ForAxis == forAxis)
-                && CarriesFixedValues(nativeValues, entry)
-                && entry.CoversNativeWords(nativeValues.Keys))
+            if (entry.Native == native && Fits(entry, nativeValues, forAxis))
+            {
+                return entry;
+            }
+        }
+
+        // D177: the dwell_native of an entry, the Fanuc mill G89 of REAM, where no entry writes it as its own.
+        foreach (CycleEntry entry in Entries)
+        {
+            if (entry.DwellNative == native && Fits(entry, nativeValues, forAxis))
             {
                 return entry;
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The entry of a native cycle that has two entries told apart by their before line, the Fanuc G84 of TAP and
+    /// TAP_COMPENSATING (D359, an amendment of D160): the entry whose before line reaches the block where it does, the
+    /// entry with no before key where it does not. Where an entry of the native sets before = "", the cycle is always
+    /// that entry and an entry without the key counts as not in the catalog (D359). Null when no entry fits.
+    /// </summary>
+    /// <param name="native">The native cycle, "G84".</param>
+    /// <param name="lineReaches">Whether the before line of an entry reaches the block in one of the ways of
+    /// D256.</param>
+    /// <param name="forAxis">The drilling axis of the block, which picks the entries of that for_axis (D160); null
+    /// where the family has no such entries.</param>
+    public CycleEntry? FindNativeByBeforeLine(string native, bool lineReaches, string? forAxis = null)
+    {
+        CycleEntry? withLine = null;
+        CycleEntry? withoutKey = null;
+        foreach (CycleEntry entry in Entries)
+        {
+            if (entry.Native != native || (forAxis is not null && entry.ForAxis != forAxis))
+            {
+                continue;
+            }
+
+            if (entry.Before == "")
+            {
+                return entry;
+            }
+
+            if (entry.Before is null)
+            {
+                withoutKey ??= entry;
+            }
+            else
+            {
+                withLine ??= entry;
+            }
+        }
+
+        return lineReaches ? withLine : withoutKey;
     }
 
     /// <summary>
@@ -130,20 +192,22 @@ public sealed record CycleCatalog
         // The catalog file of the family overrides the built-in drilling family, the [[cycle]] entries of a machine
         // file override the catalog per machine (machine-config 6).
         var overridden = new List<CycleEntry>(Entries);
+        var channelEntries = new List<CycleEntry>(ChannelEntries);
         foreach (CycleEntry entry in entries)
         {
+            if (entry.Channel is not null)
+            {
+                // D361: a table of one channel waits for ForChannel; the channel-less table is the fallback.
+                channelEntries.Add(entry with { Family = entry.Family ?? Controller });
+                continue;
+            }
+
             int index = IndexOfName(overridden, entry.Name, entry.ForAxis);
             if (index < 0)
             {
-                // D160: the entries of one name differ only by the drilling axis, so an entry added under a for_axis
-                // carries the same words of a reader or compiler rule as the entry of that name already in the
-                // catalog, which only the built-in family can name (D157).
-                // TODO(question): neither D160 nor D157 says where the rule words of a for_axis entry come from, and a
-                // catalog file cannot name them; the entry of the same name without a for_axis lends them, so that
-                // SURFACE, SAFE, CYCLE_RETRACT and AXIS stand on the X entry of a lathe as on its Z entry.
-                overridden.Add(entry.RuleWords.Count > 0 || Find(entry.Name) is not CycleEntry sibling
-                    ? entry
-                    : entry with { RuleWords = sibling.RuleWords });
+                // D157: the rule words of an added entry, the X entry of a lathe (D160) among them, follow from its
+                // own params like those of every other entry; nothing is lent from an entry of the same name.
+                overridden.Add(entry with { Family = entry.Family ?? Controller });
             }
             else
             {
@@ -151,7 +215,26 @@ public sealed record CycleCatalog
             }
         }
 
-        return new CycleCatalog { Controller = Controller, Entries = overridden };
+        return new CycleCatalog { Controller = Controller, Entries = overridden, ChannelEntries = channelEntries };
+    }
+
+    /// <summary>
+    /// The catalog a channel compiles with: the [[cycle]] tables of the machine file that name this channel over the
+    /// entries, the table of the compiled channel first, then the channel-less one (machine-config 6, D361, D377).
+    /// </summary>
+    /// <param name="channel">The channel compiled, 1 for a single-channel machine.</param>
+    public CycleCatalog ForChannel(int channel)
+    {
+        var ofChannel = new List<CycleEntry>();
+        foreach (CycleEntry entry in ChannelEntries)
+        {
+            if (entry.Channel == channel)
+            {
+                ofChannel.Add(entry with { Channel = null });
+            }
+        }
+
+        return (this with { ChannelEntries = [] }).Override(ofChannel);
     }
 
     /// <summary>
@@ -181,12 +264,52 @@ public sealed record CycleCatalog
         return Controller is { } family && controllerAddress == Enum.GetName(family)?.ToUpperInvariant();
     }
 
+    // An entry fits a source block when it maps the drilling axis asked for, the block carries its fixed values and
+    // its params cover the words of the block (machine-config 6, D160).
+    private static bool Fits(CycleEntry entry, IReadOnlyDictionary<string, decimal> nativeValues, string? forAxis)
+    {
+        return (forAxis is null || entry.ForAxis == forAxis)
+            && CarriesFixedValues(nativeValues, entry)
+            && entry.CoversNativeWords(nativeValues.Keys);
+    }
+
+    // D359: an entry without a before key does not count where an entry of its native and its for_axis sets
+    // before = "", the machine's G84 being always rigid.
+    private bool IsHidden(CycleEntry entry)
+    {
+        if (entry.Before is not null)
+        {
+            return false;
+        }
+
+        foreach (CycleEntry other in Entries)
+        {
+            if (other.Native == entry.Native && other.ForAxis == entry.ForAxis && other.Before == "")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     // An entry fits a source block when the block carries every fixed value of the entry (machine-config 6).
     private static bool CarriesFixedValues(IReadOnlyDictionary<string, decimal> nativeValues, CycleEntry entry)
     {
         foreach (KeyValuePair<string, decimal> fixedValue in entry.Fixed)
         {
-            if (!nativeValues.TryGetValue(fixedValue.Key, out decimal value) || value != fixedValue.Value)
+            decimal? value = null;
+            if (nativeValues.TryGetValue(fixedValue.Key, out decimal given))
+            {
+                value = given;
+            }
+            else if (entry.Defaults.TryGetValue(fixedValue.Key, out string? assumed)
+                && decimal.TryParse(assumed, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal number))
+            {
+                value = number;
+            }
+
+            if (value != fixedValue.Value)
             {
                 return false;
             }
