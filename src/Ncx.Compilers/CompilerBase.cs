@@ -277,7 +277,7 @@ public abstract partial class CompilerBase : ICompiler
         _options = options;
         _diagnostics = diagnostics;
         _steps = steps;
-        _numbers = new NumberFormatter(machine, diagnostics, DecimalPointOnWholeNumbers);
+        _numbers = new NumberFormatter(machine, DecimalPointOnWholeNumbers);
         _templates = new TemplateSet(machine, new Diagnostics(machine.Machine.Name));
         _lookAhead = new LookAhead(steps, machine);
         ResetWrite();

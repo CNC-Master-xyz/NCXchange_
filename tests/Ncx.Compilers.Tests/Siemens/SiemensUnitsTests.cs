@@ -71,7 +71,7 @@ public sealed class SiemensUnitsTests
     }
 
     // D292: the feed is converted from its exact value, not from the text rounded to the decimals of F: the
-    // F=0.393701 the reader writes for a source F10 under G70 comes back as F10, with no CMP020.
+    // F=0.393701 the reader writes for a source F10 under G70 comes back as F10.
     [Fact]
     public void Feed_ConvertedFromTheExactValue_RoundTripsTheSourceFeed()
     {

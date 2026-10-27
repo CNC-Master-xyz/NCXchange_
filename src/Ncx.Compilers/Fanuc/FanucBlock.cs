@@ -530,15 +530,11 @@ internal sealed class FanucBlock
 
     /// <summary>
     /// A number the compiler computed, rounded half away from zero to the decimals of its address before it is
-    /// written: a computed coordinate is no number of the program (language 2 rule 5, 4.12 ROUND).
+    /// written: a computed coordinate is no number of the program (language 2 rule 5, 4.12 ROUND). Since D363 every
+    /// number is rounded so, silently, and this is Format.
     /// </summary>
     public string FormatComputed(string address, decimal value)
     {
-        if (Numbers.DecimalsOf(address) is int decimals)
-        {
-            value = Math.Round(value, decimals, MidpointRounding.AwayFromZero);
-        }
-
         return Format(address, value);
     }
 

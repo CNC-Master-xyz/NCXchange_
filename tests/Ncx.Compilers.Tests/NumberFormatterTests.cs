@@ -6,8 +6,8 @@ using Ncx.Core.Model;
 namespace Ncx.Compilers.Tests;
 
 /// <summary>
-/// Numbers per [format] (machine-config 2): decimals per address, trailing zeros, the decimal separator, never rounds
-/// what fits, a WARNING when a value has more decimals than the machine takes (phase 3, P3-03).
+/// Numbers per [format] (machine-config 2): decimals per address with the family defaults (D366), trailing zeros, the
+/// decimal separator, never rounds what fits, rounds silently what does not (D363).
 /// </summary>
 public sealed class NumberFormatterTests
 {
@@ -25,13 +25,14 @@ public sealed class NumberFormatterTests
         Assert.Empty(diagnostics.Items);
     }
 
-    // Phase 3, P3-03; language 4.12: a value with more decimals than the machine takes is rounded half away from zero
-    // to its decimals, with a WARNING on the block.
+    // D363: a value with more decimals than the machine takes is rounded half away from zero on its decimal value to
+    // the decimals of its address (15.0175 becomes 15.018), silently; CMP020 is retired.
     [Theory]
     [InlineData("10.1235", "10.124")]
     [InlineData("-10.1235", "-10.124")]
     [InlineData("0.0005", "0.001")]
-    public void Format_MoreDecimalsThanTheMachineTakes_IsRoundedWithCmp020(string value, string written)
+    [InlineData("15.0175", "15.018")]
+    public void Format_MoreDecimalsThanTheMachineTakes_IsRoundedSilently(string value, string written)
     {
         var diagnostics = new Diagnostics("T.ncx");
         NumberFormatter numbers = Formatter(FakeMachines.PointFormat, diagnostics);
@@ -40,9 +41,7 @@ public sealed class NumberFormatterTests
             s_block);
 
         Assert.Equal(written, text);
-        Diagnostic warning = Assert.Single(diagnostics.Items);
-        Assert.Equal(DiagnosticCodes.MoreDecimalsThanTheMachineTakes, warning.Code);
-        Assert.Equal(7, warning.Line);
+        Assert.Empty(diagnostics.Items);
     }
 
     // Machine-config 2: a value rounded to zero is written without a minus sign.
@@ -78,16 +77,42 @@ public sealed class NumberFormatterTests
         Assert.Equal("565.", numbers.FormatFeed(565m, s_block));
     }
 
-    // Language 2 rule 5: an address that [format] gives no decimals keeps the digits of its value.
+    // D366: no address is written with all its digits; a linear address [format] decimals leaves out takes the
+    // decimals of X.
     [Fact]
-    public void Format_AddressWithoutDecimals_KeepsTheDigitsOfItsValue()
+    public void Format_LinearAddressWithoutDecimals_TakesTheDecimalsOfX()
     {
-        var diagnostics = new Diagnostics("T.ncx");
-        NumberFormatter numbers = Formatter(FakeMachines.PointFormat, diagnostics);
+        NumberFormatter numbers = Formatter(FakeMachines.PointFormat, new Diagnostics("T.ncx"));
 
-        Assert.Equal("1.23456", numbers.Format("Q", 1.23456m, s_block));
-        Assert.Equal("2.5", numbers.Format("Q", 2.500m, s_block));
-        Assert.Empty(diagnostics.Items);
+        Assert.Equal("1.235", numbers.Format("Q", 1.23456m, s_block));
+        Assert.Equal("2.5", numbers.Format("R", 2.500m, s_block));
+    }
+
+    // D366: an angle address [format] decimals leaves out, ANGLE or a rotary axis, takes four decimals on Heidenhain
+    // (its input resolution of 0.0001 degree) and three on Siemens and Fanuc; a written ANGLE wins.
+    [Theory]
+    [InlineData("heidenhain", "ANGLE", "12.3457")]
+    [InlineData("heidenhain", "C", "12.3457")]
+    [InlineData("siemens", "ANGLE", "12.346")]
+    [InlineData("fanuc", "B", "12.346")]
+    [InlineData("fanuc", "ROTATE", "12.346")]
+    public void Format_AngleAddressWithoutDecimals_TakesTheFamilyDefault(string controller, string address,
+        string written)
+    {
+        var numbers = new NumberFormatter(Machine(FakeMachines.Mill(controller,
+            "[format]\ndecimal_separator = \".\"\ndecimals = { X = 2 }")), pointOnWholeNumbers: false);
+
+        Assert.Equal(written, numbers.Format(address, 12.345678m, s_block));
+    }
+
+    // D366: a written ANGLE takes the decimals the machine file gives it.
+    [Fact]
+    public void Format_WrittenAngleDecimals_Win()
+    {
+        var numbers = new NumberFormatter(Machine(FakeMachines.Mill("heidenhain",
+            "[format]\ndecimal_separator = \".\"\ndecimals = { X = 3, ANGLE = 2 }")), pointOnWholeNumbers: false);
+
+        Assert.Equal("12.35", numbers.Format("ANGLE", 12.345678m, s_block));
     }
 
     // Wave-1 question #64: without decimal_separator a Heidenhain machine writes the comma of its files, the others the
@@ -112,7 +137,7 @@ public sealed class NumberFormatterTests
 
     private static NumberFormatter Formatter(string format, Diagnostics diagnostics, bool pointOnWholeNumbers = false)
     {
-        return new NumberFormatter(Machine(FakeMachines.Mill(format: format)), diagnostics, pointOnWholeNumbers);
+        return new NumberFormatter(Machine(FakeMachines.Mill(format: format)), pointOnWholeNumbers);
     }
 
     private static MachineConfig Machine(string toml)

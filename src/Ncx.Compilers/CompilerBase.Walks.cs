@@ -110,6 +110,7 @@ public abstract partial class CompilerBase
         WritePendingPreload(step);
         CheckPoint(step);
         CheckTolerance(step);
+        RoundLimitCheck.Report(step, Machine, Numbers, Diagnostics);
         WriteBlock(step.Block, step.Before, step.After);
         WritePointComment(step);
         WriteAutoPreload(step);

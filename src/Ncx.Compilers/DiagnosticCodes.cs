@@ -137,9 +137,11 @@ public static partial class DiagnosticCodes
     public const string PreloadDropped = "CMP011";
 
     /// <summary>
-    /// CMP020, a WARNING: a value has more decimals than the machine takes for its address, and is written rounded to
-    /// them (machine-config 2, phase 3 P3-03).
+    /// CMP020, retired 2026-10-27 (D363): a value with more decimals than the machine takes was a WARNING; rounding to
+    /// the decimals of the address is silent, and ROUND_LIMIT with CMP023 reports what it moves. The number is not
+    /// reused.
     /// </summary>
+    [Obsolete("Retired by D363: rounding to the decimals of an address is silent; see CMP023.")]
     public const string MoreDecimalsThanTheMachineTakes = "CMP020";
 
     /// <summary>
@@ -152,4 +154,25 @@ public static partial class DiagnosticCodes
     /// transliteration (machine-config 2).
     /// </summary>
     public const string CommentCharacterOutsideCharset = "CMP022";
+
+    /// <summary>
+    /// CMP023, a WARNING: the point the written file produces lies farther from the programmed point, over the linear
+    /// axes of the block, than ROUND_LIMIT allows, or an angle address moves by more than ROUND_LIMIT:ROTARY (language
+    /// 4.1, ROUND_LIMIT; machine-config 2; D363).
+    /// </summary>
+    public const string RoundingBeyondTheLimit = "CMP023";
+
+    /// <summary>
+    /// CMP030, a WARNING: the radius from the written start to the written center and the radius from the written
+    /// center to the written end of an arc differ by more than [machine] arc_radius_tolerance, or one output step of
+    /// the center's address without the key (machine-config 1, 4; D364).
+    /// </summary>
+    public const string ArcRadiiDifferOnTheGrid = "CMP030";
+
+    /// <summary>
+    /// CMP031, a WARNING: an arc form whose end point the control computes, from the sweep and the center, reaches a
+    /// point more than ROUND_LIMIT, or half an output step without it, from the rounded end point of the block
+    /// (controllers heidenhain.md 8 rule 4, siemens.md 12 rule 2; D365).
+    /// </summary>
+    public const string ArcEndPointOffTheGrid = "CMP031";
 }

@@ -98,7 +98,7 @@ internal static class HeidenhainArcs
         MarkPlaneWords(writing);
 
         string sign = counterclockwise ? "+" : "-";
-        string polarAngle = "IPA" + sign + writing.Numbers.Format("IPA", Math.Abs(sweep), writing.Block);
+        string polarAngle = "IPA" + sign + writing.Numbers.Format("ANGLE", Math.Abs(sweep), writing.Block);
         WriteArc(writing, ["CP", polarAngle, height, direction]);
     }
 
@@ -292,7 +292,7 @@ internal static class HeidenhainArcs
         }
 
         string sign = counterclockwise ? "+" : "-";
-        string polarAngle = "IPA" + sign + writing.Numbers.Format("IPA", sweep, writing.Block);
+        string polarAngle = "IPA" + sign + writing.Numbers.Format("ANGLE", sweep, writing.Block);
         WriteArc(writing, ["CP", polarAngle, travel, direction]);
     }
 
