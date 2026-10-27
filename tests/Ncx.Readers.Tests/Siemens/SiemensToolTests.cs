@@ -1,3 +1,4 @@
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.Writing;
 using static Ncx.Readers.Tests.Siemens.SiemensRead;
@@ -26,6 +27,23 @@ public sealed class SiemensToolTests
     public void T0_ThenM6_IsTool0()
     {
         Assert.Equal(Lines("PRELOAD=1", "TOOL=1", "PRELOAD=0", "TOOL=0"), CheckedBody("T1\nM6\nT0\nM6"));
+    }
+
+    // D297: a lone T0 on a mill that changes with M6 is PRELOAD=0 where another T follows before the end; it is
+    // TOOL=0 only where the main program ends after it with no M6 or other T in between.
+    [Fact]
+    public void T0_FollowedByAnotherT_IsPreload0()
+    {
+        Assert.Equal(Lines("PRELOAD=1", "TOOL=1", "PRELOAD=0", "PRELOAD=2"), Body("T1\nM6\nT0\nT2"));
+    }
+
+    // D132: TOOL=k consumes any preload, of k or of another tool, so an M6 after T5 M6 does not change to the T3 of
+    // the line before; the control's T5 overwrote that selection and stays its T, so the M6 is TOOL=5 again (siemens
+    // 5; virtual machine 3.5).
+    [Fact]
+    public void ToolOfAnotherTool_ConsumesThePreload()
+    {
+        Assert.Equal(Lines("PRELOAD=3", "TOOL=5", "TOOL=5"), CheckedBody("T3\nT5 M6\nM6"));
     }
 
     // The T=0 the Hermle writes before M30 unloads the spindle without an M6: TOOL=0 (controller-mapping 3, TOOL=0).
@@ -65,6 +83,17 @@ public sealed class SiemensToolTests
             CheckedBody("SETMS(2)\nS1000 M3\nSETMS\nS500 M4", MillTurn()));
     }
 
+    // D294: a spindle's number is the address extension its templates write, else the digits of its resource id, so
+    // SETMS(1) finds the main spindle of a machine that names it SP1; a spindle with neither keeps SETMS(n) RAW.
+    [Fact]
+    public void SetmsN_MatchesTheDigitsOfTheResourceId()
+    {
+        MachineConfig machine = MillTurnWith("\"S1\"", "\"SP1\"");
+
+        Assert.Equal(Lines("SPINDLE:MAIN=CW RPM:MAIN=1000", Raw("SETMS(7)")),
+            CheckedBody("SETMS(2)\nSETMS(1)\nS1000 M3\nSETMS(7)", machine));
+    }
+
     // Rule 3: S2= and M2=3 address spindle 2, S1= and M1=4 spindle 1 (siemens 5).
     [Fact]
     public void S2AndM2_BindToSpindle2()
@@ -91,6 +120,47 @@ public sealed class SiemensToolTests
         Assert.Equal(Lines("SPINDLE=CW CSS=ON VC=200", "FEED_MODE=PER_REV RPM=1000 CSS=OFF",
                 "FEED_MODE=PER_MIN CSS=ON VC=200", "RPM=1000 CSS=OFF"),
             CheckedBody("G961 S200 M3\nG97 S1000\nG961 S200\nG971 S1000"));
+    }
+
+    // D154: M19 orients at the angle the machine sets (SD43240), so the reader writes ORIENT=0 with the WARNING RDR021
+    // naming the code.
+    [Fact]
+    public void M19_IsOrient0WithTheWarning()
+    {
+        NcxProgram program = FramedProgram("M19");
+
+        Assert.Equal(Lines("ORIENT=0"), BodyOf(NcxWriter.Write(program)));
+        Assert.Equal([DiagnosticCodes.FunctionAngleSetByTheMachine], Codes(program));
+    }
+
+    // D154, D155: a [workpiece] code gives the WORKPIECE word; [spindle_sync] ON couples the default spindle with the
+    // other work spindle, SPINDLE_SYNC=MAIN,SUB, and PHASE without an angle in its template is PHASE=0 with RDR021.
+    [Fact]
+    public void WorkpieceAndSpindleSyncCodes_AreTheirWords()
+    {
+        MachineConfig machine = MillTurnWith(
+            "SUB_frame = \"datum\"", "MAIN = \"M814\"\nSUB = \"M813\"\nSUB_frame = \"datum\"",
+            "ON = \"COUPON(S2,S1)\"", "ON = \"M203\"", "OFF = \"COUPOF(S2,S1)\"", "OFF = \"M206\"",
+            "PHASE = \"COUPON(S2,S1,{angle})\"", "PHASE = \"M213\"");
+        NcxProgram program = FramedProgram("M813\nM203\nM206\nM213", machine);
+
+        Assert.Equal(
+            Lines("WORKPIECE=SUB", "SPINDLE_SYNC=MAIN,SUB", "SPINDLE_SYNC=OFF", "SPINDLE_SYNC=MAIN,SUB PHASE=0"),
+            BodyOf(NcxWriter.Write(program)));
+        Assert.Equal([DiagnosticCodes.FunctionAngleSetByTheMachine], Codes(program));
+    }
+
+    // D155: a code with an extension addresses its spindle, so the state of another spindle's table that writes the
+    // same code is ruled out, without the RDR020 of two resources switched on.
+    [Fact]
+    public void ExtendedCode_RulesOutTheTablesOfOtherSpindles()
+    {
+        MachineConfig machine = MillTurnWith("[spindle_mode.SUB]\n", "[spindle_mode.TOOL]\nAXIS = \"M2=28\"\n\n"
+            + "[spindle_mode.SUB]\n", "AXIS = \"M2=70\"", "AXIS = \"M2=28\"");
+        NcxProgram program = FramedProgram("M2=28", machine);
+
+        Assert.Equal(Lines("SPINDLE_MODE:SUB=AXIS"), BodyOf(NcxWriter.Write(program)));
+        Assert.Empty(Codes(program));
     }
 
     // SPOS= and M19 orient a spindle, M2=70 switches spindle 2 to axis mode (controller-mapping 4, ORIENT and

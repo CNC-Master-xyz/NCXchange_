@@ -106,6 +106,7 @@ internal static partial class SiemensCycles
                 return;
             }
 
+            value = SiemensMotion.FeedInNcxUnits(block, value, feed); // D292: a G70/G71 cycle feed as ControlFeed
             block.Facts.ControlFeed = value;
             cycle = WithFeed(block, cycle, value, block.Draft.Before);
         }

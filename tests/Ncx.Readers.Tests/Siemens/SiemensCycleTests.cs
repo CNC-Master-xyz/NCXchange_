@@ -325,6 +325,18 @@ public sealed class SiemensCycleTests
         Assert.Contains("R[R1]", program.Diagnostics.Items[0].Message, StringComparison.Ordinal);
     }
 
+    // D292 with D387: under G70 on a metric machine the F of an MCALL position block stays in the basic system on the
+    // control like any feed, so the reader converts it into inch for CYCLE_F and the path feed, with RDR507.
+    [Fact]
+    public void McallPositionF_UnderG70_IsConvertedIntoTheNcxUnit()
+    {
+        string body = CheckedBody(
+            "G0 X0 Y0 Z10\nF100\nMCALL CYCLE81(10,0,2,-5,)\nX10 Y10\nG70 X20 F508\nMCALL\nG1 X30");
+
+        Assert.Contains("CYCLE_F=20", body, StringComparison.Ordinal);
+        Assert.Contains("LINE X=30 F=20", body, StringComparison.Ordinal);
+    }
+
     // D387: an F of an MCALL position block that converts to an expression is the feed of this hole and of the path:
     // the CYCLE block stands again with CYCLE_F the expression (controller-mapping 5).
     [Fact]

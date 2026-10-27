@@ -219,7 +219,7 @@ public sealed class SiemensReaderTests : IDisposable
         "SKIP=2 RAPID X=2", "SHIFT X=5", "ROTATE=30", "MIRROR=X", "TILT A=10 B=20 C=0", "ORIGIN=0",
         "RAPID Z=0 FRAME=MACHINE", "LABEL=BACK", "JUMP=BACK IF={$COUNT > 0}", "LABEL=LOOP1", "JUMP=LOOP1",
         "LABEL=LOOP1_END", "TIMES=1 REPEAT=ANF", "CALL=REPEAT_ANF_ENDE TIMES=2", "CALL=REPEAT_N430 TIMES=2",
-        "CALL=\"SUBEXT\" ARG:P1=1.5", "CALL=L100", "CALL=\"EXT1\"", "HOME Z POINT=1", "HOME X", "SETPOS X=0",
+        "CALL=\"SUBEXT\" ARG:P1=1.5", "CALL=L100", "CALL=\"EXT1\"", "HOME X", "SETPOS X=0",
         "LABEL=START", "JUMP=START IF={$COUNT == 99}", "PRELOAD=0", "TOOL=0", "PRELOAD=1 OFFSET=1", "TOOL=1",
         "SUB=BEGIN NAME=REPEAT_ANF_ENDE", "SUB=BEGIN NAME=REPEAT_N430", "SUB=BEGIN NAME=L100", "SUB=END",
     ];
@@ -248,19 +248,24 @@ public sealed class SiemensReaderTests : IDisposable
     }
 
     // P5-01: every construct of the second program reads into its NCX words; RAW stays only for EXTERN, which
-    // announces a subprogram outside the file to the control, and the factors of SCALE, which have no NCX word (D5).
+    // announces a subprogram outside the file to the control, the factors of SCALE, which have no NCX word (D5), and
+    // G75 FP=1, the fixed point NCX has no POINT for, with the WARNING RDR509 (D260).
     [Fact]
     public void Read_SecondHandWrittenProgram_ReadsEveryConstructAndKeepsRawWhereNcxHasNoWord()
     {
-        string[] lines = NcxWriter.Write(new SiemensReader().Read(new SourceFile("P501B.mpf", HandWrittenSecond),
-            Mill(), new ReadOptions())).Split('\n');
+        NcxProgram program = new SiemensReader().Read(new SourceFile("P501B.mpf", HandWrittenSecond), Mill(),
+            new ReadOptions());
+        string[] lines = NcxWriter.Write(program).Split('\n');
+        Assert.Contains(program.Diagnostics.Items,
+            item => item.Code == Ncx.Readers.DiagnosticCodes.SiemensFixedPoint1HasNoPoint);
 
         foreach (string construct in s_secondConstructs)
         {
             Assert.Contains(construct, lines);
         }
 
-        Assert.Equal(["RAW:SIEMENS=\"N20 EXTERN SUBEXT(REAL)\"", "RAW:SIEMENS=\"SCALE X2\""],
+        Assert.Equal(["RAW:SIEMENS=\"N20 EXTERN SUBEXT(REAL)\"", "RAW:SIEMENS=\"SCALE X2\"",
+                "RAW:SIEMENS=\"N500 G75 FP=1 Z1=0\""],
             lines.Where(line => line.StartsWith("RAW", StringComparison.Ordinal)));
     }
 

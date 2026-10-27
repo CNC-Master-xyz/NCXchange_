@@ -7,7 +7,7 @@ namespace Ncx.Readers.Siemens;
 /// The channel words of a SINUMERIK block (controllers siemens.md 9, 11 rule 7; controller-mapping 7; language 4.8):
 /// WAITM(mark, channels) and WAITMC as SYNC=mark WITH=channels; INIT(channel, "program", "S") selects the program that
 /// the START of the channel names, START(channel) as START_CHANNEL, WAITE(channel) as WAIT_CHANNEL; GROUP_BEGIN as a
-/// SECTION with its text (controller-mapping 5, catalog cycles).
+/// SECTION with its text, GROUP_END and GROUP_ADDEND as comment lines (controller-mapping 5, catalog cycles; D291).
 /// </summary>
 internal static class SiemensChannels
 {
@@ -43,13 +43,12 @@ internal static class SiemensChannels
                 case "GROUP_BEGIN":
                     ReadGroup(block, word);
                     return;
-                case "GROUP_END":
-                    // TODO(question): controller-mapping 5 and 9 read GROUP_BEGIN and GROUP_END as SECTION, and
-                    // GROUP_END carries no text; it stays RAW.
-                    block.MarkRead(word);
-                    block.Draft.KeepAsRaw("GROUP_END closes a program group, which NCX writes as no SECTION of its own "
-                        + "(controller-mapping 5)");
-                    block.Draft.RawKeepsState = true;
+                case "GROUP_END" or "GROUP_ADDEND":
+                    // GROUP_END(<_LEVEL>,<_SP>) and GROUP_ADDEND carry only a level and a spindle and move nothing,
+                    // so they become a comment-only line holding the source text (D291, D92; NC-Programmierung SW4.92
+                    // p.1170-1171, cnc-manuals).
+                    block.MarkAllRead();
+                    block.Draft.CommentLine = "; " + block.Source.Text.Trim();
                     return;
             }
         }
@@ -143,8 +142,10 @@ internal static class SiemensChannels
         }
     }
 
-    // GROUP_BEGIN(0, "Kanal-1 ", 0, 0) opens a program group, structure only: SECTION with its text (controller-mapping
-    // 5 and 9).
+    // GROUP_BEGIN(<_LEVEL>,<_NAME>,<_SP>,<_MODE>,...) opens a program group, structure only: SECTION with its name
+    // where _MODE is a literal number with bit 1 clear. Bit 1 is ShopTurn's automatic retract to the tool-change point,
+    // which no SECTION carries, so with it set, or with a _MODE that is no literal number, the block stays RAW (D291;
+    // NC-Programmierung SW4.92 p.1170, cnc-manuals; controller-mapping 5 and 9).
     private static void ReadGroup(SiemensBlock block, SourceWord word)
     {
         block.MarkRead(word);
@@ -153,6 +154,14 @@ internal static class SiemensChannels
         if (text is null)
         {
             block.Draft.KeepAsRaw("GROUP_BEGIN names its group by no text (controller-mapping 5)");
+            return;
+        }
+
+        int? mode = arguments.Count > 3 ? SiemensNumbers.WholeNumber(arguments[3]) : null;
+        if (mode is not int bits || (bits & 2) != 0)
+        {
+            block.Draft.KeepAsRaw("GROUP_BEGIN has a _MODE that is no literal number, or one with bit 1 set, the "
+                + "automatic retract to the tool-change point, which no SECTION carries (D291)");
             return;
         }
 
