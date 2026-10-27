@@ -84,4 +84,25 @@ public sealed class HeidenhainSubprogramTests
         Assert.Empty(result.Files);
         Assert.Equal(4, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainWordWithoutKlartext).Line);
     }
+
+    // D149: an ARG name is a local of the call in NCX, and the caller reads its own value after it, while the Q
+    // parameter set before CALL PGM survives the call on the control: a caller that reads it after the call is CMP125.
+    [Fact]
+    public void Call_WhoseArgumentTheCallerReadsAfterIt_IsTheErrorCmp125()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "VAR:Q1=2", "CALL=\"PART2\" ARG:Q1=5", "RAPID X={$Q1}"));
+
+        Assert.Equal(5, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainArgumentReadAfterCall).Line);
+    }
+
+    // D149: a caller that assigns the name again before it reads it reads its own value.
+    [Fact]
+    public void Call_WhoseArgumentTheCallerAssignsBeforeItReadsIt_ReportsNothing()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "CALL=\"PART2\" ARG:Q1=5", "VAR:Q1=3", "RAPID X={$Q1}"));
+
+        Assert.DoesNotContain(DiagnosticCodes.HeidenhainArgumentReadAfterCall, HeidenhainCompile.Codes(result));
+    }
 }

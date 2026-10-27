@@ -57,6 +57,7 @@ internal static class HeidenhainSubprograms
             passes = (int)count.Number;
         }
 
+        CheckReadsAfter(writing);
         string line = CallLine(writing, call.Value);
         for (int pass = 0; pass < passes; pass++)
         {
@@ -95,5 +96,46 @@ internal static class HeidenhainSubprograms
         }
 
         return true;
+    }
+
+    // D149: every name an ARG of a CALL assigns is a local of the call in NCX, so the caller reads its own value again
+    // after the call; Klartext sets the Q parameter before the call, and Q parameters survive CALL PGM and CALL LBL on
+    // the control (D274). A block of the caller's section after the call that reads such a name before assigning it
+    // is the ERROR CMP125 on the CALL (decisions.md D149; language 4.9).
+    private static void CheckReadsAfter(HeidenhainBlock writing)
+    {
+        IReadOnlyList<BlockStep> steps = writing.LookAhead.Steps;
+        Section? section = writing.Step.Section;
+        foreach (Word argument in writing.Block.Words)
+        {
+            if (argument.Key != "ARG" || argument.Addr is not string name)
+            {
+                continue;
+            }
+
+            for (int index = writing.Step.Index + 1; index < steps.Count; index++)
+            {
+                Block block = steps[index].Block;
+                if (steps[index].Section != section)
+                {
+                    continue;
+                }
+
+                if (HeidenhainReads.NamesOf(block).Contains(name))
+                {
+                    writing.Error(DiagnosticCodes.HeidenhainArgumentReadAfterCall,
+                        $"{argument.ToCanonical()}: the block on line {block.Line} reads {name} after the call, where "
+                        + $"NCX gives the caller its own value again, while Klartext sets {name} before the call and "
+                        + "the control keeps the value the call leaves (language 4.9; D149).");
+                    break;
+                }
+
+                bool assigns = block.Find("VAR", name) is not null || block.Find("ARG", name) is not null;
+                if (assigns || block.Has("PROGRAM", null, "END") || block.Has("SUB", null, "END"))
+                {
+                    break;
+                }
+            }
+        }
     }
 }
