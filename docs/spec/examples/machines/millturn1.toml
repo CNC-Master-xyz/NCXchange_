@@ -2,6 +2,8 @@
 # Written from the SINUMERIK 840D sl programming manuals (Fundamentals, Job Planning) with the generic words of controllers/siemens.md, sections 5 and 12; no builder cycles, no structure programming (dmg-ctx-840d.toml documents those, D68). Schema draft 8. Not verified on a machine.
 # The point of this file: the plain 840D sl vocabulary is enough for a mill-turn. Spindles are numbers behind S and M (S2=, M2=3), the turret change is the T word with its D number, the spindles synchronize with COUPON/COUPOF, the axes home with G74, the chucks are M codes of the builder. Every number under [[axis]], [dynamics] and the spindle limits is plausible and not verified (D100).
 
+ncx_schema = 1                     # the version of the machine-configuration schema, not of NCXchange (machine-config 1, D348)
+
 [machine]
 name = "Generic 840D sl mill-turn"
 controller = "siemens"
@@ -22,6 +24,7 @@ line_ending = "CRLF"
 program_end = "M30"                # written for PROGRAM=END (D48)
 sub_end = "RET"                    # written for SUB=END and RETURN
 program_layout = "one_file"        # all programs and subprograms of the NCX file into one output file with %_N_NAME_MPF / _SPF headers
+motion_code = "every_block"        # G0 to G3 on every motion block, the form of the SINUMERIK examples (D299)
 
 [tool_change]
 change = "T{tool} D{offset}"       # a turret: the T word is the change, no M6 (siemens 5); the D number of OFFSET stands in the same block

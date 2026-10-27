@@ -192,7 +192,7 @@ Reader rules for the sources (details in `controller-mapping.md`): Fanuc `T4 M6`
 
 | Word | Value | Meaning | Scope |
 |---|---|---|---|
-| `COOLANT=ON` | `ON`, `OFF`; optional addr = channel name | Default coolant channel (M8/M9) or a named channel from the machine configuration (`COOLANT:AIR=ON`, `COOLANT:THROUGH=ON`). | modal per channel |
+| `COOLANT=ON` | `ON`, `OFF`; optional addr = channel name | Default coolant channel `STANDARD` (M8/M9), which every machine file names, or a named channel from the machine configuration (`COOLANT:AIR=ON`, `COOLANT:THROUGH=ON`); with a machine file a channel it does not name is an ERROR, without one the D103 WARNING (D130). | modal per channel |
 | `FUNC:CHIP_CONVEYOR=ON` | identifier; addr = function name | Named machine function defined in the machine configuration with its M code(s) per state. This is the normal way to write machine functions. | block |
 | `MFUNC=136` | integer | Raw M function by number. Only for functions the machine configuration does not name; the compiler warns. | block |
 

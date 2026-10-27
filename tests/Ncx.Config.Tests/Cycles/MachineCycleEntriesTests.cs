@@ -25,6 +25,9 @@ public sealed class MachineCycleEntriesTests
         name = "PECK"
         native = "G83"
         pre = ["FUNC:PECK_MODE=RETRACT"]
+
+        [coolant]
+        STANDARD = { ON = "M8", OFF = "M9" }
         """;
 
     // Machine-config 6: without [[cycle]] a machine has the built-in family of its controller.
@@ -35,6 +38,9 @@ public sealed class MachineCycleEntriesTests
             [machine]
             name = "Test mill"
             controller = "siemens"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """);
 
         Assert.Empty(machine.CycleEntries);
@@ -101,6 +107,9 @@ public sealed class MachineCycleEntriesTests
             name = "PECK"
             native = "G83"
             modal = "yes"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
             """, diagnostics);
 
         Assert.Null(machine);

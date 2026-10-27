@@ -15,6 +15,9 @@ public sealed class ToolPointsLoaderTests
         name = "Test mill"
         controller = "fanuc"
 
+        [coolant]
+        STANDARD = { ON = "M8", OFF = "M9" }
+
         """;
 
     // D373: the registers form with its keys and the rows.

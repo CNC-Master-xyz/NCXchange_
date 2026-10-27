@@ -47,6 +47,12 @@ public static partial class DiagnosticCodes
     public const string VariableMapWithoutIndex = "CFG008";
 
     /// <summary>
+    /// ERROR: a machine file or a cycle catalog declares an ncx_schema version this build does not read, ncx_schema
+    /// = 2; the message names the file and the version (machine-config 1, D348).
+    /// </summary>
+    public const string UnsupportedSchema = "CFG009";
+
+    /// <summary>
     /// ERROR: a [[tool_point]] row without its tool or its point, or, under offset_memory A or B, one register number
     /// that serves as a length and as a radius (machine-config 3, D373).
     /// </summary>
