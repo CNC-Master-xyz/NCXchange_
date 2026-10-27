@@ -258,6 +258,49 @@ public sealed partial class ConvertCommandTests : IDisposable
         Assert.Equal(expected, _output);
     }
 
+    // D223, architecture 10: --channel n writes CHANNEL=n on the PROGRAM=BEGIN of any file, and wins over the suffix
+    // .P-n of the file name; without either no CHANNEL is written.
+    [Theory]
+    [InlineData("O1000.nc", 2, "CHANNEL=2")]
+    [InlineData("O1000.P-2.nc", 1, "CHANNEL=1")]
+    [InlineData("O1000.P-2.nc", null, "CHANNEL=2")]
+    [InlineData("O1000.nc", null, null)]
+    public void ConvertChannel_SetsTheChannelOfTheProgram(string fileName, int? channel, string? expected)
+    {
+        string file = _project.WriteInWorkingDirectory(fileName, "%\nO1000\nG0 X10. Z5.\nM30\n%\n");
+
+        int exitCode = RunConvert(file, "nakamura-ntjx", channel: channel);
+
+        Assert.True(exitCode == 0, _error);
+        string begin = _output.Split('\n').Single(line => line.StartsWith("PROGRAM=BEGIN", StringComparison.Ordinal));
+        Assert.Equal(expected is null ? "PROGRAM=BEGIN NUMBER=1000" : "PROGRAM=BEGIN NUMBER=1000 " + expected, begin);
+    }
+
+    // D223: a channel the machine file does not have is the ERROR RDR107 of the Fanuc reader, exit code 1 (D97).
+    [Fact]
+    public void ConvertChannel_ChannelTheMachineHasNot_ExitsOneWithRdr107()
+    {
+        string file = _project.WriteInWorkingDirectory("O1000.nc", CleanProgram);
+
+        int exitCode = RunConvert(file, "fanuc-mill-30i", channel: 2);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("ERROR RDR107", _error, StringComparison.Ordinal);
+    }
+
+    // D223, D97: --channel names the channel of one program, so --batch with --channel is a usage error, exit code 2.
+    [Fact]
+    public void CommandLine_ConvertBatchWithChannel_IsAUsageErrorExitingTwo()
+    {
+        using var cli = new CliHarness();
+
+        int exitCode = cli.Run("convert", "--batch", "folder", "--report", "report.txt", "--channel", "2", "--machine",
+            "fanuc-mill-30i");
+
+        Assert.Equal(2, exitCode);
+        Assert.Contains("ERROR CLI001", cli.Error, StringComparison.Ordinal);
+    }
+
     // D97, architecture 10: convert without its file is a usage error, which decides exit code 2 before the run starts.
     [Fact]
     public void CommandLine_ConvertWithoutFile_IsAUsageErrorExitingTwo()
@@ -274,7 +317,7 @@ public sealed partial class ConvertCommandTests : IDisposable
     // ncx convert in the working directory and with the tool folder of the harness; the outputs are kept in _output and
     // _error.
     private int RunConvert(string file, string? machine, string? outputFile = null, bool strict = false,
-        ReaderRegistry? readers = null)
+        ReaderRegistry? readers = null, int? channel = null)
     {
         using var output = new StringWriter();
         using var error = new StringWriter();
@@ -287,7 +330,7 @@ public sealed partial class ConvertCommandTests : IDisposable
             ToolFolder = _project.ToolFolder,
         };
 
-        int exitCode = ConvertCommand.Run(settings, outputFile, readers ?? Program.Readers(), output, error);
+        int exitCode = ConvertCommand.Run(settings, outputFile, channel, readers ?? Program.Readers(), output, error);
         _output = output.ToString();
         _error = error.ToString();
         return exitCode;

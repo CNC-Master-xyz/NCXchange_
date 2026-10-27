@@ -40,9 +40,9 @@ public sealed class JobCommandTests : IDisposable
 
         Assert.True(exitCode == 0, _cli.Error);
         Assert.DoesNotContain("VM571", _cli.Error, StringComparison.Ordinal);
-        Assert.StartsWith("Channel 1: NAKAMURA_WY250L_O1000.path1.ncx\n\nTool list: NAKAMURA_WY250L_O1000.path1.ncx, "
+        Assert.StartsWith("Channel 1: NAKAMURA_WY250L_O1000.ncx\n\nTool list: NAKAMURA_WY250L_O1000.ncx, "
             + "the whole file, on nakamura-ntjx.toml, INTERPRETED run\n", _cli.Output, StringComparison.Ordinal);
-        Assert.Contains("\nChannel 2: NAKAMURA_WY250L_O1000.path2.ncx\n\nTool list: NAKAMURA_WY250L_O1000.path2.ncx, "
+        Assert.Contains("\nChannel 2: NAKAMURA_WY250L_O1000.P-2.ncx\n\nTool list: NAKAMURA_WY250L_O1000.P-2.ncx, "
             + "the whole file, on nakamura-ntjx.toml", _cli.Output, StringComparison.Ordinal);
     }
 
@@ -223,10 +223,10 @@ public sealed class JobCommandTests : IDisposable
     private string NakamuraJob()
     {
         string machine = _cli.CopyExample("machines/nakamura-ntjx.toml");
-        foreach (string path in new[] { "path1", "path2" })
+        foreach (string path in new[] { "", ".P-2" })
         {
-            string source = _cli.CopyExample("sources/NAKAMURA_WY250L_O1000." + path + ".nc");
-            string converted = _cli.PathOf("NAKAMURA_WY250L_O1000." + path + ".ncx");
+            string source = _cli.CopyExample("sources/NAKAMURA_WY250L_O1000" + path + ".nc");
+            string converted = _cli.PathOf("NAKAMURA_WY250L_O1000" + path + ".ncx");
             int convertExit = _cli.Run("convert", source, "--machine", machine, "--output", converted);
             Assert.True(convertExit == 0, _cli.Error);
         }

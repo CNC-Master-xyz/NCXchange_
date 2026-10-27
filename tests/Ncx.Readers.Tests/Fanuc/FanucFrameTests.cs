@@ -1,3 +1,5 @@
+using Ncx.Core.Model;
+using Ncx.Core.Writing;
 using static Ncx.Readers.Tests.Fanuc.FanucRead;
 
 namespace Ncx.Readers.Tests.Fanuc;
@@ -26,6 +28,17 @@ public sealed class FanucFrameTests
         Assert.Equal(
             Lines("SHIFT X=2.75 Z=1.25", "SHIFT=RESET", "SHIFT X=1 Z=1"),
             Body("G52 U2.75 W1.25\nG52 U1. W1.", Lathe()));
+    }
+
+    // D125: on a lathe with X in diameters the G52 X is a diameter, and so is SHIFT X under DIAMETER=ON: the reader
+    // writes it as given, neither halved nor doubled, and the program checks.
+    [Fact]
+    public void Shift_G52XOnADiameterLathe_IsTheDiameterAsWritten()
+    {
+        string text = Text("%\nO0001\nG0 X40. Z5.\nG52 X10. Z0\nG0 X20.\nG52 U0 W0\nM30\n%\n", Lathe());
+
+        Assert.Equal(Lines("RAPID X=40 Z=5", "SHIFT X=10 Z=0", "RAPID X=20", "SHIFT=RESET"), BodyOf(text));
+        Assert.False(Check(text, Lathe()).HasErrors, Check(text, Lathe()).ToText());
     }
 
     // G53 is FRAME=MACHINE on its block (controllers fanuc.md 9 rule 3).
@@ -136,11 +149,32 @@ public sealed class FanucFrameTests
         Assert.False(Check(text, Lathe()).HasErrors, Check(text, Lathe()).ToText());
     }
 
-    // G68 R rotates the plane, G69 cancels (controller-mapping 1, ROTATE).
+    // G68 R rotates the plane, G69 cancels (controller-mapping 1, ROTATE). D245 (a): without X Y it turns about the
+    // tool position, here the origin of the plane.
     [Fact]
     public void G68R30_IsRotate_AndG69Resets()
     {
-        Assert.Equal(Lines("ROTATE=30", "ROTATE=RESET"), Body("G68 R30.\nG69"));
+        Assert.Equal(Lines("RAPID X=0 Y=0", "ROTATE=30", "ROTATE=RESET"), Body("G0 X0 Y0\nG68 R30.\nG69"));
+        Assert.Equal(Lines("ROTATE=30", "ROTATE=RESET"), Body("G68 X0 Y0 R30.\nG69"));
+    }
+
+    // D245 (a): G68 without X Y turns about the tool position; where the reader does not know it as the origin of the
+    // plane, or without R (parameter 5410), the block stays RAW, the control rotates, and its G69 stays RAW too.
+    [Fact]
+    public void G68_AboutAnUnknownToolPositionOrWithoutR_IsKeptAsRawWithItsG69()
+    {
+        Assert.Equal(Lines("RAW:FANUC=\"G68 R30.\"", "RAW:FANUC=\"G69\""), Body("G68 R30.\nG69"));
+        Assert.Equal(Lines("RAPID X=10 Y=0", "RAW:FANUC=\"G68 R30.\"", "RAW:FANUC=\"G69\""),
+            Body("G0 X10. Y0\nG68 R30.\nG69"));
+        Assert.Equal(Lines("RAW:FANUC=\"G68 X0 Y0\"", "RAW:FANUC=\"G69\""), Body("G68 X0 Y0\nG69"));
+    }
+
+    // D245 (a): the centre of G18 is Z X (the G18 of the first block stands in the header, D34).
+    [Fact]
+    public void G68_InG18_TakesTheCentreOfTheZXPlane()
+    {
+        Assert.Equal(Lines("RAW:FANUC=\"G68 X0 Y0 R30.\""), Body("G18\nG68 X0 Y0 R30."));
+        Assert.Equal(Lines("ROTATE=30"), Body("G18\nG68 X0 Z0 R30."));
     }
 
     // ROTATE turns about the origin; G68 about another point stays RAW (language 4.2).
@@ -195,8 +229,8 @@ public sealed class FanucFrameTests
             Body("G52 X5.\nG68.2 X10. Y0 Z0 I0 J45. K0\nG53.1\nG69\nG0 X0 Y0\nG52 X0"));
     }
 
-    // fanuc 4 does not say where the local coordinate system of a G52 stands against an active tilted plane: the G52
-    // stays RAW and the tilted plane with its origin stays in the chain until the G69 (D5).
+    // D244 (c): NCX keeps a G52 under the tilted plane of G68.2 native, since whether the control allows it depends on
+    // its edition; the tilted plane with its origin stays in the chain until the G69 (D5).
     [Fact]
     public void G52_WhileAG682IsActive_IsKeptAsRaw()
     {
@@ -211,27 +245,194 @@ public sealed class FanucFrameTests
             Body("G68.2 X10. Y0 Z0 I0 J45. K0\nG52 X5.\nG52 X20.\nG0 X0 Y0\nG69"));
     }
 
-    // A G52 while a G68 rotates stays RAW for the same reason, and the rotation stays in the chain: the SHIFT=RESET of
-    // a replacing G52 would remove it (language 4.2).
+    // D244 (c): a G52 may not stand while a G68 rotates, PS0412 on the 0i-D: it stays RAW and the rotation stays in
+    // the chain.
     [Fact]
     public void G52_ReplacedWhileAG68Rotates_IsKeptAsRawAndTheRotationStays()
     {
         Assert.Equal(
             Lines("SHIFT X=5", "ROTATE=30", "RAW:FANUC=\"G52 X20.\"", "ROTATE=RESET", "SHIFT=RESET"),
-            Body("G52 X5.\nG68 R30.\nG52 X20.\nG69\nG52 X0"));
+            Body("G52 X5.\nG68 X0 Y0 R30.\nG52 X20.\nG69\nG52 X0"));
     }
 
-    // fanuc 4 does not say what a second G68.2 or G68 does before the G69, a new plane or one in the active plane: it
-    // stays RAW, and the G69 resets the one the chain holds.
+    // D245 (b): a second G68.2 replaces the first, TILT=RESET (SHIFT=RESET where the old one had an origin) and the
+    // new plane; one G69 resets it.
     [Fact]
-    public void G682AndG68_WhileOneIsActive_AreKeptAsRaw()
+    public void G682_WhileOneIsActive_ReplacesIt()
     {
         Assert.Equal(
-            Lines("TILT A=45 B=0 C=0", "RAW:FANUC=\"G68.2 X0 Y0 Z0 I0 J30. K0\"", "TILT=RESET"),
+            Lines("TILT A=45 B=0 C=0", "TILT=RESET", "TILT A=30 B=0 C=0", "TILT=RESET"),
             Body("G68.2 X0 Y0 Z0 I0 J45. K0\nG68.2 X0 Y0 Z0 I0 J30. K0\nG69"));
         Assert.Equal(
-            Lines("ROTATE=30", "RAW:FANUC=\"G68 R45.\"", "ROTATE=RESET"),
-            Body("G68 R30.\nG68 R45.\nG69"));
+            Lines("SHIFT X=10", "TILT A=45 B=0 C=0", "SHIFT=RESET", "SHIFT X=20", "TILT A=30 B=0 C=0", "SHIFT=RESET"),
+            Body("G68.2 X10. Y0 Z0 I0 J45. K0\nG68.2 X20. Y0 Z0 I0 J30. K0\nG69"));
+    }
+
+    // D245 (b): a second 2D G68 under absolute R replaces the first, ROTATE=RESET plus ROTATE; under G91 parameter
+    // 5400#0 decides whether R adds, so it stays RAW after the ROTATE=RESET of the rotation it replaces, and so does
+    // the G69 of the rotation the control then holds.
+    [Fact]
+    public void G68_WhileOneIsActive_ReplacesItUnderG90AndStaysRawUnderG91()
+    {
+        Assert.Equal(
+            Lines("ROTATE=30", "ROTATE=RESET", "ROTATE=45", "ROTATE=RESET"),
+            Body("G90 G68 X0 Y0 R30.\nG68 X0 Y0 R45.\nG69"));
+        Assert.Equal(
+            Lines("ROTATE=30", "ROTATE=RESET", "RAW:FANUC=\"G91 G68 X0 Y0 R45.\"", "RAW:FANUC=\"G69\""),
+            Body("G90 G68 X0 Y0 R30.\nG91 G68 X0 Y0 R45.\nG69"));
+    }
+
+    // D245: the cross forms, a G68 under G68.2 and a G68.2 under G68, raise PS5462 on the control and stay RAW; the
+    // G69 resets what the chain holds.
+    [Fact]
+    public void G682AndG68_UnderEachOther_AreKeptAsRaw()
+    {
+        Assert.Equal(
+            Lines("TILT A=45 B=0 C=0", "RAW:FANUC=\"G68 X0 Y0 R30.\"", "TILT=RESET"),
+            Body("G68.2 X0 Y0 Z0 I0 J45. K0\nG68 X0 Y0 R30.\nG69"));
+        Assert.Equal(
+            Lines("ROTATE=30", "RAW:FANUC=\"G68.2 X0 Y0 Z0 I0 J30. K0\"", "ROTATE=RESET"),
+            Body("G68 X0 Y0 R30.\nG68.2 X0 Y0 Z0 I0 J30. K0\nG69"));
+        NcxProgram program = FramedProgram("G68.2 X0 Y0 Z0 I0 J45. K0\nG68 X0 Y0 R30.");
+        Assert.Contains(program.Diagnostics.Items, diagnostic => diagnostic.Message.Contains("PS5462",
+            StringComparison.Ordinal));
+    }
+
+    // D245: the 3D conversion G68 with I J K stays RAW; a second one accumulates on the control, a third raises PS5043,
+    // and the one G69 that ends them stays RAW.
+    [Fact]
+    public void G68WithIJK_IsKeptAsRawAndAThirdNamesPs5043()
+    {
+        NcxProgram program = FramedProgram(
+            "G68 X0 Y0 Z0 I0 J0 K1 R30.\nG68 X0 Y0 Z0 I1 J0 K0 R10.\nG68 X0 Y0 Z0 I0 J1 K0 R5.\nG69\nG69");
+        Assert.Equal(
+            Lines(
+                "RAW:FANUC=\"G68 X0 Y0 Z0 I0 J0 K1 R30.\"",
+                "RAW:FANUC=\"G68 X0 Y0 Z0 I1 J0 K0 R10.\"",
+                "RAW:FANUC=\"G68 X0 Y0 Z0 I0 J1 K0 R5.\"",
+                "RAW:FANUC=\"G69\""),
+            BodyOf(NcxWriter.Write(program)));
+        Assert.Single(program.Diagnostics.Items, diagnostic => diagnostic.Message.Contains("PS5043",
+            StringComparison.Ordinal));
+    }
+
+    // D245: a G68, G68.2 or G51.1 kept RAW for another reason still switches its mode on the control, so its G69 or
+    // G50.1 stays RAW; G68.3 and G68.4 tilt the plane too, so a G54 under them stays RAW (D244 (c)).
+    [Fact]
+    public void ModesKeptAsRaw_KeepTheirCancelRaw()
+    {
+        Assert.Equal(
+            Lines("RAW:FANUC=\"G62 G68 X0 Y0 R30.\"", "RAW:FANUC=\"G69\"", "RAW:FANUC=\"G62 G51.1 X0\"",
+                "RAW:FANUC=\"G50.1 X0\""),
+            Body("G62 G68 X0 Y0 R30.\nG69\nG62 G51.1 X0\nG50.1 X0"));
+        Assert.Equal(
+            Lines("RAW:FANUC=\"G68.4 X0 Y0 Z0 I0 J30. K0\"", "RAW:FANUC=\"G54\"", "RAW:FANUC=\"G69\"", "ORIGIN=1"),
+            Body("G68.4 X0 Y0 Z0 I0 J30. K0\nG54\nG69\nG54"));
+    }
+
+    // D245: a cancel kept as RAW ends the entries the chain holds beside it, MIRROR=OFF and ROTATE=RESET, so the chain
+    // stays known.
+    [Fact]
+    public void CancelKeptAsRaw_EndsTheEntriesOfTheChainBesideIt()
+    {
+        Assert.Equal(
+            Lines("MIRROR=X", "RAW:FANUC=\"G51.1 Y5.\"", "MIRROR=OFF", "RAW:FANUC=\"G50.1 X0 Y0\"", "SHIFT X=5"),
+            Body("G51.1 X0\nG51.1 Y5.\nG50.1 X0 Y0\nG52 X5."));
+        Assert.Equal(
+            Lines("ROTATE=30", "ROTATE=RESET", "RAW:FANUC=\"G68 X10. Y10. R45.\"", "RAW:FANUC=\"G69\"", "SHIFT X=5"),
+            Body("G68 X0 Y0 R30.\nG68 X10. Y10. R45.\nG69\nG52 X5."));
+    }
+
+    // D124: G50.1 cancels the mirror of the axes it names and keeps the others (B-64484EN p.367); the chain holds one
+    // MIRROR with the set of the mirrored axes, which a change replaces with MIRROR=OFF and the new set.
+    [Fact]
+    public void G501_CancelsOnlyTheAxesItNames()
+    {
+        Assert.Equal(
+            Lines("MIRROR=X,Y", "MIRROR=OFF", "MIRROR=Y", "MIRROR=OFF", "MIRROR=X", "MIRROR=OFF", "MIRROR=X,Y",
+                "MIRROR=OFF", "MIRROR=Y"),
+            Body("G51.1 X0 Y0\nG50.1 X0\nG50.1 Y0\nG51.1 X0\nG51.1 Y0\nG50.1 X0"));
+    }
+
+    // D124, D245: an axis a G51.1 kept as RAW mirrors stays native, so its G50.1 stays RAW, while the G50.1 of an axis
+    // the chain holds writes MIRROR=OFF; G51.1 and G50.1 under a G68 raise an alarm (B-64484EN p.368) and stay RAW.
+    [Fact]
+    public void Mirror_OfANativeAxisAndUnderG68_StaysRaw()
+    {
+        Assert.Equal(
+            Lines("RAW:FANUC=\"G51.1 Y5.\"", "MIRROR=X", "MIRROR=OFF", "RAW:FANUC=\"G50.1 Y0\""),
+            Body("G51.1 Y5.\nG51.1 X0\nG50.1 X0\nG50.1 Y0"));
+        Assert.Equal(
+            Lines("ROTATE=30", "RAW:FANUC=\"G51.1 X0\"", "ROTATE=RESET"),
+            Body("G68 X0 Y0 R30.\nG51.1 X0\nG69"));
+    }
+
+    // D225: at a label a jump enters with another chain, and at the head of a loop or the target of a jump back over
+    // a range that changes the frames, the chain is unknown, so the G69 after it stays RAW.
+    [Fact]
+    public void Chain_AtJumpTargetsAndLoopHeads_IsForgottenWhereTheEdgesDisagree()
+    {
+        Assert.Equal(
+            Lines("VAR:V1=1", "ROTATE=30", "JUMP=10 IF={$V1 == 1}", "ROTATE=RESET", "LABEL=10",
+                "RAW:FANUC=\"N10 G69\""),
+            Body("#1=1\nG68 X0 Y0 R30.\nIF [#1 EQ 1] GOTO 10\nG69\nN10 G69"));
+        Assert.Contains("RAW:FANUC=\"G68 X0 Y0 R10.\"",
+            Body("#1=0\nWHILE [#1 LT 3] DO1\nG68 X0 Y0 R10.\nG69\n#1=#1+1\nEND1"), StringComparison.Ordinal);
+        Assert.Contains("RAW:FANUC=\"N30 G68 X0 Y0 R10.\"",
+            Body("N30 G68 X0 Y0 R10.\nG69\n#5=#5+1\nIF [#5 LT 3] GOTO 30"), StringComparison.Ordinal);
+        Assert.Equal(
+            Lines("VAR:V1=1", "JUMP=10 IF={$V1 == 1}", "VAR:V2=2", "LABEL=10", "ROTATE=30"),
+            Body("#1=1\nIF [#1 EQ 1] GOTO 10\n#2=2\nN10 G68 X0 Y0 R30."));
+    }
+
+    // D225: a program M99 loops back to its start begins the second pass with the chain the first leaves, so where it
+    // ends with a rotation on, the chain at the start is unknown and its G69 stays RAW; one that cancels it keeps it.
+    [Fact]
+    public void Chain_AtTheStartOfAProgramM99Loops_IsForgottenWhereThePassEndsRotated()
+    {
+        string rotated = Text("%\nO0001\nG0 X0 Y0\nG69\nG68 X0 Y0 R30.\nG1 X6. F100\nM99\n%\n");
+        string cancelled = Text("%\nO0001\nG0 X0 Y0\nG69\nG68 X0 Y0 R30.\nG1 X6. F100\nG69\nM99\n%\n");
+
+        Assert.Contains("\nRAW:FANUC=\"G69\"\nRAW:FANUC=\"G68 X0 Y0 R30.\"\n", rotated, StringComparison.Ordinal);
+        Assert.Contains("\nROTATE=30\n", cancelled, StringComparison.Ordinal);
+        Assert.DoesNotContain("RAW", cancelled, StringComparison.Ordinal);
+    }
+
+    // D244 (a): G52 holds in all of G54..G59, so after the ORIGIN the reader writes the G52 shift again; G52 X0 then
+    // cancels it.
+    [Fact]
+    public void G52_ThenG55_WritesTheShiftAgainAfterTheOrigin()
+    {
+        Assert.Equal(
+            Lines("SHIFT X=5 Y=2", "ORIGIN=2", "SHIFT X=5 Y=2", "SHIFT=RESET"),
+            Body("G52 X5. Y2.\nG55\nG52 X0 Y0"));
+    }
+
+    // D244 (c): G52 to G59 and G92 under the 2D G68 or G51.1 raise PS0412 on the 0i-D and stay RAW, and so do G28 and
+    // G30 (d); under G68.2 G28 is HOME.
+    [Fact]
+    public void CoordinateCodes_UnderG68OrG511_AreKeptAsRawNamingThePs0412()
+    {
+        NcxProgram program = FramedProgram("G68 X0 Y0 R30.\nG55\nG92 X0\nG91 G28 Z0\nG69");
+        Assert.Equal(
+            Lines("ROTATE=30", "RAW:FANUC=\"G55\"", "RAW:FANUC=\"G92 X0\"", "RAW:FANUC=\"G91 G28 Z0\"",
+                "ROTATE=RESET"),
+            BodyOf(NcxWriter.Write(program)));
+        Assert.Equal(3, program.Diagnostics.Items.Count(diagnostic => diagnostic.Message.Contains("PS0412",
+            StringComparison.Ordinal)));
+        Assert.Equal(Lines("MIRROR=X", "RAW:FANUC=\"G54\"", "MIRROR=OFF"), Body("G51.1 X0\nG54\nG50.1 X0"));
+        Assert.Equal(Lines("TILT A=45 B=0 C=0", "RAW:FANUC=\"G54\"", "HOME Z", "TILT=RESET"),
+            Body("G68.2 X0 Y0 Z0 I0 J45. K0\nG54\nG91 G28 Z0\nG69"));
+    }
+
+    // D244 (d): a G92 cancels the G52 shift of the axes it names: SHIFT=RESET, the SETPOS, then the G52 shift of the
+    // other axes.
+    [Fact]
+    public void G92_UnderAG52_ResetsTheShiftOfItsAxes()
+    {
+        Assert.Equal(
+            Lines("SHIFT X=5 Y=2", "SHIFT=RESET", "SETPOS X=0", "SHIFT Y=2", "SHIFT=RESET"),
+            Body("G52 X5. Y2.\nG92 X0\nG52 Y0"));
     }
 
     // G68.1 stays RAW until its words are mapped to the axis angles of TILT_AXIS.

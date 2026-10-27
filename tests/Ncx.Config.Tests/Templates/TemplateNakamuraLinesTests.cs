@@ -11,7 +11,7 @@ namespace Ncx.Config.Tests.Templates;
 public sealed class TemplateNakamuraLinesTests
 {
     // The first path of the Nakamura WY250L program of the specification's examples.
-    private const string NakamuraProgram = "sources/NAKAMURA_WY250L_O1000.path1.nc";
+    private const string NakamuraProgram = "sources/NAKAMURA_WY250L_O1000.nc";
 
     // Each line is read from the program, so that it is the machine's own text, trailing blank and all. The templates
     // are those of nakamura-ntjx.toml where the file has one: M{mark} (the wait), G50 S{value} (RPM_MAX), G96 S{value}

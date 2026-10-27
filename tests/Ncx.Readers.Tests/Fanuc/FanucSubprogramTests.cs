@@ -88,22 +88,48 @@ public sealed class FanucSubprogramTests
             StringComparison.Ordinal);
     }
 
-    // A subprogram that no program of the file calls runs with the chain of a caller the reader does not know: G69 and
-    // G52 act on entries of that chain and stay RAW, G68 is appended to it (language 4.2, virtual machine 3.9).
+    // A subprogram that no program of the file calls runs with the chain of a caller the reader does not know: G69, G52
+    // and G68 act on entries of that chain and stay RAW; G68 may replace a rotation of the caller (language 4.2,
+    // virtual machine 3.9; D225, D245).
     [Fact]
     public void SubprogramWithoutACallerInTheFile_KeepsItsFrameResetsRaw()
     {
-        string text = Text("%\nO0001\nG0 X0\nM30\nO0100\nG69\nG52 X0\nG68 R30.\nM99\n%\n");
+        string text = Text("%\nO0001\nG0 X0\nM30\nO0100\nG69\nG52 X0\nG68 X0 Y0 R30.\nM99\n%\n");
 
-        Assert.Contains("\nSUB=BEGIN NAME=100\nRAW:FANUC=\"G69\"\nRAW:FANUC=\"G52 X0\"\nROTATE=30\nSUB=END\n", text,
-            StringComparison.Ordinal);
+        Assert.Contains(
+            "\nSUB=BEGIN NAME=100\nRAW:FANUC=\"G69\"\nRAW:FANUC=\"G52 X0\"\nRAW:FANUC=\"G68 X0 Y0 R30.\"\nSUB=END\n",
+            text, StringComparison.Ordinal);
+    }
+
+    // D225, D245: where the callers leave different chains, a G68 and a G68.2 of the subprogram stay RAW, and after
+    // the RAW G69 no rotation is left that a G52 or G68.2 would claim an alarm for.
+    [Fact]
+    public void SubprogramOfDisagreeingCallers_KeepsItsRotationsRawWithoutFalseAlarms()
+    {
+        NcxProgram program = Program("%\nO0001\nG68 X0 Y0 R30.\nM98 P2000\nG69\nM98 P2000\nM30\nO2000\n"
+            + "G68 X0 Y0 R45.\nG69\nG52 X5.\nG68.2 X0 Y0 Z0 I0 J30. K0\nG69\nM99\n%\n");
+
+        Assert.Contains("\nSUB=BEGIN NAME=2000\nRAW:FANUC=\"G68 X0 Y0 R45.\"\nRAW:FANUC=\"G69\"\n",
+            Core.Writing.NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.DoesNotContain(program.Diagnostics.Items, diagnostic => diagnostic.Message.Contains("PS0412",
+            StringComparison.Ordinal) || diagnostic.Message.Contains("PS5462", StringComparison.Ordinal));
+    }
+
+    // D225, D245: a subprogram with G68.3, G68.4 or G68.1 may change the chain, so the caller's G69 after the call
+    // stays RAW.
+    [Fact]
+    public void SubprogramWithG683_LeavesTheChainOfItsCallerUnknown()
+    {
+        string text = Text("%\nO0001\nM98 P2000\nG69\nM30\nO2000\nG68.3 X0 Y0 Z0 R10.\nM99\n%\n");
+
+        Assert.Contains("\nCALL=2000\nRAW:FANUC=\"G69\"\n", text, StringComparison.Ordinal);
     }
 
     // With the chain its one caller left, a subprogram's G69 resets the caller's rotation (controllers fanuc.md 4).
     [Fact]
     public void SubprogramOfACallerWithARotation_ResetsItWithG69()
     {
-        string text = Text("%\nO0001\nG68 R30.\nM98 P100\nM30\nO0100\nG69\nM99\n%\n");
+        string text = Text("%\nO0001\nG68 X0 Y0 R30.\nM98 P100\nM30\nO0100\nG69\nM99\n%\n");
 
         Assert.Contains("\nSUB=BEGIN NAME=100\nROTATE=RESET\nSUB=END\n", text, StringComparison.Ordinal);
     }

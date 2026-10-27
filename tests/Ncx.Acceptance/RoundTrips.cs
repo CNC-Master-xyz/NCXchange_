@@ -219,8 +219,8 @@ public sealed class RoundTrips : IDisposable
     // Implementation 13, P3-07: each path of the Nakamura pair converts with its machine, and the NCX file it writes
     // checks as a single file with the machine without an ERROR; the pair as a job is phase 6 (Jobs/).
     [Theory]
-    [InlineData("NAKAMURA_WY250L_O1000.path1.nc")]
-    [InlineData("NAKAMURA_WY250L_O1000.path2.nc")]
+    [InlineData("NAKAMURA_WY250L_O1000.nc")]
+    [InlineData("NAKAMURA_WY250L_O1000.P-2.nc")]
     public void ConvertAndCheck_NakamuraPathAsASingleFile_RaisesNoError(string source)
     {
         Convert(source, Nakamura);

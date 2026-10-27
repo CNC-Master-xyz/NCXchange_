@@ -39,8 +39,8 @@ public sealed partial class NakamuraJobCompileTests
     // nakamura-ntjx.toml is the NTJX mark M198, which the WY sources do not pass, so the job compiler writes it after
     // the header and the codes of the source follow in their order (D314, D388 9).
     [Theory]
-    [InlineData(0, "NAKAMURA_WY250L_O1000.path1.nc")]
-    [InlineData(1, "NAKAMURA_WY250L_O1000.path2.nc")]
+    [InlineData(0, "NAKAMURA_WY250L_O1000.nc")]
+    [InlineData(1, "NAKAMURA_WY250L_O1000.P-2.nc")]
     public void NakamuraJob_CompiledBack_WritesTheWaitCodesInTheOrderOfTheSource(int channel, string source)
     {
         MachineConfig machine = Machine();
@@ -65,7 +65,7 @@ public sealed partial class NakamuraJobCompileTests
         List<string> path2 = SpindleSyncCodes(Blocks(result.Files[1].Text, machine));
 
         Assert.Empty(SpindleSyncCodes(Blocks(result.Files[0].Text, machine)));
-        Assert.Equal(SpindleSyncCodes(Blocks(Fixture.ReadText("sources/NAKAMURA_WY250L_O1000.path2.nc"), machine)),
+        Assert.Equal(SpindleSyncCodes(Blocks(Fixture.ReadText("sources/NAKAMURA_WY250L_O1000.P-2.nc"), machine)),
             path2);
         Assert.Equal(["M97", "M96", "M97"], path2);
     }
@@ -73,8 +73,8 @@ public sealed partial class NakamuraJobCompileTests
     // Implementation 16, P6-02: the builder RAW lines of each path stand verbatim in its compiled program, in their
     // order (language 4.1, RAW; D5).
     [Theory]
-    [InlineData(0, "NAKAMURA_WY250L_O1000.path1.nc")]
-    [InlineData(1, "NAKAMURA_WY250L_O1000.path2.nc")]
+    [InlineData(0, "NAKAMURA_WY250L_O1000.nc")]
+    [InlineData(1, "NAKAMURA_WY250L_O1000.P-2.nc")]
     public void NakamuraJob_CompiledBack_WritesTheRawLinesVerbatim(int channel, string source)
     {
         MachineConfig machine = Machine();

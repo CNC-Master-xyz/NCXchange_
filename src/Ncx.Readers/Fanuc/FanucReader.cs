@@ -33,6 +33,12 @@ public sealed partial class FanucReader : ReaderBase
     private FanucState? _fanuc;
     private TemplateSet? _templates;
 
+    // The channel of the file being read, from the command line or the file name (D223).
+    private long? _fileChannel;
+
+    // The chain of transforms after each jump block read, by line, for the labels the jumps enter (FanucJoins).
+    private readonly Dictionary<int, string> _chainAtJumps = [];
+
     /// <summary>
     /// The Fanuc family, Fanuc and the ISO dialects (controllers fanuc.md).
     /// </summary>
@@ -58,6 +64,8 @@ public sealed partial class FanucReader : ReaderBase
     protected override void BeginStructure(IReadOnlyList<SourceBlock> blocks)
     {
         FanucState fanuc = Facts();
+        _fileChannel = ChannelOfFile(blocks);
+        _chainAtJumps.Clear();
         foreach (SourceBlock block in blocks)
         {
             if (block.IsTrivia)
@@ -107,7 +115,7 @@ public sealed partial class FanucReader : ReaderBase
             {
                 role = StructureRole.SectionBegin;
                 number = decimal.ToInt64(decimal.Truncate(programNumber));
-                channel = ChannelOfFile();
+                channel = _fileChannel;
                 fanuc.Channel = channel;
                 fanuc.ProgramNumbers.Add(number.Value);
                 fanuc.SectionName = number.Value.ToString(CultureInfo.InvariantCulture);
@@ -252,25 +260,37 @@ public sealed partial class FanucReader : ReaderBase
         return ends == 1;
     }
 
-    // Nakamura names the files of one job by path, O1000 for path 1 and O1000.P-2 for path 2 (controllers fanuc.md 1;
-    // controller-mapping 7, CHANNEL): the path is the channel the programs of the file run on (language 4.14).
-    // TODO(question): controller-mapping 7 takes the path "from the file name or a TOML rule", machine-config names no
-    // such rule, and the documents give the file names of the builder nakamura only, whose path 1 carries no suffix;
-    // the reader writes CHANNEL=n for a file named .P-n on a machine of the builder nakamura and no CHANNEL otherwise,
-    // where the job names the channel (language 4.14), until D223 is answered.
-    private long? ChannelOfFile()
+    // The channel of the file (D223; controller-mapping 7, CHANNEL; language 4.14): ncx convert --channel n, else the
+    // suffix .P-n of the file name on any Fanuc machine, as Nakamura names the files of one job by path, O1000 and
+    // O1000.P-2 (controllers fanuc.md 1); .P-1 is channel 1. Without either the reader writes no CHANNEL: channel 1
+    // (language 4.1), unless a job binds the file (D15). A channel the machine file does not have is an ERROR, RDR107,
+    // on the first O line; a machine file without channels has channel 1 (language 4.1).
+    private long? ChannelOfFile(IReadOnlyList<SourceBlock> blocks)
     {
-        if (!FanucMacro.IsBuilderNakamura(Machine))
+        long? channel = Options.Channel;
+        if (channel is null)
         {
-            return null;
+            Match path = PathSuffix().Match(Path.GetFileName(Diagnostics.File));
+            channel = path.Success
+                ? long.Parse(path.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture)
+                : null;
         }
 
-        Match path = PathSuffix().Match(Path.GetFileName(Diagnostics.File));
-        return path.Success ? long.Parse(path.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture) : null;
+        IReadOnlyList<int> channels = Machine.Machine.Channels.Count == 0 ? [1] : Machine.Machine.Channels;
+        if (channel is long number && !channels.Contains((int)number))
+        {
+            SourceBlock? first = blocks.FirstOrDefault(block => block.Find("O") is not null);
+            Diagnostics.Error(first?.Line ?? 1, DiagnosticCodes.FanucChannelNotOfTheMachine,
+                $"The file runs on channel {number}, which the machine file does not have (channels "
+                + $"{string.Join(", ", channels)}); CHANNEL={number} is written as the file names it (D223; "
+                + "controller-mapping 7).");
+        }
+
+        return channel;
     }
 
-    // The path suffix of a Nakamura file name, .P-2 of O1000.P-2, with an extension after it or none.
-    [GeneratedRegex(@"\.P-([1-9])(?:\.[A-Za-z0-9]+)?$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    // The path suffix of a file name, .P-2 of O1000.P-2, n = 1..10, with an extension after it or none (D223).
+    [GeneratedRegex(@"\.P-(10|[1-9])(?:\.[A-Za-z0-9]+)?$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex PathSuffix();
 
     /// <summary>
@@ -308,13 +328,11 @@ public sealed partial class FanucReader : ReaderBase
         {
             // A subprogram runs with the state of its caller at the CALL (virtual machine 3.9), a contour section with
             // the state at its cycle, whose contour follows it in the source (controllers fanuc.md 6; language 4.7.1).
-            // TODO(question): virtual machine 3.9 walks a subprogram at every CALL with the state of that caller, while
-            // a reader reads it once; the documents do not say how a reader reads a block of a subprogram whose meaning
-            // depends on its caller (the verb of X10., G90 or G91, an active G81, the spindle of a bare S, the chain a
-            // G52 or G69 acts on) where the callers leave different states or a call stands after the subprogram. The
-            // reader takes what every call of the file agrees on, fact by fact (FanucCallerState); a fact the calls do
-            // not agree on, or that a call the reader has not read yet leaves open, is unknown, and a block that
-            // depends on it stays RAW; a bare M6 is a bare TOOL. This holds until D225 is answered.
+            // D225: a subprogram starts from the facts every call agrees on, fact by fact, TIMES passes included
+            // (FanucCallerState); a fact is unknown when the calls disagree, when a call is not reached yet or when
+            // nothing calls the subprogram, and a block that depends on an unknown fact stays RAW with its WARNING
+            // (D5), a bare M6 a bare TOOL. After the call the caller continues with the facts the subprogram may change
+            // marked unknown.
             fanuc.Calls.EntryOf(SectionName(fanuc, begin), ConsultedGroups()).Restore(State, fanuc);
             Derive(fanuc);
             return;
@@ -337,6 +355,7 @@ public sealed partial class FanucReader : ReaderBase
         if (Loops(fanuc, begin))
         {
             fanuc.ForgetWritten();
+            FanucJoins.AtProgramLoop(fanuc, begin, Machine);
         }
     }
 
@@ -348,7 +367,7 @@ public sealed partial class FanucReader : ReaderBase
         State.LastSpindle = null;
         State.Preloaded = null;
         fanuc.Unknowns.Clear();
-        fanuc.Chain.Clear();
+        fanuc.Chain.Reset();
         fanuc.Cycle = null;
         fanuc.CssOn = false;
         fanuc.Rpm.Clear();
@@ -403,10 +422,12 @@ public sealed partial class FanucReader : ReaderBase
         KnowGroupsOf(fanuc, block);
 
         // A label a jump enters is reached with a state the blocks before it do not tell (virtual machine 3.6).
+        // The chain is kept there only where every edge into the label agrees with it (FanucJoins; D225).
         if (block.Find("N") is SourceWord number && fanuc.JumpTargets.Contains(FanucState.LabelOf(number)))
         {
             fanuc.ForgetPositions();
             fanuc.ForgetWritten();
+            FanucJoins.AtLabel(fanuc, block, FanucState.LabelOf(number), _chainAtJumps, Machine);
         }
 
         string? reason = fanuc.ContourLines.Contains(block.Line)
@@ -448,6 +469,10 @@ public sealed partial class FanucReader : ReaderBase
         Write(reading);
         EnterCalls(fanuc, reading);
         Derive(fanuc);
+        if (FanucJoins.JumpsOf(fanuc, block, Machine).Count > 0)
+        {
+            _chainAtJumps[block.Line] = fanuc.Chain.ToKey();
+        }
 
         // The shift of an expanded corner holds for the one block after the corner (FanucCorners.FromCornerEnd).
         if (fanuc.CornerLine == block.Line)
@@ -498,6 +523,14 @@ public sealed partial class FanucReader : ReaderBase
     {
         if (reading.Draft.RawReason is string reason)
         {
+            // The modes of the control a RAW block switches on or off, and the entries of the chain it ends, which
+            // stand in front of the RAW block (D244, D245).
+            FanucFrames.KeepRawModes(reading);
+            foreach (DraftBlock draft in reading.Draft.BesideRaw)
+            {
+                WriteDraft(reading, draft);
+            }
+
             EmitRaw(reading.Source, reason);
 
             // The control runs the RAW block and the reader does not know what it changed; an F in it reaches the
@@ -516,24 +549,29 @@ public sealed partial class FanucReader : ReaderBase
 
         foreach (DraftBlock draft in reading.Draft.InOrder())
         {
-            if (draft.IsEmpty)
-            {
-                continue;
-            }
-
-            NcxBuilder builder = BeginBlock(reading.Source);
-            if (draft.Verb is not null)
-            {
-                builder.Verb(draft.Verb, draft.VerbValue);
-            }
-
-            foreach (Word word in draft.Words)
-            {
-                builder.Word(word.Key, word.Addr, word.Value);
-            }
-
-            builder.End();
+            WriteDraft(reading, draft);
         }
+    }
+
+    private void WriteDraft(FanucBlock reading, DraftBlock draft)
+    {
+        if (draft.IsEmpty)
+        {
+            return;
+        }
+
+        NcxBuilder builder = BeginBlock(reading.Source);
+        if (draft.Verb is not null)
+        {
+            builder.Verb(draft.Verb, draft.VerbValue);
+        }
+
+        foreach (Word word in draft.Words)
+        {
+            builder.Word(word.Key, word.Addr, word.Value);
+        }
+
+        builder.End();
     }
 
     // A CALL enters its subprogram with the state of the caller (virtual machine 3.9), which the reader keeps for the
@@ -629,7 +667,7 @@ public sealed partial class FanucReader : ReaderBase
             changes.EndsCycle |= !starts
                 && (code == "G80" || group is FanucModalGroups.Motion or FanucModalGroups.ReturnLevel);
             changes.Chain |= code is "G52" or "G54" or "G55" or "G56" or "G57" or "G58" or "G59" or "G54.1" or "G68"
-                or "G68.2" or "G69" or "G51.1" or "G50.1";
+                or "G68.1" or "G68.2" or "G68.3" or "G68.4" or "G69" or "G51.1" or "G50.1";
             changes.Tool |= word.Address == "T" || code == "M6";
             changes.Feed |= word.Address == "F";
             changes.Spindle |= word.Address == "S" || code is "G96" or "G97"
