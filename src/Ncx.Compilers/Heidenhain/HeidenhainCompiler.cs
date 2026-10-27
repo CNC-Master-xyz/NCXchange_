@@ -103,6 +103,7 @@ public sealed class HeidenhainCompiler : CompilerBase
         HeidenhainChain.Write(writing);
         HeidenhainToolCall.Write(writing);
         HeidenhainFrames.WriteModes(writing);
+        HeidenhainProgramFrame.WriteStock(writing);
         HeidenhainFunctions.Write(writing);
         HeidenhainFlow.WriteVariables(writing);
         HeidenhainCycles.WriteDefinition(writing);
@@ -186,6 +187,7 @@ public sealed class HeidenhainCompiler : CompilerBase
             CommentText = CommentText,
             ProgramName = ProgramFileName,
             PointRegisters = PointRegistersOf(Step.After),
+            Stock = StockOf(Step),
         };
     }
 }

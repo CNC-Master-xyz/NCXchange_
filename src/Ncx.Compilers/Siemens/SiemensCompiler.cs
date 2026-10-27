@@ -157,6 +157,7 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
             Writer = Line,
             CommentText = CommentText,
             PointRegisters = PointRegistersOf(after),
+            Stock = StockOf(Step),
         };
         _file.MeetJumpsOverCalls(write);
         if (!SiemensProgramFrame.WriteBegin(write, fileStem))
@@ -240,6 +241,7 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
         write.WriteMain();
         SiemensCycles.WriteAfter(write);
         SiemensFrames.WriteVerbs(write);
+        SiemensProgramFrame.WriteStock(write);
         SiemensMotion.WriteDwell(write);
         SiemensFlow.WriteVariables(write);
         SiemensFlow.Write(write, fileStem);

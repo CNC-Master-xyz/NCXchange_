@@ -239,4 +239,40 @@ internal static partial class HeidenhainProgramFrame
     // The block number in front of a Klartext block, 2 of "2 BLK FORM 0.1 Z X0 Y0 Z-20".
     [GeneratedRegex(@"^\s*[0-9]+(?=[\s/])\s*", RegexOptions.CultureInvariant)]
     private static partial Regex SourceBlockNumber();
+
+    /// <summary>
+    /// STOCK through [stock], BLK FORM 0.1 Z X+0 Y+0 Z-40 and BLK FORM 0.2 with their signs (D351; machine-config 5;
+    /// iTNC 530 Klartext 340490 p.62-63, 114-115): the corners and DIST with their sign, R and L without, as the
+    /// cylinder blank of the TNC 640 writes them (Klartext 340590-05 p.103). The framework has chosen the template and
+    /// reported what writes nothing (CMP012 to CMP014).
+    /// </summary>
+    public static void WriteStock(HeidenhainBlock writing)
+    {
+        if (writing.Block.Verb?.Key != "STOCK")
+        {
+            return;
+        }
+
+        writing.TakeAll("STOCK");
+        writing.TakeAll("X");
+        writing.TakeAll("Y");
+        writing.TakeAll("Z");
+        writing.TakeAll("MAX");
+        if (writing.Stock is not StockForm stock)
+        {
+            return;
+        }
+
+        var values = new TemplateValues();
+        values.Set("axis", stock.Axis);
+        foreach (StockNumber number in stock.Numbers)
+        {
+            bool unsigned = number.Name is "radius" or "diameter" or "length";
+            values.Set(number.Name, unsigned
+                ? writing.Numbers.Format(number.Address, number.Value, writing.Block)
+                : HeidenhainNumbers.Signed(writing, number.Address, number.Value));
+        }
+
+        writing.Template(stock.Template, stock.What, values);
+    }
 }

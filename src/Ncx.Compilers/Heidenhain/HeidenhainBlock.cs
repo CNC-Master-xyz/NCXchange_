@@ -98,6 +98,12 @@ internal sealed class HeidenhainBlock
     public ToolPointRegisters? PointRegisters { get; init; }
 
     /// <summary>
+    /// What the block writes for STOCK, the [stock] template and its numbers; null for another block and for a
+    /// STOCK that writes nothing (D351; CompilerBase.StockOf).
+    /// </summary>
+    public StockForm? Stock { get; init; }
+
+    /// <summary>
     /// The block.
     /// </summary>
     public Block Block => Step.Block;

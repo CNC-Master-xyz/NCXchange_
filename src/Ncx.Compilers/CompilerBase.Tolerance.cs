@@ -38,7 +38,7 @@ public abstract partial class CompilerBase
         }
 
         bool inch = step.After.Frame.Units == Units.Inch;
-        if (!ToleranceTemplate.Has(template, "tol"))
+        if (!TemplateText.Has(template, "tol"))
         {
             decimal millimetres = inch ? value * MillimetresPerInch : value;
             bool held = table?.HeldValue is decimal heldValue && heldValue <= millimetres;
@@ -46,12 +46,12 @@ public abstract partial class CompilerBase
                 held);
         }
 
-        if (state.Rotary is decimal rotary && !ToleranceTemplate.Has(template, "rotary"))
+        if (state.Rotary is decimal rotary && !TemplateText.Has(template, "rotary"))
         {
             ReportTolerance(block, table, "TOLERANCE:ROTARY=" + Text(rotary), Text(rotary) + " deg", "rotary", false);
         }
 
-        if (state.Mode == ToleranceMode.Rough && !ToleranceTemplate.Has(template, "mode"))
+        if (state.Mode == ToleranceMode.Rough && !TemplateText.Has(template, "mode"))
         {
             ReportTolerance(block, table, "TOLERANCE_MODE=ROUGH", "ROUGH", "mode", false);
         }

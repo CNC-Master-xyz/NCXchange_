@@ -163,4 +163,38 @@ internal static partial class SiemensProgramFrame
     // RET without parameters, the word of sub_end that no SAVE subprogram may carry (SW4.92, p.523).
     [GeneratedRegex(@"(?<![A-Z0-9_$])RET(?![A-Z0-9_$]|\s*\()", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex PlainReturn();
+
+    /// <summary>
+    /// STOCK through [stock], WORKPIECE(...) in a block of its own (D351; machine-config 5; NC-Programmierung SW 4.92
+    /// p.1021-1023): the framework has chosen the template and reported what writes nothing (CMP012 to CMP014).
+    /// </summary>
+    public static void WriteStock(SiemensBlock write)
+    {
+        if (write.Block.Verb?.Key != "STOCK")
+        {
+            return;
+        }
+
+        foreach (string key in new[] { "STOCK", "X", "Y", "Z", "MAX" })
+        {
+            write.Written(key);
+        }
+
+        if (write.Stock is not StockForm stock)
+        {
+            return;
+        }
+
+        var values = new TemplateValues();
+        values.Set("axis", stock.Axis);
+        foreach (StockNumber number in stock.Numbers)
+        {
+            values.Set(number.Name, write.Format(number.Address, number.Value));
+        }
+
+        if (write.Render(stock.Template, stock.What, values) is string text)
+        {
+            write.Write(text);
+        }
+    }
 }

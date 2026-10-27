@@ -1,4 +1,3 @@
-using Ncx.Config.Templates;
 using Ncx.Core.Model;
 
 namespace Ncx.Compilers;
@@ -21,7 +20,7 @@ public static class OrientTemplate
     /// <returns>False when the ERROR was reported and nothing is to be written.</returns>
     public static bool Writes(string? template, Word orient, Block block, Diagnostics diagnostics)
     {
-        if (template is null || HasAngle(template) || IsZero(orient.Value))
+        if (template is null || TemplateText.Has(template, "angle") || IsZero(orient.Value))
         {
             return true;
         }
@@ -30,19 +29,6 @@ public static class OrientTemplate
             $"{orient.ToCanonical()} needs an ORIENT template with {{angle}}: \"{template}\" orients to the angle the "
             + "machine sets and is written only for an angle of 0, so nothing is written for it (machine-config 5, "
             + "D154).");
-        return false;
-    }
-
-    private static bool HasAngle(string template)
-    {
-        foreach (Placeholder placeholder in new Template(template, 1, new Diagnostics("")).Placeholders)
-        {
-            if (placeholder.Name == "angle")
-            {
-                return true;
-            }
-        }
-
         return false;
     }
 

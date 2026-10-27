@@ -73,6 +73,24 @@ public static partial class DiagnosticCodes
     public const string NamedToolTemplateMissing = "CMP008";
 
     /// <summary>
+    /// CMP012, an INFO: STOCK of a form the machine file has no [stock] template for writes nothing; the blank feeds
+    /// only the control's graphic (machine-config 5, D351).
+    /// </summary>
+    public const string StockFormWithoutTemplate = "CMP012";
+
+    /// <summary>
+    /// CMP013, an INFO: a STOCK the machine's form cannot express writes nothing: a cylinder off the tool axis through
+    /// the datum, about another axis than the template's, or corners given by expressions (machine-config 5, D351).
+    /// </summary>
+    public const string StockNotExpressible = "CMP013";
+
+    /// <summary>
+    /// CMP014, a WARNING: a program with both a STOCK and a RAW blank of the target writes the RAW text alone
+    /// (D351).
+    /// </summary>
+    public const string StockBesideRawBlank = "CMP014";
+
+    /// <summary>
     /// CMP015: the [tolerance] template the compiler writes has no placeholder for a value the program set, {tol},
     /// {rotary} or {mode}, so the control keeps the value it holds; once per distinct value per program, never for
     /// TOLERANCE=OFF, and also for a TOLERANCE:ROTARY on a machine without ON_ROTARY. An INFO when held_value is at

@@ -134,6 +134,7 @@ public abstract partial class CompilerBase : ICompiler
         CheckNativeText(expanded, machine, diagnostics);
         CheckVectorArcs(expanded, machine, diagnostics);
         CheckCyclesAvailable(expanded, machine, channel, diagnostics);
+        CheckStockBesideRawBlank(expanded, machine, diagnostics);
 
         // A word of a table that the machine accepts only from another channel, or needs in every channel program, is
         // an ERROR of a single-channel compile; in a channel program of a job the job compiler has moved or duplicated

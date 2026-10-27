@@ -95,6 +95,12 @@ internal sealed class FanucBlock
     public ToolPointRegisters? PointRegisters { get; init; }
 
     /// <summary>
+    /// What the block writes for STOCK, the [stock] template and its numbers; null for another block and for a
+    /// STOCK that writes nothing (D351; CompilerBase.StockOf).
+    /// </summary>
+    public StockForm? Stock { get; init; }
+
+    /// <summary>
     /// The line of the block being composed: the modal codes, the motion, the functions (controllers fanuc.md 1).
     /// </summary>
     public FanucLine Main { get; } = new();

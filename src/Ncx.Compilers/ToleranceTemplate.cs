@@ -1,7 +1,5 @@
 using System.Globalization;
-using Ncx.Config.Templates;
 using Ncx.Core.Machine;
-using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.State;
 
 namespace Ncx.Compilers;
@@ -42,22 +40,6 @@ public static class ToleranceTemplate
     }
 
     /// <summary>
-    /// True when the template has the placeholder: "tol" for {tol}.
-    /// </summary>
-    public static bool Has(string template, string name)
-    {
-        foreach (Placeholder placeholder in new Template(template, 1, new Diagnostics("")).Placeholders)
-        {
-            if (placeholder.Name == name)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
     /// The text of the comment beside the switch under held_comment = true, "TOL 0.005 parameter 19581", without the
     /// comment marks of the family; null without held_comment, for TOLERANCE=OFF, or when the template carries {tol}
     /// (D367).
@@ -65,7 +47,7 @@ public static class ToleranceTemplate
     public static string? Comment(ToleranceTable? table, ToleranceState state)
     {
         if (table is not { HeldComment: true } || state.Value is not decimal value
-            || On(table, state) is not string template || Has(template, "tol"))
+            || On(table, state) is not string template || TemplateText.Has(template, "tol"))
         {
             return null;
         }
