@@ -39,6 +39,9 @@ tool_name_allowed = true           # T="NAME" under tool management (siemens 5)
 # TODO(question): a named TOOL needs a {name} template (T=\"{name}\" M6, machine-config 3), and change has one form; which template writes TOOL="NAME" on a machine that also takes numbers? (D172)
 # TODO(question): the preload templates of machine-config 3 use {tool}, while its placeholder list defines {tool} as the tool in the spindle after the block and {next} as the preloaded tool; this file follows the table of machine-config 3 (D150).
 
+[tool_points]
+form = "edge"                      # point k is the cutting edge D k of the active tool (D373 improvement 2; Grundlagen 03/2013 p. 74)
+
 [home]
 template = "G74 {axes}"            # reference point approach with machine axis names, own block, no transformation active (siemens 3)
 point = "G75 {axes} FP={point}"    # fixed points for POINT=2 and further (siemens 3)

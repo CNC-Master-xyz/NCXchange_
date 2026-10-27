@@ -101,6 +101,34 @@ Templates found in the manuals:
 
 When `change` contains `{next}`, a `PRELOAD` word that follows the `TOOL` block (before the next motion) is folded into the change command; with `auto_preload` the compiler fills `{next}` from the STATIC look-ahead. `{b}` and `{c}` are filled the same way from the next positioning block and the next `ORIENT:TOOL`; `{kind}` comes from the tool table (D52). A template may span lines with `\n`.
 
+`[tool_points]` maps a tool and its measurement point (`TOOL_POINT`, language 4.4) to the control's registers (D373). The program names the point; the machine file says what selects it, and NCX derives nothing from a tool number that the file does not state.
+
+```toml
+[tool_points]
+form = "registers"                 # indexed_tool (Klartext) | edge (Siemens) | registers (Fanuc); any other value is an ERROR
+# indexed_tool: point k is the index k-1 of the called tool, TOOL CALL 5.1 for point 2; at most nine indices, so k <= 10 (CMP123 beyond).
+#   An indexed call carries a tool number, so the TNC 640 runs its change macro (Klartext 892903-18 p. 123), and on the iTNC 530 it depends on
+#   MP7480.0 and the builder's macro; a point change of the tool in the spindle is the WARNING CMP123 unless:
+point_change = "call"              # indexed_tool: the builder's macro accepts an indexed call of the tool in the spindle
+# edge: point k is D k of the active tool, or the edge of a [[tool_point]] row, which wins.
+edge_numbering = "flat"            # edge: D numbers without relation to T (MD18102 = 1), so every point needs a row (CMP514 without one)
+# registers: H and D from a [[tool_point]] row; else the shop's step rule; else tool management for point 1; else CMP341.
+offset_memory = "C"                # registers: A | B | C; under A or B H and D share one pool and the loader refuses one number as a length and a radius (CFG010)
+managed = false                    # registers: true writes H99 and D99, the registers of the tool at the spindle, for point 1 only (30i-B B-64484EN p. 260)
+length_register_step = 100         # registers: H = tool + (k-1) * step, the shop's numbering rule; a control counterpart (parameter 11419 under G43.8/G43.9) exists under memory A or B only
+radius_register_step = 100         # registers: D = tool + (k-1) * step
+point_comment = false              # true: one comment line with the point, a and r where a point is selected (D375)
+
+[[tool_point]]                     # a row per tool and point that the rule of the form does not give; tool and point are required (CFG010)
+tool = 5
+point = 2
+length = 12                        # registers: the H of the point
+radius = 12                        # registers: the D of the point
+# edge = 20                        # edge: the D of the point
+```
+
+A machine file without `[tool_points]` writes nothing for a point other than 1 and reports the INFO CMP016 once per program, because a control that cannot select a point is doing nothing wrong; a point the form cannot map is the ERROR of its family, CMP123 Heidenhain, CMP341 Fanuc, CMP514 Siemens, naming the tool and k, because another point's registers would cut with the wrong offsets (D373). A compiler writes only the register the mapping gives, never `TIP_OFFSET` or `POINT_RADIUS` as a control value, and a tool whose program names no point compiles as before (D375, D392).
+
 ```toml
 [home]
 template = "G28 {axes}"           # Fanuc: {axes} is the named axes with an incremental 0, "U0 W0" in G-code system A and "X0 Y0 Z0" otherwise;

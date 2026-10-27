@@ -46,6 +46,11 @@ tool_name_allowed = false          # Fanuc tools are numbers
 # No change_preloaded: BOHREN.fanuc.nc writes T2 M6 also when tool 2 is preloaded, so every change is written with its T word.
 # TODO(question): the preload templates of machine-config 3 use {tool}, while its placeholder list defines {tool} as the tool in the spindle after the block and {next} as the preloaded tool; this file follows the table of machine-config 3 (D150).
 
+[tool_points]
+form = "registers"                 # H and D index the flat register pool; the M-series T has no relation to them (D373; fanuc 5)
+length_register_step = 100         # the shop's numbering rule, not the control's: point 1 of tool 5 is H5, point 2 is H105 (D373 improvement 5)
+radius_register_step = 100         # D5 and D105 likewise; offset_memory is left out, so no register collision is checked (D373 improvement 3)
+
 [home]
 template = "G28 {axes}"            # reference point return; {axes} in the G91 form, G91 G28 Z0 and G28 X0 Y0 in the sources (fanuc 4, machine-config 3)
 point = "G30 P{point} {axes}"      # second and further reference points (fanuc 4)
