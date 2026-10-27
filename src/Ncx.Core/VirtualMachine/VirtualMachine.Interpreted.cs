@@ -304,11 +304,10 @@ public sealed partial class VirtualMachine
         return labelPc;
     }
 
-    // A repeat re-executes the blocks from its label to its REPEAT block (virtual machine 3.6); a JUMP that leaves them
-    // ends the repeat.
-    // TODO(question): virtual machine 3.6 does not say what becomes of a repeat whose blocks a JUMP leaves before its
-    // passes are used (a Heidenhain FN 9 out of a CALL LBL REP section); the repeat ends, and a flow that reaches the
-    // REPEAT block again starts it anew, until D213 is answered.
+    // A repeat re-executes the blocks from its label to its REPEAT block (virtual machine 3.6). D213: a JUMP or
+    // JUMP=END to a target outside the label..REPEAT section ends the repeat, and a later arrival at the REPEAT starts it
+    // fresh with TIMES passes; the compilers reproduce this (the Fanuc counter cleared by the JUMP, the Heidenhain
+    // Q-parameter loop instead of CALL LBL REP).
     private void EndRepeatsOutside(int targetPc, Section section, int repeatsAtEntry)
     {
         Stack<RepeatFrame> repeats = _state.Flow.Repeats;

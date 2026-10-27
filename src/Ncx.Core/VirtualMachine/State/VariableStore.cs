@@ -276,10 +276,9 @@ internal sealed class VariableStore
     // The coordinate of an axis in a frame: in the workpiece frame read through the setpos shift, in the MACHINE frame
     // the stored value when the axis is known there (virtual machine 3.4); UNKNOWN when the axis is not known in that
     // frame, after a HOME without a datum table in the workpiece frame (D35).
-    // TODO(question): under DIAMETER=ON the program writes X as a diameter and the virtual machine stores the radius
-    // (D60); whether $SYS_POS_X and $SYS_MPOS_X read the diameter, as the X words of the program are written, or the
-    // radius the virtual machine holds is not said. They read the diameter, so that a value read back into an X word
-    // lands where it was, until D216 is answered.
+    // D216: under DIAMETER=ON both $SYS_POS_X and $SYS_MPOS_X read the diameter, as the X words of the program are
+    // written, so that a value read back into an X word lands where it was; under DIAMETER=OFF the radius the virtual
+    // machine holds (D60). The native conversions ($AA_IM[X] of Siemens, D240) are the readers' and compilers'.
     private VariableValue PositionOf(string axisName, PositionFrame frame)
     {
         if (AxisKey(axisName) is not string axis
