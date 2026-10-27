@@ -141,7 +141,26 @@ public sealed class TraceCommandTests : IDisposable
             _cli.Output);
     }
 
-    // An ERROR of the parser means no run: no table, exit 1 (D97).
+    // D205: an ERROR of the virtual machine stops the run, and trace writes the rows of the blocks executed before it,
+    // which the user needs to find it; exit 1 (D97).
+    [Fact]
+    public void Trace_ErrorOfTheVirtualMachine_WritesTheRowsOfTheBlocksBeforeItAndExitsOne()
+    {
+        string file = _cli.WriteFile("wear.ncx",
+            CliHarness.OneProgram("UNITS=MM", "VAR:Q2=5", "VAR:Q1={$SYS_WEAR_Z[99]}", "VAR:Q3=7"));
+
+        int exitCode = _cli.Run("trace", file, "--interpreted", "--format", "csv");
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("ERROR VM903", _cli.Error, StringComparison.Ordinal);
+        string[] rows = _cli.Output.Split('\n');
+        Assert.Equal("channel,block,variable,old,new", rows[0]);
+        Assert.Contains(rows, row => row.EndsWith(",UNITS,,MM", StringComparison.Ordinal));
+        Assert.Contains(rows, row => row.EndsWith(",VAR:Q2,,5", StringComparison.Ordinal));
+        Assert.DoesNotContain(rows, row => row.Contains("VAR:Q3", StringComparison.Ordinal));
+    }
+
+    // An ERROR of the parser means no run: no table, exit 1 (D97, D205).
     [Fact]
     public void Trace_UnknownKey_WritesNothingAndExitsOne()
     {

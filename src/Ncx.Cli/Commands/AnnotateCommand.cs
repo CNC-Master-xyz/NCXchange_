@@ -43,9 +43,9 @@ internal static class AnnotateCommand
         // The copy carries the values of every block the run executed, and the byte order mark of the file where it
         // was, as ncx format keeps it (virtual machine 6; wave-1 question #80); there is none when there was no
         // program to run.
-        // TODO(question): virtual machine 6 does not say what annotate writes when an ERROR stops the run; it writes
-        // the copy with the values of the blocks executed before the ERROR, and nothing when the file, the machine
-        // file, the parser or the expander stopped the run before its first block, until D205 is answered.
+        // When an ERROR stops the run, annotate writes the whole copy, the values on the blocks executed before it, and
+        // nothing when the file, the machine file, the parser or the expander stopped the run before its first block
+        // (architecture 10, virtual machine 6; D205).
         if (run.Program is NcxProgram program)
         {
             output.Write(run.ByteOrderMark + AnnotatedText.Write(program, annotations));

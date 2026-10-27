@@ -185,14 +185,10 @@ internal static class ConvertCommand
         string canonical = NcxWriter.Write(program);
 
         // The NCX text goes to the standard output, or into the file of --output (architecture 10).
-        // TODO(question): architecture 10 gives convert the output ".ncx in the working directory" without naming the
-        // file, while the phase plan (P3-02) compares what the command writes with the example. The text goes to the
-        // standard output or into the file of --output, as ncx format writes it, and nothing is written into the
-        // working directory that the command line does not name, until D209 is answered.
-        // TODO(question): architecture 7 ends convert with a STATIC pass that reports on the produced program, and
-        // code-guidelines 5 and 6 stop a run on ERROR; neither says whether convert writes the NCX text when the reader
-        // or the check reports an ERROR. The reader always produces a whole program, what it cannot read kept as RAW
-        // (D5), so the text is written and the ERROR sets the exit code 1, until D205 is answered.
+        // The text goes to the standard output or into the file of --output, as ncx format writes it, and nothing is
+        // written into the working directory that the command line does not name (architecture 10; D209). The reader
+        // always produces a whole program, what it cannot read kept as RAW (D5), so the text is written also after an
+        // ERROR of the reader or of the check, which sets the exit code 1 (D205).
         if (outputFile is not null)
         {
             OutputFile.Write(outputFile, canonical, diagnostics);
