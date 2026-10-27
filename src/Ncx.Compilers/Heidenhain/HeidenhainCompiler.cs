@@ -25,6 +25,7 @@ public sealed class HeidenhainCompiler : CompilerBase
     private LookAhead? _numberedFor;
     private HeidenhainLabelNumbers? _labelNumbers;
     private HeidenhainRepeats? _repeats;
+    private HeidenhainSpills? _spills;
 
     /// <summary>
     /// Heidenhain, the controller of the machine files whose programs this compiler writes (machine-config 1).
@@ -173,6 +174,7 @@ public sealed class HeidenhainCompiler : CompilerBase
             _numberedFor = LookAhead;
             _labelNumbers = HeidenhainLabelNumbers.Of(LookAhead, Machine.Format?.LabelMax ?? 999, Diagnostics);
             _repeats = HeidenhainRepeats.Of(LookAhead, CounterRange.Of(Machine.Format), Diagnostics);
+            _spills = HeidenhainSpills.Of(LookAhead, CounterRange.Of(Machine.Format));
         }
 
         return new HeidenhainBlock
@@ -187,6 +189,7 @@ public sealed class HeidenhainCompiler : CompilerBase
             Labels = _labels,
             LabelNumbers = _labelNumbers!,
             Repeats = _repeats!,
+            Spills = _spills!,
             WriteLine = Line,
             WriteToolChange = (values, suffix) => WriteToolChange(values, suffix),
             WritePreload = () => WritePreload(),

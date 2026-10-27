@@ -215,8 +215,11 @@ internal static class HeidenhainFlow
                 BinaryOperator.Less => "FN 12: IF {0} LT {1}",
                 _ => null,
             };
-            string? left = HeidenhainFormula.Operand(comparison.Left, separator);
-            string? right = HeidenhainFormula.Operand(comparison.Right, separator);
+            // D338: an operand that is a formula is spilled into a QL parameter before the jump.
+            string? left = function is null ? null : HeidenhainFormula.Operand(comparison.Left, separator)
+                ?? HeidenhainNumbers.Spilled(writing, comparison.Left);
+            string? right = function is null ? null : HeidenhainFormula.Operand(comparison.Right, separator)
+                ?? HeidenhainNumbers.Spilled(writing, comparison.Right);
             if (function is not null && left is not null && right is not null)
             {
                 return string.Format(CultureInfo.InvariantCulture, function, left, right);

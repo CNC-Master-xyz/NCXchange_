@@ -254,8 +254,10 @@ internal static class HeidenhainSetpos
             }
             else if (HeidenhainNumbers.NumberOf(word.Word.Value) is null)
             {
-                // Controllers heidenhain.md 6 and the TODO(question) of HeidenhainNumbers: the shift would be the
-                // formula position minus the value, and a coordinate of Klartext takes a number or a Q parameter.
+                // D338 names SETPOS values among the formulas spilled into a QL parameter.
+                // TODO: the spill of a SETPOS formula is not written yet: the cycle 7 of a later SETPOS writes every
+                // standing shift again, and the virtual machine keeps this one unknown, so its QL parameter would have
+                // to stay reserved for as long as the shift stands; until then it is reported (CMP102).
                 writing.Error(DiagnosticCodes.HeidenhainValueWithoutKlartext,
                     $"{word.Word.ToCanonical()}: cycle 7 would take the position of {word.Axis} minus this value, a "
                     + "formula, and Klartext takes a number or a Q parameter there; nothing is written for it "

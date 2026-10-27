@@ -24,6 +24,9 @@ internal sealed class HeidenhainBlock
 
     private readonly HashSet<Word> _written = [];
 
+    // The formulas of the block spilled into QL parameters, by formula (D338).
+    private readonly Dictionary<string, string> _spilled = new(StringComparer.Ordinal);
+
     /// <summary>
     /// The block with its state before and after it and its events (architecture 8).
     /// </summary>
@@ -74,6 +77,11 @@ internal sealed class HeidenhainBlock
     /// The REPEAT blocks written as counter loops, with their counters (D213).
     /// </summary>
     public required HeidenhainRepeats Repeats { get; init; }
+
+    /// <summary>
+    /// The QL parameters free for the formulas of a block (D338).
+    /// </summary>
+    public required HeidenhainSpills Spills { get; init; }
 
     /// <summary>
     /// Writes one line of the block (CompilerBase.Line).
@@ -276,6 +284,28 @@ internal sealed class HeidenhainBlock
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// The QL parameter that holds a formula of the block, set in a block of its own written now, before the line that
+    /// reads it: QL499 = Q1 + 5 (D338); the same formula twice in a block takes one parameter. Null when no QL is free.
+    /// </summary>
+    /// <param name="formula">The Klartext formula.</param>
+    public string? Spill(string formula)
+    {
+        if (_spilled.TryGetValue(formula, out string? held))
+        {
+            return held;
+        }
+
+        if (Spills.Free(_spilled.Count) is not string register)
+        {
+            return null;
+        }
+
+        Line(register + " = " + formula);
+        _spilled.Add(formula, register);
+        return register;
     }
 
     /// <summary>
