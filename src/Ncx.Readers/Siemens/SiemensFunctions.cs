@@ -1,4 +1,5 @@
 using System.Globalization;
+using Ncx.Config.Templates;
 using Ncx.Core.Model;
 
 namespace Ncx.Readers.Siemens;
@@ -72,9 +73,8 @@ internal static class SiemensFunctions
             return;
         }
 
-        if (block.Templates.FindFunctionByCode(code) is string state && WordOf(block, state) is Word named)
+        if (ReadTable(block, code))
         {
-            block.Draft.AddState(named.Key, named.Addr, named.Value);
             return;
         }
 
@@ -90,43 +90,122 @@ internal static class SiemensFunctions
     private static void ReadExtended(SiemensBlock block, SourceWord word)
     {
         string text = word.Address + "=" + word.Text;
-        if (block.Templates.FindFunctionByCode(text) is string state && WordOf(block, state) is Word named)
+        if (ReadTable(block, text))
         {
             block.MarkRead(word);
-            block.Draft.AddState(named.Key, named.Addr, named.Value);
             return;
         }
 
         block.KeepAsRawWord(word);
     }
 
-    // The word of a table state (machine-config 5): SPINDLE:role=CW with the role address of D154, ORIENT at 0,
-    // SPINDLE_MODE:role, COOLANT with the channel STANDARD as the bare word (language 4.6), FUNC:name=state.
-    // TODO(question): D154, the words of the states of the spindle tables and of [spindle_sync]; the reader follows its
-    // recommendation, and a PHASE code without an angle stays RAW.
-    private static Word? WordOf(SiemensBlock block, string state)
+    // The states of the machine that write the code, as FunctionChoice keeps them (D155): every state that writes it,
+    // the [workpiece] selection first, the first in file order where two resources would be switched on (RDR020). The
+    // Siemens reader keeps no source state of the tables, so no state is dropped as holding already; the codes of the
+    // spindles of the control, M3 to M5 and M19, are SiemensSpindles'. False when no state gives a word.
+    private static bool ReadTable(SiemensBlock block, string code)
     {
-        string[] keyAndValue = state.Split('=');
-        string[] keyAndAddr = keyAndValue[0].Split(':');
-        string key = keyAndAddr[0];
-        string? addr = keyAndAddr.Length > 1 ? keyAndAddr[1] : null;
-        string value = keyAndValue[1];
-        return key switch
+        IReadOnlyList<FunctionMatch> chosen = FunctionChoice.Choose(block.Templates.FindFunctionsByCode(code),
+            new FunctionContext(), block.Line, code, block.Diagnostics);
+        var words = new List<Word>();
+        foreach (FunctionMatch match in chosen)
         {
-            "SPINDLE" when value is "CW" or "CCW" or "OFF" && addr is not null =>
-                new Word { Key = key, Addr = SiemensSpindles.Address(block, addr), Value = new IdentValue(value) },
-            "SPINDLE" when value == "ORIENT" && addr is not null =>
-                new Word
+            if (WordsOf(block, match, code) is not { } matchWords)
+            {
+                return false;
+            }
+
+            words.AddRange(matchWords);
+        }
+
+        foreach (Word word in words)
+        {
+            block.Draft.AddState(word.Key, word.Addr, word.Value);
+        }
+
+        return words.Count > 0;
+    }
+
+    // The words of a table state (machine-config 5, D154): SPINDLE:role=CW with the role address, ORIENT:role at the
+    // angle of the code, SPINDLE_MODE:role, SPINDLE_SYNC=leader,follower of the pair with PHASE at the angle of the
+    // code, COOLANT with the channel STANDARD as the bare word (language 4.6), FUNC:name=state, WORKPIECE=role. An
+    // ORIENT or PHASE whose template carries no angle is at 0, with the WARNING RDR021 naming the code. Null for a
+    // state that gives no word, a spindle speed among them.
+    private static List<Word>? WordsOf(SiemensBlock block, FunctionMatch match, string code)
+    {
+        string? addr = match.Address;
+        string state = match.State;
+        switch (match.Family)
+        {
+            case "SPINDLE" when state is "CW" or "CCW" or "OFF" && addr is not null:
+                return [new Word
+                {
+                    Key = "SPINDLE",
+                    Addr = SiemensSpindles.Address(block, addr),
+                    Value = Ident(state),
+                }];
+            case "SPINDLE" when state == "ORIENT" && addr is not null:
+                return [new Word
                 {
                     Key = "ORIENT",
                     Addr = SiemensSpindles.Address(block, addr),
-                    Value = new IntegerValue(0, "0"),
-                },
-            "SPINDLE_MODE" => new Word { Key = key, Addr = addr, Value = new IdentValue(value) },
-            "SPINDLE_SYNC" when value == "OFF" => new Word { Key = key, Value = new IdentValue(value) },
-            "COOLANT" => new Word { Key = key, Addr = addr == "STANDARD" ? null : addr, Value = new IdentValue(value) },
-            "FUNC" => new Word { Key = key, Addr = addr, Value = new IdentValue(value) },
-            _ => null,
-        };
+                    Value = AngleOf(block, match, code),
+                }];
+            case "SPINDLE_MODE":
+                return [new Word { Key = "SPINDLE_MODE", Addr = addr, Value = Ident(state) }];
+            case "SPINDLE_SYNC" when state == "OFF":
+                return [new Word { Key = "SPINDLE_SYNC", Value = Ident(state) }];
+            case "SPINDLE_SYNC" when state is "ON" or "PHASE":
+                IReadOnlyList<string> pair = block.Machine.SpindleSyncRoles();
+                if (pair.Count != 2)
+                {
+                    return null;
+                }
+
+                var sync = new List<Word> { new() { Key = "SPINDLE_SYNC", Value = new ListValue([.. pair]) } };
+                if (state == "PHASE")
+                {
+                    sync.Add(new Word { Key = "PHASE", Value = AngleOf(block, match, code) });
+                }
+
+                return sync;
+            case "COOLANT":
+                return [new Word { Key = "COOLANT", Addr = addr == "STANDARD" ? null : addr, Value = Ident(state) }];
+            case "FUNC":
+                return [new Word { Key = "FUNC", Addr = addr, Value = Ident(state) }];
+            case "WORKPIECE":
+                return [new Word { Key = "WORKPIECE", Value = Ident(state) }];
+            default:
+                return null;
+        }
+    }
+
+    // The {angle} the code carried; 0 with the WARNING RDR021 where the template has none, the orientation angle set
+    // by the machine (D154).
+    private static Value AngleOf(SiemensBlock block, FunctionMatch match, string code)
+    {
+        if (match.Values.TryGetNumber("angle", out decimal angle))
+        {
+            return SiemensNumbers.Of(angle);
+        }
+
+        block.Draft.Warnings.Add(AngleSetByTheMachine(code));
+        return new IntegerValue(0, "0");
+    }
+
+    /// <summary>
+    /// The WARNING RDR021 of a code that orients a spindle or sets a phase without an angle: the reader writes 0, and
+    /// the angle is the one the machine sets (D154).
+    /// </summary>
+    /// <param name="code">The code as the source writes it, M19.</param>
+    public static SiemensWarning AngleSetByTheMachine(string code)
+    {
+        return new SiemensWarning(DiagnosticCodes.FunctionAngleSetByTheMachine,
+            $"{code} carries no angle; the reader writes 0, the orientation angle set by the machine (D154).");
+    }
+
+    private static IdentValue Ident(string value)
+    {
+        return new IdentValue(value);
     }
 }

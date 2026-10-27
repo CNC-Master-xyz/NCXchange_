@@ -121,6 +121,34 @@ public sealed class SiemensToolTests
             CheckedBody("G961 S200 M3\nG97 S1000\nG961 S200\nG971 S1000"));
     }
 
+    // D154: M19 orients at the angle the machine sets (SD43240), so the reader writes ORIENT=0 with the WARNING RDR021
+    // naming the code.
+    [Fact]
+    public void M19_IsOrient0WithTheWarning()
+    {
+        NcxProgram program = FramedProgram("M19");
+
+        Assert.Equal(Lines("ORIENT=0"), BodyOf(NcxWriter.Write(program)));
+        Assert.Equal([DiagnosticCodes.FunctionAngleSetByTheMachine], Codes(program));
+    }
+
+    // D154, D155: a [workpiece] code gives the WORKPIECE word; [spindle_sync] ON couples the default spindle with the
+    // other work spindle, SPINDLE_SYNC=MAIN,SUB, and PHASE without an angle in its template is PHASE=0 with RDR021.
+    [Fact]
+    public void WorkpieceAndSpindleSyncCodes_AreTheirWords()
+    {
+        MachineConfig machine = MillTurnWith(
+            "SUB_frame = \"datum\"", "MAIN = \"M814\"\nSUB = \"M813\"\nSUB_frame = \"datum\"",
+            "ON = \"COUPON(S2,S1)\"", "ON = \"M203\"", "OFF = \"COUPOF(S2,S1)\"", "OFF = \"M206\"",
+            "PHASE = \"COUPON(S2,S1,{angle})\"", "PHASE = \"M213\"");
+        NcxProgram program = FramedProgram("M813\nM203\nM206\nM213", machine);
+
+        Assert.Equal(
+            Lines("WORKPIECE=SUB", "SPINDLE_SYNC=MAIN,SUB", "SPINDLE_SYNC=OFF", "SPINDLE_SYNC=MAIN,SUB PHASE=0"),
+            BodyOf(NcxWriter.Write(program)));
+        Assert.Equal([DiagnosticCodes.FunctionAngleSetByTheMachine], Codes(program));
+    }
+
     // SPOS= and M19 orient a spindle, M2=70 switches spindle 2 to axis mode (controller-mapping 4, ORIENT and
     // SPINDLE_MODE; D154, D155).
     [Fact]

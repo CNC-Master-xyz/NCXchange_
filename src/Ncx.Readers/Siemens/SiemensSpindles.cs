@@ -110,7 +110,6 @@ internal static class SiemensSpindles
     /// The role address a spindle word carries: the role on a machine with more than one spindle, none on a machine
     /// with one (D154; controller-mapping 4: the reader writes the role).
     /// </summary>
-    // TODO(question): D154, which spindle words carry their role; the reader follows its recommendation.
     public static string? Address(SiemensBlock block, string role)
     {
         int spindles = 0;
@@ -360,9 +359,8 @@ internal static class SiemensSpindles
     }
 
     // M3, M4, M5 are CW, CCW, OFF; a spindle in axis mode leaves it with them, which the reader writes as
-    // SPINDLE_MODE=SPINDLE before (D155); M70 switches it to axis mode, M19 orients it at 0 (D154)
+    // SPINDLE_MODE=SPINDLE before (D155); M70 switches it to axis mode, M19 orients it at 0 with RDR021 (D154)
     // (controllers siemens.md 5; controller-mapping 4, SPINDLE_MODE and ORIENT).
-    // TODO(question): D154 and D155, the words of the spindle table states; the reader follows their recommendations.
     private static void ReadFunction(SiemensBlock block, SourceWord word, string? role, int state)
     {
         block.MarkRead(word);
@@ -381,7 +379,11 @@ internal static class SiemensSpindles
                 facts.AxisSpindles.Add(role);
                 return;
             case 19:
+                // M19 orients at the angle of SD43240, which the program does not carry: ORIENT at 0 with RDR021
+                // (D154).
                 AddSpindleWord(block, "ORIENT", role, new IntegerValue(0, "0"));
+                block.Draft.Warnings.Add(SiemensFunctions.AngleSetByTheMachine(
+                    SiemensBlock.CodeOf(word) ?? word.Address + "=" + word.Text));
                 return;
         }
 
