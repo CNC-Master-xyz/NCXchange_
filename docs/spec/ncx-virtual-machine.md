@@ -248,14 +248,14 @@ The VM never stores history in the program. Two derived outputs give it instead:
 | Event | Raised when | Payload |
 |---|---|---|
 | FILE_BEGIN, FILE_END | `FILE=BEGIN`, `FILE=END` | file name, programs and subprograms found |
-| PROGRAM_BEGIN, PROGRAM_END | `PROGRAM=BEGIN`, `PROGRAM=END` (also reached by `JUMP=END`); not for a program that a `CALL` runs from another file, whose two frame blocks do not execute (3.6, D214) | name, number; run statistics at `PROGRAM_END`, the blocks of a called external program counted under the caller (D214) |
+| PROGRAM_BEGIN, PROGRAM_END | `PROGRAM=BEGIN`, `PROGRAM=END` (also reached by `JUMP=END`); not for a program that a `CALL` runs from another file, whose two frame blocks do not execute (3.6, D214) | name, number; run statistics at `PROGRAM_END`: blocks (executed), feedDistance, rapidDistance, unknownLengthMotions and the derived distance (D235), the blocks of a called external program counted under the caller (D214) |
 | SUB_BEGIN, SUB_END | `SUB=BEGIN`, `SUB=END` or `RETURN`; not for a called external program, which the `CALL` event alone marks (D214) | name, caller |
 | SECTION | `SECTION` | text |
-| TOOL_BEGIN, TOOL_END | tool enters or leaves the spindle | tool, holder, rpm, distance and block count under the tool |
+| TOOL_BEGIN, TOOL_END | tool enters or leaves the spindle; also, for every tool the channel brought into a spindle that is still there, at the `PROGRAM=END` that ends the channel's program (`JUMP=END` included), directly before `PROGRAM_END`, and at the `SUB=END` of a subprogram nothing calls (D233) | tool, holder, rpm; at `TOOL_END` the figures of `PROGRAM_END` under the tool (D235) |
 | PRELOAD | `PRELOAD` | tool, holder |
 | MOTION | every `RAPID`, `LINE`, `ARC`, `RETRACT` | verb, from, to, center, direction, sweep angle, tool vector and surface normal when given, feed, compensation, frame, length |
 | CYCLE_CALL | every call | cycle name and parameters, call point |
-| STATE_CHANGE | any modal change | variable, old, new |
+| STATE_CHANGE | any modal change: every variable of section 2 a word sets that outlives its block (D197, list below) | variable, old, new |
 | VAR_CHANGE | `VAR`, `ARG` | name, old, new |
 | JUMP, CALL, RETURN, REPEAT | flow | target, condition, depth |
 | SYNC_WAIT, SYNC_RELEASE | scheduler | mark, channels, round |
@@ -264,6 +264,10 @@ The VM never stores history in the program. Two derived outputs give it instead:
 | FUNCTION | every `FUNC`, `MFUNC`, `COOLANT` | the word, the function or coolant channel it addresses |
 | BLOCK_WRITE (compiler) | before a block is written | the block's words, mutable, so a plugin can split `Z` onto its own line or strip umlauts from a comment |
 | TOOL_POSE (kinematics module) | per MOTION and CYCLE_CALL when the module is present (section 10) | pose of the tool tip relative to the workpiece frame |
+
+STATE_CHANGE covers the frame rows of 2.1, feed, feed mode, compensation, the position per axis, the tool vector and the surface normal of 2.2, tool, preload and offsets per holder, the spindle rows per spindle, the coolant channels and functions, and the cycle. Variables go to VAR_CHANGE; the program, flow and channel rows and `lastHolder` are out. The names are the state keys of 3.10 with the resource id as address, positions by axis (D197).
+
+The figures of `TOOL_END` and `PROGRAM_END` are the same: blocks (executed), feedDistance, rapidDistance and unknownLengthMotions, the count of MOTIONs whose length is unknown, so that a report can call the distances a lower bound; distance is their derived total. The distances are sums of the known MOTION lengths, the MOTIONs of an expanded `CYCLE_CALL` and of generated blocks (3.10) included; `RAPID` motions go to rapidDistance and all others to feedDistance. The figures are exact in INTERPRETED mode; in STATIC mode they count what the walk executes. There is no time figure, which belongs to the runtime estimate of section 8 (D235). A block and its motion count under the tool of `lastHolder`, and a tool-changing block counts under the new tool, so no motion counts under two tools (D236). At the `PROGRAM=END` that ends a channel's program, `TOOL_END` closes every tool the channel brought into a spindle that is still there; the spindle state stays unchanged. The `PROGRAM=END` of an external program run by `CALL` closes nothing, nor does a run stopped by an ERROR (D233).
 
 Each row is one event record of `Ncx.Core` (architecture 5.3). Every event carries `Before` and `After`, the resolved state of the channel around the block. Plugins (the DLL hooks such as `tool_begin`) subscribe here. A plugin has four places to act, and none of them is the VM state (D61): as a reader rule it sees the source blocks and the source-side state of a reader and decides what an M code or a sequence of source blocks means on this particular machine, for example that `M5`, `M51`, `M3 S1500` is one `COOLANT:THROUGH=ON`, or that a builder M code with a hidden subprogram is the workpiece transfer (D40, D66: the configuration tables come first, the reader rule decides the rest); as a program rewriter in the expander it may change words and insert generated blocks before the VM executes them (clamp a speed, stop the spindle before a function, add a `HOME` before a tool change); as a listener it reads every event; on `BLOCK_WRITE` it edits the output lines of the compiler. Machine limits that are the same for every program (`rpm_max`, `max_feed`, travel limits) do not need a plugin: they are configuration and the expander applies them.
 

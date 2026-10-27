@@ -32,10 +32,25 @@ public sealed record ToolEvent : VmEvent
     public decimal? Rpm { get; init; }
 
     /// <summary>
-    /// The distance under the tool, summed from the MOTION lengths that are known while the tool was in the spindle
-    /// of the holder called last; 0 at TOOL_BEGIN.
+    /// The feed distance under the tool, the known lengths of the MOTIONs other than RAPID while the tool was in the
+    /// spindle of the holder called last; 0 at TOOL_BEGIN (D235).
     /// </summary>
-    public decimal Distance { get; init; }
+    public decimal FeedDistance { get; init; }
+
+    /// <summary>
+    /// The rapid distance under the tool, the known lengths of its RAPID motions; 0 at TOOL_BEGIN (D235).
+    /// </summary>
+    public decimal RapidDistance { get; init; }
+
+    /// <summary>
+    /// The MOTIONs under the tool whose length is unknown; 0 at TOOL_BEGIN (D235).
+    /// </summary>
+    public int UnknownLengthMotions { get; init; }
+
+    /// <summary>
+    /// The derived total, FeedDistance plus RapidDistance (D235).
+    /// </summary>
+    public decimal Distance => FeedDistance + RapidDistance;
 
     /// <summary>
     /// The blocks executed under the tool while its holder was the holder called last, from the block that brought it
@@ -55,7 +70,6 @@ public sealed record ToolEvent : VmEvent
             return tool;
         }
 
-        return tool
-            + $", distance {EventText.Number(Distance)}, blocks {Blocks.ToString(CultureInfo.InvariantCulture)}";
+        return tool + ", " + EventText.Statistics(Blocks, FeedDistance, RapidDistance, UnknownLengthMotions);
     }
 }

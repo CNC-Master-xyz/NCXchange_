@@ -466,7 +466,7 @@ stateDiagram-v2
     Loaded --> Empty : TOOL=0
 ```
 
-Not drawn: `TOOL=k` in `Loaded` changes the tool without a preload and stays in `Loaded`; `PRELOAD=m2` in `Pending` replaces the pending preload. Leaving `Pending`: `TOOL=m` and the bare `TOOL` change to the preloaded tool and consume the preload; `TOOL=k` with another tool changes too but is a WARNING (the magazine cycles twice); `PRELOAD=0` only drops the preload and returns to the state the spindle was in (`Pending` remembers whether it held a tool, so the return may also be to `Empty`). A bare `TOOL` in `Empty` or `Loaded` is an ERROR (nothing preloaded); `PRELOAD=n` of the tool already in the spindle is a WARNING and changes nothing. Every transition into `Loaded` with a new tool raises `TOOL_END` for the old tool and `TOOL_BEGIN` for the new one.
+Not drawn: `TOOL=k` in `Loaded` changes the tool without a preload and stays in `Loaded`; `PRELOAD=m2` in `Pending` replaces the pending preload. Leaving `Pending`: `TOOL=m` and the bare `TOOL` change to the preloaded tool and consume the preload; `TOOL=k` with another tool changes too but is a WARNING (the magazine cycles twice); `PRELOAD=0` only drops the preload and returns to the state the spindle was in (`Pending` remembers whether it held a tool, so the return may also be to `Empty`). A bare `TOOL` in `Empty` or `Loaded` is an ERROR (nothing preloaded); `PRELOAD=n` of the tool already in the spindle is a WARNING and changes nothing. Every transition into `Loaded` with a new tool raises `TOOL_END` for the old tool and `TOOL_BEGIN` for the new one. The `PROGRAM=END` that ends a channel's program raises `TOOL_END` for every tool still in `Loaded` that the channel brought in, directly before `PROGRAM_END`, without leaving `Loaded` (D233).
 
 ### 5.3 Events
 
@@ -497,6 +497,9 @@ classDiagram
         +string Name
         +int Number
         +int Blocks
+        +decimal FeedDistance
+        +decimal RapidDistance
+        +int UnknownLengthMotions
         +decimal Distance
     }
     class SubEvent {
@@ -512,8 +515,11 @@ classDiagram
         +ToolRef Tool
         +string Holder
         +decimal Rpm
-        +decimal Distance
         +int Blocks
+        +decimal FeedDistance
+        +decimal RapidDistance
+        +int UnknownLengthMotions
+        +decimal Distance
     }
     class PreloadEvent {
         +ToolRef Tool

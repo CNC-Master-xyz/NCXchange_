@@ -30,10 +30,27 @@ public sealed record ProgramEvent : VmEvent
     public int Blocks { get; init; }
 
     /// <summary>
-    /// Run statistics at PROGRAM_END: the distance summed from the MOTION lengths of those blocks that are known; 0 at
-    /// PROGRAM_BEGIN.
+    /// Run statistics at PROGRAM_END: the known lengths of the MOTIONs of those blocks other than RAPID; 0 at
+    /// PROGRAM_BEGIN (D235).
     /// </summary>
-    public decimal Distance { get; init; }
+    public decimal FeedDistance { get; init; }
+
+    /// <summary>
+    /// Run statistics at PROGRAM_END: the known lengths of the RAPID motions of those blocks; 0 at PROGRAM_BEGIN
+    /// (D235).
+    /// </summary>
+    public decimal RapidDistance { get; init; }
+
+    /// <summary>
+    /// Run statistics at PROGRAM_END: the MOTIONs of those blocks whose length is unknown, so that a report can call
+    /// the distances a lower bound; 0 at PROGRAM_BEGIN (D235).
+    /// </summary>
+    public int UnknownLengthMotions { get; init; }
+
+    /// <summary>
+    /// The derived total, FeedDistance plus RapidDistance (D235).
+    /// </summary>
+    public decimal Distance => FeedDistance + RapidDistance;
 
     /// <inheritdoc/>
     public override string Kind => Phase == EventPhase.Begin ? "PROGRAM_BEGIN" : "PROGRAM_END";
@@ -47,7 +64,6 @@ public sealed record ProgramEvent : VmEvent
             return program;
         }
 
-        return program + $", blocks {Blocks.ToString(CultureInfo.InvariantCulture)}, "
-            + $"distance {EventText.Number(Distance)}";
+        return program + ", " + EventText.Statistics(Blocks, FeedDistance, RapidDistance, UnknownLengthMotions);
     }
 }

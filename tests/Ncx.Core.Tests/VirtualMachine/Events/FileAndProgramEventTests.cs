@@ -9,6 +9,9 @@ namespace Ncx.Core.Tests.VirtualMachine.Events;
 /// </summary>
 public sealed class FileAndProgramEventTests
 {
+    // D235: the figures of a TOOL_END or PROGRAM_END without a motion.
+    private const string NoDistance = "feedDistance 0, rapidDistance 0, unknownLengthMotions 0, distance 0";
+
     // VM 7, rows FILE_BEGIN, PROGRAM_BEGIN, STATE_CHANGE, PROGRAM_END, FILE_END: a run opens with FILE_BEGIN and closes
     // with FILE_END, each with the file name and the programs and subprograms found.
     [Fact]
@@ -21,7 +24,7 @@ public sealed class FileAndProgramEventTests
                 "FILE_BEGIN(1): file test.ncx, programs \"TEST\", subprograms none",
                 "PROGRAM_BEGIN(2): name \"TEST\", number 0",
                 "STATE_CHANGE(3): UNITS ? -> MM",
-                "PROGRAM_END(4): name \"TEST\", number 0, blocks 3, distance 0",
+                "PROGRAM_END(4): name \"TEST\", number 0, blocks 3, " + NoDistance,
                 "FILE_END(5): file test.ncx, programs \"TEST\", subprograms none",
             ],
             listener.Lines);
@@ -67,7 +70,13 @@ public sealed class FileAndProgramEventTests
         Assert.Equal(EventPhase.End, end.Phase);
         Assert.Equal(6, end.Blocks);
         Assert.Equal(70m, end.Distance);
-        Assert.Equal("PROGRAM_END(7): name \"TEST\", number 0, blocks 6, distance 70", end.ToString());
+        Assert.Equal(70m, end.FeedDistance);
+        Assert.Equal(0m, end.RapidDistance);
+        Assert.Equal(1, end.UnknownLengthMotions);
+        Assert.Equal(
+            "PROGRAM_END(7): name \"TEST\", number 0, blocks 6, feedDistance 70, rapidDistance 0, "
+            + "unknownLengthMotions 1, distance 70",
+            end.ToString());
     }
 
     // VM 7, rows SUB_BEGIN and SUB_END: raised at SUB=BEGIN and SUB=END with the name and the caller, the program or
