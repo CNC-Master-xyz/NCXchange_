@@ -312,7 +312,7 @@ internal static partial class SiemensAxes
     // A number with the factor of its axis; a computed value is rounded to the decimals of its address.
     private static string Number(SiemensBlock write, string address, decimal number, decimal factor)
     {
-        return factor == 1m ? write.Format(address, number) : write.FormatComputed(address, number * factor);
+        return factor == 1m ? write.Format(address, number) : write.Format(address, number * factor);
     }
 
     // An expression with the factor of its axis.

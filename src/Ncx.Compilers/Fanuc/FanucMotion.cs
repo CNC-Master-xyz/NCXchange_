@@ -319,7 +319,7 @@ internal static class FanucMotion
         }
 
         string letter = FanucAxes.LetterOf(write, axis.Axis, incremental: false) ?? axis.Axis;
-        return letter + write.FormatComputed(DecimalsAddress(write, axis.Axis),
+        return letter + write.Format(DecimalsAddress(write, axis.Axis),
             position.Value * FanucAxes.StateFactor(write, axis.Axis));
     }
 

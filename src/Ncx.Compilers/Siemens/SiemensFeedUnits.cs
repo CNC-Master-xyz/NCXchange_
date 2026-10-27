@@ -88,7 +88,7 @@ internal static class SiemensFeedUnits
             return write.Format("F", feed);
         }
 
-        return write.FormatComputed("F", ToMm(write) ? feed * MmPerInch : feed / MmPerInch);
+        return write.Format("F", ToMm(write) ? feed * MmPerInch : feed / MmPerInch);
     }
 
     /// <summary>

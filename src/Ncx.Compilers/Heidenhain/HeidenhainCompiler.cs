@@ -225,6 +225,10 @@ public sealed class HeidenhainCompiler : CompilerBase
     // Nothing of the program is dropped silently (language 2 rule 8): a word no concern wrote is an ERROR.
     private static void ReportUnwritten(HeidenhainBlock writing)
     {
+        // D363: ROUND_LIMIT and ROUND_LIMIT:ROTARY are state only, with no control form (controller-mapping 1): the
+        // compiler reads them for CMP023 (RoundLimitCheck) and writes nothing for them.
+        writing.Take("ROUND_LIMIT");
+        writing.Take("ROUND_LIMIT", "ROTARY");
         List<Word> unwritten = writing.Unwritten();
         if (unwritten.Count == 0)
         {

@@ -337,12 +337,12 @@ internal static class SiemensArcs
         {
             decimal sign = axis == "Z" && SiemensAxes.IsZNegated(write) ? -1m : 1m;
             write.Main.Word(SiemensLine.ArcRank,
-                SiemensAxes.Address(letter, write.FormatComputed(address, (centre - start) * sign), "", false));
+                SiemensAxes.Address(letter, write.Format(address, (centre - start) * sign), "", false));
             return;
         }
 
         write.Main.Word(SiemensLine.ArcRank, SiemensAxes.Address(letter,
-            write.FormatComputed(address, centre * SiemensAxes.StateFactor(write, axis)), "AC", expression: false));
+            write.Format(address, centre * SiemensAxes.StateFactor(write, axis)), "AC", expression: false));
     }
 
     private static bool KnownIn(IReadOnlyDictionary<string, AxisPosition> points, string first, string second)
@@ -403,9 +403,9 @@ internal static class SiemensArcs
         return value switch
         {
             IntegerValue integer => factor == 1m ? write.Format(address, integer.Number)
-                : write.FormatComputed(address, integer.Number * factor),
+                : write.Format(address, integer.Number * factor),
             DecimalValue number => factor == 1m ? write.Format(address, number.Number)
-                : write.FormatComputed(address, number.Number * factor),
+                : write.Format(address, number.Number * factor),
             ExprValue expression when SiemensExpressions.Text(write, expression) is string text => factor switch
             {
                 1m => text,
@@ -462,7 +462,7 @@ internal static class SiemensArcs
             }
 
             string letter = SiemensAxes.LetterOf(write, name);
-            string value = write.FormatComputed(SiemensAxes.DecimalsAddress(write, letter),
+            string value = write.Format(SiemensAxes.DecimalsAddress(write, letter),
                 position.Value * SiemensAxes.StateFactor(write, name));
             words.Add(SiemensAxes.Address(letter, value, "", expression: false));
         }
@@ -485,9 +485,9 @@ internal static class SiemensArcs
         var words = new List<string>();
         if (CentreOnTheGrid(write, arc, plane.First, plane.Second, words: null) is GridCentre centre)
         {
-            words.Add(SiemensAxes.Address(CenterLetter(plane.First)!, write.FormatComputed(SiemensAxes.DecimalsAddress(
+            words.Add(SiemensAxes.Address(CenterLetter(plane.First)!, write.Format(SiemensAxes.DecimalsAddress(
                 write, plane.First), centre.First * SiemensAxes.StateFactor(write, plane.First)), "AC", false));
-            words.Add(SiemensAxes.Address(CenterLetter(plane.Second)!, write.FormatComputed(SiemensAxes.DecimalsAddress(
+            words.Add(SiemensAxes.Address(CenterLetter(plane.Second)!, write.Format(SiemensAxes.DecimalsAddress(
                 write, plane.Second), centre.Second * SiemensAxes.StateFactor(write, plane.Second)), "AC", false));
             return words;
         }
@@ -500,7 +500,7 @@ internal static class SiemensArcs
                 continue;
             }
 
-            string value = write.FormatComputed(SiemensAxes.DecimalsAddress(write, name),
+            string value = write.Format(SiemensAxes.DecimalsAddress(write, name),
                 center.Value * SiemensAxes.StateFactor(write, name));
             words.Add(SiemensAxes.Address(letter, value, "AC", expression: false));
         }

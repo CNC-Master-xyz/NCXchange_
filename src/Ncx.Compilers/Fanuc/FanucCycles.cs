@@ -695,7 +695,7 @@ internal static class FanucCycles
         // The virtual machine keeps a diameter axis as a radius, while CLEARANCE is written as the program writes X.
         write.Target.Set(InitialLevel, level.ToString(CultureInfo.InvariantCulture));
         bool diameter = cycle.Axis == "X" && write.Machine.ResolveAxis("X")?.Programming == Programming.Diameter;
-        return write.FormatComputed("R", diameter ? (plane / 2m) - level : plane - level);
+        return write.Format("R", diameter ? (plane / 2m) - level : plane - level);
     }
 
     // G98 returns to the initial level, the drilling-axis position before the cycle, G99 to R (controllers fanuc.md 3,
@@ -872,7 +872,7 @@ internal static class FanucCycles
         }
 
         return FanucFunctions.NumberOf(pitch) is decimal number
-            ? write.FormatComputed("F", number * factor)
+            ? write.Format("F", number * factor)
             : FanucExpressions.WordValue(write, "F", pitch, factor);
     }
 

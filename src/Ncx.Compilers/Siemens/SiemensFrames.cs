@@ -448,7 +448,7 @@ internal static partial class SiemensFrames
             string? text = word is not null
                 ? SiemensAxes.FrameValueOf(write, axis.Key, word.Value, letter)
                 : axis.Value is decimal stored
-                    ? write.FormatComputed(SiemensAxes.DecimalsAddress(write, letter),
+                    ? write.Format(SiemensAxes.DecimalsAddress(write, letter),
                         stored * SiemensAxes.FrameStateFactor(write, axis.Key))
                     : null;
             if (text is null)
@@ -637,7 +637,7 @@ internal static partial class SiemensFrames
             string letter = SiemensAxes.LetterOf(write, sum.Key);
             values.Set(placeholder, sum.Value == 0m
                 ? "0"
-                : write.FormatComputed(SiemensAxes.DecimalsAddress(write, letter),
+                : write.Format(SiemensAxes.DecimalsAddress(write, letter),
                     sum.Value * SiemensAxes.FrameStateFactor(write, sum.Key)));
         }
 

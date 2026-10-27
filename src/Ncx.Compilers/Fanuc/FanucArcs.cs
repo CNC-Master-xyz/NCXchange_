@@ -211,7 +211,7 @@ internal static class FanucArcs
 
     private static string GridOffset(FanucBlock write, string axis, decimal offset)
     {
-        return write.FormatComputed(FanucMotion.DecimalsAddress(write, axis), offset);
+        return write.Format(FanucMotion.DecimalsAddress(write, axis), offset);
     }
 
     // A CENTER:IX from an expression is written as its expression, not from the virtual machine (FanucExpressions).
@@ -231,7 +231,7 @@ internal static class FanucArcs
     // The centre minus the start point, in radius values as the virtual machine stores them (D28, D60).
     private static string Offset(FanucBlock write, MotionEvent motion, string axis)
     {
-        return write.FormatComputed(FanucMotion.DecimalsAddress(write, axis),
+        return write.Format(FanucMotion.DecimalsAddress(write, axis),
             motion.Center![axis].Value - motion.From[axis].Value);
     }
 
@@ -239,7 +239,7 @@ internal static class FanucArcs
     private static string Point(FanucBlock write, string axis, decimal value)
     {
         string letter = FanucAxes.LetterOf(write, axis, incremental: false) ?? axis;
-        return letter + write.FormatComputed(FanucMotion.DecimalsAddress(write, axis),
+        return letter + write.Format(FanucMotion.DecimalsAddress(write, axis),
             value * FanucAxes.StateFactor(write, axis));
     }
 

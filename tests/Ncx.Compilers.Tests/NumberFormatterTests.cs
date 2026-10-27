@@ -77,15 +77,28 @@ public sealed class NumberFormatterTests
         Assert.Equal("565.", numbers.FormatFeed(565m, s_block));
     }
 
-    // D366: no address is written with all its digits; a linear address [format] decimals leaves out takes the
-    // decimals of X.
+    // D366: a linear address [format] decimals leaves out takes the decimals of X; a value that is no address, a
+    // variable or a parameter, keeps its digits.
     [Fact]
     public void Format_LinearAddressWithoutDecimals_TakesTheDecimalsOfX()
     {
         NumberFormatter numbers = Formatter(FakeMachines.PointFormat, new Diagnostics("T.ncx"));
 
-        Assert.Equal("1.235", numbers.Format("Q", 1.23456m, s_block));
+        Assert.Equal("1.235", numbers.Format("Z2", 1.23456m, s_block));
         Assert.Equal("2.5", numbers.Format("R", 2.500m, s_block));
+        Assert.Equal("1.23456", numbers.Format("Q", 1.23456m, s_block));
+        Assert.Equal("0.12345", numbers.Format("R1", 0.12345m, s_block));
+    }
+
+    // Gap closed 2026-10-28: a feed other than zero that rounds to F0 is the WARNING CMP024.
+    [Fact]
+    public void Format_FeedRoundedToZero_IsAWarning()
+    {
+        var diagnostics = new Diagnostics("T.ncx");
+        NumberFormatter numbers = Formatter(FakeMachines.PointFormat, diagnostics);
+
+        Assert.Equal("0", numbers.Format("F", 0.04m, s_block));
+        Assert.Equal(DiagnosticCodes.FeedRoundedToZero, Assert.Single(diagnostics.Items).Code);
     }
 
     // D366: an angle address [format] decimals leaves out, ANGLE or a rotary axis, takes four decimals on Heidenhain
@@ -100,7 +113,8 @@ public sealed class NumberFormatterTests
         string written)
     {
         var numbers = new NumberFormatter(Machine(FakeMachines.Mill(controller,
-            "[format]\ndecimal_separator = \".\"\ndecimals = { X = 2 }")), pointOnWholeNumbers: false);
+                "[format]\ndecimal_separator = \".\"\ndecimals = { X = 2 }")), new Diagnostics("T.ncx"),
+            pointOnWholeNumbers: false);
 
         Assert.Equal(written, numbers.Format(address, 12.345678m, s_block));
     }
@@ -110,7 +124,8 @@ public sealed class NumberFormatterTests
     public void Format_WrittenAngleDecimals_Win()
     {
         var numbers = new NumberFormatter(Machine(FakeMachines.Mill("heidenhain",
-            "[format]\ndecimal_separator = \".\"\ndecimals = { X = 3, ANGLE = 2 }")), pointOnWholeNumbers: false);
+                "[format]\ndecimal_separator = \".\"\ndecimals = { X = 3, ANGLE = 2 }")), new Diagnostics("T.ncx"),
+            pointOnWholeNumbers: false);
 
         Assert.Equal("12.35", numbers.Format("ANGLE", 12.345678m, s_block));
     }
@@ -137,7 +152,7 @@ public sealed class NumberFormatterTests
 
     private static NumberFormatter Formatter(string format, Diagnostics diagnostics, bool pointOnWholeNumbers = false)
     {
-        return new NumberFormatter(Machine(FakeMachines.Mill(format: format)), pointOnWholeNumbers);
+        return new NumberFormatter(Machine(FakeMachines.Mill(format: format)), diagnostics, pointOnWholeNumbers);
     }
 
     private static MachineConfig Machine(string toml)

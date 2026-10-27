@@ -333,6 +333,9 @@ internal sealed partial class SiemensBlock
     /// </summary>
     public void ReportUnwritten()
     {
+        // D363: ROUND_LIMIT and ROUND_LIMIT:ROTARY are state only, with no control form (controller-mapping 1): the
+        // compiler reads them for CMP023 (RoundLimitCheck) and writes nothing for them.
+        Written("ROUND_LIMIT");
         foreach (Word word in Block.Words)
         {
             if (!_written.Contains(NameOf(word)))
@@ -352,16 +355,6 @@ internal sealed partial class SiemensBlock
     public string Format(string address, decimal value)
     {
         return Numbers.Format(address, value, Block);
-    }
-
-    /// <summary>
-    /// A number the compiler computed, rounded half away from zero to the decimals of its address before it is
-    /// written: a computed coordinate is no number of the program (language 2 rule 5, 4.12 ROUND). Since D363 every
-    /// number is rounded so, silently, and this is Format.
-    /// </summary>
-    public string FormatComputed(string address, decimal value)
-    {
-        return Format(address, value);
     }
 
     /// <summary>

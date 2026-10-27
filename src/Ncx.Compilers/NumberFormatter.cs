@@ -43,20 +43,31 @@ public sealed class NumberFormatter
         "TX", "TY", "TZ", "NX", "NY", "NZ", "A3", "B3", "C3", "A5", "B5", "C5",
     };
 
+    // The linear addresses of the family defaults (D366): the axis letters X Y Z U V W with the extension of a machine
+    // axis (Z2), the centre offsets I J K and the radius R and CR of an arc.
+    private static readonly HashSet<string> s_linearAddresses = new(StringComparer.Ordinal)
+    {
+        "X", "Y", "Z", "U", "V", "W", "I", "J", "K", "R", "CR",
+    };
+
     private readonly OutputFormat? _format;
+    private readonly Diagnostics _diagnostics;
     private readonly bool _pointOnWholeNumbers;
     private readonly bool _heidenhain;
     private readonly HashSet<string> _rotaryLetters = new(StringComparer.Ordinal) { "A", "B", "C" };
+    private readonly HashSet<string> _linearLetters = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The formatter of one machine.
     /// </summary>
     /// <param name="machine">The machine, its [format], its axes and its controller.</param>
+    /// <param name="diagnostics">Where the WARNING about a feed rounded to zero goes.</param>
     /// <param name="pointOnWholeNumbers">True for a controller that writes the decimal point on every real number,
     /// X70. on Fanuc (controllers fanuc.md 2, 10 rule 5).</param>
-    public NumberFormatter(MachineConfig machine, bool pointOnWholeNumbers)
+    public NumberFormatter(MachineConfig machine, Diagnostics diagnostics, bool pointOnWholeNumbers)
     {
         _format = machine.Format;
+        _diagnostics = diagnostics;
         _pointOnWholeNumbers = pointOnWholeNumbers;
         _heidenhain = machine.Machine.Controller == Controller.Heidenhain;
         foreach (AxisDef axis in machine.Axes)
@@ -64,6 +75,10 @@ public sealed class NumberFormatter
             if (axis.Kind == AxisKind.Rotary)
             {
                 _rotaryLetters.Add(axis.Letter ?? axis.NcxName);
+            }
+            else
+            {
+                _linearLetters.Add(axis.Letter ?? axis.NcxName);
             }
         }
 
@@ -108,12 +123,29 @@ public sealed class NumberFormatter
     }
 
     /// <summary>
-    /// The decimals an address is written with: those of [format] decimals, else the default of the family (D366).
+    /// The decimals a linear or angle address is written with: those of [format] decimals, else the default of the
+    /// family (D366).
     /// </summary>
-    /// <param name="address">The address of [format] decimals whose decimals apply.</param>
+    /// <param name="address">The address of [format] decimals whose decimals apply, an axis letter or ANGLE.</param>
     public int WrittenDecimalsOf(string address)
     {
-        return DecimalsOf(address) ?? DefaultDecimals(address);
+        return DecimalsOf(address) ?? DefaultDecimals(address) ?? LinearDecimals;
+    }
+
+    /// <summary>
+    /// True for a linear address of the family defaults (D366): an axis letter X Y Z U V W with the extension of a
+    /// machine axis, a linear axis of the machine, a centre offset I J K and the radius R and CR.
+    /// </summary>
+    /// <param name="address">The address of [format] decimals.</param>
+    public bool IsLinear(string address)
+    {
+        if (s_linearAddresses.Contains(address) || _linearLetters.Contains(address))
+        {
+            return true;
+        }
+
+        return address.Length > 1 && "XYZUVW".Contains(address[0], StringComparison.Ordinal)
+            && address.Substring(1).All(char.IsAsciiDigit);
     }
 
     /// <summary>
@@ -133,15 +165,26 @@ public sealed class NumberFormatter
     /// </summary>
     /// <param name="address">The address of [format] decimals whose decimals apply.</param>
     /// <param name="value">The value, as the virtual machine or the block has it.</param>
-    /// <param name="block">The block it is written for.</param>
+    /// <param name="block">The block it is written for, which the WARNING of a feed rounded to zero cites.</param>
     /// <returns>The digits with the decimal separator of the machine, without the address.</returns>
     public string Format(string address, decimal value, Block block)
     {
         // D363: rounding a number to the decimals of its address is silent, half away from zero on the decimal value
-        // as written (15.0175 becomes 15.018); CMP020 is retired. D366: no address is written with all its digits.
-        _ = block;
-        int decimals = WrittenDecimalsOf(address);
-        decimal written = Math.Round(value, decimals, MidpointRounding.AwayFromZero);
+        // as written (15.0175 becomes 15.018); CMP020 is retired. D366: no linear or angle address is written with all
+        // its digits; a value that is no address, a variable, an ARG, a TOLERANCE or a dwell, keeps its digits unless
+        // [format] decimals names its address.
+        decimal written = (DecimalsOf(address) ?? DefaultDecimals(address)) is int decimals
+            ? Math.Round(value, decimals, MidpointRounding.AwayFromZero)
+            : value;
+        // Gap closed 2026-10-28 (delegated, W3-5): D363 makes the rounding of points silent; a feed that rounding
+        // turns into F0 is no point, and the control would not move, so it is the WARNING CMP024.
+        if (address == "F" && value != 0m && written == 0m)
+        {
+            _diagnostics.Warning(block, DiagnosticCodes.FeedRoundedToZero,
+                $"F{value.ToString(CultureInfo.InvariantCulture)} rounds to F0 with the decimals [format] gives F, "
+                + "so the control would not move at this feed (machine-config 2; D363).");
+        }
+
         return Digits(written, DecimalsOf(address)).Replace(Point, DecimalSeparator, StringComparison.Ordinal);
     }
 
@@ -193,8 +236,8 @@ public sealed class NumberFormatter
     }
 
     // D366: an angle address takes four decimals on Heidenhain and three on Siemens and Fanuc; a linear address
-    // takes the decimals of X.
-    private int DefaultDecimals(string address)
+    // takes the decimals of X; any other address keeps its digits (null).
+    private int? DefaultDecimals(string address)
     {
         if (s_vectorAddresses.Contains(address))
         {
@@ -213,7 +256,7 @@ public sealed class NumberFormatter
             return HeidenhainAngleDecimals;
         }
 
-        return DecimalsOf("X") ?? LinearDecimals;
+        return IsLinear(address) ? DecimalsOf("X") ?? LinearDecimals : null;
     }
 
     private static bool IsKlartextParameter(string address)

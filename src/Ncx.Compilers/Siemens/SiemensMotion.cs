@@ -415,10 +415,10 @@ internal static class SiemensMotion
             decimal factor = axis == "Z" && SiemensAxes.IsZNegated(write) ? -1m : 1m;
             string? value = word.Value switch
             {
-                IntegerValue integer => write.FormatComputed(vector[1], integer.Number * factor),
+                IntegerValue integer => write.Format(vector[1], integer.Number * factor),
                 DecimalValue number => factor == 1m
                     ? write.Format(vector[1], number.Number)
-                    : write.FormatComputed(vector[1], number.Number * factor),
+                    : write.Format(vector[1], number.Number * factor),
                 ExprValue expression when SiemensExpressions.Text(write, expression) is string text =>
                     factor == 1m ? text : "-(" + text + ")",
                 _ => null,

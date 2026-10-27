@@ -28,10 +28,10 @@ internal static class FanucExpressions
         switch (value)
         {
             case IntegerValue integer:
-                return factor == 1m ? write.Format(address, integer.Number) : write.FormatComputed(address,
+                return factor == 1m ? write.Format(address, integer.Number) : write.Format(address,
                     integer.Number * factor);
             case DecimalValue number:
-                return factor == 1m ? write.Format(address, number.Number) : write.FormatComputed(address,
+                return factor == 1m ? write.Format(address, number.Number) : write.Format(address,
                     number.Number * factor);
             case ExprValue { Tree: ExprNode tree }:
                 string? text = Expression(write, tree);

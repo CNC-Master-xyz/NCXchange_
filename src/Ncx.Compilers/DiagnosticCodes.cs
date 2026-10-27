@@ -163,6 +163,13 @@ public static partial class DiagnosticCodes
     public const string RoundingBeyondTheLimit = "CMP023";
 
     /// <summary>
+    /// CMP024, a WARNING: a feed other than zero rounds to F0 with the decimals [format] gives F, so the control would
+    /// not move at it (machine-config 2; D363). Gap closed 2026-10-28 (delegated): D363 makes the rounding of points
+    /// silent, not that of a feed.
+    /// </summary>
+    public const string FeedRoundedToZero = "CMP024";
+
+    /// <summary>
     /// CMP030, a WARNING: the radius from the written start to the written center and the radius from the written
     /// center to the written end of an arc differ by more than [machine] arc_radius_tolerance, or one output step of
     /// the center's address without the key (machine-config 1, 4; D364).

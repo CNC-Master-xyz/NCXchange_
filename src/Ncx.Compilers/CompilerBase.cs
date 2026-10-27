@@ -24,6 +24,7 @@ public abstract partial class CompilerBase : ICompiler
     private CompileOptions? _options;
     private Diagnostics? _diagnostics;
     private NumberFormatter? _numbers;
+    private RoundLimitCheck? _roundLimit;
     private TemplateSet? _templates;
     private LookAhead? _lookAhead;
     private IReadOnlyList<BlockStep> _steps = [];
@@ -277,7 +278,8 @@ public abstract partial class CompilerBase : ICompiler
         _options = options;
         _diagnostics = diagnostics;
         _steps = steps;
-        _numbers = new NumberFormatter(machine, DecimalPointOnWholeNumbers);
+        _numbers = new NumberFormatter(machine, diagnostics, DecimalPointOnWholeNumbers);
+        _roundLimit = new RoundLimitCheck(machine, _numbers, diagnostics);
         _templates = new TemplateSet(machine, new Diagnostics(machine.Machine.Name));
         _lookAhead = new LookAhead(steps, machine);
         ResetWrite();

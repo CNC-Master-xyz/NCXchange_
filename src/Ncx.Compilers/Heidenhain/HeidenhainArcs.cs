@@ -426,8 +426,8 @@ internal static class HeidenhainArcs
                 : ArcOnTheGrid.Written(known.Centre, known.CentreStep);
         }
 
-        decimal written = Math.Round(sweep, writing.Numbers.WrittenDecimalsOf("ANGLE"),
-            MidpointRounding.AwayFromZero);
+        int angleDecimals = writing.Numbers.WrittenDecimalsOf("ANGLE");
+        decimal written = Math.Round(sweep, angleDecimals, MidpointRounding.AwayFromZero);
         PlanePoint reached = ArcOnTheGrid.SweptEnd(new PlanePoint(start[0], start[1]),
             new PlanePoint(centre[0], centre[1]), counterclockwise ? written : -written);
         if (ArcOnTheGrid.EndBeyond(reached, new PlanePoint(end[0], end[1]), outputStep,
@@ -436,8 +436,9 @@ internal static class HeidenhainArcs
             writing.Warning(DiagnosticCodes.ArcEndPointOffTheGrid,
                 $"CP {polarAngle} turns the written start about the pole to {plane[0]}{Text(reached.First)} "
                 + $"{plane[1]}{Text(reached.Second)}, {Text(deviation)} from the rounded end point "
-                + $"{plane[0]}{Text(end[0])} {plane[1]}{Text(end[1])}; the four decimals of IPA are the one lever of "
-                + "Klartext for a helix and a sweep (D365, D268, D366).");
+                + $"{plane[0]}{Text(end[0])} {plane[1]}{Text(end[1])}, all to six decimals; IPA is written with the "
+                + $"{angleDecimals.ToString(CultureInfo.InvariantCulture)} decimals of ANGLE ([format] decimals, "
+                + "four by default), the one lever of Klartext for a helix and a sweep (D365, D268, D366).");
         }
     }
 

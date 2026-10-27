@@ -11,8 +11,10 @@ namespace Ncx.Compilers;
 /// the one that makes the radius from the written start and the radius to the written end agree best, and among equals
 /// the one nearest the exact centre. A written centre may so move inside its rounding step. The remaining difference
 /// is the WARNING CMP030 where it exceeds [machine] arc_radius_tolerance, or one output step of the centre's address
-/// without the key. Gap closed 2026-10-28 (delegated): D364 searches the neighbouring grid points only when the
-/// rounded centre misses the tolerance, so the program's own centre stays wherever its radii already agree.
+/// without the key. Gap closed 2026-10-28 (delegated, W3-5): D364 and D365 are skipped under CYLINDER (TRACYL),
+/// whose centre and end the compilers write from the block's own words. Gap closed 2026-10-28 (delegated): D364
+/// searches the neighbouring grid points only when the rounded centre misses the tolerance, so the program's own
+/// centre stays wherever its radii already agree.
 /// </summary>
 internal static class ArcOnTheGrid
 {
