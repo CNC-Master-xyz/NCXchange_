@@ -30,7 +30,7 @@ Recommendation: a WARNING, not a default. The Fanuc M-series `T` has no relation
 Meanwhile: nothing changes; no diagnostic and no `G43`, so no existing program changes. The CAM keeps writing `OFFSET:LEN`, or writes `TOOL_POINT=1` on a machine with `[tool_points] form = "registers"` (D392).
 Where: controllers/fanuc.md 5; machine-config 3; `src/Ncx.Compilers/Fanuc/FanucToolWords.cs`, `src/Ncx.Compilers/Fanuc/DiagnosticCodes.Fanuc.cs`.
 
-ANSWER:
+ANSWER: (Peter, 2026-10-27) Accept the recommendation: a WARNING at the first tool-axis motion after a TOOL without a length offset, once per tool change, naming the tool; `[tool_change] length_offset_by_macro = true` silences it. No default G43 H.
 
 #### D389 Brackets in a Fanuc comment (R1-14)
 Question: `SECTION="PROFIL (D10)"` compiles for `fanuc-mill-30i` to `(PROFIL (D10))`: the first `)` ends the comment and the rest of the line is read as code, and neither `check --strict` nor `compile` says anything. Should the Fanuc compiler replace `(` and `)` inside comment text (for example by `[` and `]`), or refuse them with an ERROR? And does a machine file state a comment length limit that the compiler checks?
@@ -38,7 +38,7 @@ Recommendation: replace `(` by `[` and `)` by `]` with a WARNING per comment tha
 Meanwhile: the Fanuc compiler refuses a comment text with `(` or `)` with an ERROR (CMP-code of the Fanuc band), because a silently broken line is worse than none and an ERROR is easy to relax later; the CAM already refuses those characters (SplinterCAM DEC-CL-005), so it never meets the ERROR.
 Where: controllers/fanuc.md 10 rule 5; controller-mapping 1 (COMMENT); `src/Ncx.Compilers/Fanuc/FanucBlock.cs` (`CommentText`), `src/Ncx.Compilers/Fanuc/DiagnosticCodes.Fanuc.cs`.
 
-ANSWER:
+ANSWER: (Peter, 2026-10-27) Accept the recommendation: replace ( by [ and ) by ] in Fanuc comment text with a WARNING per comment that names the replacement; check the 30i-B manual for an alarm on [ ] before release and note the page. No new length key.
 
 #### D390 Which holder the point words address without a role
 Question: D372 gives `TOOL_POINT` the holder role as an optional address and names no address for `TIP_OFFSET` and `POINT_RADIUS`. `TOOL` without a role addresses `default_holder`, `OFFSET` the holder of the last `TOOL` (virtual machine 3.8 rule 2). Which holder does a point word without a role address, and which holder do `TIP_OFFSET` and `POINT_RADIUS` follow?
@@ -46,7 +46,7 @@ Recommendation: as `OFFSET` does: the holder of the `TOOL` of the block, else of
 Meanwhile: the recommendation is coded (`VirtualMachine.ResolvePointWords`), and an address on `TIP_OFFSET` or `POINT_RADIUS` is refused by the catalog (PAR150), so a later answer that adds one breaks no program.
 Where: language 4.4; VM 2.3, 3.8 rule 2; `src/Ncx.Core/VirtualMachine/VirtualMachine.cs`, `src/Ncx.Core/Catalog/ToolWords.cs`.
 
-ANSWER:
+ANSWER: (Peter, 2026-10-27) Accept the recommendation as coded.
 
 #### D391 What "a block of their own" admits
 Question: D372 makes the point words valid "in a TOOL block or in a block of their own". May such a block carry anything else: `SKIP`, a `COMMENT`, `OFFSET` words, `PRELOAD`, a motion verb?
@@ -54,7 +54,7 @@ Recommendation: nothing but the three point words, `SKIP` and a `COMMENT`; anyth
 Meanwhile: the recommendation is coded (`BlockRules.CheckPointWords`, PAR017); it is the stricter reading and can be relaxed without breaking a program.
 Where: language 4.4, 5 rule 5; VM 5; `src/Ncx.Core/Parsing/BlockRules.cs`, `src/Ncx.Core/Model/DiagnosticCodes.Parsing.cs`.
 
-ANSWER:
+ANSWER: (Peter, 2026-10-27) Accept the recommendation as coded.
 
 #### D392 Does an explicit point 1 write the mapped register?
 Question: D375 says "point 1 with a = r = 0 writes nothing, so existing programs compile byte for byte as before", and D369 (b) says the CAM writes the point words and no `OFFSET:*` numbers, so the registers must come from the mapping. Read together they conflict for a CAM program that writes `TOOL=1 TOOL_POINT=1`: on a Fanuc `registers` machine it then gets no `G43 H` at all (the R1-13 failure), on Siemens no `D1`. Does an explicit `TOOL_POINT` of 1 write the register of the mapping, and what wins where a block carries `OFFSET:LEN` and the holder a point?
@@ -62,7 +62,7 @@ Recommendation: a tool whose program names its point (a `TOOL_POINT` word in its
 Meanwhile: the recommendation's first half is coded: the mapping is written for every tool whose holder carries an explicit `TOOL_POINT` word since its `TOOL`; without one nothing changes. An `OFFSET` word after the point keeps today's behaviour (it writes its register) with no WARNING.
 Where: language 4.4; controller-mapping 3; `src/Ncx.Compilers/CompilerBase.Tools.cs` and the three family tool writers.
 
-ANSWER:
+ANSWER: (Peter, 2026-10-27) Accept the recommendation as coded, including the WARNING when an OFFSET word follows a named point.
 
 ---
 
