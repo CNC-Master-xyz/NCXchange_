@@ -255,6 +255,69 @@ public sealed class CycleCallTests
         Assert.False(vm.Result!.Stopped);
     }
 
+    // D114: with a machine file the names of a catalog cycle's parameters are checked against the machine's cycle
+    // catalog; one the entry does not map is VM254, an ERROR, and the words of language 4.7 are no catalog parameters.
+    [Fact]
+    public void D114_CatalogCycleParameterTheEntryDoesNotMap_IsVm254()
+    {
+        VmHarness vm = Pocketing(VmMachines.MillTurn()).Execute(
+            "CYCLE=RECT_POCKET LENGTH=60 WIDTH=40 DEPTH=-10 CORNER=5");
+
+        Assert.Equal([DiagnosticCodes.CycleParameterUnknown], vm.Codes());
+        Assert.Contains("CORNER", Assert.Single(vm.Messages(DiagnosticCodes.CycleParameterUnknown)),
+            StringComparison.Ordinal);
+    }
+
+    // D114: parameters the entry maps are accepted.
+    [Fact]
+    public void D114_CatalogCycleParametersTheEntryMaps_AreAccepted()
+    {
+        VmHarness vm = Pocketing(VmMachines.MillTurn()).Execute("CYCLE=RECT_POCKET LENGTH=60 WIDTH={$Q1}");
+
+        vm.AssertNoDiagnostics();
+        Assert.Equal(["LENGTH", "WIDTH"], vm.State.Cycle.Parameters.Select(word => word.Key));
+    }
+
+    // D114, D103: without a machine file the parameters are not checked; the WARNING "not checked: no machine file"
+    // comes once per name.
+    [Fact]
+    public void D114_CatalogCycleWithoutAMachineFile_IsTheD103WarningOncePerName()
+    {
+        VmHarness vm = new VmHarness(VmMachines.Default()).Execute(
+            "CYCLE=RECT_POCKET LENGTH=60 WIDTH=40",
+            "CYCLE=RECT_POCKET LENGTH=70");
+
+        Assert.Equal(
+            [DiagnosticCodes.NotCheckedNoMachineFile, DiagnosticCodes.NotCheckedNoMachineFile], vm.Codes());
+        Assert.Contains("LENGTH", vm.Messages(DiagnosticCodes.NotCheckedNoMachineFile)[0], StringComparison.Ordinal);
+    }
+
+    // A machine file whose cycle catalog maps RECT_POCKET with LENGTH and WIDTH (language 4.7.1, machine-config 6).
+    private static VmHarness Pocketing(MachineConfig machine)
+    {
+        return new VmHarness(machine with
+        {
+            CycleCatalog = new CycleCatalog
+            {
+                Controller = machine.Machine.Controller,
+                Entries =
+                [
+                    new CycleEntry
+                    {
+                        Name = "RECT_POCKET",
+                        Native = "CYCLE_POCKET",
+                        Params = new Dictionary<string, string>
+                        {
+                            ["LENGTH"] = "_LENG",
+                            ["WIDTH"] = "_WID",
+                            ["DEPTH"] = "_DP",
+                        },
+                    },
+                ],
+            },
+        });
+    }
+
     // The default machine of D103 with ExpandCycles and the units set.
     // A machine whose cycle catalog is the Fanuc one with the simple turning cycle TURN_OD on G90, which returns to
     // its start point, and the one-shot GROOVE on G75, which no page of the manual states a return for (D187).

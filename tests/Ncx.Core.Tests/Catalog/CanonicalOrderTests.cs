@@ -172,6 +172,15 @@ public sealed class CanonicalOrderTests
             Canonical("Q218=60 Z2=5 COMMENT=\"POCKET\" CYCLE:HEIDENHAIN=251 Q215=0 DEPTH=-10 Q219=40"));
     }
 
+    // D114: the parameters of a catalog cycle stand at the D94 rank after the cycle words, in source order.
+    [Fact]
+    public void D114_CatalogCycleParameters_FollowTheCycleWordsInSourceOrder()
+    {
+        Assert.Equal(
+            "CYCLE=RECT_POCKET DEPTH=-10 LENGTH=60 WIDTH=40 COMMENT=\"POCKET\"",
+            Canonical("LENGTH=60 COMMENT=\"POCKET\" CYCLE=RECT_POCKET WIDTH=40 DEPTH=-10"));
+    }
+
     // The examples were rewritten into the rank order when D90 was applied, so every block of them stands in the order
     // of the catalog (D90; phase 0, P0-06).
     [Fact]

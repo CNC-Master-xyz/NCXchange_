@@ -2,6 +2,7 @@ using Ncx.Core.Catalog;
 using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.State;
+using Ncx.Core.VirtualMachine.Validation;
 
 namespace Ncx.Core.VirtualMachine.Handlers;
 
@@ -58,17 +59,21 @@ internal static class CycleHandlers
             }
         }
 
+        // The parameters of a catalog cycle are checked against the machine's cycle catalog (D114).
+        CycleParameterValidation.Check(context, cycle);
+
         Word? axis = context.Block.Find("AXIS");
         cycle.Axis = axis is null ? CycleState.ToolAxisOf(context.State.Frame.Workplane) : axis.Value.ToCanonical();
     }
 
-    // The parameter words of a cycle block: the cycle words of language 4.7 but CYCLE, AXIS and CYCLE_CALL, and in a
-    // CYCLE:controller=n block every key the catalog does not know, a native parameter (D94).
+    // The parameter words of a cycle block: the cycle words of language 4.7 but CYCLE, AXIS and CYCLE_CALL; in a
+    // CYCLE:controller=n block every key the catalog does not know, a native parameter (D94); in a block of a catalog
+    // cycle every such key but a machine axis word, a cycle parameter (D114).
     private static bool IsParameter(Word word, bool nativeBlock)
     {
         if (word.Definition is null)
         {
-            return nativeBlock;
+            return nativeBlock || !WordCatalog.TryMachineAxis(word.Key, out _);
         }
 
         return word.Definition.Group == WordKind.Cycle && word.Key is not ("CYCLE" or "AXIS" or "CYCLE_CALL");

@@ -156,4 +156,10 @@ public static partial class DiagnosticCodes
     /// 3.3, 5, D189).
     /// </summary>
     public const string CycleCallOnTheDrillingAxis = "VM253";
+
+    /// <summary>
+    /// VM254: a parameter of a catalog cycle that the machine's cycle catalog does not map for that cycle, checked
+    /// with a machine file; without one it is the WARNING VM003 (language 4.7.1, virtual machine 5, D103, D114).
+    /// </summary>
+    public const string CycleParameterUnknown = "VM254";
 }

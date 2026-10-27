@@ -117,7 +117,8 @@ internal static class CanonicalRanks
     public const int ToleranceRotary = 800;
     public const int ToleranceMode = 810;
 
-    // Bucket 13: the cycle words, then the native parameters of a CYCLE:<controller>=n block in source order (D94).
+    // Bucket 13: the cycle words, then the native parameters of a CYCLE:<controller>=n block (D94) and the parameters
+    // of a catalog cycle (D114), in source order.
     public const int Cycle = 820;
     public const int Axis = 830;
     public const int Surface = 840;

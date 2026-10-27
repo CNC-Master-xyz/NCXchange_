@@ -112,7 +112,7 @@ flowchart BT
 
 ## 4. Core model (Ncx.Core)
 
-The parsed program is a list of blocks, a block a list of words, a word a key with an optional address and an optional typed value, exactly as the lexical rules of the language define it. The word catalog is the schema: it says for every key which value type it takes, whether it is a verb, whether it accepts an address, its scope, and its rank in the canonical order. The parser validates against the catalog so that the VM never sees a wrong value type and no unknown key other than the two provisional forms of 4.1: a machine axis word (D93) and a native parameter of a `CYCLE:<controller>=n` block (D94).
+The parsed program is a list of blocks, a block a list of words, a word a key with an optional address and an optional typed value, exactly as the lexical rules of the language define it. The word catalog is the schema: it says for every key which value type it takes, whether it is a verb, whether it accepts an address, its scope, and its rank in the canonical order. The parser validates against the catalog so that the VM never sees a wrong value type and no unknown key other than the three provisional forms of 4.1: a machine axis word (D93), a native parameter of a `CYCLE:<controller>=n` block (D94) and a parameter of a catalog cycle (`CYCLE=RECT_POCKET LENGTH=60`, D114).
 
 ```mermaid
 classDiagram
@@ -260,7 +260,7 @@ flowchart TD
     E2 -- yes, pseudo-words allowed --> F
     E2 -- yes, user file --> G2[ERROR pseudo-word in a user file]
     E2 -- no --> F{key in catalog?}
-    F -- no --> F2{"machine axis form in a block whose verb takes axis words, or a block with CYCLE:controller=n?"}
+    F -- no --> F2{"machine axis form in a block whose verb takes axis words, a block with CYCLE:controller=n, or a catalog cycle block?"}
     F2 -- yes --> F3[provisional word: number or expression value, bare only under HOME]
     F3 --> I
     F2 -- no --> G[ERROR unknown key, keep block as RAW text]
@@ -275,7 +275,7 @@ flowchart TD
     M --> A
 ```
 
-A key the catalog does not know is accepted as a provisional word when it has the form of a machine axis (`[XYZABCUVW][0-9]{0,2}`, or `I` followed by that) in a block whose verb takes axis words, with a number or expression value (bare only under `HOME`), or when it stands in a block with `CYCLE:<controller>=n` as a native cycle parameter; the VM resolves the first against `[[axis]]`, the second stays unresolved (D93, D94). The parser decides the two forms after it has read every token of the block, because the condition is a property of the block, not of the token; in a block with `CYCLE:<controller>=n` an unknown key is a native parameter even when it has the machine-axis form (D94). A key starting with `@` is a pseudo-word (`@SAVE`, `@RESTORE`, section 5.5); the parser accepts it, with a state key `KEY[:ADDR]` as its value, only when it runs with `ParserOptions.AllowPseudoWords`, which the expander sets for generated text; in a user file it is the ERROR "pseudo-word in a user file" (D95).
+A key the catalog does not know is accepted as a provisional word when it has the form of a machine axis (`[XYZABCUVW][0-9]{0,2}`, or `I` followed by that) in a block whose verb takes axis words, with a number or expression value (bare only under `HOME`), or when it stands in a block with `CYCLE:<controller>=n` as a native cycle parameter; the VM resolves the first against `[[axis]]`, the second stays unresolved (D93, D94). The parser decides the two forms after it has read every token of the block, because the condition is a property of the block, not of the token; in a block with `CYCLE:<controller>=n` an unknown key is a native parameter even when it has the machine-axis form (D94). The third form: in a block whose `CYCLE` value is not a built-in name or `OFF`, every other unknown key is a cycle parameter with a number or expression value, kept in source order at the rank of the native parameters; a key of the machine-axis form stays a machine axis word there. The VM checks the parameter names against the machine's cycle catalog (VM254; without a machine file the D103 WARNING), in `Validation/CycleParameterValidation` (D114). A key starting with `@` is a pseudo-word (`@SAVE`, `@RESTORE`, section 5.5); the parser accepts it, with a state key `KEY[:ADDR]` as its value, only when it runs with `ParserOptions.AllowPseudoWords`, which the expander sets for generated text; in a user file it is the ERROR "pseudo-word in a user file" (D95).
 
 `NcxWriter` is the inverse: it writes a program in canonical form (word order by `CanonicalRank`, numbers as stored, comments kept; comment-only lines and blank lines are trivia kept in place, the comment column is canonical, D92) and is what `format` and every reader use for output. Generated blocks (section 5.5) are skipped by the writer unless asked for. A byte order mark the file began with is no part of the text: the parser skips it, `NcxProgram.HasByteOrderMark` records it next to the line ending, and the writer writes it back; a program a reader built has none (D111). The comment column counts Unicode code points, as the columns of the lexer's PAR messages do (`string.EnumerateRunes`, D166).
 

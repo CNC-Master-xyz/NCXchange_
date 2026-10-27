@@ -176,6 +176,7 @@ The cycle call (language 4.7; VM 3.3, 5; D59, D94).
 | `VM251` | ERROR | CYCLE_CALL of a built-in drilling cycle without DEPTH or CLEARANCE; a catalog or CYCLE:controller=n cycle carries its own parameters. Suppressed inside a subprogram that no program of the file calls (D99). | VM 3.3, 5; D94 |
 | `VM252` | ERROR | AXIS naming an axis that is not a linear axis of the machine. | language 4.7; VM 3.3, 5; D59 |
 | `VM253` | ERROR | CYCLE_CALL of a built-in drilling cycle with a word on its drilling axis; the cycle's own planes move that axis, and a pre-positioning is a RAPID of its own. | language 4.7; VM 3.3, 5; D189 |
+| `VM254` | ERROR | A parameter of a catalog cycle that the machine's cycle catalog does not map for that cycle; without a machine file it is the WARNING VM003. | language 4.7.1; VM 5; D114 |
 
 ## Flow
 

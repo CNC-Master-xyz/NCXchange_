@@ -217,6 +217,44 @@ public sealed class BlockRulesTests
         BlockWithError(text, DiagnosticCodes.WordValueNotAccepted);
     }
 
+    // D114: in a block whose CYCLE value is not a built-in name or OFF, every key the word catalog does not know is a
+    // cycle parameter with a number or expression value, kept in source order.
+    [Fact]
+    public void D114_CatalogCycleParameters_AreKeptInSourceOrder()
+    {
+        Block block = ParseText.CleanBlock("CYCLE=RECT_POCKET LENGTH=60 WIDTH={$Q1} DEPTH=-10 CORNER_RADIUS=5");
+
+        Assert.Equal(["CYCLE", "LENGTH", "WIDTH", "DEPTH", "CORNER_RADIUS"], Keys(block));
+        Assert.Null(block.Find("LENGTH")?.Definition);
+    }
+
+    // D114: a key of the machine-axis form stays a D93 machine axis word in such a block, so without a verb it is an
+    // axis word without verb, never a cycle parameter.
+    [Fact]
+    public void D114_MachineAxisFormInACatalogCycleBlock_StaysAMachineAxisWord()
+    {
+        BlockWithError("CYCLE=RECT_POCKET LENGTH=60 Z2=5", DiagnosticCodes.AxisWordWithoutVerb);
+    }
+
+    // D114: a cycle parameter takes a number or an expression and no address.
+    [Theory]
+    [InlineData("CYCLE=RECT_POCKET LENGTH=ON", DiagnosticCodes.WordValueNotAccepted)]
+    [InlineData("CYCLE=RECT_POCKET LENGTH", DiagnosticCodes.WordValueNotAccepted)]
+    [InlineData("CYCLE=RECT_POCKET LENGTH:X=60", DiagnosticCodes.WordTakesNoAddress)]
+    public void D114_CatalogCycleParameterWithAnotherValue_IsError(string text, string code)
+    {
+        BlockWithError(text, code);
+    }
+
+    // D114: a built-in drilling cycle and CYCLE=OFF open nothing to keys the catalog does not know.
+    [Theory]
+    [InlineData("CYCLE=DRILL SURFACE=0 CLEARANCE=2 DEPTH=-15 LENGTH=60")]
+    [InlineData("CYCLE=OFF LENGTH=60")]
+    public void D114_UnknownKeyBesideABuiltInCycleOrOff_IsUnknownKey(string text)
+    {
+        BlockWithError(text, DiagnosticCodes.UnknownKey);
+    }
+
     // Any other key the catalog does not know is an ERROR, and the block is kept with its source text and the word
     // without a definition (virtual machine 3 step 1, architecture 4.1).
     [Theory]
