@@ -16,7 +16,7 @@ dialect = "iTNC530"                # 30i | 31i-T | 0i-TF | iTNC530 | TNC640 | 84
 builder = "dmg"                    # machine builder id, used by RAW:DMG and by the builder function tables
 gcode_system = "A"                 # Fanuc lathes only: A (G98/G99 feed, U/W incremental, G90 = turning cycle), B (G94/G95, G90/G91, cycles G77/G78/G79) or C (as B, with G70/G71 for inch and mm and cycles G20/G21/G24; D174)
 s_binds_to_spindle_word = true     # Fanuc: one S word, owned by the spindle of the M code in the same block; RPM:role is written into that role's SPINDLE block
-limits = "warn"                    # warn | clamp: what the expander does with RPM, F and targets beyond the machine limits (D64)
+limits = "warn"                    # warn | clamp: what the expander does with RPM, F and targets beyond the machine limits (D64); clamp rewrites F against the linear axes its block names and only the absolute axis words of RAPID and LINE under FRAME=MACHINE (D192, D203)
 channels = [1]
 units_default = "MM"
 default_spindle = "S1"
@@ -138,7 +138,7 @@ incremental_letter = "U"           # Fanuc lathes: U/W/H/V are the incremental f
 kind = "linear"                    # linear | rotary
 limits = [-10, 650]                # min and max in machine coordinates (the G53 / M91 frame), for the travel-limit analytics (D100)
 rapid = 30000                      # mm/min, for the runtime estimate
-max_feed = 10000                   # mm/min, the F this axis can follow; the expander warns or clamps (D64)
+max_feed = 10000                   # mm/min (deg/min on a rotary axis), the F this axis can follow; VM441 compares the path feed of the axes a block moves, the expander warns or clamps (D64, D192)
 acceleration = 3000                # mm/s^2, for the trapezoidal profile of the runtime estimate
 programming = "diameter"           # X axis of a lathe: diameter | radius | switchable (D60); the reader interprets the source with it, the compiler writes it
 home = 0                           # reference point 1 in machine coordinates (the G53 / M91 frame), for HOME (D100)
