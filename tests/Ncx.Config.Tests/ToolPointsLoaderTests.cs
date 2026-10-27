@@ -85,6 +85,16 @@ public sealed class ToolPointsLoaderTests
         Assert.Equal(DiagnosticCodes.ToolPointConflict, Assert.Single(diagnostics.Items).Code);
     }
 
+    // P2-01: a tool that is no whole number is the wrong type, CFG003, and nothing else.
+    [Fact]
+    public void RowWithAFractionalTool_IsCfg003Only()
+    {
+        Diagnostics diagnostics =
+            Report(Head + "[tool_points]\nform = \"edge\"\n\n[[tool_point]]\ntool = 1.5\npoint = 2\n");
+
+        Assert.Equal(DiagnosticCodes.WrongType, Assert.Single(diagnostics.Items).Code);
+    }
+
     // D373 (3): under offset memory A or B, H and D share one pool, so one number as a length and as a radius is
     // CFG010, also within one row.
     [Theory]

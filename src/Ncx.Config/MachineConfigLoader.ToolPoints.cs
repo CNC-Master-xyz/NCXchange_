@@ -69,6 +69,13 @@ public static partial class MachineConfigLoader
             int? point = row.Integer("point");
             if (tool is not int toolNumber || point is not int pointNumber)
             {
+                // A key that stands with a value of the wrong type was reported by Integer as CFG003, and that is the
+                // whole mistake of the row; only a missing key is CFG010.
+                if ((tool is null && row.Has("tool")) || (point is null && row.Has("point")))
+                {
+                    continue;
+                }
+
                 row.Diagnostics.Error(row.Line, DiagnosticCodes.ToolPointConflict,
                     $"{row.Name} has no {(tool is null ? "tool" : "point")}, by which the row is found "
                     + "(machine-config 3, D373).");
