@@ -72,8 +72,8 @@ public sealed class ExampleRunTests
     // MILLTURN_TRANSFER: the D103 WARNINGs name TURRET1, SUB, SUB_CHUCK, Z2 and MAIN_CHUCK, once each; the holder and
     // the sub spindle are created on the spot, and C resolves to the sub spindle's own axis after WORKPIECE=SUB. The
     // holder TURRET1 created on the spot has no spindle, so the LINEs of lines 13 and 14 find the default spindle, the
-    // tool spindle TOOL, still OFF: spindle OFF before a LINE (VM 5). Which spindle is the default one on the default
-    // machine is wave-1 question #53; at LINE C=90 the tool spindle runs.
+    // tool spindle TOOL, still OFF, but they turn against the running work spindle MAIN, the workpiece holder, which
+    // passes the rule: no spindle OFF before a LINE (VM 5, D129); at LINE C=90 the tool spindle runs.
     [Fact]
     public void MillturnTransfer_WithoutAMachineFile_WarnsNotCheckedOnceForEachMissingName()
     {
@@ -89,18 +89,18 @@ public sealed class ExampleRunTests
             }
         }
 
-        Assert.Equal(7, vm.Codes().Count);
+        Assert.Equal(5, vm.Codes().Count);
         Assert.Equal(5, messages.Count);
-        Assert.Equal([13, 14], spindleOffLines);
+        Assert.Empty(spindleOffLines);
         string[] names = ["role TURRET1", "role SUB", "function SUB_CHUCK", "axis Z2", "function MAIN_CHUCK"];
         for (int index = 0; index < names.Length; index++)
         {
             Assert.Contains(names[index], messages[index], StringComparison.Ordinal);
         }
 
-        Assert.Equal(new ToolRef(12), vm.State.Holders["TURRET1"].SpindleTool);
-        Assert.Equal(12, vm.State.Holders["TURRET1"].OffsetLen);
-        Assert.Equal("SUB", vm.State.Frame.WorkpieceHolder);
+        Assert.Equal(new ToolRef(12), vm.State.Holders["ROLE_TURRET1"].SpindleTool);
+        Assert.Equal(12, vm.State.Holders["ROLE_TURRET1"].OffsetLen);
+        Assert.Equal("ROLE_SUB", vm.State.Frame.WorkpieceHolder);
         Assert.True(vm.State.Motion.Position.ContainsKey("C_SUB"));
     }
 

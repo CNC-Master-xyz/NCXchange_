@@ -239,9 +239,9 @@ public sealed class ToolChangeTests
         VmHarness vm = new VmHarness(VmMachines.Default()).Execute("TOOL:TURRET1=3", "OFFSET=3");
 
         Assert.Equal([DiagnosticCodes.NotCheckedNoMachineFile], vm.Codes());
-        Assert.Equal(3, vm.State.Holders["TURRET1"].OffsetCombined);
+        Assert.Equal(3, vm.State.Holders["ROLE_TURRET1"].OffsetCombined);
         Assert.Equal(0, vm.State.Holders["H1"].OffsetCombined);
-        Assert.Equal("TURRET1", vm.State.LastHolder);
+        Assert.Equal("ROLE_TURRET1", vm.State.LastHolder);
     }
 
     // VM 3.8 rule 2: the same with a machine file, the second turret being no default.

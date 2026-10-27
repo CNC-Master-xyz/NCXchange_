@@ -16,6 +16,10 @@ internal sealed class ResourceResolver
     // can write as an axis word (language 3, KEY; D93), so it never meets a machine axis of the file (D103).
     private const string CreatedAxisPrefix = "C_";
 
+    // The id of a resource created on the spot is ROLE_ and its role, ROLE_SUB, never the id of a resource of the
+    // default machine such as S2, so that a guessed resource never aliases real state (D170).
+    private const string CreatedIdPrefix = "ROLE_";
+
     // The name that resolves to the rotary axis of a work spindle created on the spot while it holds the workpiece
     // (virtual machine 3.8 rule 3, D103).
     private const string SpindleAxisName = "C";
@@ -55,8 +59,8 @@ internal sealed class ResourceResolver
     /// </summary>
     public string? ResolveSpindle(string? role, Block block, ChannelState state, Diagnostics diagnostics)
     {
-        // TODO(question): D103 creates a resource on the spot for a role the default machine lacks without saying of
-        // which kind for a spindle word; it is a work spindle, which D103 gives a rotary axis of its own (D170).
+        // A spindle word on a role the default machine lacks creates a work spindle on the spot, which gets a rotary
+        // axis of its own (D103, D170).
         return Resolve(role, _machine.ResolveDefaultSpindle(), static resource => resource.IsSpindle, "spindle",
             ResourceType.WorkSpindle, block, state, diagnostics);
     }
@@ -519,19 +523,19 @@ internal sealed class ResourceResolver
 
     private ResourceDef? FindCreated(string role)
     {
-        return _createdResources.TryGetValue(role, out ResourceDef? created) ? created : null;
+        return _createdResources.TryGetValue(CreatedIdPrefix + role, out ResourceDef? created) ? created : null;
     }
 
-    // A work spindle created on the spot gets a rotary axis of its own, so that C resolves to it while it is the
-    // workpiece holder (D103); a holder created on the spot has no spindle. The resource is named by its role.
+    // Every spindle word and WORKPIECE create a work spindle with a rotary axis of its own, so that C resolves to it
+    // while it is the workpiece holder; TOOL and PRELOAD create a holder without a spindle (D103). The id is ROLE_ and
+    // the role, the axis C_ and the role (D170).
     private ResourceDef CreateOnTheSpot(string role, ResourceType type)
     {
-        // TODO(question): D103 names neither the id of a resource created on the spot nor the name of the rotary axis
-        // of a work spindle created so; the resource takes the role as its id and the axis is C_ and the role (D170).
+        string id = CreatedIdPrefix + role;
         ResourceDef created = type == ResourceType.WorkSpindle
-            ? new ResourceDef { Id = role, Type = type, Axis = CreatedAxisPrefix + role }
-            : new ResourceDef { Id = role, Type = type };
-        _createdResources[role] = created;
+            ? new ResourceDef { Id = id, Type = type, Axis = CreatedAxisPrefix + role }
+            : new ResourceDef { Id = id, Type = type };
+        _createdResources[id] = created;
         if (created.Axis is string axis)
         {
             _createdAxes[axis] = AxisKind.Rotary;

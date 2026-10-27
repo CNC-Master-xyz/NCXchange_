@@ -221,8 +221,9 @@ internal static class ArcRules
         }
         else if (words.HasCenter && words.Radius is not null)
         {
-            // TODO(question): language 4.3 gives ARC "CENTER or R", and neither it nor virtual machine 5 says what an
-            // ARC with both is; the block says two things of one arc and is an ERROR until D186 is answered.
+            // An ARC goes to its target with CENTER or with R, not both: the block says two things of one arc and is an
+            // ERROR, listed in virtual machine 5 next to ANGLE with R. A Fanuc G2/G3 with both, where R wins, is the
+            // reader's to translate (language 4.3, fanuc 4, D186).
             diagnostics.Error(block, DiagnosticCodes.ArcCenterWithRadius,
                 "ARC goes to its target with CENTER or with R, and this one has both (language 4.3).");
             valid = false;
