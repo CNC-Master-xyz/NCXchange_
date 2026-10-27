@@ -11,8 +11,8 @@ namespace Ncx.Compilers.Heidenhain;
 /// </summary>
 internal static class HeidenhainSubprograms
 {
-    // TODO(question): heidenhain 8 rule 6 writes subprograms "as separate .h files with CALL PGM when the machine
-    // setting says so", and machine-config 2 has no such setting; every SUB section is written as an LBL section.
+    // D274: every SUB is an LBL section after the M30 of each caller; the option of separate .h files with CALL PGM is
+    // struck from heidenhain 8 rule 6 for 1.0 (decisions.md D274).
 
     /// <summary>
     /// Writes SUB=BEGIN NAME=n as LBL n (heidenhain 8 rule 6).
