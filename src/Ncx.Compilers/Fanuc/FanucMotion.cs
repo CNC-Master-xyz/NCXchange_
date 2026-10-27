@@ -255,11 +255,10 @@ internal static class FanucMotion
     }
 
     /// <summary>
-    /// G4 with P in milliseconds for DWELL, which NCX gives in seconds (controllers fanuc.md 4; controller-mapping 1,
-    /// DWELL; language 4.1).
+    /// G4 X with the seconds of DWELL and a decimal point, which the control reads as seconds whatever the increment
+    /// system and parameter 1015#7 (D159; 30i-B B-64484EN p.188, cnc-manuals connector page 188: X "decimal point
+    /// permitted"; controllers fanuc.md 4; controller-mapping 1, DWELL; language 4.1).
     /// </summary>
-    // TODO(question): D159: the unit of G4 P is milliseconds or seconds by a parameter that no key of the machine file
-    // carries; P is written in milliseconds, as fanuc 4 writes it and the reader reads it, until D159 is answered.
     public static void WriteDwell(FanucBlock write)
     {
         if (write.Block.Find("DWELL") is not Word dwell)
@@ -268,9 +267,9 @@ internal static class FanucMotion
         }
 
         write.Written(dwell);
-        if (FanucExpressions.WordValue(write, "P", dwell.Value, 1000m) is string milliseconds)
+        if (FanucExpressions.WordValue(write, "X", dwell.Value, 1m) is string seconds)
         {
-            write.Write("G4 P" + milliseconds);
+            write.Write("G4 X" + seconds);
         }
     }
 

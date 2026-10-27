@@ -110,23 +110,23 @@ public sealed class FanucMotionTests
         Assert.Equal("G17 X10. Y10.\nG1 X20. Y15. F100.\n", body);
     }
 
-    // Language 4.1 DWELL, controller-mapping 1: G4 with P in milliseconds (D159).
+    // Language 4.1 DWELL, controller-mapping 1 (D159): G4 X in seconds with a decimal point, which the control reads
+    // as seconds whatever its increment system and parameter 1015#7 (B-64484EN p.188).
     [Fact]
-    public void Dwell_InSeconds_IsG4PInMilliseconds()
+    public void Dwell_InSeconds_IsG4XInSecondsWithADecimalPoint()
     {
-        string body = FanucCompile.Body("DWELL=1.5");
-
-        Assert.Equal("G4 P1500\n", body);
+        Assert.Equal("G4 X1.5\n", FanucCompile.Body("DWELL=1.5"));
+        Assert.Equal("G4 X2.\n", FanucCompile.Body("DWELL=2"));
     }
 
-    // Language 4.1 DWELL (seconds), controllers fanuc.md 4 and 7 (D159): an expression dwell is the expression times
-    // 1000 in brackets, an operation in brackets of its own.
+    // Language 4.1 DWELL (seconds), controllers fanuc.md 4 and 7 (D159): an expression dwell is the expression in
+    // seconds, a variable bare and an operation in brackets.
     [Fact]
-    public void Dwell_AsAnExpression_IsG4PWithTheExpressionTimes1000()
+    public void Dwell_AsAnExpression_IsG4XWithTheExpression()
     {
         string body = FanucCompile.Body("VAR:V1=2\nDWELL={$V1}\nDWELL={$V1 + 0.5}");
 
-        Assert.Equal("#1 = 2\nG4 P[#1 * 1000]\nG4 P[[#1 + 0.5] * 1000]\n", body);
+        Assert.Equal("#1 = 2\nG4 X#1\nG4 X[#1 + 0.5]\n", body);
     }
 
     // Controller-mapping 1, SKIP; language 2 rule 2 (the verb on every block), 4.3 (F is modal); D53, virtual machine
