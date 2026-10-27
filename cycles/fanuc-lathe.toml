@@ -107,8 +107,8 @@ params = { DEPTH = "X", CLEARANCE = "R", CYCLE_DWELL = "P", CYCLE_F = "F" }
 # are modal data the three cycles share, so a repeat block with a new R is a new CYCLE block, because a new CYCLE replaces all parameters (language 4.7).
 # F is the cutting feed on G90 and G94 (CYCLE_F) and the thread lead on G92 and G76 (PITCH, language 4.7). The lead equals the pitch on a single-start thread; a
 # multi-start thread is cut by shifting the thread start angle with Q, which has no NCX word and keeps its block RAW (D175).
-# TODO(question): TAPER is a parameter name of a catalog entry, and the parser takes none yet, so a block with R reads as RAW and no program can carry TAPER
-# until D114 is answered; the mapping stands here because D175 decided it.
+# D114: TAPER is a parameter name of a catalog entry, the third provisional form of the parser: in a block whose CYCLE is not a built-in name, a key the word
+# catalog does not know is a cycle parameter, checked against the machine's catalog by the VM; the mapping stands here because D175 decided it.
 
 [[cycle]]
 name = "TURN_OD"
