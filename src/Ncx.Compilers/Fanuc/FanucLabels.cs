@@ -21,6 +21,9 @@ internal sealed class FanucLabels
     // walk of the section (FanucPaths).
     private readonly Dictionary<int, FanucMeeting> _meetings = [];
 
+    // The greatest block number the labels of the O program take or a contour took from them (D277, D278).
+    private int _greatest;
+
     /// <summary>
     /// The labels of no section: FILE=BEGIN and FILE=END.
     /// </summary>
@@ -75,6 +78,34 @@ internal sealed class FanucLabels
         }
 
         return meeting;
+    }
+
+    /// <summary>
+    /// The next free block number of the O program, above every number its labels take and every number given out
+    /// before: the P and Q of a contour written inline and the labels of that contour (D277, D278).
+    /// </summary>
+    public int Allocate()
+    {
+        _greatest = Math.Max(_greatest, EndLabel ?? 0) + 1;
+        return _greatest;
+    }
+
+    /// <summary>
+    /// The labels of a contour section written inline in an O program: each takes a free number of the program, so
+    /// that no N stands twice in it (D277, D278).
+    /// </summary>
+    /// <param name="section">The contour section.</param>
+    /// <param name="steps">Every step of the run.</param>
+    /// <param name="program">The labels of the O program the contour stands in.</param>
+    public static FanucLabels Renumbered(Section section, IReadOnlyList<BlockStep> steps, FanucLabels program)
+    {
+        FanucLabels labels = Of(section, steps);
+        foreach (string label in new List<string>(labels._numbers.Keys))
+        {
+            labels._numbers[label] = program.Allocate();
+        }
+
+        return labels;
     }
 
     /// <summary>
@@ -134,6 +165,7 @@ internal sealed class FanucLabels
         }
 
         EndLabel = conditionalEnd ? greatest + 1 : null;
+        _greatest = greatest;
     }
 
     // The loop of a main program: M99 jumps back to its first block, which the reader writes as a LABEL after the

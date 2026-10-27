@@ -71,30 +71,58 @@ internal static class FanucContour
             return true;
         }
 
-        // D278: the blocks are written from an unknown motion state, so the first writes G00 or G01 and every later
-        // one its own code and words; what the program has active otherwise (plane, feed mode, G80) stands.
-        var entryState = new TargetState();
-        entryState.TakeOver(write.Target);
-        entryState.Forget(FanucCodes.Motion);
-        entryState.Forget("F");
-        if (contours.Inline(contour, entryState) is not InlinedSection inlined
+        // D278: the contour's own labels take free numbers of this O program (D277), so no N stands twice in it.
+        contours.SetLabels(contour, FanucLabels.Renumbered(contour, write.Steps, write.Labels));
+        if (contours.Inline(contour, EntryState(write, contour)) is not InlinedSection inlined
             || !Checks(write, entry, inlined, contour))
         {
             return false;
         }
 
-        List<string> lines = FirstBlockWords(write, entry, inlined);
-        int greatest = GreatestLabel(write, program);
-        int first = contours.Next(program, greatest);
-        int last = lines.Count > 1 ? contours.Next(program, greatest) : first;
+        var lines = new List<string>(inlined.Lines);
+        int motion = lines.FindIndex(IsMotionLine);
+        if (motion < 0 || !IsLinearLine(lines[motion]))
+        {
+            write.Error(DiagnosticCodes.FanucContourFirstBlockNotLinear,
+                $"The first motion line of the CONTOUR {contour.Name} of CYCLE={entry.Name} is \""
+                + (motion < 0 ? "none" : lines[motion]) + "\", and the first block of a Fanuc contour writes G00 or "
+                + "G01 (controllers fanuc.md 6; D278).");
+            return false;
+        }
+
+        // P names the line of the first motion: a bare label line in front of it gives that line its number, since
+        // a label line alone is a block of its own that P must not name.
+        int? labelBefore = null;
+        for (int index = motion - 1; index >= 0; index--)
+        {
+            if (IsBareLabel(lines[index]))
+            {
+                labelBefore ??= OwnNumber(lines[index]);
+                lines.RemoveAt(index);
+                motion--;
+            }
+        }
+
+        lines[motion] = WithoutUnmovedAxis(write, entry, inlined, lines[motion]);
+        int first = OwnNumber(lines[motion]) ?? labelBefore ?? write.Labels.Allocate();
+        if (OwnNumber(lines[motion]) is null)
+        {
+            lines[motion] = "N" + Number(first) + " " + lines[motion];
+        }
+
+        int lastIndex = lines.Count - 1;
+        int last = lastIndex == motion ? first : OwnNumber(lines[lastIndex]) ?? write.Labels.Allocate();
+        if (lastIndex != motion && OwnNumber(lines[lastIndex]) is null)
+        {
+            lines[lastIndex] = "N" + Number(last) + " " + lines[lastIndex];
+        }
+
         var range = new FanucContourRange(first, last);
         contours.Add(program, contour, range);
         write.Write(CycleLine(code, range));
-        for (int index = 0; index < lines.Count; index++)
+        foreach (string line in lines)
         {
-            string number = index == 0 ? "N" + Number(first) + " "
-                : index == lines.Count - 1 ? "N" + Number(last) + " " : "";
-            write.Write(number + lines[index]);
+            write.Write(line);
         }
 
         // D278: after the section every code its blocks wrote is unknown, since the control does not run them where
@@ -106,6 +134,96 @@ internal static class FanucContour
 
         write.MakeUnknown(FanucCodes.Motion);
         return true;
+    }
+
+    // D278: the blocks of the contour are written from an unknown motion state, so the first writes G00 or G01 and its
+    // words; the feed mode, the plane and G90/G91 are left unknown as well, so that the first block writes the ones
+    // the contour runs under wherever a later G70 stands (the control runs the range under its own modal state). The
+    // cycle, the compensation and the units are pinned to what the contour's NCX blocks have, so that no other code,
+    // G80 or G40 among them, is written inside the range.
+    private static TargetState EntryState(FanucBlock write, Section contour)
+    {
+        var state = new TargetState();
+        state.TakeOver(write.Target);
+        foreach (string key in (string[])[FanucCodes.Motion, "F", FanucCodes.FeedMode, FanucCodes.Plane,
+            FanucCodes.Distance])
+        {
+            state.Forget(key);
+        }
+
+        state.Set(FanucCodes.Cycle, "G80");
+        if (FirstStepOf(write, contour) is BlockStep first)
+        {
+            state.Set(FanucCodes.Comp, FanucCodes.CompCode(first.Before.Motion.Comp));
+            if (FanucCodes.UnitsCode(first.Before.Frame.Units, write.System) is string units)
+            {
+                state.Set(FanucCodes.Units, units);
+            }
+        }
+
+        foreach (string key in (string[])[FanucCodes.Length, FanucCodes.Origin])
+        {
+            if (write.Target.ActiveOf(key) is null or "?")
+            {
+                state.Forget(key);
+            }
+        }
+
+        return state;
+    }
+
+    // The first block of the contour's walk after its SUB=BEGIN.
+    private static BlockStep? FirstStepOf(FanucBlock write, Section contour)
+    {
+        foreach (BlockStep step in write.Steps)
+        {
+            if (step.Section == contour && !step.Block.Has("SUB", null, "BEGIN"))
+            {
+                return step;
+            }
+        }
+
+        return null;
+    }
+
+    // A line that carries a motion code G00 to G03 (with or without its leading zero).
+    private static bool IsMotionLine(string line)
+    {
+        return MotionCodeOf(line) is not null;
+    }
+
+    private static bool IsLinearLine(string line)
+    {
+        return MotionCodeOf(line) is "G0" or "G1";
+    }
+
+    private static string? MotionCodeOf(string line)
+    {
+        foreach (string token in line.Split(' '))
+        {
+            if (token is "G0" or "G00" or "G1" or "G01" or "G2" or "G02" or "G3" or "G03")
+            {
+                return token.Length == 3 ? string.Concat("G", token.AsSpan(2)) : token;
+            }
+        }
+
+        return null;
+    }
+
+    // A line that is a block number alone, "N7", the line of a LABEL block.
+    private static bool IsBareLabel(string line)
+    {
+        string trimmed = line.Trim();
+        return trimmed.Length > 1 && trimmed[0] == 'N' && trimmed.Substring(1).All(char.IsAsciiDigit);
+    }
+
+    // The block number a line carries itself; null for none.
+    private static int? OwnNumber(string line)
+    {
+        string first = line.TrimStart().Split(' ')[0];
+        return first.Length > 1 && first[0] == 'N' && first.Substring(1).All(char.IsAsciiDigit)
+            ? int.Parse(first.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture)
+            : null;
     }
 
     private static string CycleLine(string code, FanucContourRange range)
@@ -284,26 +402,25 @@ internal static class FanucContour
         return (diameter ? target / 2m : target) != start.Value;
     }
 
-    // The lines of the section, the first without the word of a plane axis its first motion names but does not move,
-    // so that G71 and G72 read type I where only the infeed axis moves (D278).
-    private static List<string> FirstBlockWords(FanucBlock write, CycleEntry entry, InlinedSection inlined)
+    // The line of the first motion without the word of a plane axis it names but does not move, so that G71 and G72
+    // read type I where only the infeed axis moves (D278).
+    private static string WithoutUnmovedAxis(FanucBlock write, CycleEntry entry, InlinedSection inlined, string line)
     {
-        var lines = new List<string>(inlined.Lines);
         Block? first = FirstMotion(inlined);
-        if (entry.Native is not ("G71" or "G72") || first is null || lines.Count == 0)
+        if (entry.Native is not ("G71" or "G72") || first is null)
         {
-            return lines;
+            return line;
         }
 
         string other = entry.Native == "G71" ? "Z" : "X";
         if (first.Find(other) is null || Moves(write, first, other))
         {
-            return lines;
+            return line;
         }
 
         string letter = FanucAxes.LetterOf(write, other, incremental: false) ?? other;
         var kept = new List<string>();
-        foreach (string token in lines[0].Split(' '))
+        foreach (string token in line.Split(' '))
         {
             if (!(token.StartsWith(letter, StringComparison.Ordinal) && token.Length > letter.Length
                 && (char.IsAsciiDigit(token[letter.Length]) || token[letter.Length] is '-' or '.' or '[' or '#')))
@@ -312,24 +429,6 @@ internal static class FanucContour
             }
         }
 
-        lines[0] = string.Join(" ", kept);
-        return lines;
-    }
-
-    // The greatest block number the labels of the program take (D277): its numeric labels, the numbers its
-    // identifier labels and the end of a conditional JUMP=END take.
-    private static int GreatestLabel(FanucBlock write, Section program)
-    {
-        int greatest = write.Labels.EndLabel ?? 0;
-        foreach (BlockStep step in write.Steps)
-        {
-            if (step.Section == program && step.Block.Find("LABEL") is Word label
-                && write.Labels.NumberOf(label.Value.ToCanonical()) is int number)
-            {
-                greatest = Math.Max(greatest, number);
-            }
-        }
-
-        return greatest;
+        return string.Join(" ", kept);
     }
 }

@@ -2,7 +2,8 @@ namespace Ncx.Compilers;
 
 /// <summary>
 /// A section written inline in the block that names it, the contour of a Fanuc G70 to G73 (D278): its lines, written
-/// from an unknown target state, and the keys of the target state they wrote, which are unknown after them.
+/// from the target state the caller gave (CompilerBase.InlineSection), and the keys of the target state they changed,
+/// which are unknown after them.
 /// </summary>
 public sealed class InlinedSection
 {

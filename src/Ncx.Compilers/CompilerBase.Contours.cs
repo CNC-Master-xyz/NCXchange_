@@ -85,9 +85,24 @@ public abstract partial class CompilerBase
         return new InlinedSection { Lines = lines, WrittenKeys = written, Steps = steps };
     }
 
-    // Whether a section was written inline and stands as no subprogram of its own (D278, D388 item 4).
+    // Whether a section was written inline and stands as no subprogram of its own (D278, D388 item 4): one that a
+    // CALL of the file also names is written as a subprogram as well, since the CALL needs it.
     private bool IsInlined(Section section)
     {
-        return _inlined.Contains(section);
+        return _inlined.Contains(section) && !IsCalled(section);
+    }
+
+    // Whether a CALL of the run enters the section (virtual machine 2.7).
+    private bool IsCalled(Section section)
+    {
+        foreach (BlockStep step in _steps)
+        {
+            if (step.Section == section && step.Block.Has("SUB", null, "BEGIN") && step.After.Flow.Calls.Count > 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

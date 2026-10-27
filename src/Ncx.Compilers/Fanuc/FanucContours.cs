@@ -3,22 +3,31 @@ using Ncx.Core.Model;
 namespace Ncx.Compilers.Fanuc;
 
 /// <summary>
-/// The contour sections of G70 to G73 the compiler has written inline, per program, with their P and Q, and the next
-/// free block number of each program (D278, D277).
+/// The contour sections of G70 to G73 the compiler has written inline, per program, with their P and Q (D278, D277).
 /// </summary>
 internal sealed class FanucContours
 {
     private readonly Func<Section, TargetState, InlinedSection?> _inline;
+    private readonly Action<Section, FanucLabels> _setLabels;
     private readonly Dictionary<Section, Dictionary<Section, FanucContourRange>> _ranges = [];
-    private readonly Dictionary<Section, int> _greatest = [];
 
     /// <summary>
     /// The contours of one compile.
     /// </summary>
     /// <param name="inline">Writes a section inline, CompilerBase.InlineSection.</param>
-    public FanucContours(Func<Section, TargetState, InlinedSection?> inline)
+    /// <param name="setLabels">Sets the labels a section is written with.</param>
+    public FanucContours(Func<Section, TargetState, InlinedSection?> inline, Action<Section, FanucLabels> setLabels)
     {
         _inline = inline;
+        _setLabels = setLabels;
+    }
+
+    /// <summary>
+    /// Sets the labels a contour section is written with in the O program it is inlined into (D277, D278).
+    /// </summary>
+    public void SetLabels(Section contour, FanucLabels labels)
+    {
+        _setLabels(contour, labels);
     }
 
     /// <summary>
@@ -46,19 +55,6 @@ internal sealed class FanucContours
         }
 
         ranges[contour] = range;
-    }
-
-    /// <summary>
-    /// The next block number of a program, after the greatest number its labels take and every number given out
-    /// before (D277).
-    /// </summary>
-    /// <param name="program">The program or subprogram.</param>
-    /// <param name="greatest">The greatest block number of its labels.</param>
-    public int Next(Section program, int greatest)
-    {
-        int next = Math.Max(_greatest.GetValueOrDefault(program), greatest) + 1;
-        _greatest[program] = next;
-        return next;
     }
 
     /// <summary>

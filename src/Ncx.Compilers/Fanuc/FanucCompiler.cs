@@ -130,8 +130,7 @@ public sealed class FanucCompiler : CompilerBase
             Writer = text => WriteLine(text, block),
             CommentText = CommentText,
             PointRegisters = PointRegistersOf(after),
-            Contours = _contourState ??= new FanucContours(InlineSection),
-
+            Contours = _contourState ??= new FanucContours(Inline, (section, labels) => _labels[section] = labels),
             ProgramNumbers = _programNumbers,
             Repeats = _repeats,
             Stock = StockOf(Step),
@@ -143,6 +142,17 @@ public sealed class FanucCompiler : CompilerBase
         }
 
         write.ReportUnwritten();
+    }
+
+    // D278: a contour section written inline; its lines reach the O program when FanucContour writes them, so the
+    // numbers its walk wrote are counted there, once.
+    private InlinedSection? Inline(Section section, TargetState entry)
+    {
+        var own = new HashSet<int>(_ownNumbers);
+        InlinedSection? inlined = InlineSection(section, entry);
+        _ownNumbers.Clear();
+        _ownNumbers.UnionWith(own);
+        return inlined;
     }
 
     // A line of the block; one that carries its own N, a label or a RAW line, carries a number no other line of its O
