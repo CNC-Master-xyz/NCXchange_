@@ -132,9 +132,8 @@ internal static class SiemensFrames
         if (replacing && !chain.TryCut(blocks))
         {
             block.MarkAllRead();
-            block.Draft.KeepAsRaw($"{name} deletes the programmable frame, and the chain holds a tilt of CYCLE800 "
-                + "or is "
-                + "not known here (controllers siemens.md 4; virtual machine 3.9)");
+            block.Draft.KeepAsRaw($"{name} deletes the programmable frame, and an entry of it stands before a tilt "
+                + "of CYCLE800, or the chain is not known here (controllers siemens.md 4; virtual machine 3.9; D333)");
             return;
         }
 

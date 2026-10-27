@@ -145,6 +145,31 @@ public sealed class SiemensFrameTests
                 + "CYCLE800(1,\"TABLE\",0,57,0,0,0,0,20,0,0,0,0,-1,100,1)\nCYCLE800()"));
     }
 
+    // D333: CYCLE800 writes system frames, not the programmable frame, so TRANS, ROT, MIRROR and SCALE cut only the
+    // programmable entries after the last tilt of CYCLE800 and the tilt survives; a programmable entry before such a
+    // tilt keeps the block RAW, since NCX cannot remove it without the tilt.
+    [Fact]
+    public void Trans_AfterCYCLE800_CutsOnlyTheProgrammableEntries()
+    {
+        const string Tilt = "CYCLE800(0,\"TABLE\",0,27,0,0,0,0,45,0,0,0,0,-1,100,1)";
+        const string Additive = "CYCLE800(0,\"TABLE\",1,27,0,0,0,0,45,0,0,0,0,-1,100,1)";
+
+        Assert.Equal(Lines("TILT A=0 B=45 C=0 MOVE=TURN", "SHIFT X=5", "SHIFT=RESET", "ROTATE=30"),
+            CheckedBody(Tilt + "\nTRANS X5\nROT RPL=30"));
+        Assert.Equal(Lines("SHIFT X=5", "TILT A=0 B=45 C=0 MOVE=TURN", Raw("TRANS Y2")),
+            Body("ATRANS X5\n" + Additive + "\nTRANS Y2"));
+    }
+
+    // D333: a new CYCLE800 (_ST ones digit 0) resets the earlier tilts and every programmable entry before its TILT;
+    // _X0, _Y0, _Z0 are a SHIFT before the TILT and _X1, _Y1, _Z1 one after it, which CYCLE800() removes with the tilt.
+    [Fact]
+    public void CYCLE800_New_ResetsTheChain_ReferencePointsAreShifts()
+    {
+        Assert.Equal(Lines("SHIFT X=5", "SHIFT=RESET", "SHIFT X=1 Y=2 Z=3", "TILT A=0 B=45 C=0 MOVE=TURN", "SHIFT X=4",
+                "SHIFT=RESET", "TILT=RESET", "SHIFT=RESET"),
+            CheckedBody("ATRANS X5\nCYCLE800(0,\"TABLE\",0,27,1,2,3,0,45,0,4,0,0,-1,100,1)\nCYCLE800()"));
+    }
+
     // D335: _A is the first rotation of the order the mode gives, not the angle about X; _MODE 39 is the order Z X Y,
     // so its _A turns about Z and is the C of TILT. _DIR 0 only computes the frame, MOVE=STAY; _FR=5 retracts by _FR_I
     // (controller-mapping 1, TILT; D83).

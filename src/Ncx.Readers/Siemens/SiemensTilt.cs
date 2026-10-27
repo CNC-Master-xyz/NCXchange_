@@ -22,7 +22,9 @@ internal static class SiemensTilt
     private const int Carrier = 1;
     private const int Swivel = 2;
     private const int Mode = 3;
+    private const int BeforeRotation = 4;
     private const int FirstAngle = 7;
+    private const int AfterRotation = 10;
     private const int SecondAngle = 8;
     private const int Direction = 13;
     private const int RetractDistance = 14;
@@ -106,10 +108,12 @@ internal static class SiemensTilt
             return;
         }
 
-        if (!ReferencePointsAreZero(arguments) || (st / 100) % 10 != 0)
+        SiemensDraftBlock? before = ReferenceShift(arguments, BeforeRotation);
+        SiemensDraftBlock? after = ReferenceShift(arguments, AfterRotation);
+        if (before is null || after is null || (st / 100) % 10 != 0)
         {
-            block.Draft.KeepAsRaw("CYCLE800 with a reference point before or after the rotation, or with the tool "
-                + "aligned instead of the plane, has no NCX word (controllers siemens.md 4)");
+            block.Draft.KeepAsRaw("CYCLE800 with a reference point that is no number, or with the tool aligned instead "
+                + "of the plane, has no NCX word (controllers siemens.md 4)");
             return;
         }
 
@@ -142,14 +146,23 @@ internal static class SiemensTilt
             blocks.Add(retractBlock);
         }
 
+        // D333: a new swivel (_ST ones digit 0) resets the earlier tilts and every programmable entry before its TILT,
+        // an additive one (1) appends; _X0, _Y0, _Z0 are a SHIFT before the TILT and _X1, _Y1, _Z1 one after it, all
+        // entries of CYCLE800, a system frame that TRANS and the other replacing instructions leave standing.
         SiemensChain chain = block.Facts.Chain;
-        var next = new SiemensChainEntry(entry.Verb!, "CYCLE800", entry);
-        if ((st % 10 != 1 && !chain.TryRemoveSwivel(blocks)) || !chain.TryReplace(null, next, blocks))
+        if (st % 10 != 1 && !chain.TryClear(blocks))
         {
-            block.Draft.KeepAsRaw("the new swivel of CYCLE800 would replace a tilt that is not the last entry of "
-                + "the chain "
-                + "of transforms, or one the reader does not know (language 4.2, D31)");
+            block.Draft.KeepAsRaw("the new swivel of CYCLE800 resets a chain of transforms the reader does not know "
+                + "here (language 4.2, D31; virtual machine 3.9)");
             return;
+        }
+
+        foreach (SiemensDraftBlock part in new[] { before, entry, after })
+        {
+            if (part.Verb is not null && (part.Verb != "SHIFT" || part.Words.Count > 0))
+            {
+                chain.Append(new SiemensChainEntry(part.Verb, "CYCLE800", part), blocks);
+            }
         }
 
         WarnNotCarried(block, st, dir, fr);
@@ -442,17 +455,32 @@ internal static class SiemensTilt
         return false;
     }
 
-    private static bool ReferencePointsAreZero(List<string> arguments)
+    // The SHIFT of a reference point of CYCLE800, _X0 _Y0 _Z0 before the rotation or _X1 _Y1 _Z1 after it (D333): the
+    // axes whose value is not 0, no words where all are 0 or empty; null where a value is no number.
+    private static SiemensDraftBlock? ReferenceShift(List<string> arguments, int first)
     {
-        foreach (int index in new[] { 4, 5, 6, 10, 11, 12 })
+        var shift = new SiemensDraftBlock().WithVerb("SHIFT");
+        string[] axes = ["X", "Y", "Z"];
+        for (int index = 0; index < 3; index++)
         {
-            if (index < arguments.Count && arguments[index].Length > 0 && Number(arguments, index) != 0)
+            int place = first + index;
+            if (place >= arguments.Count || arguments[place].Trim().Length == 0)
             {
-                return false;
+                continue;
+            }
+
+            if (Number(arguments, place) is not decimal value)
+            {
+                return null;
+            }
+
+            if (value != 0)
+            {
+                shift.Add(axes[index], SiemensNumbers.Of(value));
             }
         }
 
-        return true;
+        return shift;
     }
 
     private static int? Whole(List<string> arguments, int index)
