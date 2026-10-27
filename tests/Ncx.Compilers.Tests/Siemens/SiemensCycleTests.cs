@@ -273,6 +273,7 @@ public sealed class SiemensCycleTests
                 "SLOT1(10,0,2,-5,,1,,,40,10,,,,100,,2,,,,,,,,,,,,,,1000,2)"),
             Body(result));
         Assert.Equal([DiagnosticCodes.SiemensCycleRequiredPositionEmpty], CompilerCodes(result));
+        Assert.Contains("VARI", result.Diagnostics.Items[0].Message, StringComparison.Ordinal);
     }
 
     // D380: DEEP_HOLE is CYCLE830 with an absolute _DP and the _AMODE ones digit 1, S_FB the drilling feed at
@@ -304,6 +305,41 @@ public sealed class SiemensCycleTests
             MillBody("CYCLE=DRILL SURFACE=0 CLEARANCE=2 DEPTH=-5 SAFE=10 CYCLE_RETRACT=SAFE CYCLE_F=100",
                 "CYCLE_CALL X=10 Y=10", "CYCLE=DRILL SURFACE=0 CLEARANCE=2 DEPTH=-5 SAFE=10 CYCLE_RETRACT=SAFE "
                 + "CYCLE_F=200", "CYCLE_CALL X=20", "CYCLE_CALL X=30", "CYCLE=OFF", "LINE X=40 F=200"));
+    }
+
+    // SW4.92 p.540 (review B2): F or S alone under an armed MCALL calls the cycle, so the compiler ends its call
+    // first; the next position arms it again.
+    [Fact]
+    public void FeedOrSpeedAlone_UnderTheCompilersOwnModalCall_EndsItFirst()
+    {
+        Assert.Equal(Lines("F100", "MCALL CYCLE81(10,0,2,-5)", "G0 X10 Y10", "MCALL", "F200", "S1200",
+                "F100", "MCALL CYCLE81(10,0,2,-5)", "X20", "MCALL"),
+            MillBody("CYCLE=DRILL SURFACE=0 CLEARANCE=2 DEPTH=-5 SAFE=10 CYCLE_RETRACT=SAFE CYCLE_F=100",
+                "CYCLE_CALL X=10 Y=10", "F=200", "RPM=1200", "CYCLE_CALL X=20", "CYCLE=OFF"));
+    }
+
+    // Review B2 with B4: the F of a direct call inside the compiler's modal range would call the armed cycle, so the
+    // modal call ends before it.
+    [Fact]
+    public void DirectCall_InsideTheModalRange_EndsTheModalCallBeforeItsFeed()
+    {
+        Assert.Equal(Lines("F100", "MCALL CYCLE81(10,0,2,-5)", "G0 X10 Y10", "MCALL", "F80", "CYCLE82(10,0,2,-5,,1)",
+                "F100", "MCALL CYCLE81(10,0,2,-5)", "X20", "MCALL"),
+            MillBody("CYCLE=DRILL SURFACE=0 CLEARANCE=2 DEPTH=-5 SAFE=10 CYCLE_RETRACT=SAFE CYCLE_F=100",
+                "CYCLE_CALL X=10 Y=10",
+                "CYCLE=DRILL_DWELL SURFACE=0 CLEARANCE=2 DEPTH=-5 SAFE=10 CYCLE_RETRACT=SAFE CYCLE_DWELL=1 CYCLE_F=80",
+                "CYCLE_CALL", "CYCLE=DRILL SURFACE=0 CLEARANCE=2 DEPTH=-5 SAFE=10 CYCLE_RETRACT=SAFE CYCLE_F=100",
+                "CYCLE_CALL X=20", "CYCLE=OFF"));
+    }
+
+    // D387 (review B1): a CYCLE_F that is an expression stands on the position block as F=.
+    [Fact]
+    public void CycleFeed_AnExpressionInsideTheModalRange_StandsOnThePositionBlock()
+    {
+        Assert.Contains("X20 F=R1", MillBody("VAR:R1=250",
+            "CYCLE=DRILL SURFACE=0 CLEARANCE=2 DEPTH=-5 SAFE=10 CYCLE_RETRACT=SAFE CYCLE_F=100", "CYCLE_CALL X=10",
+            "CYCLE=DRILL SURFACE=0 CLEARANCE=2 DEPTH=-5 SAFE=10 CYCLE_RETRACT=SAFE CYCLE_F={$R1}", "CYCLE_CALL X=20",
+            "CYCLE=OFF"), StringComparison.Ordinal);
     }
 
     // D224: CYCLE=OFF after a direct call ends nothing the control has active, and the compiler writes nothing for it.

@@ -325,11 +325,14 @@ public sealed class SiemensCycleTests
         Assert.Contains("R[R1]", program.Diagnostics.Items[0].Message, StringComparison.Ordinal);
     }
 
-    // An F of an MCALL position block that converts is the feed of the control, as before (controller-mapping 5).
+    // D387: an F of an MCALL position block that converts to an expression is the feed of this hole and of the path:
+    // the CYCLE block stands again with CYCLE_F the expression (controller-mapping 5).
     [Fact]
-    public void McallPositionF_ThatConverts_IsTheFeedOfTheControl()
+    public void McallPositionF_ThatConverts_IsTheFeedOfTheCycleAndOfTheControl()
     {
-        Assert.Equal(Lines("RAPID X=0 Y=0 Z=10", Drill, "CYCLE_CALL X=10 Y=10", "CYCLE=OFF",
+        Assert.Equal(Lines("RAPID X=0 Y=0 Z=10", Drill,
+                Drill.Replace("CYCLE_F=100", "CYCLE_F={INT(14 / 2)}", StringComparison.Ordinal),
+                "CYCLE_CALL X=10 Y=10", "CYCLE=OFF",
                 "LINE X=30 F={INT(14 / 2)}"),
             CheckedBody("G0 X0 Y0 Z10\nF100\nMCALL CYCLE81(10,0,2,-5,)\nX10 Y10 F=14 DIV 2\nMCALL\nG1 X30"));
     }
@@ -371,8 +374,81 @@ public sealed class SiemensCycleTests
         Assert.Contains("CYCLE_DWELL=0.12", body, StringComparison.Ordinal);
     }
 
-    // A CYCLE830 with _DP and _AMODE, S_FB = 150 at position 18 (SW4.92 p.1119-1123).
-    private static string Cycle830(string depth, string amode)
+    // D387 (review B1): F=R1 on a position block is the CYCLE_F of the call as an expression, never the old feed.
+    [Fact]
+    public void McallPositionF_FromAVariable_DefinesTheCycleAgainWithTheExpression()
+    {
+        Assert.Contains(Lines(Drill.Replace("CYCLE_F=100", "CYCLE_F={$R1}", StringComparison.Ordinal),
+                "CYCLE_CALL X=20"),
+            CheckedBody("R1=250\nG0 X0 Y0 Z10\nF100\nMCALL CYCLE81(10,0,2,-5,)\nX10 Y10\nX20 F=R1\nMCALL"),
+            StringComparison.Ordinal);
+    }
+
+    // SW4.92 p.540 (review B2): F or S alone with G0 active under MCALL calls the cycle at the position reached, a
+    // CYCLE_CALL there, after the CYCLE block again with the new CYCLE_F (D387).
+    [Fact]
+    public void FeedOrSpeedAloneUnderMcall_CallsTheCycleAtThePositionReached()
+    {
+        string body = CheckedBody("S1000 M3\nG0 X0 Y0 Z10\nF100\nMCALL CYCLE81(10,0,2,-5,)\nX10 Y10\nF200\nS1200\n"
+            + "X20 Y10\nMCALL");
+
+        Assert.Contains(Lines("CYCLE_CALL X=10 Y=10", "F=200",
+                Drill.Replace("CYCLE_F=100", "CYCLE_F=200", StringComparison.Ordinal), "CYCLE_CALL"),
+            body, StringComparison.Ordinal);
+        Assert.Contains(Lines("RPM=1200", "CYCLE_CALL", "CYCLE_CALL X=20 Y=10"), body, StringComparison.Ordinal);
+    }
+
+    // SW4.92 p.539 (review B4): a direct call inside an armed MCALL range leaves the MCALL armed, so the CYCLE block of
+    // the modal cycle stands again after the direct call instead of CYCLE=OFF, and the next position calls it.
+    [Fact]
+    public void DirectCall_InsideAModalRange_DefinesTheModalCycleAgain()
+    {
+        Assert.Contains(Lines("CYCLE_CALL X=10 Y=10",
+                "CYCLE=DRILL_DWELL SURFACE=0 CLEARANCE=2 DEPTH=-5 SAFE=10 CYCLE_RETRACT=SAFE CYCLE_F=100 CYCLE_DWELL=1",
+                "CYCLE_CALL", Drill, "CYCLE_CALL X=20 Y=10", "CYCLE=OFF"),
+            CheckedBody("G0 X0 Y0 Z10\nF100\nMCALL CYCLE81(10,0,2,-5,)\nX10 Y10\nCYCLE82(10,0,2,-5,,1)\nX20 Y10\n"
+                + "MCALL"),
+            StringComparison.Ordinal);
+    }
+
+    // D380: _DTD of CYCLE830 is seconds by the _AMODE thousands digit, not by its sign (SW4.92 p.1123), so a negative
+    // one stays native; D181: MPIT counts only with _PITA 0 (SW4.92 p.1129-1130).
+    [Fact]
+    public void Cycle830NegativeDwellAndMpitWithAnotherPitchUnit_StayRaw()
+    {
+        string dwell = Cycle830("-25", "1", "-1");
+
+        Assert.EndsWith(Raw(dwell) + "\n", Body("G0 X0 Y0 Z10\n" + dwell), StringComparison.Ordinal);
+        Assert.EndsWith(Raw("CYCLE84(10,0,2,-15,,,,10,,,,,,2)") + "\n",
+            Body("G0 X0 Y0 Z10\nCYCLE84(10,0,2,-15,,,,10,,,,,,2)"), StringComparison.Ordinal);
+    }
+
+    // D181: the ISO coarse pitch is millimetres, so in an inch program PITCH is that pitch in inches.
+    [Fact]
+    public void CYCLE84_MetricSizeInAnInchProgram_IsThePitchInInches()
+    {
+        Assert.Contains("PITCH=0.059055", Body("G70\nG0 X0 Y0 Z1\nCYCLE84(1,0,0.1,-1,,,,10)"),
+            StringComparison.Ordinal);
+    }
+
+    // D362: a position without an NCX word that is 0 is the control's behaviour and gets no WARNING.
+    [Fact]
+    public void UnmappedPositionsOfZero_GetNoWarning()
+    {
+        Assert.Empty(Codes(FramedProgram("G0 X0 Y0 Z10\nCYCLE86(10,0,2,-20,,0,0,0,0,0,0)")));
+    }
+
+    // D379 with p.1057: SLOT2 reads its _AMODE ones digit as SLOT1 does, 2 absolute.
+    [Fact]
+    public void Slot2_WithAbsoluteAmode_IsCircSlot()
+    {
+        Assert.Contains("CYCLE=CIRC_SLOT",
+            Body("G0 X40 Y40 Z10\nSLOT2(10,0,2,-5,,1,90,10,40,40,20,0,0,100,300,2,0,0,0,,,,,,,,,1000,2)"),
+            StringComparison.Ordinal);
+    }
+
+    // A CYCLE830 with _DP, _AMODE and _DTD, S_FB = 150 at position 18 (SW4.92 p.1119-1123).
+    private static string Cycle830(string depth, string amode, string dwell = "")
     {
         string[] positions = new string[38];
         Array.Fill(positions, "");
@@ -380,6 +456,7 @@ public sealed class SiemensCycleTests
         positions[1] = "0";
         positions[2] = "2";
         positions[3] = depth;
+        positions[12] = dwell;
         positions[17] = "150";
         positions[37] = amode;
         return "CYCLE830(" + string.Join(",", positions).TrimEnd(',') + ")";

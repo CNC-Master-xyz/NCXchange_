@@ -8,7 +8,7 @@ The Siemens cycle half of the decisions of package W2-7 of `.worktrees/codewave/
 
 ## Scope
 
-- Reader: `src/Ncx.Readers/Siemens/SiemensCycles.cs`, the new `SiemensCycleForms.cs`.
+- Reader: `src/Ncx.Readers/Siemens/SiemensCycles.cs` and its new part `SiemensCycles.Forms.cs`.
 - Compiler: `src/Ncx.Compilers/Siemens/SiemensCycles.cs`, the new `SiemensCycles.Positions.cs`, `DiagnosticCodes.Siemens.cs` (CMP574-CMP576).
 - Core and data: `src/Ncx.Core/Machine/DrillingFamily.Siemens.cs`, `cycles/siemens.toml`.
 - Spec: controllers/siemens.md 7, 11 rule 5, 12 rule 5; controller-mapping 5; 03-open-questions rows 104-106, 133, 134.
@@ -25,7 +25,7 @@ The Siemens cycle half of the decisions of package W2-7 of `.worktrees/codewave/
   - D355, D356: PECK is FDPR; without PECK or with PECK = 0 the compiler writes FDPR = |DEPTH - SURFACE|, or |DEPTH - CLEARANCE| without SURFACE.
   - D358: the compiler writes `_VRT` from `[cycles] chip_break_lift` on the CYCLE83 of VARI = 0 and `_DIS1` from `peck_clearance` where set (millimetres, divided by 25.4 under UNITS=INCH); the reader carries `_VRT`/`_DIS1` without the WARNING where they equal the key, or the control's own value (_VRT 0 or 1 mm, _DIS1 0) where the key is left out.
   - D362: the compiler checks the words of the CYCLE block once, at the block: CMP574 for a CYCLE_F that TAP and TAP_COMPENSATING derive from PITCH, nothing for CYCLE_DWELL=0 or PECK=0 without a position, CMP571 otherwise; rule words (CYCLE_RETRACT, AXIS) are skipped at the calls.
-  - D379: the reader converts SLOT1 only in the sl form (fixed `_DMODE` 1000, NUM empty/0/1, RAD and INDA empty or 0, in a direct call `_CPA`/`_CPO` the position reached; under MCALL the positions come from the blocks, Bedienhandbuch Drehen 840D sl/828D 2013, connector p.412-413, "nur bei Einzelposition"), the `_AMODE` ones digit 0, 1 or 2 (1 incremental); the compiler writes SLOT1/SLOT2 as a direct call at each position after the G0 motion, with `_CPA`/`_CPO` the call position.
+  - D379: the reader converts SLOT1 only in the sl form (fixed `_DMODE` 1000, NUM empty/0/1, RAD and INDA empty or 0, in a direct call `_CPA`/`_CPO` the position reached; under MCALL the positions come from the blocks, Bedienhandbuch Fräsen 840D sl/828D 2013, connector p.361-363, the input window "Längsnut (SLOT1)"), the `_AMODE` ones digit 0, 1 or 2 (1 incremental); the compiler writes SLOT1/SLOT2 as a direct call at each position after the G0 motion, with `_CPA`/`_CPO` the call position.
   - D380: the reader takes CYCLE830 with `_AMODE` 0, 1 or omitted, DEPTH = `_DP` for 1 and RFP less |`_DP`| for 0 or omitted (`SiemensCycleForms.DepthIsIncremental`); the compiler writes the fixed `_AMODE` 1 with an absolute `_DP` and S_FB at position 18 (test).
   - D387: a literal F on a position block under MCALL of a cycle that takes the modal F writes the CYCLE block again with that CYCLE_F before the CYCLE_CALL and keeps ControlFeed; the compiler writes a CYCLE_F that changes inside the armed range as the F of the position block (`X20 F200`), so the round trip closes (N11, tests on both sides).
   - D188: the compiler marker became a comment (the ERROR CMP572 stood already).
@@ -34,3 +34,11 @@ The Siemens cycle half of the decisions of package W2-7 of `.worktrees/codewave/
   - Gap closed 2026-10-27 (delegated): SLOT1/SLOT2 are written as direct calls at each position (not MCALL), since `_CPA`/`_CPO` count only for a single position.
   - Gap closed 2026-10-27 (delegated): the SLOT1 `_AMODE` ones digit 1 ("Z1 (ink)", SW4.92 p.1054) reads with the incremental rule of D380.
   - Left: cycles/README.md needed no change for these decisions; a CIRC_SLOT test of its own (it runs the SLOT code path).
+- Claude (agent), 2026-10-27, review fixes:
+  - B1 (D387): an F with an expression value on an MCALL position block (`X80 Y50 F=R1`) re-emits the CYCLE block with `CYCLE_F={$R1}`; the compiler writes it back as `X.. F=R1` on the position block, so it round-trips.
+  - B2 (SW4.92 p.540): the reader reads a block with only F or S under an armed MCALL with G0/G1 active as its F/RPM, the CYCLE block again where the F changes CYCLE_F, and a CYCLE_CALL at the position reached. The compiler never writes an F or S alone while its own MCALL is armed: `SiemensCycles.EndModalCallBeforeBareFeed` (one hook line in `SiemensCompiler.WriteWords`, before `SiemensSpindles.Write`) and the F line of a call write MCALL alone first; the next position arms the call again. A call armed by a RAW line stays with D259, an unknown one with D343.
+  - B3: VARI joins LENG, WID, FFP1 of SLOT1 for CMP576 (its ones digit 0 is "reserviert", SW4.92 p.1053).
+  - B4 (p.539): a direct call inside an armed MCALL range writes the CYCLE block of the modal cycle again after its CYCLE_CALL instead of CYCLE=OFF, and keeps the modal cycle.
+  - The SLOT reference-point citation is Bedienhandbuch Fräsen 2013 p.361-363. SLOT2 reads its `_AMODE` ones digit 0, 1, 2 as SLOT1 does (p.1057). Unmapped positions of 0 get no RDR502 (D362). Under UNITS=INCH `_VRT`/`_DIS1` compare with the key divided by 25.4. MPIT counts only with `_PITA` 0, PIT only with 0 or 1, other units stay RAW (p.1129-1130); the coarse pitch is converted to inches in an inch program. A negative `_DTD` of CYCLE830 stays RAW, since the `_AMODE` thousands digit, not the sign, gives the unit (p.1123).
+  - `SiemensCycleForms.cs` became the part `SiemensCycles.Forms.cs` of the reader's `SiemensCycles`; both new files are named in their folder README. Open-questions row 206 settled (D356).
+  - Gap closed 2026-10-27 (delegated): D387's "a non-literal F keeps the existing RAW rule" is read as: an F with no NCX value stays RAW (as before); an F with an NCX expression value re-emits the CYCLE block, because keeping the old CYCLE_F would lose the feed silently.

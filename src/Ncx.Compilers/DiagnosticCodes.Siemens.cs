@@ -133,7 +133,7 @@ public static partial class DiagnosticCodes
 
     /// <summary>
     /// CMP576, a WARNING: a position the control needs for the cycle stays empty because no NCX word carries it, the
-    /// length, width and feed of SLOT1, the spindle of CYCLE830 (D379, D380; SW4.92 p.1053, 1121).
+    /// length, width, feed and VARI of SLOT1, the spindle of CYCLE830 (D379, D380; SW4.92 p.1053, 1121).
     /// </summary>
     public const string SiemensCycleRequiredPositionEmpty = "CMP576";
 

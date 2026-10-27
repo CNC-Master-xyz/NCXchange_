@@ -16,12 +16,12 @@ internal static partial class SiemensCycles
     private const decimal MillimetresPerInch = 25.4m;
 
     // Gap closed 2026-10-27 (delegated, code wave 2): the positions without an NCX word that the control needs for
-    // the cycle to run, reported once with CMP576 where they stay empty: the length, width and feed of SLOT1
-    // (SW4.92 p.1053), the opening angle, width, radius and feed of SLOT2 (p.1055), the spindle direction and speed
-    // of CYCLE830 (p.1121).
+    // the cycle to run, reported once with CMP576 where they stay empty: the length, width, feed and VARI of SLOT1,
+    // whose ones digit 0 is "reserviert" (SW4.92 p.1053), the opening angle, width, radius and feed of SLOT2
+    // (p.1055), the spindle direction and speed of CYCLE830 (p.1121).
     private static readonly Dictionary<string, string[]> s_required = new(StringComparer.Ordinal)
     {
-        ["SLOT1"] = ["LENG", "WID", "FFP1"],
+        ["SLOT1"] = ["LENG", "WID", "FFP1", "VARI"],
         ["SLOT2"] = ["AFSL", "WID", "RAD", "FFP1"],
         ["CYCLE830"] = ["_SDAC", "_SV1"],
     };

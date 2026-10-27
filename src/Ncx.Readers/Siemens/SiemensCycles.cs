@@ -12,8 +12,10 @@ namespace Ncx.Readers.Siemens;
 /// alone is CYCLE=OFF; a direct CYCLE81(...) is CYCLE= and one CYCLE_CALL at the current position; the patterns HOLES1
 /// and HOLES2 are SiemensPatterns.
 /// </summary>
-internal static class SiemensCycles
+internal static partial class SiemensCycles
 {
+    private const decimal MillimetresPerInch = 25.4m;
+
     // The trailing mode integers the 840D sl added; omitted they mean the old behaviour (controllers siemens.md 7).
     private static readonly string[] s_modes = ["_GMODE", "_DMODE", "_AMODE"];
 
@@ -31,6 +33,12 @@ internal static class SiemensCycles
         if (block.Take("MCALL") is not null)
         {
             ReadModalCall(block);
+            return;
+        }
+
+        if (FiresModalCall(block))
+        {
+            CallWithoutMotion(block);
             return;
         }
 
@@ -99,19 +107,22 @@ internal static class SiemensCycles
             }
 
             block.Facts.ControlFeed = value;
-            cycle = WithLiteralFeed(block, cycle, value);
+            cycle = WithFeed(block, cycle, value, block.Draft.Before);
         }
 
         Returned(block, cycle);
     }
 
-    // D387: a literal F on a position block under MCALL is both the feed of the cycle and the path feed: a cycle that
-    // takes the modal F as its CYCLE_F drills this hole and the later ones of the range with it, so the CYCLE block
-    // stands again with that CYCLE_F, all other words unchanged, directly before the CYCLE_CALL. A cycle with a feed of
-    // its own (CYCLE85 FFR, CYCLE84) takes only the path feed, and a non-literal F stays the feed of the control.
+    // D387: an F on a position block under MCALL is both the feed of the cycle and the path feed: a cycle that takes
+    // the modal F as its CYCLE_F drills this hole and the later ones of the range with it, so the CYCLE block stands
+    // again with that CYCLE_F, all other words unchanged, directly before the CYCLE_CALL. A cycle with a feed of its
+    // own (CYCLE85 FFR, CYCLE84) takes only the path feed.
     // Gap closed 2026-10-27 (delegated, code wave 2): an F equal to the CYCLE_F the cycle has already writes no CYCLE
-    // block again, since nothing changes (N11: the compiler writes the F on the position block, X.. Y.. F..).
-    private static SiemensCycle WithLiteralFeed(SiemensBlock block, SiemensCycle cycle, Value feed)
+    // block again, since nothing changes (N11: the compiler writes the F on the position block, X.. Y.. F..); an F
+    // with an NCX expression value, F=R1, is re-emitted as CYCLE_F={$R1} as well, which the compiler writes back as
+    // F=R1 on the position block, rather than keeping the old CYCLE_F (which loses the feed) or the block RAW.
+    private static SiemensCycle WithFeed(SiemensBlock block, SiemensCycle cycle, Value feed,
+        List<SiemensDraftBlock> target)
     {
         CycleEntry? entry = null;
         if (cycle.Words.Count > 0 && cycle.Words[0].Value is IdentValue name)
@@ -119,7 +130,7 @@ internal static class SiemensCycles
             entry = block.Machine.CycleCatalog.Find(name.Name);
         }
 
-        if (SiemensNumbers.NumberOf(feed) is null || entry is null || !entry.IsAddressWord("CYCLE_F"))
+        if (entry is null || !entry.IsAddressWord("CYCLE_F"))
         {
             return cycle;
         }
@@ -155,7 +166,7 @@ internal static class SiemensCycles
             definition.Add(word.Key, word.Addr, word.Value);
         }
 
-        block.Draft.Before.Add(definition);
+        target.Add(definition);
         SiemensCycle redefined = cycle with { Words = words };
         block.Facts.ModalCycle = redefined;
         return redefined;
@@ -343,9 +354,89 @@ internal static class SiemensCycles
         }
 
         block.Draft.After.Add(new SiemensDraftBlock().WithVerb("CYCLE_CALL"));
-        block.Draft.After.Add(new SiemensDraftBlock().Add("CYCLE", new IdentValue("OFF")));
-        block.Facts.ModalCycle = null;
         Returned(block, cycle);
+
+        // A direct call leaves an armed MCALL armed (SW4.92 p.539: only MCALL alone or another MCALL ends it), so
+        // inside a modal range the CYCLE block of the modal cycle stands again after the call instead of CYCLE=OFF
+        // (D224 for a cycle called once; D387 for the definition written again).
+        if (block.Facts.ModalCycle is SiemensCycle modal)
+        {
+            var definition = new SiemensDraftBlock();
+            foreach (Word word in modal.Words)
+            {
+                definition.Add(word.Key, word.Addr, word.Value);
+            }
+
+            block.Draft.After.Add(definition);
+            return;
+        }
+
+        block.Draft.After.Add(new SiemensDraftBlock().Add("CYCLE", new IdentValue("OFF")));
+    }
+
+    // SW4.92 p.540: under an armed MCALL a block that programs F or S with G0 or G1 active calls the modal cycle at the
+    // position reached, without any path motion. Such a block with no position becomes a CYCLE_CALL there, after its
+    // own F or S, with the CYCLE block written again where the F changes the CYCLE_F (D387).
+    private static bool FiresModalCall(SiemensBlock block)
+    {
+        if (block.Facts.ModalCycle is null || block.Facts.MotionCode is not ("G0" or "G1")
+            || block.Facts.IsUnknown(SiemensFacts.Motion))
+        {
+            return false;
+        }
+
+        bool programs = false;
+        foreach (SourceWord word in block.Source.Words)
+        {
+            if (word.Address == "F" || SiemensSpindles.IsSpeed(word))
+            {
+                programs = true;
+            }
+        }
+
+        if (!programs)
+        {
+            return false;
+        }
+
+        foreach (SourceWord word in block.Unread())
+        {
+            if (word.Address is not ("N" or ":" or "F" or "FB"))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void CallWithoutMotion(SiemensBlock block)
+    {
+        SiemensCycle cycle = block.Facts.ModalCycle!;
+        if (block.MachineFrame is not null)
+        {
+            return;
+        }
+
+        if (block.Find("F") is SourceWord feed)
+        {
+            if (SiemensExpression.ValueOf(block, feed.Text, out string? problem) is not Value value)
+            {
+                block.Draft.KeepAsRaw(problem!);
+                return;
+            }
+
+            cycle = WithFeed(block, cycle, value, block.Draft.After);
+        }
+
+        block.Draft.After.Add(new SiemensDraftBlock().WithVerb("CYCLE_CALL"));
+        Returned(block, cycle);
+    }
+
+    // The program units of the block: UNITS=INCH after G70 or G700 (controller-mapping 1, UNITS).
+    private static bool Inch(SiemensBlock block)
+    {
+        return block.Facts.Written.TryGetValue("UNITS", out string? units) && units == "INCH";
     }
 
     /// <summary>
@@ -374,12 +465,12 @@ internal static class SiemensCycles
         // defaults where the reader needs it to tell two entries apart (VARI of CYCLE83 is 0); the mode integers are
         // read only where an entry fixes them, the depth mode of CYCLE830 and SLOT1 included (D379, D380), and a call
         // that sets any other mode stays RAW.
-        CycleEntry? entry = catalog.FindNative(call.Address, SiemensCycleForms.Selecting(call.Address, numbers));
+        CycleEntry? entry = catalog.FindNative(call.Address, Selecting(call.Address, numbers));
         string? problem = entry is null
             ? NoEntry(catalog, call.Address)
             : arguments.Count > entry.Signature.Count
                 ? $"{call.Address} has more parameters than the signature of its catalog entry"
-                : ModeSet(entry, arguments) ?? SiemensCycleForms.NativeOnly(block, entry, arguments, modal);
+                : ModeSet(entry, arguments) ?? NativeOnly(block, entry, arguments, modal);
         if (problem is not null)
         {
             block.Draft.KeepAsRaw(problem);
@@ -387,7 +478,7 @@ internal static class SiemensCycles
         }
 
         var reading = new CycleReading(block, entry!, arguments,
-            SiemensCycleForms.DepthIsIncremental(call.Address, numbers));
+            DepthIsIncremental(call.Address, numbers));
         return reading.Words();
     }
 
@@ -437,8 +528,10 @@ internal static class SiemensCycles
         foreach (string mode in s_modes)
         {
             int index = IndexOf(entry.Signature, mode);
-            if (index >= 0 && index < arguments.Count && arguments[index].Length > 0 && !entry.Fixed.ContainsKey(mode)
-                && SiemensNumbers.NumberOf(SiemensNumbers.Parse(arguments[index])) != 0)
+            decimal? value = index >= 0 && index < arguments.Count && arguments[index].Length > 0
+                ? SiemensNumbers.NumberOf(SiemensNumbers.Parse(arguments[index]))
+                : 0;
+            if (value != 0 && !entry.Fixed.ContainsKey(mode) && !ModeAccepted(entry.Native, mode, value))
             {
                 return $"{mode} of {entry.Native} sets a mode that no NCX word carries (D181)";
             }
@@ -627,7 +720,9 @@ internal static class SiemensCycles
                 return false;
             }
 
-            value = SiemensNumbers.Of(size < 0 ? -pitch : pitch);
+            // The coarse pitch is millimetres in an inch program too (_PITA 0, SW4.92 p.1130), PITCH program units.
+            decimal inProgramUnits = Inch(block) ? Math.Round(pitch / MillimetresPerInch, 6) : pitch;
+            value = SiemensNumbers.Of(size < 0 ? -inProgramUnits : inProgramUnits);
             return true;
         }
 
@@ -638,6 +733,14 @@ internal static class SiemensCycles
             if (SiemensNumbers.NumberOf(value) is not decimal dwell || dwell >= 0)
             {
                 return value;
+            }
+
+            // D380: the thousands digit of the CYCLE830 _AMODE, not the sign, says seconds or revolutions of _DTD
+            // (SW4.92 p.1123); the reader takes only _AMODE 0 or 1, seconds, where a negative dwell means nothing.
+            if (entry.Native == "CYCLE830")
+            {
+                Raw($"{entry.CycleDwell} of CYCLE830 is negative, which in seconds is no dwell (SW4.92 p.1123)");
+                return null;
             }
 
             string? role = SiemensSpindles.MasterRole(block);
@@ -738,8 +841,10 @@ internal static class SiemensCycles
             for (int index = 0; index < arguments.Count && index < entry.Signature.Count; index++)
             {
                 string native = entry.Signature[index];
+                // D362: a 0 is the control's behaviour anyway and is dropped silently.
                 if (arguments[index].Length > 0 && !_used.Contains(native) && !entry.Fixed.ContainsKey(native)
-                    && Array.IndexOf(s_modes, native) < 0 && !Carried(native, arguments[index]))
+                    && Array.IndexOf(s_modes, native) < 0 && !Carried(native, arguments[index])
+                    && SiemensNumbers.NumberOf(SiemensNumbers.Parse(arguments[index])) != 0)
                 {
                     unmapped.Add(native);
                 }
@@ -764,12 +869,15 @@ internal static class SiemensCycles
                 return true;
             }
 
+            // The keys are millimetres; the compiler writes them in program units (D357).
             decimal? value = SiemensNumbers.NumberOf(SiemensNumbers.Parse(argument));
             CyclesConfig? cycles = block.Machine.Cycles;
+            decimal divisor = Inch(block) ? MillimetresPerInch : 1m;
+            decimal lift = (cycles?.ChipBreakLift ?? 1m) / divisor;
             return native switch
             {
-                "_VRT" => value == (cycles?.ChipBreakLift ?? 1m) || (value == 0 && cycles?.ChipBreakLift is null or 1m),
-                "_DIS1" => value == (cycles?.PeckClearance ?? 0m),
+                "_VRT" => value == lift || (value == 0 && cycles?.ChipBreakLift is null or 1m),
+                "_DIS1" => value == (cycles?.PeckClearance ?? 0m) / divisor,
                 _ => false,
             };
         }

@@ -71,9 +71,9 @@ internal static partial class SiemensCycles
         if (AtCallPosition(write))
         {
             // D379: a cycle with a reference point of its own, SLOT1 and SLOT2, is called once at each position with
-            // _CPA/_CPO, the reference point of a single position (Bedienhandbuch Drehen 840D sl/828D 2013, connector
-            // p.412-413: "nur bei Einzelposition"); the motion to the position stands before it, and WriteAfter
-            // writes the call.
+            // _CPA/_CPO, the reference point of a single position (Bedienhandbuch Fräsen 840D sl/828D 2013, connector
+            // p.361-363, the input window "Längsnut (SLOT1)"); the motion to the position stands before it, and
+            // WriteAfter writes the call.
             EndModalCall(write);
             SiemensMotion.Change(write, "G0", SiemensLine.MotionRank, "G0");
             SiemensMotion.WriteDistance(write);
@@ -139,6 +139,45 @@ internal static partial class SiemensCycles
         {
             write.Write("MCALL");
             write.Target.Set(ModalCall, Off);
+        }
+    }
+
+    /// <summary>
+    /// MCALL alone before a block that programs F or S without a motion while a modal call this compiler armed stands:
+    /// F or S with G0 or G1 active calls the modal subprogram at the position reached (SW4.92 p.540; controllers
+    /// siemens.md 7). A modal call that a RAW line armed is left to RawModalCallStands (D259), an unknown one to the
+    /// next motion (D343); the next CYCLE_CALL at a position arms the call again.
+    /// </summary>
+    /// <param name="write">The block being written.</param>
+    public static void EndModalCallBeforeBareFeed(SiemensBlock write)
+    {
+        Block block = write.Block;
+        if (block.Verb is Word verb && (s_motions.Contains(verb.Key) || verb.Key == "CYCLE_CALL"))
+        {
+            return;
+        }
+
+        bool programs = false;
+        foreach (Word word in block.Words)
+        {
+            if (word.Key is "F" or "RPM")
+            {
+                programs = true;
+            }
+        }
+
+        if (programs)
+        {
+            EndModalCallBeforeFeed(write);
+        }
+    }
+
+    // MCALL alone before an F or S line while a modal call this compiler armed stands, which the line would call.
+    private static void EndModalCallBeforeFeed(SiemensBlock write)
+    {
+        if (write.ActiveOf(ModalCall) is string active && active is not (Off or RawArmed))
+        {
+            EndModalCall(write);
         }
     }
 
@@ -268,6 +307,8 @@ internal static partial class SiemensCycles
     {
         if (CycleFeed(write) is string feed)
         {
+            // An F alone under an armed call would call that one (SW4.92 p.540), so that one ends first.
+            EndModalCallBeforeFeed(write);
             write.Write(feed);
         }
     }
