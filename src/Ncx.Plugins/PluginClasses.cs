@@ -7,8 +7,8 @@ namespace Ncx.Plugins;
 internal static class PluginClasses
 {
     /// <summary>
-    /// The objects of the plugin classes of one DLL, in the ordinal order of the full names of their classes (the
-    /// TODO(question) of PluginLoader.Files); null, reported with the plugin's name, when the DLL or one of its classes
+    /// The objects of the plugin classes of one DLL, in the ordinal order of the full names of their classes
+    /// (D317); null, reported with the plugin's name, when the DLL or one of its classes
     /// cannot be loaded, so that nothing of the plugin acts.
     /// </summary>
     /// <param name="name">The name of the plugin.</param>

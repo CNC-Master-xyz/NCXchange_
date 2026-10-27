@@ -12,27 +12,6 @@ namespace Ncx.Readers.Siemens;
 /// </summary>
 internal static class SiemensFunctions
 {
-    // The M codes the controller defines, which the reader maps itself: the stops, the ends, the spindles, the change
-    // (controllers siemens.md 1, 5).
-    private static readonly string[] s_controllerCodes =
-        ["M0", "M1", "M2", "M3", "M4", "M5", "M6", "M17", "M19", "M30", "M70"];
-
-    /// <summary>
-    /// Tells whether the controller or a table of the machine names an M word, so that no reader rule is asked for it
-    /// (D40, D66, machine-config 5).
-    /// </summary>
-    /// <param name="block">The block, with the templates of the machine.</param>
-    /// <param name="word">An M word.</param>
-    public static bool Names(SiemensBlock block, SourceWord word)
-    {
-        if (SiemensBlock.CodeOf(word) is not string code)
-        {
-            return true;
-        }
-
-        return Array.IndexOf(s_controllerCodes, code) >= 0 || block.Templates.FindFunctionByCode(code) is not null;
-    }
-
     /// <summary>
     /// Reads the M and H words no other concern read.
     /// </summary>

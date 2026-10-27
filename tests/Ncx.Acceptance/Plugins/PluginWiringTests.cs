@@ -84,13 +84,13 @@ public sealed class PluginWiringTests : IDisposable
         Assert.Equal($"{file}(4): INFO PLG001: plugin ShopRules: inserted 1 block at line 4\n", _project.Error);
     }
 
-    // Machine-config 10, implementation 17 P7-01: the [plugins] list of ncx.toml names an assembly by its path from
-    // the working directory, outside plugins/.
+    // Machine-config 10, implementation 17 P7-01, D238: [plugins] assemblies of ncx.toml names an assembly by its path
+    // from the working directory, outside plugins/.
     [Fact]
     public void Check_AssemblyTheListOfNcxTomlNames_IsLoadedFromItsPath()
     {
         TestPlugins.CopyInto(Path.Combine(_project.WorkingDirectory, "lib"), TestPlugins.ShopRules);
-        _project.WriteInWorkingDirectory("ncx.toml", "plugins = [\"lib/ShopRules.dll\"]\n");
+        _project.WriteInWorkingDirectory("ncx.toml", "[plugins]\nassemblies = [\"lib/ShopRules.dll\"]\n");
         string file = _project.WriteInWorkingDirectory("part.ncx", s_clutchProgram);
 
         int exitCode = _project.Check(file, "plugin-mill");
@@ -117,8 +117,8 @@ public sealed class PluginWiringTests : IDisposable
             StringComparison.Ordinal);
     }
 
-    // Architecture 9, D40, D66: convert offers the reader rules of the plugins the blocks the tables of the machine
-    // leave undecided; ShopRules reads M456 as COOLANT=ON.
+    // Architecture 9, D66, D231: convert offers every source block to the reader rules of the plugins before the
+    // tables of the machine; ShopRules reads M456, which no table names, as COOLANT=ON.
     [Fact]
     public void Convert_ReaderRuleOfAPlugin_ReadsACodeTheTablesLeaveUndecided()
     {

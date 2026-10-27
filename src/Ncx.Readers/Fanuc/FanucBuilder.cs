@@ -15,10 +15,6 @@ namespace Ncx.Readers.Fanuc;
 /// </summary>
 internal static class FanucBuilder
 {
-    // The M codes of the controller itself, which the structure pass, the calls and the tool change read; the code of
-    // an external call is not among them, because it is a fact of the machine, [format] external_call (D322).
-    private static readonly string[] s_ownCodes = ["M0", "M1", "M2", "M30", "M6", "M98", "M99"];
-
     // The G codes the reader maps in every G-code system (controllers fanuc.md 3, 4; controller-mapping 1, 2).
     private static readonly string[] s_commonCodes =
     [
@@ -96,26 +92,6 @@ internal static class FanucBuilder
                 ReadCode(block, word);
             }
         }
-    }
-
-    /// <summary>
-    /// Tells whether the controller or a table of the machine names an M code, so that no reader rule is asked for it:
-    /// the tables are tried first (D40, D66, machine-config 5).
-    /// </summary>
-    /// <param name="block">The block being read.</param>
-    /// <param name="word">The M word.</param>
-    public static bool Names(FanucBlock block, SourceWord word)
-    {
-        // M200 P of the builder nakamura calls a program as M98 does, which FanucMacro reads (controller-mapping 6, 8),
-        // and the external call code the machine names is read there too (D322).
-        string? code = NativeCode.Of(word);
-        return code is null
-            || s_ownCodes.Contains(code)
-            || code == FanucMacro.ExternalCallCode(block.Machine)
-            || (code == "M200" && FanucMacro.IsBuilderNakamura(block.Machine))
-            || FanucFunctions.Of(block, word, out _) is not null
-            || WorkpieceOf(block, code) is not null
-            || MarkOf(block, word) is not null;
     }
 
     // An M code: STOP, the word of a function table, WORKPIECE, SYNC, or MFUNC with a WARNING (controller-mapping 1, 4,

@@ -32,6 +32,12 @@ internal static class AnnotatedText
         string lineEnding = program.LineEnding == LineEnding.CrLf ? "\r\n" : "\n";
         var text = new StringBuilder();
 
+        // A file that began with a byte order mark gets it back in front of its copy, as format writes it (D111).
+        if (program.HasByteOrderMark)
+        {
+            text.Append('\uFEFF');
+        }
+
         // For every line of the file, a comment-only or blank line or a block, as the canonical writer interleaves
         // them: each trivia line before the block whose index it records, written back as read (D92, D142). The
         // expander keeps the index before the blocks generated for that block (language 4.15).

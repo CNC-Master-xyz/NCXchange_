@@ -315,7 +315,7 @@ Before a change goes into the source, the two levels above it are checked (code-
 | Level | For | Where |
 |---|---|---|
 | Configuration | another machine, other M codes, a retract before the tool change, a cycle | a TOML file in `machines/` or `cycles/`, after `docs/spec/machine-config.md`; `src/Ncx.Config/MachineConfigLoader.cs` reads it, and no code changes |
-| Plugin | a rule the TOML cannot say | one class with one method: an `IProgramRewriter` (`src/Ncx.Core/Expander/IProgramRewriter.cs`) changes blocks before the run, an `IVmListener` watches it, an `ISourceRule` reads a source block for a reader, an `IBlockWriter` changes the lines of a compiler. `ncx plugin new` copies the template of `templates/ncx-plugin/`, whose coolant clutch rule is the one of code-guidelines 11; `docs/plugins.md` tells the rest |
+| Plugin | a rule the TOML cannot say | one class with one method: an `IProgramRewriter` (`src/Ncx.Core/Expander/IProgramRewriter.cs`) changes blocks before the run, an `IVmListener` watches it, an `ISourceRule` reads a source block, or a run of them, for a reader before its tables (D231, D232), an `IBlockWriter` changes the lines of a compiler. `ncx plugin new` copies the template of `templates/ncx-plugin/`, whose coolant clutch rule is the one of code-guidelines 11; `docs/plugins.md` tells the rest |
 | Source | a new word, a new rule of the virtual machine, a new controller family, a new command | below |
 
 In the source:

@@ -28,18 +28,16 @@ public static class PluginLoader
     /// The plugin DLLs of a working directory in load order.
     /// </summary>
     /// <param name="workingDirectory">The working directory, the folder of ncx.toml.</param>
-    /// <param name="listed">The [plugins] list of ncx.toml, plugins = ["MyShop.NcxPlugins.dll"] (machine-config
-    /// 10).</param>
+    /// <param name="listed">[plugins] assemblies of ncx.toml, assemblies = ["MyShop.NcxPlugins.dll"] (machine-config
+    /// 10, D238).</param>
     /// <returns>The files as the user finds them from the working directory: "plugins/MyShopRules.dll".</returns>
     public static IReadOnlyList<string> Files(string workingDirectory, IReadOnlyList<string> listed)
     {
-        // The plugins come from the [plugins] list of ncx.toml and from plugins/ (implementation 17, P7-01), each DLL
-        // once, since each gets a context of its own.
-        // TODO(question): no document gives the load order, which is the order the rewriters of several plugins act in
-        // (D199 recommends "plugin load order" without giving it), nor where a name of the [plugins] list is found. The
-        // list comes first, in its order, then the DLLs of plugins/ that it does not name, in the ordinal order of
-        // their names; a name of the list is a path from the working directory, and a name that is no file there is
-        // looked for in plugins/, where ncx plugin build puts it (P7-02), until that is answered.
+        // The plugins come from [plugins] assemblies of ncx.toml and from plugins/ (implementation 17, P7-01; D238),
+        // each DLL once, since each gets a context of its own. The list comes first, in its order, then the DLLs of
+        // plugins/ that it does not name, in the ordinal order of their names; a name of the list is a path from the
+        // working directory, and a name that is no file there is looked for in plugins/, where ncx plugin build puts it
+        // (D317). The rewriters of several plugins act in this order (D199).
         var files = new List<string>();
         var fullPaths = new HashSet<string>(StringComparer.Ordinal);
         foreach (string entry in listed)
@@ -75,20 +73,29 @@ public static class PluginLoader
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> settings, PluginDiagnostics diagnostics)
     {
         var plugins = new PluginSet();
+        var loaded = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (string file in files)
         {
             // A plugin is named after its DLL, MyShopRules.dll is MyShopRules: the name of its section of ncx.toml
-            // (D80) and of every diagnostic about it (implementation 17, P7-01).
+            // (D80) and of every diagnostic about it (implementation 17, P7-01). A name loads once, from its first DLL
+            // in load order; another DLL of that name is a WARNING (D317, D330; gap closed 2026-10-28, delegated).
             string name = Path.GetFileNameWithoutExtension(file);
+            if (loaded.TryGetValue(name, out string? first))
+            {
+                diagnostics.DuplicateName(name, file, first);
+                continue;
+            }
+
+            loaded[name] = file;
             List<object>? classes = PluginClasses.Load(name, file, FullPath(workingDirectory, file), diagnostics);
             if (classes is null)
             {
                 continue;
             }
 
-            // TODO(question): no document says what a DLL among the plugins that implements none of the four
-            // interfaces is, a dependency a plugin brings into plugins/ among them. It is a WARNING and gives nothing,
-            // until that is answered.
+            // A DLL among the plugins that implements none of the four interfaces, a dependency copied into plugins/
+            // by hand among them, is a WARNING and gives nothing; ncx plugin build leaves a plugin that brings
+            // assemblies in its build output instead (D330).
             if (classes.Count == 0)
             {
                 diagnostics.NoPluginClass(name, file);
@@ -137,8 +144,8 @@ public static class PluginLoader
         return new ReadOnlyDictionary<string, string>(own);
     }
 
-    // A name of the [plugins] list as a file: a path from the working directory, or else the file of that name in
-    // plugins/ (the TODO(question) of Files); one that is in neither is kept as written and reported when it loads.
+    // A name of [plugins] assemblies as a file: a path from the working directory, or else the file of that name in
+    // plugins/ (D317); one that is in neither is kept as written and reported when it loads.
     private static string FindListed(string workingDirectory, string entry)
     {
         if (File.Exists(FullPath(workingDirectory, entry)))

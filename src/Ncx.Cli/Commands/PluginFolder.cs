@@ -37,11 +37,9 @@ internal static class PluginFolder
             return null;
         }
 
-        // TODO(question): the six steps of code-guidelines 11 run ncx plugin build after ncx plugin new, in the same
-        // folder and without naming the plugin, and no document says which plugin build and test take without a
-        // folder. The working directory is the folder of the plugin when it holds a project file; else the one folder
-        // of the working directory that ncx plugin new made, which holds a project file of its own name. Several of
-        // them, or none, are reported, until that is answered.
+        // Without a folder, build and test take the one project file of the working directory, else the one subfolder
+        // <name>/ holding <name>.csproj, as ncx plugin new makes it; none or several are CLI553, exit code 2, and the
+        // message names the plugins found (D332; code-guidelines 11, the six steps).
         if (OnlyProjectIn(workingDirectory) is string own)
         {
             return PluginProject.Of(own, workingDirectory);

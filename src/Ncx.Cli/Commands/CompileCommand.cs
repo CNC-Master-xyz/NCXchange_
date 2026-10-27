@@ -155,9 +155,9 @@ internal static class CompileCommand
             BlockWriters = plugins.BlockWriters,
         };
 
-        // Parse, then compile: the compiler expands, runs the virtual machine STATIC and writes (architecture 8). A
-        // byte order mark is no part of the text the parser reads (wave-1 question #80).
-        NcxProgram program = Parser.Parse(WithoutByteOrderMark(text), settings.File, new ParserOptions());
+        // Parse, then compile: the compiler expands, runs the virtual machine STATIC and writes (architecture 8). The
+        // parser skips a byte order mark, and the NC file gets none (D111).
+        NcxProgram program = Parser.Parse(text, settings.File, new ParserOptions());
         CompileResult result = compiler.Compile(program, machine, options);
         foreach (Diagnostic diagnostic in result.Diagnostics.Items)
         {
@@ -309,7 +309,7 @@ internal static class CompileCommand
         }
     }
 
-    // A byte order mark is no part of the text the parser and the TOML loaders read (wave-1 question #80).
+    // A byte order mark is no part of the text the TOML loaders read (D111).
     private static string WithoutByteOrderMark(string text)
     {
         return text.StartsWith(InputFile.ByteOrderMark, StringComparison.Ordinal)

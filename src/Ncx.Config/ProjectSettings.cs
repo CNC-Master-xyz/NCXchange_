@@ -55,7 +55,8 @@ public sealed record ProjectSettings
     public string Out { get; init; } = OutFolder;
 
     /// <summary>
-    /// plugins: the plugin assemblies, plugins = ["MyShop.NcxPlugins.dll"] (machine-config 10); empty when left out.
+    /// [plugins] assemblies: the plugin assemblies, assemblies = ["MyShop.NcxPlugins.dll"] (machine-config 10, D238);
+    /// empty when left out.
     /// </summary>
     public IReadOnlyList<string> Plugins { get; init; } = [];
 

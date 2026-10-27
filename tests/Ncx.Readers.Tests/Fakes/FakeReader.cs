@@ -84,20 +84,6 @@ internal sealed class FakeReader : ReaderBase
         };
     }
 
-    protected override bool LeavesUndecided(SourceBlock block)
-    {
-        foreach (SourceWord word in block.Words)
-        {
-            string? code = Code(word);
-            if (word.Address == "M" && code is not null && !s_ownCodes.Contains(code) && FindFunction(code) is null)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     protected override void ReadBlock(SourceBlock block)
     {
         if (block.Find("*") is SourceWord title)

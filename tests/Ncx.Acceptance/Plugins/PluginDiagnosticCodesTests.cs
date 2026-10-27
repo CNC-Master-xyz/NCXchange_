@@ -39,7 +39,7 @@ public sealed class PluginDiagnosticCodesTests
         }
     }
 
-    // D98: the INFO "plugin MyShopRules: inserted 2 blocks at line 12" is the first code of the area, as the tests of
+    // D98: the INFO "plugin MyShopRules: inserted 3 blocks at line 12" is the first code of the area, as the tests of
     // the diagnostics of Ncx.Core print it.
     [Fact]
     public void DiagnosticCodes_InsertedBlocks_IsPlg001()

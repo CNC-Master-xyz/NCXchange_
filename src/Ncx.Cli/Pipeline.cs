@@ -89,12 +89,9 @@ internal static class Pipeline
         // a plugin that fails is left out while the run goes on (implementation 17, P7-01).
         PluginSet plugins = RunPlugins.Load(settings, runMachine.Project, diagnostics);
 
-        // Parse. A byte order mark is no part of the text the parser reads; annotate puts it back in front of its copy,
-        // as ncx format does (wave-1 question #80).
-        string byteOrderMark = text.StartsWith(InputFile.ByteOrderMark, StringComparison.Ordinal)
-            ? InputFile.ByteOrderMark
-            : "";
-        NcxProgram program = Parser.Parse(text.Substring(byteOrderMark.Length), settings.File, new ParserOptions());
+        // Parse. A byte order mark is no part of the text: the parser skips it and the program records it, so that
+        // annotate writes it back in front of its copy, as ncx format does (D111).
+        NcxProgram program = Parser.Parse(text, settings.File, new ParserOptions());
 
         // Expand: the expansion rules of the machine and the program rewriters of the plugins turn into generated NCX
         // blocks around the blocks that trigger them, so that the virtual machine executes what the machine will
@@ -150,7 +147,6 @@ internal static class Pipeline
             Diagnostics = diagnostics,
             InputsRead = true,
             Program = runnable ? expanded : null,
-            ByteOrderMark = byteOrderMark,
         };
     }
 
@@ -221,11 +217,12 @@ internal static class Pipeline
             return null;
         }
 
-        NcxProgram program = Parser.Parse(WithoutByteOrderMark(text), fileName, new ParserOptions());
+        // The parser skips a byte order mark (D111).
+        NcxProgram program = Parser.Parse(text, fileName, new ParserOptions());
         return Expander.Expand(program, machine, rewriters);
     }
 
-    // A byte order mark is no part of the text the parser and the TOML loaders read (wave-1 question #80).
+    // A byte order mark is no part of the text the TOML loaders read (D111); the parser skips it itself.
     internal static string WithoutByteOrderMark(string text)
     {
         return text.StartsWith(InputFile.ByteOrderMark, StringComparison.Ordinal)

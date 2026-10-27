@@ -72,10 +72,9 @@ internal sealed class PluginRewriter : INamedRewriter
         }
 
         // D98, code-guidelines 11: the blocks a rewriter inserted are an INFO with the plugin's name and the line.
-        // TODO(question): D98, code-guidelines 11 and P7-02 print "inserted 2 blocks at line 12" for the coolant clutch
-        // rule, whose answer inserts three blocks, @SAVE=SPINDLE:MAIN, SPINDLE:MAIN=OFF and @RESTORE=SPINDLE:MAIN.
-        // Every block of the answer before and after the block is counted, three for the clutch rule, until that is
-        // answered.
+        // Every block of the answer before and after the block counts, three for the coolant clutch rule,
+        // @SAVE=SPINDLE:MAIN, SPINDLE:MAIN=OFF and @RESTORE=SPINDLE:MAIN; a Replace inserts none and prints no INFO
+        // (D318).
         int inserted = result.Kind == RewriteKind.Surround ? result.Before.Count + result.After.Count : 0;
         if (inserted > 0)
         {

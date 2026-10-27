@@ -20,7 +20,9 @@ public sealed class ProjectSettingsLoaderTests
             machines = "shop/machines"
             cycles = "shop/cycles"
             out = "nc"
-            plugins = ["MyShop.NcxPlugins.dll"]
+
+            [plugins]
+            assemblies = ["MyShop.NcxPlugins.dll"]
             """, diagnostics);
 
         Assert.Equal("", diagnostics.ToText());
@@ -139,6 +141,60 @@ public sealed class ProjectSettingsLoaderTests
         Assert.Empty(settings.Plugins);
         Assert.Equal("8000", settings.PluginSettings["MyShopRules"]["rpm_limit"]);
         Assert.Equal("THROUGH", settings.PluginSettings["MyShopRules"]["coolant"]);
+    }
+
+    // D238: [plugins] holds the assemblies and, below it, the section of each plugin (D80), side by side in one file.
+    [Fact]
+    public void NcxToml_AssembliesBesidePluginSections_LoadBoth()
+    {
+        var diagnostics = new Diagnostics(ProjectSettings.FileName);
+
+        ProjectSettings? settings = ProjectSettingsLoader.LoadText("""
+            [plugins]
+            assemblies = ["MyShop.NcxPlugins.dll", "lib/Clutch.dll"]
+
+            [plugins.MyShopRules]
+            rpm_limit = "8000"
+            """, diagnostics);
+
+        Assert.Equal("", diagnostics.ToText());
+        Assert.NotNull(settings);
+        Assert.Equal(["MyShop.NcxPlugins.dll", "lib/Clutch.dll"], settings.Plugins);
+        Assert.Equal(["MyShopRules"], settings.PluginSettings.Keys);
+        Assert.Equal("8000", settings.PluginSettings["MyShopRules"]["rpm_limit"]);
+    }
+
+    // D238: the top-level list plugins = [...] of the old form is the wrong type, an ERROR on its line.
+    [Fact]
+    public void NcxToml_PluginsAsATopLevelArray_IsWrongTypeError()
+    {
+        var diagnostics = new Diagnostics(ProjectSettings.FileName);
+
+        ProjectSettings? settings = ProjectSettingsLoader.LoadText("""
+            machine = "dmu50"
+            plugins = ["MyShop.NcxPlugins.dll"]
+            """, diagnostics);
+
+        Diagnostic error = Assert.Single(diagnostics.Items);
+        Assert.Equal(DiagnosticCodes.WrongType, error.Code);
+        Assert.Equal(2, error.Line);
+        Assert.Contains("assemblies", error.Message, StringComparison.Ordinal);
+        Assert.Null(settings);
+    }
+
+    // D238: no plugin may be named assemblies; a section [plugins.assemblies] is the wrong type of the list.
+    [Fact]
+    public void NcxToml_PluginSectionNamedAssemblies_IsWrongTypeError()
+    {
+        var diagnostics = new Diagnostics(ProjectSettings.FileName);
+
+        ProjectSettings? settings = ProjectSettingsLoader.LoadText("""
+            [plugins.assemblies]
+            rpm_limit = "8000"
+            """, diagnostics);
+
+        Assert.Equal(DiagnosticCodes.WrongType, Assert.Single(diagnostics.Items).Code);
+        Assert.Null(settings);
     }
 
     // D80: the settings of a plugin are strings; a number is the wrong type, an ERROR on its line.
