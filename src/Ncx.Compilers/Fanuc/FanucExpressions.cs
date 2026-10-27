@@ -41,7 +41,7 @@ internal static class FanucExpressions
                 }
 
                 // The factor stands as a constant of the expression: * 2 or / 2 between radius and diameter (D60),
-                // * 1000 from the seconds of DWELL and CYCLE_DWELL to the milliseconds of P (language 4.1, 4.7;
+                // * 1000 from the seconds of CYCLE_DWELL to the milliseconds of a cycle P (language 4.7;
                 // controllers fanuc.md 4, 6; D159); an operation is its operand in brackets (controllers fanuc.md 7).
                 if (factor != 1m)
                 {

@@ -5,12 +5,10 @@ using Ncx.Core.Model;
 
 namespace Ncx.Compilers;
 
-// TODO(question): machine-config 2 gives the [format] keys without saying what a file that leaves one out writes,
-// and what a line longer than max_line_length does. Without line_ending the lines end with LF, as the canonical writer
-// ends the lines of a program that was never a file; without block_numbers no line is numbered, and block_numbers
-// enabled without start or step counts from 10 in steps of 10, the values of its example; a longer line is kept as it
-// is with a WARNING, until that is answered. Without decimal_separator the separator of the controller family applies
-// (NumberFormatter, wave-1 question #64).
+// D263: a [format] key the machine file leaves out takes its family value (OutputFormat.WithFamilyDefaults, which
+// CompilerBase applies before any line is written): LF; no block numbers, start 10 step 10 when enabled, Heidenhain
+// from 0 in steps of 1; max_line_length 0, Siemens 512. An overlong line is kept as it is with the WARNING CMP021.
+// Without decimal_separator the separator of the controller family applies (NumberFormatter, wave-1 question #64).
 
 /// <summary>
 /// The lines of one output file and how [format] writes them (machine-config 2): the block numbers of block_numbers,
@@ -22,7 +20,8 @@ internal sealed class OutputBuffer
     private const string CrLf = "\r\n";
     private const string Lf = "\n";
 
-    // block_numbers = { enabled = true, start = 10, step = 10 } (machine-config 2).
+    // block_numbers = { enabled = true, start = 10, step = 10 } (machine-config 2), for a format that never went
+    // through WithFamilyDefaults (D263).
     private const int DefaultStart = 10;
     private const int DefaultStep = 10;
 

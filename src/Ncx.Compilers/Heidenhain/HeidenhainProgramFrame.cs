@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Ncx.Config.Templates;
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.State;
 
@@ -141,8 +142,8 @@ internal static partial class HeidenhainProgramFrame
     // The program whose file the block is written into (program_layout = "file_per_program", D48): its own program,
     // or, in the walk of a subprogram, the program whose walk entered it, the last PROGRAM=BEGIN before it in walk
     // order (architecture 8, D99). The walk of a subprogram that no program calls follows the PROGRAM=END of the last
-    // program and belongs to none: that subprogram stands in no output file, with the WARNING of the framework and its
-    // TODO(question) (CompilerBase.FilePerProgram), and its UNITS has no BEGIN PGM to be compared with.
+    // program: under file_per_program it stands in the first program's file (D264, CompilerBase.FilePerProgram), under
+    // one_file it belongs to none, and its UNITS has no BEGIN PGM to be compared with.
     private static Section? ProgramOf(HeidenhainBlock writing)
     {
         if (writing.Step.Section is Section { Kind: SectionKind.Program } own)
@@ -156,12 +157,27 @@ internal static partial class HeidenhainProgramFrame
             Block block = steps[index].Block;
             if (block.Has("PROGRAM", null, "END"))
             {
-                return null;
+                return writing.Machine.Format?.ProgramLayout == ProgramLayout.FilePerProgram
+                    ? FirstProgram(steps) : null;
             }
 
             if (block.Has("PROGRAM", null, "BEGIN"))
             {
                 return steps[index].Section;
+            }
+        }
+
+        return null;
+    }
+
+    // The first program of the file, whose file holds the subprograms no program calls (D264).
+    private static Section? FirstProgram(IReadOnlyList<BlockStep> steps)
+    {
+        foreach (BlockStep step in steps)
+        {
+            if (step.Block.Has("PROGRAM", null, "BEGIN"))
+            {
+                return step.Section;
             }
         }
 
@@ -214,13 +230,49 @@ internal static partial class HeidenhainProgramFrame
         };
     }
 
-    // The name of the program, the name of the NCX file for a program without NAME, as the framework names its file.
+    // The name of the program, the final name the framework gives its file (D266).
     private static string NameOf(HeidenhainBlock writing, Section program)
     {
-        return program.Name ?? Path.GetFileNameWithoutExtension(writing.Diagnostics.File);
+        return writing.ProgramName(program);
     }
 
     // The block number in front of a Klartext block, 2 of "2 BLK FORM 0.1 Z X0 Y0 Z-20".
     [GeneratedRegex(@"^\s*[0-9]+(?=[\s/])\s*", RegexOptions.CultureInvariant)]
     private static partial Regex SourceBlockNumber();
+
+    /// <summary>
+    /// STOCK through [stock], BLK FORM 0.1 Z X+0 Y+0 Z-40 and BLK FORM 0.2 with their signs (D351; machine-config 5;
+    /// iTNC 530 Klartext 340490 p.62-63, 114-115): the corners and DIST with their sign, R and L without, as the
+    /// cylinder blank of the TNC 640 writes them (Klartext 340590-05 p.103). The framework has chosen the template and
+    /// reported what writes nothing (CMP012 to CMP014).
+    /// </summary>
+    public static void WriteStock(HeidenhainBlock writing)
+    {
+        if (writing.Block.Verb?.Key != "STOCK")
+        {
+            return;
+        }
+
+        writing.TakeAll("STOCK");
+        writing.TakeAll("X");
+        writing.TakeAll("Y");
+        writing.TakeAll("Z");
+        writing.TakeAll("MAX");
+        if (writing.Stock is not StockForm stock)
+        {
+            return;
+        }
+
+        var values = new TemplateValues();
+        values.Set("axis", stock.Axis);
+        foreach (StockNumber number in stock.Numbers)
+        {
+            bool unsigned = number.Name is "radius" or "diameter" or "length";
+            values.Set(number.Name, unsigned
+                ? writing.Numbers.Format(number.Address, number.Value, writing.Block)
+                : HeidenhainNumbers.Signed(writing, number.Address, number.Value));
+        }
+
+        writing.Template(stock.Template, stock.What, values);
+    }
 }

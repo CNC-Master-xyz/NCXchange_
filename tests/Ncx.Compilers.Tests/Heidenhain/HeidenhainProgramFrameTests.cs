@@ -70,6 +70,23 @@ public sealed class HeidenhainProgramFrameTests
         Assert.Equal("0 BEGIN PGM OP2 MM\r\n1 L Z+10 R0 FMAX\r\n2 M30\r\n3 END PGM OP2 MM\r\n", result.Files[1].Text);
     }
 
+    // D266: a name taken already, compared case-insensitively, gets _2 with the WARNING CMP005, and BEGIN PGM and END
+    // PGM carry the file's final name.
+    [Fact]
+    public void Rule1_NameTakenAlready_BeginPgmCarriesTheFinalName()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"OP1\"", "UNITS=MM", "RAPID Z=5", "PROGRAM=END",
+            "PROGRAM=BEGIN NAME=\"op1\"", "UNITS=MM", "RAPID Z=10", "PROGRAM=END",
+            "FILE=END"));
+
+        Assert.Equal("op1_2.h", result.Files[1].Name);
+        Assert.Equal("0 BEGIN PGM op1_2 MM\r\n1 L Z+10 R0 FMAX\r\n2 M30\r\n3 END PGM op1_2 MM\r\n",
+            result.Files[1].Text);
+        Assert.Contains(result.Diagnostics.Items, item => item.Code == DiagnosticCodes.ProgramNameTaken);
+    }
+
     // D337: every Klartext program starts with feed per minute, so the header's FEED_MODE=PER_MIN writes nothing
     // (controller-mapping 2, FEED_MODE); UNITS stands in BEGIN PGM, WORKPLANE waits for the TOOL CALL, COMP for the
     // first straight line, and CYCLE=OFF writes nothing (heidenhain 5).

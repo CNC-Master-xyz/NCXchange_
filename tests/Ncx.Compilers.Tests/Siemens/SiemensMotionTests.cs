@@ -1,3 +1,4 @@
+using Ncx.Core.Machine;
 using static Ncx.Compilers.Tests.Siemens.SiemensCompile;
 
 namespace Ncx.Compilers.Tests.Siemens;
@@ -16,14 +17,25 @@ public sealed class SiemensMotionTests
         Assert.Equal(Lines("G0 Z2=-58"), MillTurnBody("RAPID Z2=-58"));
     }
 
-    // Every motion block writes its motion code, as the comments of MILLTURN_TRANSFER write G0 Z2=-58 after a G0 (the
-    // TODO(question) of SiemensMotion); an X of the mill-turn under DIAMETER=ON is a diameter, as its X axis is written
-    // (D60).
+    // Every motion block writes its motion code, the family value "every_block" of [format] motion_code (D299), as the
+    // comments of MILLTURN_TRANSFER write G0 Z2=-58 after a G0; an X of the mill-turn under DIAMETER=ON is a diameter,
+    // as its X axis is written (D60).
     [Fact]
     public void MotionCode_OnEveryMotionBlock_IsWrittenAgain()
     {
         Assert.Equal(Lines("G0 X42 Z2", "G1 X40 F0.2", "G1 Z-60", "G0 X45"),
             MillTurnBody("RAPID X=42 Z=2", "LINE X=40 F=0.2", "LINE Z=-60", "RAPID X=45"));
+    }
+
+    // [format] motion_code = "change" (D299): G0 to G3 only where the code changes, arcs included.
+    [Fact]
+    public void MotionCode_Change_WritesTheCodeOnlyWhereItChanges()
+    {
+        MachineConfig machine = Replaced("machines/siemens-840dsl-mill.toml", "comment_charset = \"ASCII\"",
+            "comment_charset = \"ASCII\"\nmotion_code = \"change\"");
+
+        Assert.Equal(Lines("G0 X10 Y0", "G1 X20 F100", "Y10", "G0 Z5"),
+            Body(Run(Program(MillHeader, "RAPID X=10 Y=0", "LINE X=20 F=100", "LINE Y=10", "RAPID Z=5"), machine)));
     }
 
     // Siemens 1 and 12 rule 2: a value that is an expression stands after an equals sign, X=R1*2 (controller-mapping 2,

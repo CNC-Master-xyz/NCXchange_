@@ -148,6 +148,12 @@ public static partial class DiagnosticCodes
     public const string HeidenhainLabelChainsDiffer = "CMP119";
 
     /// <summary>
+    /// CMP120, a WARNING: PATH_MODE with an empty or missing PATH_MODE template is not written; Klartext has no modal
+    /// switch of the path mode, and heidenhain-itnc530.toml leaves both templates empty (machine-config 5, D349).
+    /// </summary>
+    public const string HeidenhainPathModeNotWritten = "CMP120";
+
+    /// <summary>
     /// CMP121, a WARNING: the [cycles] chip_break_lift of the machine, the one source of Q256 (D358), lies outside the
     /// input range of Q256, 0.1 to 99999.9999 on the iTNC 530; the compiler writes the nearest value of the range and
     /// names both.
