@@ -35,9 +35,8 @@ internal static class SpindleWords
             Description = "Spindle speed, per spindle role.",
         },
 
-        // TODO(question): the row of SPINDLE_MODE writes "addr = spindle role" where the other spindle words write
-        // "optional addr", while language 4.10 says that a word without a role address targets the default resource
-        // of its kind. The catalog keeps the address optional, as 4.10 says for every role address (D113).
+        // The role address of SPINDLE_MODE is required: a bare SPINDLE_MODE is PAR151, and only a word whose row makes
+        // the role address optional targets the default resource of its kind (D113; language 4.10).
         new WordDefinition
         {
             Key = "SPINDLE_MODE",
@@ -45,6 +44,7 @@ internal static class SpindleWords
             ValueKinds = ValueKinds.Ident,
             AllowedIdents = ["SPINDLE", "AXIS"],
             AddrKind = AddrKind.Role,
+            IsAddrRequired = true,
             Scope = Scope.Modal,
             CanonicalRank = CanonicalRanks.SpindleMode,
             Section = "4.5",

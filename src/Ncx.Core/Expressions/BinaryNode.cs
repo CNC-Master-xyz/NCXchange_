@@ -9,11 +9,14 @@ namespace Ncx.Core.Expressions;
 public sealed record BinaryNode(BinaryOperator Operator, ExprNode Left, ExprNode Right) : ExprNode
 {
     /// <summary>
-    /// The two operands with one space on each side of the operator, AND, OR and MOD included. The tree holds the
-    /// parentheses of the expression as ParenthesesNode, so the operands are written as they stand.
+    /// The two operands with one space on each side of the operator, AND, OR and MOD included. A parsed tree holds
+    /// the parentheses of the expression as ParenthesesNode; where a tree built in code lacks the parentheses its
+    /// grouping needs, they are added, so that the text reads back into the same tree grouping (D112; language 4.12).
+    /// Compilers bracket from the tree, never from this text.
     /// </summary>
     public override string ToCanonical()
     {
-        return Left.ToCanonical() + " " + ExprSymbols.Of(Operator) + " " + Right.ToCanonical();
+        return ExprPrecedence.Left(Operator, Left) + " " + ExprSymbols.Of(Operator) + " "
+            + ExprPrecedence.Right(Operator, Right);
     }
 }

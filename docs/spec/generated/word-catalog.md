@@ -77,7 +77,7 @@ renumbered (D372: `TOOL_POINT` 435, `TIP_OFFSET` 465, `POINT_RADIUS` 467).
 | 500 | `CSS` | `ON`, `OFF` |  |  | role, optional | modal | 4.11 | Constant surface speed (G96, G97): the spindle follows VC while it is on. |
 | 510 | `VC` | number, expression |  |  | role, optional | modal | 4.11 | Cutting speed for CSS in m/min or ft/min (the S of G96 S140). |
 | 520 | `RPM_MAX` | number, expression |  |  | role, optional | modal | 4.11 | Speed limit under CSS (G50 S, LIMS). |
-| 530 | `SPINDLE_MODE` | `SPINDLE`, `AXIS` |  |  | role, optional | modal | 4.5 | Work spindle as rotating spindle or as positioning C axis (M70, SPOS); in AXIS mode its axis is driven with C. |
+| 530 | `SPINDLE_MODE` | `SPINDLE`, `AXIS` |  |  | role, required | modal | 4.5 | Work spindle as rotating spindle or as positioning C axis (M70, SPOS); in AXIS mode its axis is driven with C. |
 | 540 | `ORIENT` | number, expression |  |  | role, optional | block | 4.5 | Oriented spindle stop in degrees (M19, SPOS=); the spindle is stopped afterwards. |
 | 550 | `SPINDLE_SYNC` | list, `OFF` |  |  |  | modal | 4.5 | Synchronous spindles, a list of two spindle roles of which the second follows the first; OFF ends it (D56). |
 | 560 | `PHASE` | number, expression |  |  |  | with partner | 4.5 | Angular offset in degrees of a phase-synchronous run; only with SPINDLE_SYNC. |
@@ -92,11 +92,11 @@ renumbered (D372: `TOOL_POINT` 435, `TIP_OFFSET` 465, `POINT_RADIUS` 467).
 | 650 | `FRAME` | `MACHINE` |  |  |  | block | 4.2 | The coordinates of this block refer to the machine datum (G53, M91). |
 | 660 | `SHIFT=RESET` | `RESET` |  |  |  | modal | 4.2 | Removes the entry of `SHIFT` and what follows it from the frame chain; a frame word, not the verb. |
 | 670 | `ROTATE` | number, expression, `RESET` |  |  |  | modal | 4.2 | Rotation of the working plane about the tool axis in degrees, appended to the chain; ROTATE=RESET removes it and what follows. |
-| 680 | `MIRROR` | list, identifier |  |  |  | modal | 4.2 | Mirrors the named axes, an axis list or a single axis, appended to the chain; MIRROR=OFF. |
+| 680 | `MIRROR` | list, identifier |  |  |  | modal | 4.2 | Mirrors the named axes, an axis list or a single axis, appended to the chain; MIRROR=OFF cuts the chain at the last mirror (D124). |
 | 690 | `TILT=RESET` | `RESET` |  |  |  | modal | 4.2 | Removes the entry of `TILT` and what follows it from the frame chain; a frame word, not the verb. |
 | 700 | `TILT_AXIS=RESET` | `RESET` |  |  |  | modal | 4.2 | Removes the entry of `TILT_AXIS` and what follows it from the frame chain; a frame word, not the verb. |
 | 710 | `MOVE` | `TURN`, `MOVE`, `STAY` |  |  |  | block | 4.2 | How the machine reaches the tilted plane, with TILT or TILT_AXIS; default STAY (D82). |
-| 720 | `ROT` | `TABLE`, `COORD` |  |  |  | block | 4.2 | On table kinematics, whether the table turns or only the coordinate system, with TILT or TILT_AXIS; default TABLE (D82). |
+| 720 | `ROT` | `TABLE`, `COORD` |  |  |  | block | 4.2 | Whether the table turns or only the coordinate system, with TILT or TILT_AXIS; the option acts through a free rotary axis, whoever carries it; default TABLE (D82, D191). |
 | 730 | `POINT` | integer |  |  |  | block | 4.3 | The reference point HOME moves to, POINT=2 for the second (G30 P2); only with HOME. |
 | 740 | `CYLINDER` | number, expression, `OFF` |  |  |  | modal | 4.2 | Cylinder surface transformation, on with the reference radius as the value, off with OFF; there is no ON form (D54, D96, D102). |
 | 750 | `POLAR` | `ON`, `OFF` |  |  |  | modal | 4.2 | Face transformation, Cartesian programming of the face with X and C (G12.1, TRANSMIT; D54, D102). |

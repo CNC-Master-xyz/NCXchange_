@@ -112,12 +112,14 @@ flowchart BT
 
 ## 4. Core model (Ncx.Core)
 
-The parsed program is a list of blocks, a block a list of words, a word a key with an optional address and an optional typed value, exactly as the lexical rules of the language define it. The word catalog is the schema: it says for every key which value type it takes, whether it is a verb, whether it accepts an address, its scope, and its rank in the canonical order. The parser validates against the catalog so that the VM never sees a wrong value type and no unknown key other than the two provisional forms of 4.1: a machine axis word (D93) and a native parameter of a `CYCLE:<controller>=n` block (D94).
+The parsed program is a list of blocks, a block a list of words, a word a key with an optional address and an optional typed value, exactly as the lexical rules of the language define it. The word catalog is the schema: it says for every key which value type it takes, whether it is a verb, whether it accepts an address, its scope, and its rank in the canonical order. The parser validates against the catalog so that the VM never sees a wrong value type and no unknown key other than the three provisional forms of 4.1: a machine axis word (D93), a native parameter of a `CYCLE:<controller>=n` block (D94) and a parameter of a catalog cycle (`CYCLE=RECT_POCKET LENGTH=60`, D114).
 
 ```mermaid
 classDiagram
     class NcxProgram {
         +string FileName
+        +LineEnding LineEnding
+        +bool HasByteOrderMark
         +List~Block~ Blocks
         +List~Section~ Programs
         +List~Section~ Subs
@@ -129,6 +131,7 @@ classDiagram
     class Trivia {
         +int Line
         +string Text
+        +int BlockIndex
     }
     NcxProgram "1" *-- "*" Trivia
     class Section {
@@ -246,8 +249,9 @@ The lexer splits a line into the comment and the words, honouring quoted strings
 
 ```mermaid
 flowchart TD
+    S[skip a UTF-8 byte order mark at file start, record it] --> A
     A[read line] --> B{empty or whitespace?}
-    B -- yes --> T[record trivia: line number and text]
+    B -- yes --> T[record trivia: line number, text and the index of the next block]
     T --> A
     B -- no --> C[split comment at first ; outside strings]
     C --> C2{any word left?}
@@ -258,7 +262,7 @@ flowchart TD
     E2 -- yes, pseudo-words allowed --> F
     E2 -- yes, user file --> G2[ERROR pseudo-word in a user file]
     E2 -- no --> F{key in catalog?}
-    F -- no --> F2{"machine axis form in a block whose verb takes axis words, or a block with CYCLE:controller=n?"}
+    F -- no --> F2{"machine axis form in a block whose verb takes axis words, a block with CYCLE:controller=n, or a catalog cycle block?"}
     F2 -- yes --> F3[provisional word: number or expression value, bare only under HOME]
     F3 --> I
     F2 -- no --> G[ERROR unknown key, keep block as RAW text]
@@ -273,9 +277,9 @@ flowchart TD
     M --> A
 ```
 
-A key the catalog does not know is accepted as a provisional word when it has the form of a machine axis (`[XYZABCUVW][0-9]{0,2}`, or `I` followed by that) in a block whose verb takes axis words, with a number or expression value (bare only under `HOME`), or when it stands in a block with `CYCLE:<controller>=n` as a native cycle parameter; the VM resolves the first against `[[axis]]`, the second stays unresolved (D93, D94). The parser decides the two forms after it has read every token of the block, because the condition is a property of the block, not of the token; in a block with `CYCLE:<controller>=n` an unknown key is a native parameter even when it has the machine-axis form (D94). A key starting with `@` is a pseudo-word (`@SAVE`, `@RESTORE`, section 5.5); the parser accepts it, with a state key `KEY[:ADDR]` as its value, only when it runs with `ParserOptions.AllowPseudoWords`, which the expander sets for generated text; in a user file it is the ERROR "pseudo-word in a user file" (D95).
+A key the catalog does not know is accepted as a provisional word when it has the form of a machine axis (`[XYZABCUVW][0-9]{0,2}`, or `I` followed by that) in a block whose verb takes axis words, with a number or expression value (bare only under `HOME`), or when it stands in a block with `CYCLE:<controller>=n` as a native cycle parameter; the VM resolves the first against `[[axis]]`, the second stays unresolved (D93, D94). The parser decides the two forms after it has read every token of the block, because the condition is a property of the block, not of the token; in a block with `CYCLE:<controller>=n` an unknown key is a native parameter even when it has the machine-axis form (D94). The third form: in a block whose `CYCLE` value is not a built-in name or `OFF`, every other unknown key is a cycle parameter with a number or expression value, kept in source order at the rank of the native parameters; a key of the machine-axis form stays a machine axis word there. The VM checks the parameter names against the machine's cycle catalog (VM254; without a machine file the D103 WARNING), in `Validation/CycleParameterValidation` (D114). A key starting with `@` is a pseudo-word (`@SAVE`, `@RESTORE`, section 5.5); the parser accepts it, with a state key `KEY[:ADDR]` as its value, only when it runs with `ParserOptions.AllowPseudoWords`, which the expander sets for generated text; in a user file it is the ERROR "pseudo-word in a user file" (D95).
 
-`NcxWriter` is the inverse: it writes a program in canonical form (word order by `CanonicalRank`, numbers as stored, comments kept; comment-only lines and blank lines are trivia kept in place, the comment column is canonical, D92) and is what `format` and every reader use for output. Generated blocks (section 5.5) are skipped by the writer unless asked for.
+`NcxWriter` is the inverse: it writes a program in canonical form (word order by `CanonicalRank`, numbers as stored, comments kept; comment-only lines and blank lines are trivia kept in place, the comment column is canonical, D92; each trivia line records the index of the block it stands before, set by the parser and by `NcxBuilder.Trivia` at the call, and the writer places it there, the lines after `FILE=END` after the last block; its line stays as data, D142) and is what `format` and every reader use for output. Generated blocks (section 5.5) are skipped by the writer unless asked for. A byte order mark the file began with is no part of the text: the parser skips it, `NcxProgram.HasByteOrderMark` records it next to the line ending, and the writer writes it back; a program a reader built has none (D111). The comment column counts Unicode code points, as the columns of the lexer's PAR messages do (`string.EnumerateRunes`, D166).
 
 ### 4.2 Numbers and geometry (D62)
 
@@ -647,6 +651,10 @@ flowchart TD
     I --> J([expanded program: original and generated blocks in order])
     J --> K[virtual machine executes all of them; @SAVE pushes, @RESTORE re-applies the saved words]
 ```
+
+When several rules and rewriters act on one block, their blocks nest: the rules in canonical order of their triggering words (each table's rule once), the outermost first; the plugin rewriters in load order, each inside the previous; `limits = "clamp"` clamps last, over every block the VM executes for the block. Generated blocks are not expanded again (D199).
+
+A block-inserting step keeps every trivia anchor valid by shifting the block indices: the expander maps the index a comment-only or blank line records to the first block it emits for that block (after the post blocks of a cycle that ends there), so the line stands before the blocks generated for the block it stood before; a rewriter's blocks go through the same mapping (D142).
 
 What this gives the shop-floor example: the program says `COOLANT:THROUGH=ON` while the spindle runs at 1500; the rule on that machine says `requires = { SPINDLE = "OFF" }, restore = ["SPINDLE"]`; the expander emits `@SAVE=SPINDLE:MAIN`, `SPINDLE:MAIN=OFF`, the coolant block, `@RESTORE=SPINDLE:MAIN`; the VM turns the restore into `SPINDLE:MAIN=CW RPM:MAIN=1500` and the compiler writes `M5`, `M51`, `M3 S1500`. The runtime estimate charges the stop and the start with the spindle's `accel_time`.
 
@@ -1085,7 +1093,7 @@ The API is shaped for NC programmers with little C# (code-guidelines.md, section
 
 | Command | Input | Pipeline | Output |
 |---|---|---|---|
-| `ncx convert <file> [--machine <name or toml>] [--output <file>] [--strict]` | controller file | reader, NcxWriter, STATIC check | NCX text to stdout or `--output`, nothing written that the command line does not name (D209; a converted program that a `CALL="name"` is to find is written as `<name>.ncx`, D215); diagnostics |
+| `ncx convert <file> [--machine <name or toml>] [--output <file>] [--strict]` | controller file, read as UTF-8 when its bytes are valid UTF-8, else as Windows-1252 with a WARNING (D229) | reader, NcxWriter, STATIC check | NCX text to stdout or `--output`, nothing written that the command line does not name (D209; a converted program that a `CALL="name"` is to find is written as `<name>.ncx`, D215); diagnostics |
 | `ncx convert --batch <folder> --machine <toml> --report <file> [--strict]` | every file of a folder and of its folders | per file as `convert`, never stopping on an error | the report of `--report`: per file and in total the blocks, the `RAW` blocks per word and the diagnostics per code; the diagnostics of every file |
 | `ncx compile <file.ncx> --machine <toml> [--output <folder>]` | NCX | parser, VM STATIC, compiler | NC file under `out/<machine>/` or in the folder of `--output`, diagnostics |
 | `ncx compile --job <name.ncxjob.toml>` | job manifest | parser per channel, job compiler | one NC file per channel |
@@ -1094,8 +1102,8 @@ The API is shaped for NC programmers with little C# (code-guidelines.md, section
 | `ncx check --job <name.ncxjob.toml>` with the options of `check` | job manifest (machine-config 8) | parser and expander per channel file, one VM STATIC per channel program in rounds (VM 3.7) | diagnostics only |
 | `ncx analyze --job <name.ncxjob.toml>` with the options of `analyze` but `--vars` | job manifest (machine-config 8) | parser and expander per channel file, one VM INTERPRETED (STATIC under `--static`) per channel program in rounds (VM 3.7), analytics per channel | the reports of every channel, in the order of the manifest |
 | `ncx analyze <file.ncx> [--machine <toml>] [--vars <toml>] [--from <line>] [--to <line>] [--analytic tools,runtime] [--static] [--format text\|csv] [--skip-blocks none\|all\|0,3]` | NCX | parser, expander, VM INTERPRETED (STATIC under `--static`) with `ExpandCycles`, analytics over the block range | the reports of the analytics `--analytic` names, all without it, in aligned text or CSV (VM 8) |
-| `ncx trace <file.ncx> [--format text\|csv]` with the options of `check` | NCX | parser, expander, VM STATIC | one row per changed state variable per executed block: channel, block, variable, old, new (VM 6), in aligned text or CSV |
-| `ncx annotate <file.ncx>` with the options of `check` | NCX | parser, expander, VM STATIC | the program with the previous values appended to each block's comment (VM 6) |
+| `ncx trace <file.ncx> [--format text\|csv]` with the options of `check` | NCX | parser, expander, VM STATIC | one row per changed state variable per executed block: channel, block, variable, old, new (VM 6), in aligned text or CSV: a header row first, aligned text the default, CSV per RFC 4180 with LF line ends, a generated block's block column `<line> generated by …` or `rewritten by …` (D237) |
+| `ncx annotate <file.ncx>` with the options of `check` | NCX | parser, expander, VM STATIC | the program with the previous values appended to each block's comment (VM 6): several variables joined by `, `, an unknown value `?`, a generated block as a comment line (D237) |
 | `ncx --version` | none | none | the version of `ncx`: the `Version` of `Directory.Build.props`, stamped from the release tag, with the commit after `+` (D347) |
 | `ncx --help`, `ncx <command> --help` | none | none | the commands, or the options of one command |
 | `ncx plugin new <name>`, `build [<folder>]`, `check <dll>`, `test [<folder>]` | template | copies the plugin template, builds it into `plugins/`, registers it in `ncx.toml`, loads and lists a DLL's interfaces, runs its tests | a runnable plugin without knowing `dotnet new` |

@@ -56,8 +56,8 @@ internal static class ExprTokenizer
             // A name: a function, one of the words AND, OR, NOT and MOD, or after $ a variable name, which follows
             // ADDR (language 4.9, 4.12). Keys, addresses and identifiers are uppercase and a parser may accept
             // lowercase and normalize (language 3, Case), so a variable name in lowercase is normalized.
-            // TODO(question): language 3, Case, does not say whether function names and the words AND, OR, NOT and
-            // MOD count as identifiers; they are normalized like the variable names until D112 is settled.
+            // Function names and the words AND, OR, NOT and MOD are accepted in any case and written uppercase
+            // (D112).
             if (char.IsAsciiLetter(character))
             {
                 int end = index + 1;

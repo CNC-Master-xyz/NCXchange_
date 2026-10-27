@@ -260,6 +260,23 @@ public sealed class WordCatalogTests
         Assert.False(WordCatalog.IsNativeParameterAllowed(block));
     }
 
+    // D114: a block whose CYCLE value is not a built-in name or OFF is a catalog cycle block, whose unknown keys are
+    // cycle parameters; the native form and the built-in names are not.
+    [Theory]
+    [InlineData("CYCLE=RECT_POCKET LENGTH=60", true)]
+    [InlineData("CYCLE=CIRC_POCKET", true)]
+    [InlineData("CYCLE=DRILL SURFACE=0 CLEARANCE=5 DEPTH=-2", false)]
+    [InlineData("CYCLE=CHIP_BREAK SURFACE=0 CLEARANCE=5 DEPTH=-2 PECK=1", false)]
+    [InlineData("CYCLE=OFF", false)]
+    [InlineData("CYCLE:HEIDENHAIN=251 Q215=0", false)]
+    [InlineData("CYCLE_CALL X=10 Y=10", false)]
+    public void D114_IsCatalogCycleBlock(string text, bool expected)
+    {
+        Block block = Assert.Single(ExampleBlocks.Read(text));
+
+        Assert.Equal(expected, WordCatalog.IsCatalogCycleBlock(block));
+    }
+
     // @SAVE and @RESTORE are internal, of the group Pseudo, with a state key KEY[:ADDR] as their value (D95).
     [Theory]
     [InlineData("@SAVE")]

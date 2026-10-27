@@ -571,6 +571,16 @@ internal sealed class ResourceResolver
         state.Frame.SetposShift.TryAdd(axis, 0m);
     }
 
+    /// <summary>
+    /// True the first time a run asks about this name, so that "not checked: no machine file" comes once per name
+    /// (D103); the cycle parameters of D114 ask with their own names.
+    /// </summary>
+    /// <param name="name">The kind and the name: "cycle parameter RECT_POCKET LENGTH".</param>
+    public bool IsFirstNotChecked(string name)
+    {
+        return _warned.Add(name);
+    }
+
     // "not checked: no machine file", once per name (D103).
     private void WarnNotChecked(string kind, string name, string createdAs, Block block, Diagnostics diagnostics)
     {

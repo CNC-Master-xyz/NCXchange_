@@ -31,7 +31,7 @@ The file frame, the programs and subprograms, and the words of a block (language
 | `PAR013` | ERROR | A word in a HOME block that is not a bare axis name. | language 4.3, 5 rule 2 |
 | `PAR014` | ERROR | An axis word without a value outside a HOME block. | language 4.3, 5 rule 2; D93 |
 | `PAR015` | ERROR | Duplicate key: a key twice in one block with one address. | language 5 rule 4; VM 5 |
-| `PAR016` | ERROR | IF, ARG, TIMES, WITH, FRAME, MOVE, ROT, POINT or PHASE without its verb or partner word in the block. | language 5 rule 5; VM 5 |
+| `PAR016` | ERROR | IF, ARG, TIMES, WITH, FRAME, MOVE, ROT, POINT or PHASE without its verb or partner word in the block; NAME, NUMBER or CHANNEL without its program or section block; a cycle parameter without CYCLE. | language 5 rule 5; VM 5; D116 |
 | `PAR017` | ERROR | TOOL_POINT, TIP_OFFSET or POINT_RADIUS in a block that is neither a TOOL block nor a block of their own. | language 4.4; VM 5; D372, D392 |
 | `PAR020` | ERROR | Missing or misplaced FILE=BEGIN: it is the first block of the file and stands nowhere else. | language 4.1; VM 5; D92 |
 | `PAR021` | ERROR | FILE=BEGIN without NCX, the format version. | language 4.1; VM 5 |
@@ -183,6 +183,7 @@ The cycle call (language 4.7; VM 3.3, 5; D59, D94).
 | `VM251` | ERROR | CYCLE_CALL of a built-in drilling cycle without DEPTH or CLEARANCE; a catalog or CYCLE:controller=n cycle carries its own parameters. Suppressed inside a subprogram that no program of the file calls (D99). | VM 3.3, 5; D94 |
 | `VM252` | ERROR | AXIS naming an axis that is not a linear axis of the machine. | language 4.7; VM 3.3, 5; D59 |
 | `VM253` | ERROR | CYCLE_CALL of a built-in drilling cycle with a word on its drilling axis; the cycle's own planes move that axis, and a pre-positioning is a RAPID of its own. | language 4.7; VM 3.3, 5; D189 |
+| `VM254` | ERROR | A parameter of a catalog cycle that the machine's cycle catalog does not map for that cycle; without a machine file it is the WARNING VM003. | language 4.7.1; VM 5; D114 |
 
 ## Flow
 
@@ -223,6 +224,8 @@ Expressions and variables (language 4.9, 4.12; VM 1, 2.7, 3.6, 5; D38, D51). The
 | `PAR109` | ERROR | A part after a complete expression. | language 4.12 |
 | `PAR110` | ERROR | A second comparison behind a comparison. | language 4.12 |
 | `PAR111` | ERROR | A function with a number of arguments it does not take. | language 4.12; D118 |
+| `PAR112` | ERROR | An index on a variable that is not a SYS_ name. | language 4.12; D145 |
+| `PAR113` | ERROR | A literal index that is no whole number of 0 or more. | language 4.12; D145 |
 | `VM080` | ERROR | Assignment to a SYS_ variable. | VM 2.7, 5 |
 | `VM540` | WARNING | Unresolved expression in STATIC mode, counted and reported once per run. | VM 1, 5 |
 | `VM900` | ERROR | Division by zero. | language 4.12; VM 5 |
@@ -231,8 +234,8 @@ Expressions and variables (language 4.9, 4.12; VM 1, 2.7, 3.6, 5; D38, D51). The
 | `VM903` | ERROR | A SYS_ name the configuration does not map, or an unknown state, read in INTERPRETED mode. | VM 2.7, 3.6; D51 |
 | `VM905` | ERROR | An operation without a real result. | language 4.12 |
 | `VM906` | ERROR | A number beyond the range of the decimal arithmetic. | language 4.12 |
-| `VM907` | ERROR | An index on a variable that is not a SYS_ name. | language 4.12; D51 |
-| `VM908` | ERROR | An index that selects no register. | language 4.12; D51 |
+| `VM907` | ERROR | Retired (D145): an index on a variable that is not a SYS_ name is PAR112. | language 4.12; D145 |
+| `VM908` | ERROR | A computed index that selects no register: negative after rounding half away from zero. | language 4.12; D51, D145 |
 | `VM754` | ERROR | An expression gives a number with decimals where its word takes an integer. | language 3, 4; VM 5 |
 
 ## Resource

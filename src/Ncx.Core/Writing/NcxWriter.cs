@@ -1,6 +1,7 @@
 using System.Text;
 using Ncx.Core.Catalog;
 using Ncx.Core.Model;
+using Ncx.Core.Parsing;
 
 namespace Ncx.Core.Writing;
 
@@ -18,6 +19,9 @@ public static class NcxWriter
 
     // Words that reach column 54 or later are followed by three spaces before the comment (language 5 rule 7, D92).
     private const int SpacesAfterLongWords = 3;
+
+    // The UTF-8 byte order mark as it stands at the start of a decoded text (D111).
+    private const char ByteOrderMark = '\uFEFF';
 
     /// <summary>
     /// Writes a program in canonical form without its generated blocks, as ncx format does (language 4.15).
@@ -42,29 +46,33 @@ public static class NcxWriter
         string lineEnding = program.LineEnding == LineEnding.CrLf ? "\r\n" : "\n";
         var text = new StringBuilder();
 
-        // For every line of the file, a comment-only or blank line or a block: the trivia are interleaved with the
-        // blocks by line number, each before the first block of a greater line, and written back as read (D92). The
-        // blocks stand in file order, and with them the programs and subprograms (language 4.13).
-        int nextTrivia = 0;
-        foreach (Block block in program.Blocks)
+        // A file that began with a byte order mark gets it back as read; a program built by a reader has none (D111).
+        if (program.HasByteOrderMark)
         {
-            // ncx format never writes a generated block; it is written when the options ask for it (language 4.15,
-            // architecture 4.1).
-            if (WrittenBlock(block, options) is not Block written)
-            {
-                continue;
-            }
+            text.Append(ByteOrderMark);
+        }
 
-            while (nextTrivia < program.Trivia.Count && program.Trivia[nextTrivia].Line < written.Line)
+        // For every line of the file, a comment-only or blank line or a block: each trivia line stands before the
+        // block whose index it records and is written back as read (D92, D142). The blocks stand in file order, and
+        // with them the programs and subprograms (language 4.13).
+        int nextTrivia = 0;
+        for (int index = 0; index < program.Blocks.Count; index++)
+        {
+            while (nextTrivia < program.Trivia.Count && program.Trivia[nextTrivia].BlockIndex <= index)
             {
                 text.Append(program.Trivia[nextTrivia].Text).Append(lineEnding);
                 nextTrivia++;
             }
 
-            text.Append(WriteBlock(written)).Append(lineEnding);
+            // ncx format never writes a generated block; it is written when the options ask for it (language 4.15,
+            // architecture 4.1).
+            if (WrittenBlock(program.Blocks[index], options) is Block written)
+            {
+                text.Append(WriteBlock(written)).Append(lineEnding);
+            }
         }
 
-        // The trivia after the last block, the lines after FILE=END among them (D92).
+        // The trivia after the last block, the lines after FILE=END among them (D92, D142).
         while (nextTrivia < program.Trivia.Count)
         {
             text.Append(program.Trivia[nextTrivia].Text).Append(lineEnding);
@@ -103,10 +111,10 @@ public static class NcxWriter
 
         // Then the comment as read: spaces up to column 57, so that the semicolon stands in column 57, or three spaces
         // when the words reach column 54 or later (language 5 rule 7, D92).
-        // TODO(question): language 5 rule 7 counts columns and does not say what a column is beyond ASCII (a UTF-16
-        // unit, a code point, a character as an editor shows it). A column is one character of the string here, as the
-        // lexer counts the columns of its diagnostics, until D166 is answered.
-        int spaces = Math.Max(CommentColumn - 1 - line.Length, SpacesAfterLongWords);
+        // A column is one Unicode code point of the line, first is column 1, so the words are counted by their code
+        // points (D166; language 5 rule 7).
+        string words = line.ToString();
+        int spaces = Math.Max(CommentColumn - 1 - Columns.CodePoints(words), SpacesAfterLongWords);
         return line.Append(' ', spaces).Append(block.Comment).ToString();
     }
 

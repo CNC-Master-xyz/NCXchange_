@@ -514,7 +514,10 @@ A job manifest requires `[job] machine` and `id` and `file` of every `[[channel]
 Q1 = 10
 Q2 = 5
 QS1 = "TEXT"
+"SYS_WEAR_Z[99]" = 0.012
 ```
+
+A key is the name as the program writes it, without `$`. A register of a `SYS_` name is quoted, with its index as plain whole numbers: `"SYS_WEAR_Z[99]" = 0.012`; the key grammar allows a comma-separated multi-index, `"SYS_X[3,1]"`, from the start. Unindexed names stay bare keys. A key of another form is an ERROR (CFG005). The evaluator uses a value of the vars file wherever the VM has none, also for a `SYS_` name the configuration does not map; otherwise reading it is VM903, whose message names the vars file (D120).
 
 ## 9. Kinematics (optional)
 

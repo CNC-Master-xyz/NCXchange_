@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 
 namespace Ncx.Core.Catalog;
@@ -16,6 +17,9 @@ public static class WordCatalog
 
     // The cycle word, whose controller address makes a block the native form of a cycle (language 4.7.1, D94).
     private const string CycleKey = "CYCLE";
+
+    // The value that ends the active cycle (language 4.7).
+    private const string CycleOff = "OFF";
 
     // The letters a machine axis name starts with (language 3, KEY; D93).
     private const string MachineAxisLetters = "XYZABCUVW";
@@ -108,17 +112,33 @@ public static class WordCatalog
     /// <param name="block">The block with all its words.</param>
     public static bool IsNativeParameterAllowed(Block block)
     {
-        // TODO(question): language 4.7.1 lets a program name any cycle of the machine's cycle catalog with the
-        // parameter names of that catalog (CYCLE=RECT_POCKET LENGTH=60 WIDTH=40), which are no words of this catalog
-        // and, under D94, no native parameters, while ncx format reads a program without a machine file (D91). Only
-        // the native form opens a block to keys the catalog does not know until D114 is answered.
-        //
         // The native form is the cycle word with a controller address: CYCLE:HEIDENHAIN=251 (language 4.7).
         foreach (Word word in block.Words)
         {
             if (word.Key == CycleKey && word.Addr is not null)
             {
                 return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Tells whether a block names a cycle of the machine's cycle catalog: its CYCLE value is no built-in name and not
+    /// OFF, CYCLE=RECT_POCKET. In its block every key the catalog does not know is a cycle parameter with a number or
+    /// expression value, kept in source order at the rank of the native parameters; a key of the machine-axis form
+    /// stays a machine axis word (language 4.7.1, D114).
+    /// </summary>
+    /// <param name="block">The block with all its words.</param>
+    public static bool IsCatalogCycleBlock(Block block)
+    {
+        // The catalog form is the cycle word without an address and with a name of the catalog (language 4.7.1).
+        foreach (Word word in block.Words)
+        {
+            if (word.Key == CycleKey && word.Addr is null && word.Value is IdentValue { Name: string name })
+            {
+                return name != CycleOff && !DrillingFamily.Names.Contains(name);
             }
         }
 

@@ -26,7 +26,8 @@ public sealed class CanonicalOrderTests
         "FEED_MODE=PER_MIN",
         "PRELOAD=1", "TOOL=1", "TOOL_POINT=1", "OFFSET=1", "OFFSET:LEN=1", "OFFSET:RAD=1", "TIP_OFFSET=0",
         "POINT_RADIUS=0", "COMP=OFF",
-        "SPINDLE=CW", "RPM=1", "CSS=ON", "VC=1", "RPM_MAX=1", "SPINDLE_MODE=AXIS", "ORIENT=0", "SPINDLE_SYNC=MAIN,SUB",
+        "SPINDLE=CW", "RPM=1", "CSS=ON", "VC=1", "RPM_MAX=1", "SPINDLE_MODE:MAIN=AXIS", "ORIENT=0",
+        "SPINDLE_SYNC=MAIN,SUB",
         "PHASE=1",
         "COOLANT=ON", "FUNC:CHIP_CONVEYOR=ON", "MFUNC=1",
         "UNITS=MM", "WORKPLANE=XY", "ORIGIN=1", "DIAMETER=ON", "WORKPIECE=MAIN", "FRAME=MACHINE", "SHIFT=RESET",
@@ -181,6 +182,15 @@ public sealed class CanonicalOrderTests
         Assert.Equal(
             "CYCLE:HEIDENHAIN=251 DEPTH=-10 Q218=60 Z2=5 Q215=0 Q219=40 COMMENT=\"POCKET\"",
             Canonical("Q218=60 Z2=5 COMMENT=\"POCKET\" CYCLE:HEIDENHAIN=251 Q215=0 DEPTH=-10 Q219=40"));
+    }
+
+    // D114: the parameters of a catalog cycle stand at the D94 rank after the cycle words, in source order.
+    [Fact]
+    public void D114_CatalogCycleParameters_FollowTheCycleWordsInSourceOrder()
+    {
+        Assert.Equal(
+            "CYCLE=RECT_POCKET DEPTH=-10 LENGTH=60 WIDTH=40 COMMENT=\"POCKET\"",
+            Canonical("LENGTH=60 COMMENT=\"POCKET\" CYCLE=RECT_POCKET WIDTH=40 DEPTH=-10"));
     }
 
     // The examples were rewritten into the rank order when D90 was applied, so every block of them stands in the order

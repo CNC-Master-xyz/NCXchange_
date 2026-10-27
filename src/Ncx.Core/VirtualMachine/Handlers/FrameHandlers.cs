@@ -135,8 +135,8 @@ internal static class FrameHandlers
     // MIRROR=X or MIRROR=X,Y appends the mirrored axes to the chain (language 4.2, virtual machine 2.1).
     private static void ApplyMirror(Word word, BlockContext context)
     {
-        // TODO(question): language 4.2 gives MIRROR the value OFF where the other chain words have RESET; OFF is read
-        // as the reset form of the mirror, cutting the chain at the last mirror, until D124 is answered.
+        // MIRROR=OFF is the reset form: it cuts the chain at the last MIRROR entry and removes everything after it.
+        // Cancelling one of several axes is MIRROR=OFF then MIRROR=<remaining> (D124; language 4.2).
         if (BlockContext.IdentOf(word) == "OFF")
         {
             FrameRules.Cut(context.State, TransformKind.Mirror);

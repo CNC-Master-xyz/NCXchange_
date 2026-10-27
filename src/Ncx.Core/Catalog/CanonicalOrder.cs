@@ -95,8 +95,9 @@ internal static class CanonicalOrder
             return machineAxis.IsIncremental ? CanonicalRanks.IncrementalMachineAxis : CanonicalRanks.MachineAxis;
         }
 
-        // Any other key the catalog does not know is an ERROR of the parser, and its block keeps its source text
-        // (architecture 4.1); it keeps its place in source order among the words the catalog does not know.
+        // In a block of a catalog cycle any other key the catalog does not know is a cycle parameter at the same rank,
+        // in source order (language 4.7.1, D114); elsewhere it is an ERROR of the parser, and its block keeps its
+        // source text (architecture 4.1) and its place in source order among the words the catalog does not know.
         return CanonicalRanks.NativeParameter;
     }
 
