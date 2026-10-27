@@ -65,12 +65,24 @@ public sealed class SiemensRawTests
     [Fact]
     public void PathControlWords_OfAMotionBlock_AreRawWordsOfTheBlock()
     {
-        NcxProgram program = FramedProgram("G1 X10 F100\nG64 ADIS=0.1 G1 X30\nFZ=0.1 G1 X40");
+        NcxProgram program = FramedProgram("G1 X10 F100\nG641 ADIS=0.1 G1 X30\nFZ=0.1 G1 X40");
 
-        Assert.Equal(Lines("LINE X=10 F=100", "LINE X=30 RAW:SIEMENS=\"G64 ADIS=0.1\"",
+        Assert.Equal(Lines("LINE X=10 F=100", "LINE X=30 RAW:SIEMENS=\"G641 ADIS=0.1\"",
                 "LINE X=40 RAW:SIEMENS=\"FZ=0.1\""),
             BodyOf(NcxWriter.Write(program)));
         Assert.Equal([DiagnosticCodes.SiemensWordsKeptAsRaw, DiagnosticCodes.SiemensWordsKeptAsRaw], Codes(program));
+    }
+
+    // D349: G60 and G64 are PATH_MODE, written where the mode changes; G641 to G645, G9 and G601 to G603 stay RAW
+    // words, and after a RAW G641 the control no longer runs G64, so the next G64 is written again.
+    [Fact]
+    public void G60AndG64_ArePathMode_TheBlendingFormsStayRaw()
+    {
+        NcxProgram program = FramedProgram("G60 G1 X1 F100\nG64 X2\nG64 X3\nG641 X4\nG64 X5\nG9 X6");
+
+        Assert.Equal(Lines("LINE X=1 F=100 PATH_MODE=EXACT_STOP", "LINE X=2 PATH_MODE=CONTINUOUS", "LINE X=3",
+                "LINE X=4 RAW:SIEMENS=\"G641\"", "LINE X=5 PATH_MODE=CONTINUOUS", "LINE X=6 RAW:SIEMENS=\"G9\""),
+            BodyOf(NcxWriter.Write(program)));
     }
 
     // Rule 8: a builder cycle the configuration does not name stays RAW with a WARNING (controller-mapping 9).
