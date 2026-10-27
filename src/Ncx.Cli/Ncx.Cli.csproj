@@ -12,6 +12,19 @@
     <ToolCommandName>ncx</ToolCommandName>
   </PropertyGroup>
 
+  <!--
+    The package of the .NET tool, versioned by the Version of Directory.Build.props: the id that P7-03 installs
+    (dotnet tool install NCXchange.Cli), the MIT license of D75 and the repository. Authors is answered with
+    D165 and stays out until then (D347).
+  -->
+  <PropertyGroup>
+    <PackageId>NCXchange.Cli</PackageId>
+    <Description>ncx, the command line of NCXchange: converts, checks, formats and compiles NCX programs.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/NC-PB/NCXchange_</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="System.CommandLine" />
   </ItemGroup>
@@ -32,7 +45,8 @@
   <!--
     The shipped machine files and cycle catalogs next to the tool, in machines/ and cycles/ of its own folder, where
     ncx finds a machine by name and the catalog a machine names after the folders of the working directory
-    (implementation 12, P2-04; machine-config 6, 10).
+    (implementation 12, P2-04; machine-config 6, 10). The release keeps these loose copies; Ncx.Config builds the same
+    files into the binary as the last place of the lookup (D371).
   -->
   <ItemGroup>
     <None Include="../../machines/*.toml" Link="machines/%(Filename)%(Extension)"

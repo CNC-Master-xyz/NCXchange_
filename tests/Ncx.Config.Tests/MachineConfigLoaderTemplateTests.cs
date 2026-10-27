@@ -82,14 +82,14 @@ public sealed class MachineConfigLoaderTemplateTests
             SYS_POS_X = "#{-}"
             """);
 
-        var lines = new List<int>();
+        var lines = new List<int?>();
         foreach (Diagnostic diagnostic in diagnostics.Items)
         {
             Assert.Equal(DiagnosticCodes.TemplatePlaceholderMalformed, diagnostic.Code);
             lines.Add(diagnostic.Line);
         }
 
-        Assert.Equal([9, 12, 16], lines);
+        Assert.Equal<int?>([9, 12, 16], lines);
     }
 
     // Wave-1 question #61: a template text that several keys write is parsed once and reported on the first of them.

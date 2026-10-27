@@ -20,7 +20,7 @@ Klartext into canonical NCX, per section 7 of `controllers/heidenhain.md`.
 
 ## Done when
 
-- `ncx convert 2.5D_FRAESEN.h --machine heidenhain-itnc530` equals `examples/2.5D_FRAESEN.ncx` (with the WARNING about the missing `M30`).
+- `ncx convert 2.5D_FRAESEN.h --machine heidenhain-itnc530` reads into the blocks of `examples/2.5D_FRAESEN.ncx`, except the Heidenhain reader differences its notes list, each tied to its rule (with the WARNING about the missing `M30`; D217, amended 2026-10-27).
 - Every Heidenhain file of the corpus converts without a crash; `PLANE AXIAL`, `CP IPA`, `LN`, `M140` read into their words.
 
 ## Log

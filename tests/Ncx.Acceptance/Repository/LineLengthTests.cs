@@ -4,8 +4,8 @@ namespace Ncx.Acceptance.Repository;
 
 /// <summary>
 /// The 120-character line of code-guidelines 3.3 over every C# file of src/ and tests/. dotnet format has no rule for
-/// the length, so this test holds it (wave-1 question #2, D109). A test that writes files works in a temporary folder
-/// of its own (implementation 00-method 4).
+/// the length; CI fails on a longer line (D109), and this test holds the same limit in every local test run. A test
+/// that writes files works in a temporary folder of its own (implementation 00-method 4).
 /// </summary>
 public sealed class LineLengthTests : IDisposable
 {
