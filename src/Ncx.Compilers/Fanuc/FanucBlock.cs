@@ -79,6 +79,16 @@ internal sealed class FanucBlock
     public required FanucLabels Labels { get; init; }
 
     /// <summary>
+    /// The O numbers of the programs of the file, NUMBER or the one the compiler generates (D257).
+    /// </summary>
+    public FanucProgramNumbers ProgramNumbers { get; init; } = FanucProgramNumbers.None;
+
+    /// <summary>
+    /// The REPEAT ranges of the file with the counters of their nesting depth (D213, D280).
+    /// </summary>
+    public FanucRepeats Repeats { get; init; } = FanucRepeats.None;
+
+    /// <summary>
     /// Writes one line of the block, CompilerBase.Line.
     /// </summary>
     public required Action<string> Writer { get; init; }

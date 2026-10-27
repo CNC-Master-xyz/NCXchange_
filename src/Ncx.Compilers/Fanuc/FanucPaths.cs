@@ -381,7 +381,7 @@ internal static partial class FanucPaths
     {
         foreach (BlockStep step in write.Steps)
         {
-            if (step.Section == write.Step.Section && step.Block.Find("JUMP")?.Value.ToCanonical() == label
+            if (step.Section == write.Step.Section && FanucLabels.JumpTargetOf(step.Block) == label
                 && !CanHold(key, step.After))
             {
                 return false;

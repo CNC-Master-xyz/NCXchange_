@@ -100,11 +100,10 @@ internal sealed class FanucLabels
         return labels;
     }
 
-    // A numeric LABEL is the block number N that GOTO names (controllers fanuc.md 1, 7). A LABEL named by an
-    // identifier, as a reader lowers WHILE and IF THEN (controller-mapping 6), has no Fanuc form.
-    // TODO(question): a LABEL named by an identifier (WHILE_12, IF_7) and the end that a conditional JUMP=END names
-    // need a block number that no document gives; they take the numbers after the greatest numeric label of their
-    // section, in the order they stand, the end last.
+    // A numeric LABEL is the block number N that GOTO names (controllers fanuc.md 1, 7). D277: a numeric label keeps
+    // its number; a LABEL named by an identifier, as a reader lowers WHILE and IF THEN (controller-mapping 6), and the
+    // end that a conditional JUMP=END names take the numbers above the greatest numeric label of their O program, in
+    // the order they stand, the end last (fanuc 10 rule 6).
     private void Number(List<Block> blocks)
     {
         var identifiers = new List<string>();
@@ -123,9 +122,9 @@ internal sealed class FanucLabels
             }
 
             conditionalEnd |= block.Has("JUMP", null, "END") && block.Has("IF");
-            if (block.Find("JUMP") is Word jump)
+            if (JumpTargetOf(block) is string target)
             {
-                _jumpTargets.Add(jump.Value.ToCanonical());
+                _jumpTargets.Add(target);
             }
         }
 
@@ -140,7 +139,8 @@ internal sealed class FanucLabels
     // The loop of a main program: M99 jumps back to its first block, which the reader writes as a LABEL after the
     // header and a JUMP to it (controller-mapping 6, M99 paragraph).
     // D210: the compiler writes such a JUMP back as M99 where every jump to the label is unconditional; M99 takes no
-    // condition, so a conditional one keeps the label's N and IF [ ] GOTO (decisions.md; fanuc 10 rule 3).
+    // condition, so a conditional one keeps the label's N and IF [ ] GOTO (decisions.md; fanuc 10 rule 3), and so does
+    // the label of a REPEAT, whose loop is an IF GOTO (D280).
     private void FindLoop(Section section, List<Block> blocks)
     {
         if (section.Kind != SectionKind.Program || blocks.Count < 2)
@@ -162,13 +162,22 @@ internal sealed class FanucLabels
         string name = label.Value.ToCanonical();
         foreach (Block block in blocks)
         {
-            if (block.Find("JUMP")?.Value.ToCanonical() == name && block.Has("IF"))
+            if (JumpTargetOf(block) == name && (block.Has("IF") || block.Has("REPEAT")))
             {
                 return;
             }
         }
 
         LoopLabel = name;
+    }
+
+    /// <summary>
+    /// The label a block jumps to: the target of a JUMP, or the label of a REPEAT, whose IF GOTO returns to it (D280);
+    /// null for any other block.
+    /// </summary>
+    public static string? JumpTargetOf(Block block)
+    {
+        return (block.Find("JUMP") ?? block.Find("REPEAT"))?.Value.ToCanonical();
     }
 
     // The header block of D34: state words only.
