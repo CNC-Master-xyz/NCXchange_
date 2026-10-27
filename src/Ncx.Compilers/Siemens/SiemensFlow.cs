@@ -389,10 +389,11 @@ internal static partial class SiemensFlow
     }
 
     /// <summary>
-    /// DEF REAL name in the definition part of a unit, after its EXTERN lines and before its first executable block,
-    /// for every variable the unit uses that the control does not have already: an R parameter, a name [variables]
-    /// map covers, a parameter of the PROC, a name a RAW DEF of the unit declares and a name of [variables] declared
-    /// are left out. A name more than one unit uses and declared does not name is an ERROR, since a DEF is local to
+    /// DEF REAL name, or DEF STRING[200] name for a name assigned a string (D169), in the definition part of a unit,
+    /// after its EXTERN lines and before its first executable block, for every variable the unit uses that the control
+    /// does not have already: an R parameter, a name [variables] map covers, a parameter of the PROC, a name a RAW DEF
+    /// of the unit declares and a name of [variables] declared are left out. A name more than one unit uses and
+    /// declared does not name is an ERROR, since a DEF is local to
     /// its unit and the value would not carry over (controllers siemens.md 8, 12 rule 7; machine-config 7; D261).
     /// </summary>
     /// <param name="write">The block being written, the head of the unit.</param>
@@ -417,7 +418,10 @@ internal static partial class SiemensFlow
                 continue;
             }
 
-            write.Write("DEF REAL " + name);
+            // D169: a name the file assigns a string is DEF STRING[200], the longest string of the control
+            // (NC-Programmierung SW4.92, connector p.431), since only STRING compares as text with == and <>
+            // (Arbeitsvorbereitung 2013 p.71); every other name stays REAL (D261).
+            write.Write((write.File.HoldsString(name) ? "DEF STRING[200] " : "DEF REAL ") + name);
         }
     }
 

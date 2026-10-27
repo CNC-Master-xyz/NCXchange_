@@ -50,6 +50,9 @@ internal sealed partial class SiemensFile
     // The names a RAW:SIEMENS block of a unit declares itself, DEF REAL LEN the reader kept (D261).
     private readonly Dictionary<Section, HashSet<string>> _rawDeclared = [];
 
+    // The names a VAR word of the file assigns a string to, which the definition part declares STRING (D169).
+    private readonly HashSet<string> _stringNames = new(StringComparer.Ordinal);
+
     // The RAW PROC line of a subprogram, PROC NAME SAVE as the reader keeps it (controller-mapping 6, SUB=BEGIN): a
     // RAW PROC line that is the first block of the SUB section, as the reader declares the subprogram by a PROC at the
     // top of its unit only (SiemensUnits.Read); a PROC inside a unit stays a RAW line of its own
@@ -182,6 +185,16 @@ internal sealed partial class SiemensFile
     public IReadOnlyList<string> NamesUsedBy(Section unit)
     {
         return _names.TryGetValue(unit, out List<string>? names) ? names : [];
+    }
+
+    /// <summary>
+    /// True where a VAR word of the file assigns the name a string, so that its DEF is STRING, the one type the control
+    /// compares with == and &lt;&gt; as text (D169).
+    /// </summary>
+    /// <param name="name">The NCX variable name.</param>
+    public bool HoldsString(string name)
+    {
+        return _stringNames.Contains(name);
     }
 
     /// <summary>
@@ -481,6 +494,10 @@ internal sealed partial class SiemensFile
                 if (word.Key == "VAR" && word.Addr is string assigned)
                 {
                     AddName(unit, assigned);
+                    if (word.Value is StringValue)
+                    {
+                        _stringNames.Add(assigned);
+                    }
                 }
 
                 if (word.Value is ExprValue { Tree: ExprNode tree })

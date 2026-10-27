@@ -284,6 +284,22 @@ public sealed class SiemensFlowTests
             TextOf(result));
     }
 
+    // D169: == and != compare two strings, and the control compares only STRING variables with == and <>
+    // (Arbeitsvorbereitung 2013 p.71), so a name the unit assigns a string is declared DEF STRING[200], the longest
+    // string of the control (NC-Programmierung SW4.92 p.431), and != is written <>.
+    [Fact]
+    public void StringComparison_OfTwoStringVariables_IsEqualsAndNotEqualsOnDefString()
+    {
+        CompileResult result = Run(Program(MillHeader, "VAR:NAME1=\"DRILL\" VAR:NAME2=\"MILL\"",
+            "JUMP=SAME IF={$NAME1 == $NAME2}", "JUMP=OTHER IF={$NAME1 != $NAME2}", "LABEL=SAME", "LABEL=OTHER"),
+            Mill());
+
+        Assert.Empty(CompilerCodes(result));
+        Assert.Equal(Lines("%_N_T_MPF", "DEF STRING[200] NAME1", "DEF STRING[200] NAME2", "G17 G40 G90 G94 G71",
+            "NAME1=\"DRILL\" NAME2=\"MILL\"", "IF NAME1==NAME2 GOTOF SAME", "IF NAME1<>NAME2 GOTOF OTHER", "SAME:",
+            "OTHER:", "M30"), TextOf(result));
+    }
+
     // D261: a name a RAW DEF of the unit declares itself is not declared a second time, which would be alarm 12200.
     [Fact]
     public void Declarations_OfANameARawDefOfTheUnitDeclares_AreLeftOut()
