@@ -51,14 +51,25 @@ internal static class FanucTilt
         if (block.TakeCode("G68.2"))
         {
             ReadTilt(block);
+            return;
+        }
+
+        // D245: G68.3, the plane by the tool axis direction, and G68.4, the additive form, stay RAW; they tilt the
+        // plane of the control, so G54 to G59 under them stay RAW and their G69 too (FanucFrames.KeepRawModes;
+        // B-64484EN-2 p.27-28).
+        if (block.TakeCode("G68.3") || block.TakeCode("G68.4"))
+        {
+            block.Draft.KeepAsRaw("G68.3 and G68.4, the tilted working plane by the tool axis and its additive form, "
+                + "are kept as RAW (D245)");
         }
     }
 
     // D245 (b): a second G68.2 replaces the first, its plane defined in the workpiece system (B-64484EN p.916-918):
     // SHIFT=RESET, or TILT=RESET where the old one had no origin, then the new SHIFT and TILT (FanucChain.TryChange);
     // the additive form is G68.4, which stays RAW. A G68.2 while the 2D or 3D G68 is on raises PS5462 (B-64484EN
-    // p.948-950) and stays RAW. In a subprogram whose caller the reader does not know, a G68.2 is appended to the
-    // caller's chain (D225). A G68.2 the reader keeps as RAW still tilts the plane on the control.
+    // p.948-950) and stays RAW. On a chain of callers the reader does not know it stays RAW too, since it may replace
+    // a plane of the caller (D225). A G68.2 the reader keeps as RAW still tilts the plane on the control, which
+    // FanucFrames.KeepRawModes records.
     private static void ReadTilt(FanucBlock block)
     {
         FanucChain chain = block.Fanuc.Chain;
@@ -69,7 +80,11 @@ internal static class FanucTilt
             return;
         }
 
-        chain.SetNative("G68.2", true);
+        if (!chain.Known)
+        {
+            block.Draft.KeepAsRaw(FanucFrames.UnknownChain("G68.2"));
+            return;
+        }
 
         SourceWord? convention = block.Take("P");
         SourceWord? first = block.Take("I");
@@ -133,48 +148,35 @@ internal static class FanucTilt
             new Word { Key = "B", Value = FanucNumbers.Of(b) },
             new Word { Key = "C", Value = FanucNumbers.Of(c) },
         ]);
+        // The chain without the active G68.2, the one the new G68.2 replaces, and the new plane after it.
         var blocks = new List<DraftBlock>();
-        if (!chain.Known)
+        List<FanucChainEntry> desired = FanucFrames.WithoutRotations(chain);
+        if (origin.Count == 0)
         {
-            if (origin.Count > 0)
-            {
-                chain.Append(new FanucChainEntry("SHIFT", "G68.2", origin), blocks);
-            }
-
-            chain.Append(tilt, blocks);
+            desired.Add(tilt);
+        }
+        else if (LocalShiftAtTheEnd(desired, origin) is FanucChainEntry local)
+        {
+            // The origin and the G52 shift directly in front of it are two shifts of one frame: they stand added in
+            // one SHIFT, so that the chain holds one shift and its RESET means the same under both readings of
+            // language 4.2 (wave-1 question #95); the G69 writes the G52 shift again (FanucFrames).
+            desired[^1] = new FanucChainEntry("SHIFT", "G68.2", Sum(local.Words, origin), local.Words);
+            desired.Add(tilt);
         }
         else
         {
-            // The chain without the active G68.2, the one the new G68.2 replaces, and the new plane after it.
-            List<FanucChainEntry> desired = FanucFrames.WithoutRotations(chain);
-            if (origin.Count == 0)
-            {
-                desired.Add(tilt);
-            }
-            else if (LocalShiftAtTheEnd(desired, origin) is FanucChainEntry local)
-            {
-                // The origin and the G52 shift directly in front of it are two shifts of one frame: they stand added in
-                // one SHIFT, so that the chain holds one shift and its RESET means the same under both readings of
-                // language 4.2 (wave-1 question #95); the G69 writes the G52 shift again (FanucFrames).
-                desired[^1] = new FanucChainEntry("SHIFT", "G68.2", Sum(local.Words, origin), local.Words);
-                desired.Add(tilt);
-            }
-            else
-            {
-                desired.Add(new FanucChainEntry("SHIFT", "G68.2", origin));
-                desired.Add(tilt);
-            }
+            desired.Add(new FanucChainEntry("SHIFT", "G68.2", origin));
+            desired.Add(tilt);
+        }
 
-            if (!chain.TryChange(desired, blocks))
-            {
-                block.Draft.KeepAsRaw("the G68.2 would unwind the chain of transforms with a RESET that the documents "
-                    + "read in two ways (language 4.2)");
-                return;
-            }
+        if (!chain.TryChange(desired, blocks))
+        {
+            block.Draft.KeepAsRaw("the G68.2 would unwind the chain of transforms with a RESET that the documents "
+                + "read in two ways (language 4.2)");
+            return;
         }
 
         chain.SetNative("G68.2", false);
-
         if (block.Fanuc.TiltsTurned.Contains(block.Line))
         {
             blocks[^1].Add("MOVE", new IdentValue("TURN"));

@@ -194,8 +194,9 @@ internal sealed class FanucExpression
             && _block.Machine.ResolveAxis(axis)?.Programming is Programming.Diameter or Programming.Switchable)
         {
             _block.Diagnostics.Warning(_block.Line, DiagnosticCodes.FanucPositionOfADiameterAxis,
-                $"{native} is read 1:1 as ${name}, a diameter of the {axis} axis programmed in diameters; whether the "
-                + "control gives the diameter or the radius there is not measured yet (D240, D216).");
+                $"{native} is read 1:1 as ${name} of the {axis} axis programmed in diameters, which NCX reads as a "
+                + "diameter; whether the control gives the diameter or the radius there is not measured yet (D240, "
+                + "D216).");
         }
     }
 

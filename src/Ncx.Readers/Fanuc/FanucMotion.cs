@@ -111,7 +111,7 @@ internal static class FanucMotion
 
     // The modal words the source changes: WORKPLANE from G17 to G19, UNITS from G20/G21 (G70/G71 in system C),
     // FEED_MODE from G94/G95 (G98/G99 in system A), COMP from G40 to G42, PATH_MODE from G61 (EXACT_STOP) and G64
-    // (CONTINUOUS) of group 13, whose G62 and G63 stay RAW (D349); G0 to G3, G90/G91 and G15/G16 are read into
+    // (CONTINUOUS) of group 15, whose G62 and G63 stay RAW (D349); G0 to G3, G90/G91 and G15/G16 are read into
     // the verb and the words of the block (controllers fanuc.md 3, 9 rule 1; controller-mapping 1, 2).
     private static void ReadModalWords(FanucBlock block)
     {
@@ -139,7 +139,7 @@ internal static class FanucMotion
         }
     }
 
-    // The modal word of a code of groups 02, 05, 06, 07 and 13 and its value; null for another code.
+    // The modal word of a code of groups 02, 05, 06, 07 and 15 and its value; null for another code.
     private static string? ModalWord(string? code, GcodeSystem? system, out string value)
     {
         bool systemA = system == GcodeSystem.A;

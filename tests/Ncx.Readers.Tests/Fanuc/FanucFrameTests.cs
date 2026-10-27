@@ -269,7 +269,8 @@ public sealed class FanucFrameTests
     }
 
     // D245 (b): a second 2D G68 under absolute R replaces the first, ROTATE=RESET plus ROTATE; under G91 parameter
-    // 5400#0 decides whether R adds, so it stays RAW, and so does the G69 of the rotation the control then holds.
+    // 5400#0 decides whether R adds, so it stays RAW after the ROTATE=RESET of the rotation it replaces, and so does
+    // the G69 of the rotation the control then holds.
     [Fact]
     public void G68_WhileOneIsActive_ReplacesItUnderG90AndStaysRawUnderG91()
     {
@@ -277,7 +278,7 @@ public sealed class FanucFrameTests
             Lines("ROTATE=30", "ROTATE=RESET", "ROTATE=45", "ROTATE=RESET"),
             Body("G90 G68 X0 Y0 R30.\nG68 X0 Y0 R45.\nG69"));
         Assert.Equal(
-            Lines("ROTATE=30", "RAW:FANUC=\"G91 G68 X0 Y0 R45.\"", "RAW:FANUC=\"G69\""),
+            Lines("ROTATE=30", "ROTATE=RESET", "RAW:FANUC=\"G91 G68 X0 Y0 R45.\"", "RAW:FANUC=\"G69\""),
             Body("G90 G68 X0 Y0 R30.\nG91 G68 X0 Y0 R45.\nG69"));
     }
 
@@ -313,6 +314,33 @@ public sealed class FanucFrameTests
             BodyOf(NcxWriter.Write(program)));
         Assert.Single(program.Diagnostics.Items, diagnostic => diagnostic.Message.Contains("PS5043",
             StringComparison.Ordinal));
+    }
+
+    // D245: a G68, G68.2 or G51.1 kept RAW for another reason still switches its mode on the control, so its G69 or
+    // G50.1 stays RAW; G68.3 and G68.4 tilt the plane too, so a G54 under them stays RAW (D244 (c)).
+    [Fact]
+    public void ModesKeptAsRaw_KeepTheirCancelRaw()
+    {
+        Assert.Equal(
+            Lines("RAW:FANUC=\"G62 G68 X0 Y0 R30.\"", "RAW:FANUC=\"G69\"", "RAW:FANUC=\"G62 G51.1 X0\"",
+                "RAW:FANUC=\"G50.1 X0\""),
+            Body("G62 G68 X0 Y0 R30.\nG69\nG62 G51.1 X0\nG50.1 X0"));
+        Assert.Equal(
+            Lines("RAW:FANUC=\"G68.4 X0 Y0 Z0 I0 J30. K0\"", "RAW:FANUC=\"G54\"", "RAW:FANUC=\"G69\"", "ORIGIN=1"),
+            Body("G68.4 X0 Y0 Z0 I0 J30. K0\nG54\nG69\nG54"));
+    }
+
+    // D245: a cancel kept as RAW ends the entries the chain holds beside it, MIRROR=OFF and ROTATE=RESET, so the chain
+    // stays known.
+    [Fact]
+    public void CancelKeptAsRaw_EndsTheEntriesOfTheChainBesideIt()
+    {
+        Assert.Equal(
+            Lines("MIRROR=X", "RAW:FANUC=\"G51.1 Y5.\"", "MIRROR=OFF", "RAW:FANUC=\"G50.1 X0 Y0\"", "SHIFT X=5"),
+            Body("G51.1 X0\nG51.1 Y5.\nG50.1 X0 Y0\nG52 X5."));
+        Assert.Equal(
+            Lines("ROTATE=30", "ROTATE=RESET", "RAW:FANUC=\"G68 X10. Y10. R45.\"", "RAW:FANUC=\"G69\"", "SHIFT X=5"),
+            Body("G68 X0 Y0 R30.\nG68 X10. Y10. R45.\nG69\nG52 X5."));
     }
 
     // D244 (a): G52 holds in all of G54..G59, so after the ORIGIN the reader writes the G52 shift again; G52 X0 then

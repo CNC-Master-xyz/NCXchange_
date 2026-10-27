@@ -97,6 +97,26 @@ internal sealed class FanucChain
     }
 
     /// <summary>
+    /// A copy of the chain, which a block kept as RAW goes back to (FanucFrames.KeepRawModes).
+    /// </summary>
+    public FanucChain Copy()
+    {
+        var copy = new FanucChain();
+        copy.CopyFrom(this);
+        return copy;
+    }
+
+    /// <summary>
+    /// Drops the entries of these functions without writing a change: a cancel the reader keeps as RAW on a chain it
+    /// does not know (D225).
+    /// </summary>
+    /// <param name="owners">The functions, "G68", "G68.2".</param>
+    public void Drop(params string[] owners)
+    {
+        _entries.RemoveAll(entry => owners.Contains(entry.Owner));
+    }
+
+    /// <summary>
     /// Tells whether an entry of a Fanuc function stands in the chain.
     /// </summary>
     /// <param name="owner">The function, "G68.2".</param>

@@ -54,6 +54,13 @@ public static partial class DiagnosticCodes
     public const string FanucChannelNotOfTheMachine = "RDR107";
 
     /// <summary>
+    /// RDR108, a WARNING: a position variable, #5021.. or #5041.., is mapped 1:1 onto $SYS_MPOS_ or $SYS_POS_ of an
+    /// axis programmed in diameters or switchable, while whether the control gives a diameter or a radius there is not
+    /// measured yet (D240; language 4.12).
+    /// </summary>
+    public const string FanucPositionOfADiameterAxis = "RDR108";
+
+    /// <summary>
     /// RDR109, a WARNING: a G2 or G3 carries both its radius R and its centre I J K; the control takes R and ignores
     /// I J K, and the reader writes the radius form (D186; controllers fanuc.md 4).
     /// </summary>
@@ -65,11 +72,4 @@ public static partial class DiagnosticCodes
     /// path (D354; machine-config 2).
     /// </summary>
     public const string FanucHelixFeedNotScaled = "RDR110";
-
-    /// <summary>
-    /// RDR108, a WARNING: a position variable, #5021.. or #5041.., is mapped 1:1 onto $SYS_MPOS_ or $SYS_POS_ of an
-    /// axis programmed in diameters or switchable, while whether the control gives a diameter or a radius there is not
-    /// measured yet (D240; language 4.12).
-    /// </summary>
-    public const string FanucPositionOfADiameterAxis = "RDR108";
 }

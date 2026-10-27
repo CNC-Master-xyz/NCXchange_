@@ -179,6 +179,7 @@ internal static class FanucBuilder
     {
         IReadOnlyList<FunctionMatch> chosen = FanucFunctions.Choose(block, word, out SourceWord? parameter);
         var functions = new List<FunctionMatch>();
+        var words = new List<FanucFunction>();
         string? workpiece = null;
         foreach (FunctionMatch match in chosen)
         {
@@ -186,9 +187,10 @@ internal static class FanucBuilder
             {
                 workpiece ??= match.State;
             }
-            else if (FanucFunctions.WordOf(block, match) is not null)
+            else if (FanucFunctions.WordOf(block, match) is FanucFunction function)
             {
                 functions.Add(match);
+                words.Add(function);
             }
         }
 
@@ -207,9 +209,10 @@ internal static class FanucBuilder
             block.Draft.AddState("WORKPIECE", null, new IdentValue(workpiece));
         }
 
-        foreach (FunctionMatch match in functions)
+        for (int index = 0; index < functions.Count; index++)
         {
-            FanucFunction function = FanucFunctions.WordOf(block, match)!;
+            FunctionMatch match = functions[index];
+            FanucFunction function = words[index];
             bool orient = function.Key == "ORIENT";
             block.Draft.AddState(function.Key, function.Addr, orient ? AngleOf(block, word, match) : function.Value);
             if (match.State == "PHASE")
@@ -243,10 +246,12 @@ internal static class FanucBuilder
             return value;
         }
 
-        string key = match.State == "PHASE" ? "PHASE" : "ORIENT";
-        block.Diagnostics.Warning(block.Line, DiagnosticCodes.FunctionAngleSetByTheMachine,
-            $"M{word.Text} carries no angle, so {key}=0 is written: the orientation angle is set by the machine "
-            + "(D154).");
+        string message = match.State == "PHASE"
+            ? $"M{word.Text} carries no phase angle, so PHASE=0 is written: the phase offset is set by the machine "
+                + "(D154)."
+            : $"M{word.Text} carries no angle, so ORIENT=0 is written: the orientation angle is set by the machine "
+                + "(D154).";
+        block.Diagnostics.Warning(block.Line, DiagnosticCodes.FunctionAngleSetByTheMachine, message);
         return new IntegerValue(0, "0");
     }
 
@@ -369,7 +374,7 @@ internal static class FanucBuilder
             "G38" => "G38 is a push check (controller-mapping 9)",
             "G5" or "G8" or "G61.1" => $"{code} switches the path smoothing with a tolerance in a parameter "
                 + "(controller-mapping 1, TOLERANCE)",
-            "G62" or "G63" => $"{code}, the cutting mode of group 13, has no NCX word; G61 and G64 are PATH_MODE "
+            "G62" or "G63" => $"{code}, the cutting mode of group 15, has no NCX word; G61 and G64 are PATH_MODE "
                 + "(D349)",
             "G33" => "G33, thread cutting, has no NCX word",
             _ => $"{code} has no NCX word the Fanuc reader maps (controller-mapping 9)",

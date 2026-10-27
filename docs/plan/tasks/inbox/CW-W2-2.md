@@ -36,3 +36,10 @@ Left over:
 - D155 "holds already": the Fanuc reader keeps no state of the function tables (FanucState is W2-4's), so no state is dropped as holding or as the OFF of a resource not on.
 - D354 compiler half (CMP324, the scaling on output) is W3-5; until then a Fanuc helix does not round-trip to the same F.
 - The comment in `C/Jobs/JobRunner.Words.cs:144` (sample name) is W3-1's.
+
+Review fixes, 2026-10-27:
+- A block kept as RAW now sets its mode afterwards. `FanucFrames.KeepRawModes` runs when the block is written, and the chain first goes back to `FanucBlock.ChainBefore`. A G68, G68.2, G68.3, G68.4 or G51.1 kept as RAW, for any reason (also `G62 G68 …`), marks its mode native, and its G69 or G50.1 then stays RAW. A replacing RAW G68, G68.2 or G68.3, and every RAW cancel, writes the end of the entries the chain holds (ROTATE=RESET, MIRROR=OFF, SHIFT/TILT=RESET) beside the RAW block (`FanucDraft.BesideRaw`). The chain becomes unknown only when that cut is ambiguous. On an unknown chain the entries are dropped.
+- A G68 or G68.2 on a chain of callers the reader does not know stays RAW (D225, D245 (b)). Before, it was appended.
+- G68.3 and G68.4 are taken by FanucTilt and kept RAW, so a G54 under them stays RAW (D244 (c)).
+- G-code groups follow B-64484EN-2 p.27-28: 12 is G66/G67, 14 is G54..G59, 15 is G61..G64. G68.2/.3/.4 belong to group 16. Changed in FanucModalGroups, the fanuc.md 3 table, and the toml comments (both copies).
+- RDR107-110 are now in number order. RDR021 has its own wording for PHASE; RDR108 no longer calls an MPOS value a diameter. FanucBuilder no longer uses `!`. The I J K of G68 are read without an array. FanucFrames is split into partials: Datums, Rotations, Modes. Row 71 now reads "settled 2026-10-27 (D250)" only.

@@ -25,6 +25,12 @@ internal sealed class FanucDraft
     public List<DraftBlock> After { get; } = [];
 
     /// <summary>
+    /// The blocks written in front of the RAW block where the block is kept as RAW: the removal of the entries of the
+    /// chain that a cancel or a replacing function kept as RAW ends on the control (D245; FanucFrames.KeepRawModes).
+    /// </summary>
+    public List<DraftBlock> BesideRaw { get; } = [];
+
+    /// <summary>
     /// Why the block is kept as RAW; null while it reads into NCX words.
     /// </summary>
     public string? RawReason { get; private set; }

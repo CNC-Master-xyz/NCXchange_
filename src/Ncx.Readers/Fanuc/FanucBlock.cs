@@ -65,6 +65,12 @@ internal sealed class FanucBlock
     public FanucDraft Draft { get; } = new();
 
     /// <summary>
+    /// The chain of transforms before the frames of the block were read, which a block kept as RAW goes back to
+    /// (FanucFrames.KeepRawModes); null before FanucFrames reads the block.
+    /// </summary>
+    public FanucChain? ChainBefore { get; set; }
+
+    /// <summary>
     /// True when G53 stands in the block: its coordinates are machine coordinates, FRAME=MACHINE (controllers
     /// fanuc.md 4).
     /// </summary>

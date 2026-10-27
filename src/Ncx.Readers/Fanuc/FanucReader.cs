@@ -512,6 +512,14 @@ public sealed partial class FanucReader : ReaderBase
     {
         if (reading.Draft.RawReason is string reason)
         {
+            // The modes of the control a RAW block switches on or off, and the entries of the chain it ends, which
+            // stand in front of the RAW block (D244, D245).
+            FanucFrames.KeepRawModes(reading);
+            foreach (DraftBlock draft in reading.Draft.BesideRaw)
+            {
+                WriteDraft(reading, draft);
+            }
+
             EmitRaw(reading.Source, reason);
 
             // The control runs the RAW block and the reader does not know what it changed; an F in it reaches the
@@ -530,24 +538,29 @@ public sealed partial class FanucReader : ReaderBase
 
         foreach (DraftBlock draft in reading.Draft.InOrder())
         {
-            if (draft.IsEmpty)
-            {
-                continue;
-            }
-
-            NcxBuilder builder = BeginBlock(reading.Source);
-            if (draft.Verb is not null)
-            {
-                builder.Verb(draft.Verb, draft.VerbValue);
-            }
-
-            foreach (Word word in draft.Words)
-            {
-                builder.Word(word.Key, word.Addr, word.Value);
-            }
-
-            builder.End();
+            WriteDraft(reading, draft);
         }
+    }
+
+    private void WriteDraft(FanucBlock reading, DraftBlock draft)
+    {
+        if (draft.IsEmpty)
+        {
+            return;
+        }
+
+        NcxBuilder builder = BeginBlock(reading.Source);
+        if (draft.Verb is not null)
+        {
+            builder.Verb(draft.Verb, draft.VerbValue);
+        }
+
+        foreach (Word word in draft.Words)
+        {
+            builder.Word(word.Key, word.Addr, word.Value);
+        }
+
+        builder.End();
     }
 
     // A CALL enters its subprogram with the state of the caller (virtual machine 3.9), which the reader keeps for the
