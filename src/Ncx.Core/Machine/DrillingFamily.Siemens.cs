@@ -51,9 +51,28 @@ public static partial class DrillingFamily
     // to 48 for M48 (SW4.92 p.1089: "Gewindegröße nur für ISO metrisch").
     private static readonly Dictionary<decimal, decimal> s_isoCoarsePitch = new()
     {
-        [3m] = 0.5m, [4m] = 0.7m, [5m] = 0.8m, [6m] = 1m, [7m] = 1m, [8m] = 1.25m, [10m] = 1.5m, [12m] = 1.75m,
-        [14m] = 2m, [16m] = 2m, [18m] = 2.5m, [20m] = 2.5m, [22m] = 2.5m, [24m] = 3m, [27m] = 3m, [30m] = 3.5m,
-        [33m] = 3.5m, [36m] = 4m, [39m] = 4m, [42m] = 4.5m, [45m] = 4.5m, [48m] = 5m,
+        [3m] = 0.5m,
+        [4m] = 0.7m,
+        [5m] = 0.8m,
+        [6m] = 1m,
+        [7m] = 1m,
+        [8m] = 1.25m,
+        [10m] = 1.5m,
+        [12m] = 1.75m,
+        [14m] = 2m,
+        [16m] = 2m,
+        [18m] = 2.5m,
+        [20m] = 2.5m,
+        [22m] = 2.5m,
+        [24m] = 3m,
+        [27m] = 3m,
+        [30m] = 3.5m,
+        [33m] = 3.5m,
+        [36m] = 4m,
+        [39m] = 4m,
+        [42m] = 4.5m,
+        [45m] = 4.5m,
+        [48m] = 5m,
     };
 
     /// <summary>
