@@ -1,3 +1,4 @@
+using Ncx.Core.Machine;
 using static Ncx.Compilers.Tests.Siemens.SiemensCompile;
 
 namespace Ncx.Compilers.Tests.Siemens;
@@ -298,6 +299,35 @@ public sealed class SiemensFlowTests
         Assert.Equal(Lines("%_N_T_MPF", "DEF STRING[200] NAME1", "DEF STRING[200] NAME2", "G17 G40 G90 G94 G71",
             "NAME1=\"DRILL\" NAME2=\"MILL\"", "IF NAME1==NAME2 GOTOF SAME", "IF NAME1<>NAME2 GOTOF OTHER", "SAME:",
             "OTHER:", "M30"), TextOf(result));
+    }
+
+    // D240: under DIAMETER=ON $SYS_MPOS_X is a diameter and $AA_IM[X] reads a radius (MD20360 bits 6/7 off), so it
+    // is written twice; $AA_IW[X] reads a diameter under DIAMON and maps one to one.
+    [Fact]
+    public void MachinePositionOfX_UnderDiameterOn_IsTwiceAaIm()
+    {
+        Assert.Equal(Lines("R1=($AA_IM[X]*2)", "R2=$AA_IW[X]"),
+            Body(Run(Program(MillTurnHeader, "VAR:R1={$SYS_MPOS_X}", "VAR:R2={$SYS_POS_X}"), WithActualValues(""))));
+    }
+
+    // D240, D388: under DIAMETER=OFF, or on an axis that keeps actual values in diameters (frames_in_diameter),
+    // $AA_IM[X] maps one to one.
+    [Theory]
+    [InlineData("DIAMETER=OFF", "")]
+    [InlineData("DIAMETER=ON", "frames_in_diameter = true\n")]
+    public void MachinePositionOfX_InRadiiOrWithFramesInDiameter_IsAaImAsItStands(string diameter, string key)
+    {
+        CompileResult result = Run(Program(MillTurnHeader, diameter, "VAR:R1={$SYS_MPOS_X}"), WithActualValues(key));
+
+        Assert.Contains("R1=$AA_IM[X]", LinesOf(Body(result)));
+    }
+
+    // millturn1.toml with the actual values of X in [system_variables] and a key after programming of the X axis.
+    private static MachineConfig WithActualValues(string key)
+    {
+        return Variant(MillTurnFile, text => text.Replace("programming = \"switchable\"",
+            "programming = \"switchable\"\n" + key, StringComparison.Ordinal)
+            + "\n[system_variables]\nSYS_POS_X = \"$AA_IW[X]\"\nSYS_MPOS_X = \"$AA_IM[X]\"\n");
     }
 
     // D261: a name a RAW DEF of the unit declares itself is not declared a second time, which would be alarm 12200.

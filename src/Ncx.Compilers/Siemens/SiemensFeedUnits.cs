@@ -41,9 +41,9 @@ internal static class SiemensFeedUnits
 
         write.Diagnostics.Info(write.Block, DiagnosticCodes.SiemensFeedConverted,
             $"UNITS={Word(units)} is written {metric}, under which the control keeps every feed in the basic system "
-            + $"{BaseOf(write)} of the machine (MD10240) and has no G700/G710 (extended_units, MD10260): each feed under "
-            + $"it is written converted into {BaseOf(write)} (840D sl NC-Programmierung SW4.92, p.115, p.164-166; "
-            + "D292).");
+            + $"{BaseOf(write)} of the machine (MD10240) and has no G700/G710 (extended_units, MD10260): each feed "
+            + $"under it is written converted into {BaseOf(write)} (840D sl NC-Programmierung SW4.92, p.115, "
+            + "p.164-166; D292).");
         return metric;
     }
 

@@ -127,6 +127,17 @@ internal static partial class SiemensAxes
     }
 
     /// <summary>
+    /// True where a machine-frame actual value of X, $AA_IM[X], reads the radius of the diameter the program means:
+    /// DIAMETER=ON on an X axis written in diameters whose control keeps actual values in radii, MD20360 bits 6 and 7
+    /// off, which [[axis]] frames_in_diameter = false says (D240, D388; Funktionshandbuch Grundfunktionen 2012
+    /// p.901-903).
+    /// </summary>
+    public static bool ReadsRadius(SiemensBlock write)
+    {
+        return write.After.Frame.Diameter && WritesDiameter(write) && !FramesInDiameter(write);
+    }
+
+    /// <summary>
     /// The value of a SHIFT word on an axis as TRANS writes it, with the frame factor of the axis (D125).
     /// </summary>
     public static string? FrameValueOf(SiemensBlock write, string axis, Value value, string letter)
