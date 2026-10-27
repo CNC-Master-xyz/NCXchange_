@@ -131,6 +131,7 @@ classDiagram
     class Trivia {
         +int Line
         +string Text
+        +int BlockIndex
     }
     NcxProgram "1" *-- "*" Trivia
     class Section {
@@ -249,7 +250,7 @@ The lexer splits a line into the comment and the words, honouring quoted strings
 flowchart TD
     S[skip a UTF-8 byte order mark at file start, record it] --> A
     A[read line] --> B{empty or whitespace?}
-    B -- yes --> T[record trivia: line number and text]
+    B -- yes --> T[record trivia: line number, text and the index of the next block]
     T --> A
     B -- no --> C[split comment at first ; outside strings]
     C --> C2{any word left?}
@@ -277,7 +278,7 @@ flowchart TD
 
 A key the catalog does not know is accepted as a provisional word when it has the form of a machine axis (`[XYZABCUVW][0-9]{0,2}`, or `I` followed by that) in a block whose verb takes axis words, with a number or expression value (bare only under `HOME`), or when it stands in a block with `CYCLE:<controller>=n` as a native cycle parameter; the VM resolves the first against `[[axis]]`, the second stays unresolved (D93, D94). The parser decides the two forms after it has read every token of the block, because the condition is a property of the block, not of the token; in a block with `CYCLE:<controller>=n` an unknown key is a native parameter even when it has the machine-axis form (D94). The third form: in a block whose `CYCLE` value is not a built-in name or `OFF`, every other unknown key is a cycle parameter with a number or expression value, kept in source order at the rank of the native parameters; a key of the machine-axis form stays a machine axis word there. The VM checks the parameter names against the machine's cycle catalog (VM254; without a machine file the D103 WARNING), in `Validation/CycleParameterValidation` (D114). A key starting with `@` is a pseudo-word (`@SAVE`, `@RESTORE`, section 5.5); the parser accepts it, with a state key `KEY[:ADDR]` as its value, only when it runs with `ParserOptions.AllowPseudoWords`, which the expander sets for generated text; in a user file it is the ERROR "pseudo-word in a user file" (D95).
 
-`NcxWriter` is the inverse: it writes a program in canonical form (word order by `CanonicalRank`, numbers as stored, comments kept; comment-only lines and blank lines are trivia kept in place, the comment column is canonical, D92) and is what `format` and every reader use for output. Generated blocks (section 5.5) are skipped by the writer unless asked for. A byte order mark the file began with is no part of the text: the parser skips it, `NcxProgram.HasByteOrderMark` records it next to the line ending, and the writer writes it back; a program a reader built has none (D111). The comment column counts Unicode code points, as the columns of the lexer's PAR messages do (`string.EnumerateRunes`, D166).
+`NcxWriter` is the inverse: it writes a program in canonical form (word order by `CanonicalRank`, numbers as stored, comments kept; comment-only lines and blank lines are trivia kept in place, the comment column is canonical, D92; each trivia line records the index of the block it stands before, set by the parser and by `NcxBuilder.Trivia` at the call, and the writer places it there, the lines after `FILE=END` after the last block; its line stays as data, D142) and is what `format` and every reader use for output. Generated blocks (section 5.5) are skipped by the writer unless asked for. A byte order mark the file began with is no part of the text: the parser skips it, `NcxProgram.HasByteOrderMark` records it next to the line ending, and the writer writes it back; a program a reader built has none (D111). The comment column counts Unicode code points, as the columns of the lexer's PAR messages do (`string.EnumerateRunes`, D166).
 
 ### 4.2 Numbers and geometry (D62)
 
@@ -643,6 +644,8 @@ flowchart TD
     I --> J([expanded program: original and generated blocks in order])
     J --> K[virtual machine executes all of them; @SAVE pushes, @RESTORE re-applies the saved words]
 ```
+
+A block-inserting step keeps every trivia anchor valid by shifting the block indices: the expander maps the index a comment-only or blank line records to the first block it emits for that block (after the post blocks of a cycle that ends there), so the line stands before the blocks generated for the block it stood before; a rewriter's blocks go through the same mapping (D142).
 
 What this gives the shop-floor example: the program says `COOLANT:THROUGH=ON` while the spindle runs at 1500; the rule on that machine says `requires = { SPINDLE = "OFF" }, restore = ["SPINDLE"]`; the expander emits `@SAVE=SPINDLE:MAIN`, `SPINDLE:MAIN=OFF`, the coolant block, `@RESTORE=SPINDLE:MAIN`; the VM turns the restore into `SPINDLE:MAIN=CW RPM:MAIN=1500` and the compiler writes `M5`, `M51`, `M3 S1500`. The runtime estimate charges the stop and the start with the spindle's `accel_time`.
 

@@ -36,6 +36,31 @@ public sealed class CoolantClutchRuleTests
         Assert.Empty(expanded.Diagnostics.Items);
     }
 
+    // D142: a comment line before the block stands before the blocks generated for it, since the expander shifts the
+    // block index the line records.
+    [Fact]
+    public void D142_CommentLineBeforeTheBlock_StandsBeforeItsGeneratedBlocks()
+    {
+        string program = ExpanderHarness.File(
+            "UNITS=MM",
+            "SPINDLE:MAIN=CW RPM:MAIN=1500",
+            "; engage the clutch",
+            "COOLANT:THROUGH=ON");
+
+        NcxProgram expanded = ExpanderHarness.Expand(program, ExpanderMachines.CoolantClutch());
+
+        Assert.Equal(
+            ExpanderHarness.File(
+                "UNITS=MM",
+                "SPINDLE:MAIN=CW RPM:MAIN=1500",
+                "; engage the clutch",
+                "@SAVE=SPINDLE:MAIN",
+                "SPINDLE:MAIN=OFF",
+                "COOLANT:THROUGH=ON",
+                "@RESTORE=SPINDLE:MAIN"),
+            ExpanderHarness.WriteWithGenerated(expanded));
+    }
+
     // The VM turns the restore into SPINDLE:MAIN=CW RPM:MAIN=1500 from its own snapshot, so the state after the
     // coolant block equals the state without the rule plus the coolant, RPM:MAIN restored (virtual machine 3.10).
     [Fact]

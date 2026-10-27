@@ -52,29 +52,27 @@ public static class NcxWriter
             text.Append(ByteOrderMark);
         }
 
-        // For every line of the file, a comment-only or blank line or a block: the trivia are interleaved with the
-        // blocks by line number, each before the first block of a greater line, and written back as read (D92). The
-        // blocks stand in file order, and with them the programs and subprograms (language 4.13).
+        // For every line of the file, a comment-only or blank line or a block: each trivia line stands before the
+        // block whose index it records and is written back as read (D92, D142). The blocks stand in file order, and
+        // with them the programs and subprograms (language 4.13).
         int nextTrivia = 0;
-        foreach (Block block in program.Blocks)
+        for (int index = 0; index < program.Blocks.Count; index++)
         {
-            // ncx format never writes a generated block; it is written when the options ask for it (language 4.15,
-            // architecture 4.1).
-            if (WrittenBlock(block, options) is not Block written)
-            {
-                continue;
-            }
-
-            while (nextTrivia < program.Trivia.Count && program.Trivia[nextTrivia].Line < written.Line)
+            while (nextTrivia < program.Trivia.Count && program.Trivia[nextTrivia].BlockIndex <= index)
             {
                 text.Append(program.Trivia[nextTrivia].Text).Append(lineEnding);
                 nextTrivia++;
             }
 
-            text.Append(WriteBlock(written)).Append(lineEnding);
+            // ncx format never writes a generated block; it is written when the options ask for it (language 4.15,
+            // architecture 4.1).
+            if (WrittenBlock(program.Blocks[index], options) is Block written)
+            {
+                text.Append(WriteBlock(written)).Append(lineEnding);
+            }
         }
 
-        // The trivia after the last block, the lines after FILE=END among them (D92).
+        // The trivia after the last block, the lines after FILE=END among them (D92, D142).
         while (nextTrivia < program.Trivia.Count)
         {
             text.Append(program.Trivia[nextTrivia].Text).Append(lineEnding);

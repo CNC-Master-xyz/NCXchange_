@@ -86,7 +86,7 @@ public sealed class LexicalRulesTests
         Assert.True(program.Diagnostics.Items.Count == 0, program.Diagnostics.ToText());
         Assert.Equal(LineEnding.CrLf, program.LineEnding);
         Assert.Equal("; start", program.Blocks[1].Comment);
-        Assert.Equal([new Trivia(1, "; head"), new Trivia(5, "")], program.Trivia);
+        Assert.Equal([new Trivia(1, "; head", 0), new Trivia(5, "", 3)], program.Trivia);
     }
 
     // LF input reports LF (language 3, Encoding).

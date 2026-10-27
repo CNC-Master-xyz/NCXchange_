@@ -44,7 +44,7 @@ Clean checkout, no warnings, CI green on the first push.
 
 Files, all in `src/Ncx.Core/Model/`, one type per file, records, `sealed`:
 
-- `NcxProgram` (FileName, LineEnding, Blocks, Sections, FileBegin, FileEnd, Trivia, Diagnostics). `Trivia` is the list of comment-only and blank lines with their line numbers (D92); the writer interleaves them with the blocks by line number.
+- `NcxProgram` (FileName, LineEnding, Blocks, Sections, FileBegin, FileEnd, Trivia, Diagnostics). `Trivia` is the list of comment-only and blank lines with their line numbers (D92) and the index of the block each stands before; the writer places them by that index, and the line stays as data (D142).
 - `Section` (Kind: Program or Sub, Name, Number, Channel, FirstBlock, LastBlock).
 - `Block` (Line, Words, Verb, Skip, SkipNumber, Comment, SourceText, IsGenerated, OriginLine) with `Find(key)`, `Find(key, addr)`, `Has(key)`, `Has(key, addr, value)` (D106); `OriginLine` is the line of the block a generated block was made for and is copied into `Diagnostic.OriginLine` (D98). A block never sorts its words; the writer does.
 - `Word` (Key, Addr, Value, Definition) with `ToCanonical()`.

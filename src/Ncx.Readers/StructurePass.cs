@@ -262,9 +262,11 @@ internal sealed partial class StructurePass
                 continue;
             }
 
+            // The end of a section stands in front of the trivia that separate it from the next (Boundary, D142).
             SourceBlock block = _blocks[index];
             if (block.IsTrivia)
             {
+                steps.AddRange(_before[index] ?? []);
                 steps.Add(new ReadStep { Kind = ReadStepKind.Trivia, Source = block });
                 continue;
             }

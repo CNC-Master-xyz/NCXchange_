@@ -36,13 +36,13 @@ internal static class AnnotatedText
         var text = new StringBuilder();
 
         // For every line of the file, a comment-only or blank line or a block, as the canonical writer interleaves
-        // them: each trivia line before the first block of a greater line, written back as read (D92). A generated
-        // block has the line of the block it was generated for (language 4.15), so it stands next to that block.
+        // them: each trivia line before the block whose index it records, written back as read (D92, D142). The
+        // expander keeps the index before the blocks generated for that block (language 4.15).
         int nextTrivia = 0;
         for (int index = 0; index < program.Blocks.Count; index++)
         {
             Block block = program.Blocks[index];
-            while (nextTrivia < program.Trivia.Count && program.Trivia[nextTrivia].Line < block.Line)
+            while (nextTrivia < program.Trivia.Count && program.Trivia[nextTrivia].BlockIndex <= index)
             {
                 text.Append(program.Trivia[nextTrivia].Text).Append(lineEnding);
                 nextTrivia++;
@@ -63,7 +63,7 @@ internal static class AnnotatedText
             text.Append(NcxWriter.WriteBlock(WithValues(block, values))).Append(lineEnding);
         }
 
-        // The trivia after the last block, the lines after FILE=END among them (D92).
+        // The trivia after the last block, the lines after FILE=END among them (D92, D142).
         while (nextTrivia < program.Trivia.Count)
         {
             text.Append(program.Trivia[nextTrivia].Text).Append(lineEnding);

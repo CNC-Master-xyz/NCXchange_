@@ -49,8 +49,8 @@ public sealed record NcxProgram
     public Block? FileEnd { get; init; }
 
     /// <summary>
-    /// The comment-only and blank lines with their line numbers, kept in place and written back as read; the writer
-    /// interleaves them with the blocks by line number (D92).
+    /// The comment-only and blank lines in file order, kept in place and written back as read; the writer places each
+    /// before the block whose index it records, the lines after FILE=END after the last block (D92, D142).
     /// </summary>
     public IReadOnlyList<Trivia> Trivia { get; init; } = [];
 

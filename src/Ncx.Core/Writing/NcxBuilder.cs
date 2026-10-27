@@ -184,15 +184,10 @@ public sealed class NcxBuilder
                 "A trivia line is one blank, whitespace-only or comment-only line (language 3, Block).", nameof(text));
         }
 
-        // The writer places trivia among the blocks by line number, each before the first block of a greater line
-        // (D92). A trivia line takes the line of the block begun last, 0 before the first, so that it is written after
-        // that block and before the next block of a greater line.
-        // TODO(question): a program places its trivia among its blocks by line number alone (architecture 4,
-        // NcxProgram.Trivia), and a reader begins each block with the line of its source block (architecture 7). Where
-        // the lines of a reader's blocks decrease, as when it moves a section kept below M30 in front of PROGRAM=END
-        // (language 4.13), or where two blocks of one source line stand around a trivia line, the writer may place the
-        // trivia line away from its call. The builder keeps the line of the block begun last until D142 is answered.
-        _trivia.Add(new Trivia(_lastLine, text));
+        // A trivia line records the index of the block it stands before, the block begun next, so the writer places it
+        // where it is called also where the lines of a reader's blocks decrease or two blocks of one source line stand
+        // around it; its line, the line of the block begun last, 0 before the first, stays as data (D92, D142).
+        _trivia.Add(new Trivia(_lastLine, text, _blocks.Count));
     }
 
     /// <summary>
