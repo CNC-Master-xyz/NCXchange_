@@ -52,15 +52,17 @@ internal static class ToolValidation
                 "language 4.4; VM 5; D372"),
             ValidationRule.Warning(DiagnosticCodes.TipOffsetUnderTilt,
                 "A motion with a TIP_OFFSET under TILT, TILT_AXIS or TCPM=ON: no tip is derived; once per program.",
-                "VM 5, 9; D374"),
+                "VM 5, 9; D374") with { SuppressedInUncalledSub = true },
         ],
     };
 
     /// <summary>
     /// A motion with a tip offset while TILT, TILT_AXIS or TCPM=ON leaves the tool axis no machine axis: the VM derives
-    /// no tip and says so with the WARNING VM484, which the caller reports once per program (D374).
+    /// no tip and says so with the WARNING VM484, which the caller reports once per program (D374). The rule depends on
+    /// the caller's state and is suppressed inside a subprogram that no program of the file calls (3.9, D99).
     /// </summary>
-    /// <returns>True when the WARNING was reported.</returns>
+    /// <returns>True when the WARNING was reported, false also where it was suppressed, so that the program can still
+    /// report it once.</returns>
     public static bool CheckTipUnderTilt(BlockContext context)
     {
         ChannelState state = context.State;
@@ -78,10 +80,10 @@ internal static class ToolValidation
         string offset = holder.ActiveTipOffset is decimal known
             ? known.ToString(CultureInfo.InvariantCulture)
             : "?";
-        context.Diagnostics.Warning(context.Block, DiagnosticCodes.TipOffsetUnderTilt,
+        context.CallerRuleDiagnostics.Warning(context.Block, DiagnosticCodes.TipOffsetUnderTilt,
             $"TIP_OFFSET={offset} under a tilted tool axis (TILT, TILT_AXIS or TCPM=ON): the tool axis is no machine "
             + "axis, so the virtual machine derives no tip while the tool axis is turned (D374).");
-        return true;
+        return ReferenceEquals(context.CallerRuleDiagnostics, context.Diagnostics);
     }
 
     /// <summary>

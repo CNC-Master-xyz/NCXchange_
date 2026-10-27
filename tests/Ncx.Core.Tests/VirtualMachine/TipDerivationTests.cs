@@ -210,4 +210,17 @@ public sealed class TipDerivationTests
         string message = Assert.Single(harness.Messages(DiagnosticCodes.TipOffsetUnderTilt));
         Assert.Contains("while the tool axis is turned", message, StringComparison.Ordinal);
     }
+
+    // D374 with D99: VM484 depends on the caller's state and is suppressed inside a subprogram that no program calls;
+    // the program that follows the same way still warns once.
+    [Fact]
+    public void Vm484_InAnUncalledSubprogram_IsSuppressed()
+    {
+        string file = "FILE=BEGIN NCX=1\nPROGRAM=BEGIN NAME=\"TEST\"\nPROGRAM=END\n"
+            + "SUB=BEGIN NAME=\"FINISH\"\nUNITS=MM\n" + PointTwo + "\nTCPM=ON\nRAPID Z=50\nSUB=END\nFILE=END\n";
+
+        VmHarness harness = VmHarness.Run(file, VmMachines.Default());
+
+        Assert.DoesNotContain(DiagnosticCodes.TipOffsetUnderTilt, harness.Codes());
+    }
 }

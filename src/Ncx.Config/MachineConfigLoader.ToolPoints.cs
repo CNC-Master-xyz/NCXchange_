@@ -42,6 +42,7 @@ public static partial class MachineConfigLoader
             return null;
         }
 
+        var rowLines = new List<int>();
         var points = new ToolPointsTable
         {
             Form = known,
@@ -52,14 +53,15 @@ public static partial class MachineConfigLoader
             LengthRegisterStep = table.Integer("length_register_step"),
             RadiusRegisterStep = table.Integer("radius_register_step"),
             PointComment = table.Flag("point_comment"),
-            Rows = ReadToolPointRows(root),
+            Rows = ReadToolPointRows(root, rowLines),
         };
-        CheckSharedRegisters(points, root);
+        CheckSharedRegisters(points, rowLines, root);
         return points;
     }
 
-    // [[tool_point]]: tool and point are what a row is found by, so a row without either is CFG010 (D373).
-    private static List<ToolPointRow> ReadToolPointRows(ConfigTable root)
+    // [[tool_point]]: tool and point are what a row is found by, so a row without either is CFG010 (D373). The line of
+    // each row read goes into rowLines at the row's index, for the messages of CheckSharedRegisters.
+    private static List<ToolPointRow> ReadToolPointRows(ConfigTable root, List<int> rowLines)
     {
         var rows = new List<ToolPointRow>();
         foreach (ConfigTable row in root.Tables("tool_point", "[[tool_point]]", "machine-config 3"))
@@ -90,6 +92,7 @@ public static partial class MachineConfigLoader
                 Length = row.Integer("length"),
                 Radius = row.Integer("radius"),
             });
+            rowLines.Add(row.LineOf("radius"));
         }
 
         return rows;
@@ -98,7 +101,8 @@ public static partial class MachineConfigLoader
     // Under offset memory A or B the H and D codes share one pool, so a register number that serves as a length for
     // one tool and point and as a radius for another, or for the same, is CFG010; under C, and without the key, it is
     // not checked (D373 improvement 3; Fanuc 30i-B B-64484EN-2 p. 262-263).
-    private static void CheckSharedRegisters(ToolPointsTable points, ConfigTable root)
+    // The ERROR stands on the radius line of the row that reuses the length register.
+    private static void CheckSharedRegisters(ToolPointsTable points, List<int> rowLines, ConfigTable root)
     {
         if (points.OffsetMemory is not ("A" or "B"))
         {
@@ -114,11 +118,12 @@ public static partial class MachineConfigLoader
             }
         }
 
-        foreach (ToolPointRow row in points.Rows)
+        for (int index = 0; index < points.Rows.Count; index++)
         {
+            ToolPointRow row = points.Rows[index];
             if (row.Radius is int radius && lengths.Contains(radius))
             {
-                root.Diagnostics.Error(root.Line, DiagnosticCodes.ToolPointConflict,
+                root.Diagnostics.Error(rowLines[index], DiagnosticCodes.ToolPointConflict,
                     $"Register {radius} serves as a length and as a radius, and under offset_memory = "
                     + $"\"{points.OffsetMemory}\" H and D share one pool (machine-config 3, D373).");
             }

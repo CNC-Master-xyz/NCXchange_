@@ -108,6 +108,19 @@ public sealed class ToolPointsLoaderTests
         Assert.Equal(DiagnosticCodes.ToolPointConflict, Assert.Single(diagnostics.Items).Code);
     }
 
+    // D373 (3): the shared-pool CFG010 stands on the radius line of the row that reuses the register, not on the first
+    // line of the file.
+    [Fact]
+    public void RegisterAsLengthAndRadius_IsReportedOnTheRadiusLineOfTheRow()
+    {
+        Diagnostics diagnostics = Report(Head + "[tool_points]\nform = \"registers\"\noffset_memory = \"A\"\n\n"
+            + "[[tool_point]]\ntool = 5\npoint = 1\nlength = 5\nradius = 5\n");
+
+        Diagnostic error = Assert.Single(diagnostics.Items);
+        Assert.Equal(DiagnosticCodes.ToolPointConflict, error.Code);
+        Assert.Equal(12, error.Line);
+    }
+
     // D373 (3): under memory C, and without the key, length = radius is legal.
     [Theory]
     [InlineData("offset_memory = \"C\"\n")]
