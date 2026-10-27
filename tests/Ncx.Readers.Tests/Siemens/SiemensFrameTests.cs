@@ -87,6 +87,17 @@ public sealed class SiemensFrameTests
         Assert.Equal(Lines("DIAMETER=ON", Raw(Swivel)), Body("DIAMON\n" + Swivel, MillTurn()));
     }
 
+    // D333, D5: after a CYCLE800 kept as RAW the chain holds a swivel the reader does not know, so a later TRANS and
+    // CYCLE800() stay RAW instead of being written without that swivel.
+    [Fact]
+    public void FrameBlocks_AfterARawCYCLE800_StayRaw()
+    {
+        const string Swivel = "CYCLE800(0,\"TABLE\",0,27,10,0,0,0,45,0,4,0,0,-1,100,1)";
+
+        Assert.Equal(Lines("DIAMETER=ON", Raw(Swivel), Raw("TRANS X5"), Raw("CYCLE800()")),
+            Body("DIAMON\n" + Swivel + "\nTRANS X5\nCYCLE800()", MillTurn()));
+    }
+
     // D240: $AA_IW[X] reads a diameter under DIAMON and maps one to one; $AA_IM[X] reads a radius (MD20360 bits 6/7
     // off), so the reader doubles it under DIAMON with the WARNING RDR510, the factor not yet measured, and takes it
     // as written under DIAMOF or with frames_in_diameter.

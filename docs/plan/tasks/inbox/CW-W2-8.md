@@ -50,4 +50,5 @@ The fifteen reader decisions of W2-8 on main: D125 (r), D132 (r), D149 (marker),
     - D155: the FunctionContext carries the channel of a one-channel machine and, for a code with an extension `Mn=`, the role of spindle n.
     - P501B keeps `G75 FP=1` and expects it RAW with RDR509.
   - Gap closed 2026-10-27 (delegated): D240's WARNING is RDR510 `SiemensMachinePositionDoubled`, the next free code of RDR510-519.
+  - Gap closed 2026-10-27 (delegated): D333 with D5, after a `CYCLE800` kept as RAW the reader no longer knows the chain (`SiemensReader` makes the frames fact unknown), so a later `TRANS` or `CYCLE800()` that depends on it stays RAW instead of being written without the RAW swivel; test `FrameBlocks_AfterARawCYCLE800_StayRaw` (the c800d probe) failed before.
   - Left over: the `F` that `SiemensCycles.cs` reads on a position block (W2-7's file) does not yet call `SiemensMotion.FeedInNcxUnits`.
