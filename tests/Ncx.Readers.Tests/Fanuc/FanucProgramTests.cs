@@ -192,11 +192,20 @@ public sealed class FanucProgramTests
         Assert.Empty(Codes(program));
     }
 
+    // D349: G61 is PATH_MODE=EXACT_STOP and G64 PATH_MODE=CONTINUOUS; G62, G63 and G61.1 are not PATH_MODE.
+    [Fact]
+    public void G61AndG64_ArePathMode()
+    {
+        Assert.Equal(
+            Lines("LINE X=1 F=100 PATH_MODE=EXACT_STOP", "PATH_MODE=CONTINUOUS", "RAW:FANUC=\"G62\""),
+            Body("G1 G61 X1. F100\nG64\nG62"));
+    }
+
     // The reader keeps what it cannot express as RAW and its output formats to itself (D5, D91).
     [Fact]
     public void Output_WithRawAndComments_FormatsToItself()
     {
-        NcxProgram program = FramedProgram("G0 X1. (A)\nG64\n(B)\nG1 X2. F100");
+        NcxProgram program = FramedProgram("G0 X1. (A)\nG63\n(B)\nG1 X2. F100");
 
         AssertFormatsToItself(Core.Writing.NcxWriter.Write(program));
         Assert.Equal([DiagnosticCodes.KeptAsRaw], Codes(program));

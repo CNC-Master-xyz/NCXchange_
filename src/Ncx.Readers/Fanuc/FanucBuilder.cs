@@ -24,7 +24,7 @@ internal static class FanucBuilder
         "G0", "G1", "G2", "G3", "G4", "G15", "G16", "G17", "G18", "G19", "G28", "G30", "G40", "G41", "G42", "G43",
         "G43.4", "G43.5", "G44", "G49", "G52", "G53", "G53.1", "G54", "G54.1", "G55", "G56", "G57", "G58", "G59",
         "G65", "G66", "G67", "G68", "G68.1", "G68.2", "G69", "G5.1", "G7.1", "G12.1", "G13.1", "G50.1", "G51.1", "G80",
-        "G96", "G97",
+        "G61", "G64", "G96", "G97",
     ];
 
     // The G codes of a mill and of every G-code system of a lathe (controllers fanuc.md 3, 6).
@@ -317,7 +317,8 @@ internal static class FanucBuilder
             "G38" => "G38 is a push check (controller-mapping 9)",
             "G5" or "G8" or "G61.1" => $"{code} switches the path smoothing with a tolerance in a parameter "
                 + "(controller-mapping 1, TOLERANCE)",
-            "G61" or "G62" or "G63" or "G64" => $"{code}, the cutting mode of group 13, has no NCX word",
+            "G62" or "G63" => $"{code}, the cutting mode of group 13, has no NCX word; G61 and G64 are PATH_MODE "
+                + "(D349)",
             "G33" => "G33, thread cutting, has no NCX word",
             _ => $"{code} has no NCX word the Fanuc reader maps (controller-mapping 9)",
         };

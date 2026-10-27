@@ -110,7 +110,8 @@ internal static class FanucMotion
     }
 
     // The modal words the source changes: WORKPLANE from G17 to G19, UNITS from G20/G21 (G70/G71 in system C),
-    // FEED_MODE from G94/G95 (G98/G99 in system A), COMP from G40 to G42; G0 to G3, G90/G91 and G15/G16 are read into
+    // FEED_MODE from G94/G95 (G98/G99 in system A), COMP from G40 to G42, PATH_MODE from G61 (EXACT_STOP) and G64
+    // (CONTINUOUS) of group 13, whose G62 and G63 stay RAW (D349); G0 to G3, G90/G91 and G15/G16 are read into
     // the verb and the words of the block (controllers fanuc.md 3, 9 rule 1; controller-mapping 1, 2).
     private static void ReadModalWords(FanucBlock block)
     {
@@ -138,7 +139,7 @@ internal static class FanucMotion
         }
     }
 
-    // The modal word of a code of groups 02, 05, 06 and 07 and its value; null for another code.
+    // The modal word of a code of groups 02, 05, 06, 07 and 13 and its value; null for another code.
     private static string? ModalWord(string? code, GcodeSystem? system, out string value)
     {
         bool systemA = system == GcodeSystem.A;
@@ -159,6 +160,8 @@ internal static class FanucMotion
             "G40" => "OFF",
             "G41" => "LEFT",
             "G42" => "RIGHT",
+            "G61" => "EXACT_STOP",
+            "G64" => "CONTINUOUS",
             _ => "",
         };
 
@@ -166,6 +169,7 @@ internal static class FanucMotion
         {
             "G17" or "G18" or "G19" => "WORKPLANE",
             "G40" or "G41" or "G42" => "COMP",
+            "G61" or "G64" => "PATH_MODE",
             _ when value is "INCH" or "MM" => "UNITS",
             _ when value is "PER_MIN" or "PER_REV" => "FEED_MODE",
             _ => null,

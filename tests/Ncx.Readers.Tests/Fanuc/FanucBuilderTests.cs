@@ -115,7 +115,7 @@ public sealed class FanucBuilderTests
     public void G31G38AndUnmappedCodes_AreKeptAsRaw()
     {
         Assert.Equal(
-            Lines("RAW:FANUC=\"G31 Z-10. F100\"", "RAW:FANUC=\"G38 A10.\"", "RAW:FANUC=\"G64\""),
-            Body("G31 Z-10. F100\nG38 A10.\nG64"));
+            Lines("RAW:FANUC=\"G31 Z-10. F100\"", "RAW:FANUC=\"G38 A10.\"", "RAW:FANUC=\"G63\""),
+            Body("G31 Z-10. F100\nG38 A10.\nG63"));
     }
 }
