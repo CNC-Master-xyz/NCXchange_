@@ -278,7 +278,7 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
     }
 
     // The template the framework wrote the change with: unload for TOOL=0, change_preloaded for a preloaded tool where
-    // the machine has it, change otherwise (machine-config 3).
+    // the machine has it, change_named for a tool called by name, change otherwise (machine-config 3, D172).
     private static string? ChangeTemplate(SiemensBlock write)
     {
         ToolChangeConfig? config = write.Machine.ToolChange;
@@ -295,6 +295,14 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
 
         bool preloaded = write.Before.Holders.TryGetValue(holder, out HolderSnapshot? before)
             && before.Preloaded == after.SpindleTool;
-        return preloaded && config?.ChangePreloaded is not null ? config.ChangePreloaded : config?.Change;
+        if (preloaded && config?.ChangePreloaded is not null)
+        {
+            return config.ChangePreloaded;
+        }
+
+        // D172: a tool called by name is written with change_named.
+        return after.SpindleTool.Name is not null && config?.ChangeNamed is not null
+            ? config.ChangeNamed
+            : config?.Change;
     }
 }

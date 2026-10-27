@@ -55,6 +55,12 @@ public static partial class DiagnosticCodes
     public const string NoOtherToolToPrepare = "CMP006";
 
     /// <summary>
+    /// CMP008: a tool called by name on a machine with tool_name_allowed = true whose [tool_change] has no
+    /// change_named or preload_named for it (machine-config 3, D172).
+    /// </summary>
+    public const string NamedToolTemplateMissing = "CMP008";
+
+    /// <summary>
     /// CMP016, an INFO: the program names a measurement point other than 1 and the machine file has no [tool_points],
     /// so nothing selects it; once per program (machine-config 3, D373).
     /// </summary>

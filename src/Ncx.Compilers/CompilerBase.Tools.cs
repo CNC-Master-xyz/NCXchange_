@@ -51,15 +51,43 @@ public abstract partial class CompilerBase
         // for every other change (machine-config 3, virtual machine 3.5).
         bool wasPreloaded = step.Before.Holders.TryGetValue(holder, out HolderSnapshot? before)
             && before.Preloaded == after.SpindleTool;
+        // D172: a tool called by name, the TOOL value or the preloaded tool of a bare TOOL, takes change_named; change
+        // stays numeric.
         bool asPreloaded = wasPreloaded && config?.ChangePreloaded is not null;
-        string? text = asPreloaded ? config?.ChangePreloaded : config?.Change;
+        bool named = !asPreloaded && after.SpindleTool.Name is not null && config?.ChangeNamed is not null;
+        if (!asPreloaded && NamedTemplateMissing(after.SpindleTool, config?.ChangeNamed, "change_named"))
+        {
+            return;
+        }
+
+        string? text = asPreloaded ? config?.ChangePreloaded : named ? config?.ChangeNamed : config?.Change;
         if (TemplateOf(text) is Template template)
         {
             FillToolValues(filled, template, step, holder, after);
         }
 
-        string what = asPreloaded ? "[tool_change] change_preloaded" : "[tool_change] change";
+        string what = asPreloaded ? "[tool_change] change_preloaded"
+            : named ? "[tool_change] change_named" : "[tool_change] change";
         WriteTemplate(text, what + " (machine-config 3)", filled, suffix);
+    }
+
+    // D172: a tool called by name on a machine with tool_name_allowed = true needs the named template; without it the
+    // block is the ERROR CMP008 and nothing is written for it. A machine that takes no names keeps its numeric
+    // template, whose {tool} has no value to write.
+    private bool NamedTemplateMissing(ToolRef tool, string? namedTemplate, string key)
+    {
+        if (tool.Name is not string name
+            || namedTemplate is not null
+            || Machine.ToolChange is not { ToolNameAllowed: true })
+        {
+            return false;
+        }
+
+        Diagnostics.Error(Step.Block, DiagnosticCodes.NamedToolTemplateMissing,
+            $"The tool \"{name}\" is called by name, and the machine \"{Machine.Machine.Name}\" takes tool names "
+            + $"(tool_name_allowed = true) but has no [tool_change] {key} to write it, so nothing is written for it "
+            + "(machine-config 3, D172).");
+        return true;
     }
 
     /// <summary>
@@ -141,7 +169,15 @@ public abstract partial class CompilerBase
     // introduction); {next} is the preferred spelling in new files.
     private void WritePreloadOf(ToolRef tool, TemplateValues? values)
     {
-        if (Machine.ToolChange?.Preload is not string text)
+        ToolChangeConfig? config = Machine.ToolChange;
+        if (NamedTemplateMissing(tool, config?.PreloadNamed, "preload_named"))
+        {
+            return;
+        }
+
+        // D172: a tool called by name takes preload_named; preload stays numeric.
+        bool named = tool.Name is not null && config?.PreloadNamed is not null;
+        if ((named ? config?.PreloadNamed : config?.Preload) is not string text)
         {
             Diagnostics.Warning(Step.Block, DiagnosticCodes.PreloadDropped,
                 $"PRELOAD={tool} is dropped: the machine \"{Machine.Machine.Name}\" has no [tool_change] preload, so "
@@ -157,7 +193,8 @@ public abstract partial class CompilerBase
             filled.Set("name", name);
         }
 
-        WriteTemplate(text, "[tool_change] preload (machine-config 3)", filled);
+        WriteTemplate(text, named ? "[tool_change] preload_named (machine-config 3)"
+            : "[tool_change] preload (machine-config 3)", filled);
     }
 
     // The placeholders of a change command that the virtual machine and the look-ahead give (machine-config
@@ -283,10 +320,8 @@ public abstract partial class CompilerBase
         return Machine.ResolveAxis(toolAxis)?.Letter ?? toolAxis;
     }
 
-    // A tool by number is the number of its placeholder; a tool by name has no number to write.
-    // TODO(question): D172: a template with {tool} or {next} for a tool a program calls by name has no value to write;
-    // the placeholder stays without one, which leaves the template unusable (machine-config introduction), until it is
-    // answered.
+    // A tool by number is the number of its placeholder; a tool by name has no number to write, and writes through
+    // change_named and preload_named with {name} (D172).
     private static void SetTool(TemplateValues values, string name, ToolRef tool)
     {
         if (tool.Number is int number && !values.Has(name))
