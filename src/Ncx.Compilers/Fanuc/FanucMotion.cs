@@ -381,6 +381,12 @@ internal static class FanucMotion
             write.Main.Code(FanucCodes.RankOf(FanucCodes.FeedMode), mode);
         }
 
+        if (verb == "ARC" && HelixFeedFactor(write) is double factor)
+        {
+            AddHelixFeed(write, feedWord, factor);
+            return;
+        }
+
         if (feedWord is not null)
         {
             AddStatedFeed(write, feedWord);
@@ -409,6 +415,98 @@ internal static class FanucMotion
         {
             write.Main.Word("F" + feed);
         }
+    }
+
+    // D354: under helix_feed = "arc", the Fanuc default (parameter 1403#5 = 0), the control measures F of a helix
+    // along the arc in the plane, while NCX measures it along the whole path (language 4.1, F; D353). The factor the
+    // compiler scales F by is the plane length over the path length, computed in double from the MOTION event; null
+    // for an arc in the plane, under helix_feed = "path", and where the event does not give both lengths.
+    private static double? HelixFeedFactor(FanucBlock write)
+    {
+        if (write.Machine.Format?.HelixFeed != HelixFeed.Arc)
+        {
+            return null;
+        }
+
+        MotionEvent? motion = null;
+        foreach (VmEvent vmEvent in write.Step.Events)
+        {
+            motion = vmEvent is MotionEvent { Verb: Verb.Arc } arc ? arc : motion;
+        }
+
+        if (motion is not { Sweep: decimal sweep, Length: decimal length, Center: not null } || length <= 0m)
+        {
+            return null;
+        }
+
+        string[] plane = [.. motion.Center.Keys];
+        if (plane.Length != 2 || !motion.From.TryGetValue(plane[0], out AxisPosition first) || !first.Known
+            || !motion.From.TryGetValue(plane[1], out AxisPosition second) || !second.Known
+            || !MovesOutsideThePlane(write, motion, plane))
+        {
+            return null;
+        }
+
+        double radius = Math.Sqrt(Math.Pow((double)(first.Value - motion.Center[plane[0]].Value), 2)
+            + Math.Pow((double)(second.Value - motion.Center[plane[1]].Value), 2));
+        double inThePlane = radius * Math.Abs((double)sweep) * Math.PI / 180d;
+        double factor = inThePlane / (double)length;
+        return factor < 1d ? factor : null;
+    }
+
+    // True where the arc moves a linear axis outside its plane, which makes it a helix (language 4.3; D353).
+    private static bool MovesOutsideThePlane(FanucBlock write, MotionEvent motion, string[] plane)
+    {
+        foreach (KeyValuePair<string, AxisPosition> to in motion.To)
+        {
+            if (plane.Contains(to.Key) || !to.Value.Known || !motion.From.TryGetValue(to.Key, out AxisPosition from)
+                || !from.Known || from.Value == to.Value.Value)
+            {
+                continue;
+            }
+
+            if (write.Machine.ResolveAxis(to.Key)?.Kind != AxisKind.Rotary)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // D354: the F of a helix scaled to the arc in the plane and rounded like every other value, also on a helix that
+    // states no F; the target then holds the scaled value, so the next LINE or ARC writes the NCX feed again. An F the
+    // STATIC walk does not know is written as it stands with the WARNING CMP324.
+    private static void AddHelixFeed(FanucBlock write, Word? feedWord, double factor)
+    {
+        if (write.After.Unknown.Contains("F") || write.After.Motion.Feed is not decimal value)
+        {
+            if (feedWord is not null)
+            {
+                AddStatedFeed(write, feedWord);
+            }
+            else if (!write.Holds("F"))
+            {
+                write.ReportNotHeld("F");
+            }
+
+            write.Warning(DiagnosticCodes.FanucHelixFeedNotScaled,
+                $"The feed of this helix is not known before the program runs, so F is written as it stands; with "
+                + $"parameter 1403#5 = 0 (helix_feed = \"arc\") the control runs it along the arc in the plane, which "
+                + $"is {Text(1d / factor)} times that feed along the path (D354; machine-config 2).");
+            return;
+        }
+
+        string scaled = write.Format("F", (decimal)((double)value * factor));
+        if (write.Target.Changes("F", scaled))
+        {
+            write.Main.Word("F" + scaled);
+        }
+    }
+
+    private static string Text(double value)
+    {
+        return Math.Round(value, 6).ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     // The F word of the block, where the control's feed differs; an expression every time, since its value may have

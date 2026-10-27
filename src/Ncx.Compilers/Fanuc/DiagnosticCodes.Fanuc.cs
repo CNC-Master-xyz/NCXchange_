@@ -147,6 +147,13 @@ public static partial class DiagnosticCodes
     public const string FanucMixedWordsUnknownTarget = "CMP323";
 
     /// <summary>
+    /// CMP324, a WARNING: the F of a helix is not known in the STATIC walk, so it is written as it stands, and under
+    /// helix_feed = "arc" (parameter 1403#5 = 0) the control runs it along the arc in the plane, a faster feed along
+    /// the path (machine-config 2; controllers fanuc.md 4; D354).
+    /// </summary>
+    public const string FanucHelixFeedNotScaled = "CMP324";
+
+    /// <summary>
     /// CMP340, a WARNING: MFUNC is written as the M code it names, which no function table of the machine names
     /// (language 4.6).
     /// </summary>
