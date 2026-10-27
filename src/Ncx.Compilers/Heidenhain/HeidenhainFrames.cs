@@ -40,8 +40,8 @@ internal static class HeidenhainFrames
     // through (decisions.md D146).
     // TODO(question): NCX CYLINDER is a modal transformation of the motion blocks that follow it, and no decision says
     // how those blocks become the contour subprogram of cycle 14 nor where cycle 27 takes Q1, Q3, Q6, Q10, Q11, Q12
-    // and Q17 from, which no NCX word carries; CYLINDER is reported (CMP101) and nothing is written for it, so no C word
-    // reaches the output under the NCX letter.
+    // and Q17 from, which no NCX word carries; CYLINDER is reported (CMP101) and nothing is written for it, so no C
+    // word reaches the output under the NCX letter.
     private static void RefuseCylinder(HeidenhainBlock writing)
     {
         if (writing.Take("CYLINDER") is not Word cylinder)

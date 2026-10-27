@@ -18,6 +18,9 @@ internal static partial class HeidenhainProgramFrame
     private const string CommentMark = "; ";
     private const string SectionMark = "* - ";
 
+    // The longest program name of the iTNC 530 (D266).
+    private const int MaxNameLength = 25;
+
     /// <summary>
     /// A comment block of Klartext: ; text.
     /// </summary>
@@ -40,7 +43,9 @@ internal static partial class HeidenhainProgramFrame
             return;
         }
 
-        writing.Line("BEGIN PGM " + NameOf(writing, program) + " " + units);
+        string name = NameOf(writing, program);
+        CheckName(writing, name);
+        writing.Line("BEGIN PGM " + name + " " + units);
     }
 
     /// <summary>
@@ -221,10 +226,66 @@ internal static partial class HeidenhainProgramFrame
         };
     }
 
-    // The name of the program, the name of the NCX file for a program without NAME, as the framework names its file.
+    // D266: BEGIN PGM and END PGM carry the file's final name: the NAME of the program, the NCX file stem for a program
+    // without one, and a name an earlier program of the file has taken, compared case-insensitively, with _2, _3 in
+    // file order, as the framework names the files (decisions.md D266; CompilerBase.Layout).
     private static string NameOf(HeidenhainBlock writing, Section program)
     {
-        return program.Name ?? Path.GetFileNameWithoutExtension(writing.Diagnostics.File);
+        string stem = Path.GetFileNameWithoutExtension(writing.Diagnostics.File);
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (Section section in ProgramsOf(writing))
+        {
+            string name = section.Name ?? stem;
+            string candidate = name;
+            for (int suffix = 2; taken.Contains(candidate); suffix++)
+            {
+                candidate = name + "_" + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            taken.Add(candidate);
+            if (section == program)
+            {
+                return candidate;
+            }
+        }
+
+        return program.Name ?? stem;
+    }
+
+    // The programs of the compile in file order.
+    private static List<Section> ProgramsOf(HeidenhainBlock writing)
+    {
+        var programs = new List<Section>();
+        foreach (BlockStep step in writing.LookAhead.Steps)
+        {
+            if (step.Section is { Kind: SectionKind.Program } program && !programs.Contains(program))
+            {
+                programs.Add(program);
+            }
+        }
+
+        programs.Sort((one, other) => one.FirstBlock.CompareTo(other.FirstBlock));
+        return programs;
+    }
+
+    // D266: a WARNING when the name breaks the control's limits: a character outside A-Z a-z 0-9 _ -, or more than 25
+    // characters on the iTNC 530 (decisions.md D266).
+    private static void CheckName(HeidenhainBlock writing, string name)
+    {
+        bool characters = name.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-');
+        bool itnc530 = string.Equals(writing.Machine.Machine.Dialect, "iTNC530", StringComparison.OrdinalIgnoreCase);
+        bool length = !itnc530 || name.Length <= MaxNameLength;
+        if (characters && length)
+        {
+            return;
+        }
+
+        writing.Warning(DiagnosticCodes.HeidenhainProgramNameLimits,
+            $"The program name \"{name}\" breaks the limits of the control: "
+            + (characters ? "" : "it has characters outside A-Z a-z 0-9 _ -")
+            + (characters || length ? "" : ", and ")
+            + (length ? "" : $"it is longer than the {MaxNameLength} characters of the iTNC 530")
+            + " (controllers heidenhain.md 1; D266).");
     }
 
     // The block number in front of a Klartext block, 2 of "2 BLK FORM 0.1 Z X0 Y0 Z-20".

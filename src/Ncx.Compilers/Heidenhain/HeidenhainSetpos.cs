@@ -227,8 +227,8 @@ internal static class HeidenhainSetpos
     // The axes of the absolute axis words of the block, each marked as written; null when the shift of one of them has
     // no Klartext form, which is reported.
     // D320: a SETPOS of an axis whose position is known in the MACHINE frame only, after HOME or a machine-frame move,
-    // is the ERROR CMP113: no cycle 7 or TRANS DATUM takes a machine-frame position, and FN 25 is locked on the iTNC 530
-    // and absent on the TNC 640; the FN 18 ID270/ID240 route waits for D182 (decisions.md D320; heidenhain 8).
+    // is the ERROR CMP113: no cycle 7 or TRANS DATUM takes a machine-frame position, and FN 25 is locked on the
+    // iTNC 530 and absent on the TNC 640; the FN 18 ID270/ID240 route waits for D182 (decisions.md D320; heidenhain 8).
     // D117: SETPOS carries absolute axis words only, which the parser holds (PAR012, decisions.md); an incremental
     // word that still reached here is left unwritten and becomes the ERROR CMP101.
     private static List<string>? NamedAxes(HeidenhainBlock writing)
