@@ -435,7 +435,8 @@ internal static partial class SiemensExpression
     }
 
     // $AA_IW[X] reads a diameter under DIAMON and maps one to one, while $AA_IM[X] reads a radius where MD20360 bits
-    // 6/7 are off, so under DIAMON and DIAM90 the reader doubles it into the diameter NCX reads under DIAMETER=ON;
+    // 6/7 are off, half the diameter NCX reads under DIAMETER=ON, so under DIAMON and DIAM90 the reader writes the
+    // NCX name halved;
     // where [[axis]] frames_in_diameter says the control gives diameters it maps one to one (D240, D388;
     // Funktionshandbuch Grundfunktionen 2012 p.901-903, cnc-manuals).
     private static bool MachinePositionInRadius(SiemensBlock block, string native)
@@ -461,10 +462,12 @@ internal static partial class SiemensExpression
                     }
 
                     // D240: the factor rests on the default of MD20360 until it is measured on a machine, so the
-                    // reader names it.
+                    // reader names it. NCX ${entry.Key} reads the diameter under DIAMETER=ON (language 4.12), twice
+                    // the radius the source variable reads, so the source value is half of it; the compiler writes
+                    // the NCX name back as ($AA_IM[X]*2), which closes the round trip.
                     var doubled = new SiemensWarning(DiagnosticCodes.SiemensMachinePositionDoubled,
                         $"{native} reads a radius on the control by default (MD20360 bits 6/7 off) while NCX reads X "
-                        + $"as a diameter under DIAMETER=ON; the reader writes 2 * ${entry.Key}, a factor not yet "
+                        + $"as a diameter under DIAMETER=ON; the reader writes ${entry.Key} / 2, a factor not yet "
                         + "measured on a machine; set frames_in_diameter on the X axis where the control gives "
                         + "diameters (D240).");
                     if (!block.Draft.Warnings.Contains(doubled))
@@ -472,7 +475,7 @@ internal static partial class SiemensExpression
                         block.Draft.Warnings.Add(doubled);
                     }
 
-                    return "(2 * $" + entry.Key + ")";
+                    return "($" + entry.Key + " / 2)";
                 }
             }
 

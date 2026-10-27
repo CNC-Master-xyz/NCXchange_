@@ -65,8 +65,8 @@ public static partial class DiagnosticCodes
 
     /// <summary>
     /// RDR510, a WARNING: $AA_IM[X], the machine position, reads a radius on the control by default (MD20360 bits 6/7
-    /// off), so under DIAMON the reader doubles it into the diameter NCX reads; the factor is not yet measured on a
-    /// machine, and frames_in_diameter on the X axis turns it off (D240).
+    /// off), half the diameter NCX $SYS_MPOS_X reads, so under DIAMON the reader writes the NCX name halved; the factor
+    /// is not yet measured on a machine, and frames_in_diameter on the X axis turns it off (D240).
     /// </summary>
     public const string SiemensMachinePositionDoubled = "RDR510";
 }
