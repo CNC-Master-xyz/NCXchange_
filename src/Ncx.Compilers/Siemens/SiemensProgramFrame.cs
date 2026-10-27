@@ -123,9 +123,10 @@ internal static partial class SiemensProgramFrame
 
     /// <summary>
     /// The end of a subprogram, for SUB=END and RETURN: sub_end of the machine (machine-config 2). In a subprogram
-    /// whose PROC line declares SAVE, a RET of sub_end is M17, since RET "can only be used in subprograms that were not
-    /// defined with the attribute SAVE" (840D sl NC-Programmierung SW4.92, p.523) and M17 is the return at the end of
-    /// any subprogram (p.522, 3.2.2.8); the rest of sub_end stays as it is, and a sub_end without RET is not changed.
+    /// whose PROC line declares SAVE, a RET of sub_end is M17, the plain end D381 keeps: RET may stand there (D381),
+    /// but its one benefit, not interrupting G64, needs a subprogram without SAVE (840D sl NC-Programmierung SW4.92,
+    /// p.523; 840D/810D Arbeitsvorbereitung 2006 p.92), and M17 is the return at the end of any subprogram (p.522,
+    /// 3.2.2.8); the rest of sub_end stays as it is, and a sub_end without RET is not changed.
     /// </summary>
     public static string? SubEnd(SiemensBlock write, Section? sub)
     {
@@ -160,7 +161,7 @@ internal static partial class SiemensProgramFrame
         }
     }
 
-    // RET without parameters, the word of sub_end that no SAVE subprogram may carry (SW4.92, p.523).
+    // RET without parameters, the word of sub_end that a SAVE subprogram writes as M17 (D381; SW4.92, p.523).
     [GeneratedRegex(@"(?<![A-Z0-9_$])RET(?![A-Z0-9_$]|\s*\()", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex PlainReturn();
 }

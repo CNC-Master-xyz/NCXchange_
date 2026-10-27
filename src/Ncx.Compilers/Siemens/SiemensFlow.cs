@@ -226,26 +226,10 @@ internal static partial class SiemensFlow
             return;
         }
 
-        // RET "can only be used in subprograms that were not defined with the attribute SAVE", and the manual names
-        // no exception for the parameterized form and no other way to leave a SAVE subprogram to the program end
-        // (840D sl NC-Programmierung SW4.92, p.511, p.523-526; D344): an ERROR where a RAW PROC line declares SAVE.
-        // TODO(question): the manual contradicts itself: the DISPLOF example of SW4.92 p.518 (Beispiel 1) is PROC
-        // CYCLE(AXIS TOMOV, REAL POSITION) SAVE DISPLOF ... RET (also SW4.94 EN p.508, BS.000504 p.175-176, 840D
-        // Arbeitsvorbereitung 2006 p.127-128), and p.526 says a return over several levels evaluates the SAVE of each
-        // level. CMP597 keeps the conservative reading of p.523 until that is answered (open questions, manual
-        // audit 2026-10-26, row 1).
-        if (write.File.DeclaresSave(sub))
-        {
-            write.Error(DiagnosticCodes.SiemensReturnInSaveSubprogram,
-                $"JUMP=END in block {write.Block.Line.ToString(CultureInfo.InvariantCulture)} of the subprogram "
-                + $"{sub.Name ?? sub.Number?.ToString(CultureInfo.InvariantCulture)}, which its PROC line declares "
-                + "SAVE: the return RET(\"label\",,$P_STACK) that ends the program from the call cannot stand in a "
-                + "subprogram with the attribute SAVE (840D sl NC-Programmierung SW4.92, p.523; D344); the manual "
-                + "contradicts itself, its example on p.518 ends a SAVE subprogram with RET, and this ERROR is the "
-                + "conservative reading until that is answered.");
-            return;
-        }
-
+        // D381: RET stands in a SAVE subprogram as in any other, plain and parameterized. The p.523 sentence is about
+        // RET's G64 benefit, which SAVE takes away ("Voraussetzung dafür ist, dass das Unterprogramm kein SAVE-Attribut
+        // besitzt", 840D/810D Arbeitsvorbereitung 2006 p.92), not a ban: Siemens ends PROC ... SAVE DISPLOF with RET
+        // (NC-Programmierung SW4.92 p.518), and a return over several levels evaluates the SAVE of each level (p.526).
         SiemensCycles.EndModalCall(write);
         WriteConditional(write, condition, "RET(\"" + label + "\",,$P_STACK)");
     }

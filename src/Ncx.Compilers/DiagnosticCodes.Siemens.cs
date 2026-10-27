@@ -163,14 +163,11 @@ public static partial class DiagnosticCodes
     public const string SiemensWordUnderARawModalCall = "CMP596";
 
     /// <summary>
-    /// CMP597: JUMP=END in a subprogram whose PROC line, a RAW line of the file, declares SAVE: the return
-    /// RET("label",,$P_STACK) that ends the program from the call (D344) cannot stand there, since RET "can only be
-    /// used in subprograms that were not defined with the attribute SAVE" (840D sl NC-Programmierung SW4.92, p.523).
-    /// The manual contradicts itself: its DISPLOF example (p.518) ends a PROC ... SAVE DISPLOF with RET, and p.526 says
-    /// a return over several levels evaluates the SAVE of each level; CMP597 is the conservative reading of p.523.
+    /// CMP597, retired 2026-10-27 (D381): JUMP=END in a subprogram whose PROC line declares SAVE was an ERROR, the
+    /// conservative reading of 840D sl NC-Programmierung SW4.92 p.523. RET is allowed in a SAVE subprogram, so the
+    /// compiler writes RET("label",,$P_STACK) there as in any other subprogram. The number is not reused.
     /// </summary>
-    // TODO(question): which reading of the manual holds, RET forbidden in a SAVE subprogram (p.523) or allowed (the
-    // examples of p.518 and the rule of p.526), is open (open questions, manual audit 2026-10-26, row 1).
+    [Obsolete("Retired by D381: RET is allowed in a SAVE subprogram, so JUMP=END there is the parameterized return.")]
     public const string SiemensReturnInSaveSubprogram = "CMP597";
 
     /// <summary>

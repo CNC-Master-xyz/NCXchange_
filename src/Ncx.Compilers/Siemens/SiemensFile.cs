@@ -271,9 +271,9 @@ internal sealed partial class SiemensFile
 
     /// <summary>
     /// True when the RAW PROC line of the subprogram declares the attribute SAVE, PROC NAME(...) SAVE as the reader
-    /// keeps it (controller-mapping 6, SUB=BEGIN), in which no RET may stand: RET "can only be used in subprograms that
-    /// were not defined with the attribute SAVE" (840D sl NC-Programmierung SW4.92, p.511, p.523). The compiler's own
-    /// PROC line never declares SAVE (SiemensFlow.ProcLine).
+    /// keeps it (controller-mapping 6, SUB=BEGIN), whose plain end is M17 rather than RET (D381; 840D sl
+    /// NC-Programmierung SW4.92, p.511, p.523). The compiler's own PROC line never declares SAVE
+    /// (SiemensFlow.ProcLine).
     /// </summary>
     public bool DeclaresSave(Section sub)
     {

@@ -84,15 +84,15 @@ public sealed class SiemensFlowTests
         Assert.Contains("PROGRAM_END:", TextOf(result));
     }
 
-    // D344 and the 840D sl manual (NC-Programmierung SW4.92, p.523): RET "can only be used in subprograms that were
-    // not defined with the attribute SAVE", and the parameterized form is no exception the manual names (p.524-526),
-    // so JUMP=END in a subprogram whose RAW PROC line declares SAVE, as the reader keeps PROC NAME SAVE, is the ERROR
-    // CMP597 naming the block.
+    // D381: RET is allowed in a SAVE subprogram, plain and parameterized (SAVE only takes away RET's continuous-path
+    // benefit, 840D/810D Arbeitsvorbereitung 2006 p.92; Siemens's own PROC ... SAVE DISPLOF ... RET, NC-Programmierung
+    // SW4.92 p.518), so JUMP=END in a subprogram whose RAW PROC line declares SAVE is the parameterized return
+    // RET("<end label>",,$P_STACK) as in any other subprogram, with no CMP597, and the plain end stays M17.
     [Theory]
     [InlineData("PROC CHECK SAVE")]
     [InlineData("N5 PROC CHECK SAVE")]
     [InlineData("PROC CHECK SBLOF SAVE DISPLOF")]
-    public void JumpToEndInASubprogram_DeclaredSave_IsTheErrorCmp597(string proc)
+    public void JumpToEndInASubprogram_DeclaredSave_IsTheParameterizedReturn(string proc)
     {
         string program = $$"""
             FILE=BEGIN NCX=1
@@ -110,17 +110,20 @@ public sealed class SiemensFlowTests
             """;
         CompileResult result = Run(program, Mill());
 
-        Assert.Equal(["CMP597"], CompilerCodes(result));
+        Assert.Empty(CompilerCodes(result));
+        Assert.Contains("IF NOT (R1==1) GOTOF SKIP_CALL_", TextOf(result), StringComparison.Ordinal);
+        Assert.Contains("RET(\"PROGRAM_END\",,$P_STACK)", TextOf(result), StringComparison.Ordinal);
+        Assert.Equal("M17", LinesOf(TextOf(result))[^1]);
     }
 
-    // D344: the CMP597 of a SAVE subprogram stands after a parameter list too, PROC CHECK(REAL WERT1) SAVE with the
-    // parameter its call gives, with no blank after the parenthesis and with a default that holds parentheses, the
-    // spellings the reader keeps as RAW (NC-Programmierung SW4.92, p.511-512, p.523).
+    // D381: SAVE after a parameter list, PROC CHECK(REAL WERT1) SAVE with the parameter its call gives, with no blank
+    // after the parenthesis and with a default that holds parentheses (the spellings the reader keeps as RAW,
+    // NC-Programmierung SW4.92, p.511-512), takes the parameterized return too.
     [Theory]
     [InlineData("PROC CHECK(REAL WERT1) SAVE")]
     [InlineData("PROC CHECK(REAL WERT1)SAVE")]
     [InlineData("PROC CHECK(REAL WERT1=SIN(30)) SAVE")]
-    public void JumpToEndInASubprogram_DeclaredSaveAfterParameters_IsTheErrorCmp597(string proc)
+    public void JumpToEndInASubprogram_DeclaredSaveAfterParameters_IsTheParameterizedReturn(string proc)
     {
         string program = $$"""
             FILE=BEGIN NCX=1
@@ -136,7 +139,10 @@ public sealed class SiemensFlowTests
             FILE=END
             """;
 
-        Assert.Equal(["CMP597"], CompilerCodes(Run(program, Mill())));
+        CompileResult result = Run(program, Mill());
+
+        Assert.Empty(CompilerCodes(result));
+        Assert.Contains("RET(\"PROGRAM_END\",,$P_STACK)", TextOf(result), StringComparison.Ordinal);
     }
 
     // D344: SAVE inside the name of a subprogram, SAVE_CHECK or CHECKSAVE, is no attribute, so the parameterized
