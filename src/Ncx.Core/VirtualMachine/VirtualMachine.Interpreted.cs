@@ -305,8 +305,8 @@ public sealed partial class VirtualMachine
     }
 
     // A repeat re-executes the blocks from its label to its REPEAT block (virtual machine 3.6). D213: a JUMP or
-    // JUMP=END to a target outside the label..REPEAT section ends the repeat, and a later arrival at the REPEAT starts it
-    // fresh with TIMES passes; the compilers reproduce this (the Fanuc counter cleared by the JUMP, the Heidenhain
+    // JUMP=END to a target outside the label..REPEAT section ends the repeat, and a later arrival at the REPEAT starts
+    // it fresh with TIMES passes; the compilers reproduce this (the Fanuc counter cleared by the JUMP, the Heidenhain
     // Q-parameter loop instead of CALL LBL REP).
     private void EndRepeatsOutside(int targetPc, Section section, int repeatsAtEntry)
     {
