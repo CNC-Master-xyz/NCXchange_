@@ -58,4 +58,11 @@ public static partial class DiagnosticCodes
     /// I J K, and the reader writes the radius form (D186; controllers fanuc.md 4).
     /// </summary>
     public const string FanucArcRadiusOverCentre = "RDR109";
+
+    /// <summary>
+    /// RDR110, a WARNING: a helix moves with the F along the arc in the plane ([format] helix_feed = "arc", parameter
+    /// 1403#5), and the reader does not know its geometry or its F, so the F is not scaled back to the feed along the
+    /// path (D354; machine-config 2).
+    /// </summary>
+    public const string FanucHelixFeedNotScaled = "RDR110";
 }

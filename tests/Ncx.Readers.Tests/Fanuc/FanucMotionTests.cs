@@ -77,13 +77,40 @@ public sealed class FanucMotionTests
             Body("G91 G3 X10. Y10. I10. J0 F100"));
     }
 
-    // A centre word left out is 0, and a third axis in the arc block makes a helix (controllers fanuc.md 4).
+    // A centre word left out is 0, and a third axis in the arc block makes a helix (controllers fanuc.md 4); on a
+    // control that measures F along the path the F stays (D354).
     [Fact]
     public void G3_WithoutJAndWithZ_IsAHelixAboutTheCentre()
     {
         Assert.Equal(
             Lines("RAPID X=10 Y=0 Z=0", "ARC=CCW X=10 Y=0 Z=-5 CENTER:X=0 CENTER:Y=0 F=100"),
-            Body("G0 X10. Y0 Z0\nG3 X10. Y0 Z-5. I-10. F100"));
+            Body("G0 X10. Y0 Z0\nG3 X10. Y0 Z-5. I-10. F100", MillWith("[format]\nhelix_feed = \"path\"")));
+    }
+
+    // D354: under helix_feed = "arc", the Fanuc default, the F of a helix is along the arc in the plane; the reader
+    // scales it by the path length over the plane length, written or modal, and the next line writes the control's
+    // feed again: a quarter circle of radius 10 rising 5 is 15.708 in the plane and 16.485 along the path, a half
+    // circle of radius 5 rising 2 15.708 and 15.835.
+    [Fact]
+    public void Helix_UnderHelixFeedArc_ScalesTheFeedBackToThePath()
+    {
+        Assert.Equal(
+            Lines(
+                "RAPID X=10 Y=0 Z=0",
+                "ARC=CCW X=0 Y=10 Z=-5 R=10 F=104.944",
+                "LINE X=5 F=100",
+                "ARC=CCW X=15 Y=10 Z=-7 CENTER:X=10 CENTER:Y=10 F=100.807"),
+            Body("G0 X10. Y0 Z0\nG3 X0 Y10. Z-5. R10. F100\nG1 X5.\nG3 X15. Y10. Z-7. I5. J0 F100"));
+    }
+
+    // D354: where the reader does not know the start of the helix, the F stays with the WARNING RDR110.
+    [Fact]
+    public void Helix_FromAnUnknownStart_KeepsTheFeedWithRdr110()
+    {
+        NcxProgram program = FramedProgram("G91 G3 X-10. Y10. Z-5. R10. F100");
+
+        Assert.Contains("F=100\n", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains(program.Diagnostics.Items, diagnostic => diagnostic.Code == "RDR110");
     }
 
     // A G91 block becomes IX, IY words; G90 is absolute again and writes no word (controller-mapping 2).

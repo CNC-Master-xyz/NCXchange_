@@ -296,6 +296,10 @@ internal static class FanucMotion
         else if (arc)
         {
             ReadArc(block, main, start, incremental);
+            if (!block.Draft.IsRaw)
+            {
+                ScaleHelixFeed(block, main, start);
+            }
         }
         else if (vector)
         {
@@ -463,6 +467,130 @@ internal static class FanucMotion
         {
             main.Add("TX", x).Add("TY", y).Add("TZ", z);
         }
+    }
+
+    // D354: under [format] helix_feed = "arc", the Fanuc default (parameter 1403#5 = 0), the control measures the F of
+    // an arc that moves an axis outside its plane along the arc in the plane, while the F of NCX is the feed along the
+    // whole path; the reader scales the F the helix moves with, written or modal, by the path length over the plane
+    // length, so that a compile returns the source F within the rounding, and the next LINE or ARC writes the
+    // control's feed again (AddModalFeed). Where the reader does not know the geometry or the F, the F stays as the
+    // source gives it with the WARNING RDR110 (machine-config 2; controllers fanuc.md 4).
+    private static void ScaleHelixFeed(FanucBlock block, DraftBlock main, Dictionary<string, decimal> start)
+    {
+        PlaneAxes(block, out string first, out string second, out _, out _, out _);
+        double rise = 0;
+        bool helix = false;
+        bool known = true;
+        foreach (Word word in main.Words)
+        {
+            // An axis word is X= or the incremental IX= (controller-mapping 2).
+            string axis = block.Machine.ResolveAxis(word.Key) is null && word.Key.StartsWith('I') ? word.Key[1..]
+                : word.Key;
+            if (word.Addr is not null || axis == first || axis == second
+                || block.Machine.ResolveAxis(axis) is not { Kind: AxisKind.Linear })
+            {
+                continue;
+            }
+
+            helix = true;
+            if (start.TryGetValue(axis, out decimal from)
+                && block.State.Positions.TryGetValue(axis, out decimal to))
+            {
+                rise += (double)((to - from) * (to - from));
+            }
+            else
+            {
+                known = false;
+            }
+        }
+
+        HelixFeed measured = block.Machine.Format?.HelixFeed ?? HelixFeed.Arc;
+        if (!helix || measured != HelixFeed.Arc)
+        {
+            return;
+        }
+
+        Value? feed = main.Words.Find(word => word.Key == "F")?.Value ?? block.Fanuc.ControlFeed;
+        double? plane = known ? PlaneLength(block, main, start, first, second) : null;
+        if (plane is not double length || length <= 0 || FanucNumbers.NumberOf(feed) is not decimal source)
+        {
+            block.Diagnostics.Warning(block.Line, DiagnosticCodes.FanucHelixFeedNotScaled,
+                "The helix moves with the F along the arc in the plane (helix_feed = \"arc\", parameter 1403#5), and "
+                + "the reader does not know its geometry or its F, so the F stays as the source gives it (D354).");
+            return;
+        }
+
+        double path = Math.Sqrt((length * length) + rise);
+        Value scaled = FanucNumbers.Of(FanucNumbers.Round((double)source * path / length, 3));
+        main.Remove("F");
+        main.Add("F", scaled);
+        block.Fanuc.WrittenFeed = scaled;
+    }
+
+    // The length of the arc in the plane: the radius times the swept angle, from the centre or from R, for a start
+    // and an end point the reader knows; null where it does not, under polar interpolation and on a diameter axis.
+    private static double? PlaneLength(FanucBlock block, DraftBlock main, Dictionary<string, decimal> start,
+        string first, string second)
+    {
+        if (block.Fanuc.Polar || DiameterInPlane(block, first, second)
+            || !start.TryGetValue(first, out decimal startFirst) || !start.TryGetValue(second, out decimal startSecond)
+            || !block.State.Positions.TryGetValue(first, out decimal endFirst)
+            || !block.State.Positions.TryGetValue(second, out decimal endSecond))
+        {
+            return null;
+        }
+
+        double x0 = (double)startFirst;
+        double y0 = (double)startSecond;
+        double x1 = (double)endFirst;
+        double y1 = (double)endSecond;
+        bool clockwise = main.VerbValue is IdentValue { Name: "CW" };
+        if (FanucNumbers.NumberOf(main.Words.Find(word => word.Key == "R")?.Value) is decimal signed)
+        {
+            double radius = Math.Abs((double)signed);
+            double chord = Math.Sqrt(((x1 - x0) * (x1 - x0)) + ((y1 - y0) * (y1 - y0)));
+            double half = Math.Asin(Math.Min(1.0, chord / (2 * radius)));
+            double swept = signed < 0 ? (2 * Math.PI) - (2 * half) : 2 * half;
+            return radius * swept;
+        }
+
+        double? cx = CentreOf(main, first, x0);
+        double? cy = CentreOf(main, second, y0);
+        if (cx is not double centreX || cy is not double centreY)
+        {
+            return null;
+        }
+
+        double r = Math.Sqrt(((x0 - centreX) * (x0 - centreX)) + ((y0 - centreY) * (y0 - centreY)));
+        double from = Math.Atan2(y0 - centreY, x0 - centreX);
+        double to = Math.Atan2(y1 - centreY, x1 - centreX);
+        double sweep = clockwise ? from - to : to - from;
+        while (sweep <= 1e-12)
+        {
+            sweep += 2 * Math.PI;
+        }
+
+        return r * sweep;
+    }
+
+    // The absolute centre coordinate of an axis: CENTER:X as written, or CENTER:IX added to the start.
+    private static double? CentreOf(DraftBlock main, string axis, double start)
+    {
+        foreach (Word word in main.Words)
+        {
+            if (word.Key == "CENTER" && word.Addr == axis && FanucNumbers.NumberOf(word.Value) is decimal absolute)
+            {
+                return (double)absolute;
+            }
+
+            if (word.Key == "CENTER" && word.Addr == "I" + axis
+                && FanucNumbers.NumberOf(word.Value) is decimal offset)
+            {
+                return start + (double)offset;
+            }
+        }
+
+        return null;
     }
 
     // D185: under G43.5 the I J K of G2 and G3 are the tool vector, documented for arcs of TCP type 2, so the arc
