@@ -618,7 +618,7 @@ public sealed class FanucCycleTests
         Assert.Equal(
             Lines(
                 "RAPID X=60 Z=-20 C=0",
-                "CYCLE=DRILL AXIS=X SURFACE=0 CLEARANCE=54 DEPTH=30 CYCLE_RETRACT=CLEARANCE CYCLE_F=0.05",
+                "CYCLE=DRILL AXIS=X CLEARANCE=54 DEPTH=30 CYCLE_RETRACT=CLEARANCE CYCLE_F=0.05",
                 "CYCLE_CALL",
                 "CYCLE_CALL C=120",
                 "CYCLE=OFF"),
@@ -846,5 +846,15 @@ public sealed class FanucCycleTests
     {
         Assert.Equal(Lines("FUNC:AIR=ON", "FUNC:AIR=OFF"),
             Body("M51\nM9", MillWith("[func.AIR]\nON = \"M51\"\nOFF = \"M9\"")));
+    }
+
+    // D158 (gap closed): on a lathe X axis SURFACE is CLEARANCE less twice surface_clearance, the key a radius on a
+    // diameter X; without the key no SURFACE, since 0 there is the axis of the part.
+    [Fact]
+    public void SurfaceClearance_OnALatheXAxis_IsTwiceTheKeyBelowR()
+    {
+        string text = Text("%\nO0001\nG0 X60. Z-20. C0\nG87 X30. R-3. F0.05\nG80\nM30\n%\n",
+            LatheWithCycles("surface_clearance = 2"));
+        Assert.Contains("CYCLE=DRILL AXIS=X SURFACE=50 CLEARANCE=54", text, StringComparison.Ordinal);
     }
 }

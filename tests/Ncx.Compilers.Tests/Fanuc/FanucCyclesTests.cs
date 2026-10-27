@@ -711,7 +711,7 @@ public sealed class FanucCyclesTests
 
         Assert.DoesNotContain(FanucCompile.CompilerDiagnostics(result),
             diagnostic => diagnostic.Severity == Severity.Error);
-        Assert.Contains("\nG71 P1 Q2\nN1 G0 G18 X20.\nG1 G99 Z-10. F0.2\nN2 X40.\nG70 P1 Q2\n", text,
+        Assert.Contains("\nG71 P1 Q2\nN1 G0 X20.\nG1 Z-10. F0.2\nN2 X40.\nG99\nG70 P1 Q2\n", text,
             StringComparison.Ordinal);
         Assert.DoesNotContain("M99", text, StringComparison.Ordinal);
         Assert.DoesNotContain("G80", text.Substring(text.IndexOf("G71", StringComparison.Ordinal)),
@@ -729,10 +729,10 @@ public sealed class FanucCyclesTests
             FanucCompile.Lathe().Replace("catalog = \"fanuc-lathe.toml\"",
                 "catalog = \"fanuc-lathe.toml\"\ncontour_type_ii = true", StringComparison.Ordinal)));
 
-        Assert.Contains("\nN1 G0 G18 X20.\n", typeI, StringComparison.Ordinal);
+        Assert.Contains("\nN1 G0 X20.\n", typeI, StringComparison.Ordinal);
         Assert.Contains(FanucCompile.CompilerDiagnostics(typeII),
             diagnostic => diagnostic.Code == DiagnosticCodes.FanucContourTypeIINotDeclared);
-        Assert.Contains("\nN1 G0 G18 X20. Z1.\n", declared, StringComparison.Ordinal);
+        Assert.Contains("\nN1 G0 X20. Z1.\n", declared, StringComparison.Ordinal);
     }
 
     // D278: a first block of G71 that does not move X is alarm PS0325, CMP390; a first block that is no RAPID or LINE
@@ -778,7 +778,7 @@ public sealed class FanucCyclesTests
 
         Assert.DoesNotContain(FanucCompile.CompilerDiagnostics(result),
             diagnostic => diagnostic.Severity == Severity.Error);
-        Assert.Contains("\nG71 P2 Q3\nN2 G0 G18 X20.\nN3 G1 G99 Z-10. F0.2\n", text, StringComparison.Ordinal);
+        Assert.Contains("\nG71 P2 Q3\nN2 G0 X20.\nN3 G1 Z-10. F0.2\n", text, StringComparison.Ordinal);
     }
 
     // D278: a later G70 under another feed mode runs the range under that mode, so the first contour blocks write
@@ -792,8 +792,12 @@ public sealed class FanucCyclesTests
         int start = text.IndexOf("G71", StringComparison.Ordinal);
         string range = text.Substring(start, text.IndexOf("X40.\n", start, StringComparison.Ordinal) - start);
 
-        Assert.Contains("G1 G99 Z-10. F0.2", range, StringComparison.Ordinal);
+        // D278 (B-64484EN-1 p.90): the range holds G00 to G03, G04, axis words and F only; the feed mode it runs
+        // under stands in front of the cycle line.
+        Assert.Contains("G1 Z-10. F0.2", range, StringComparison.Ordinal);
+        Assert.DoesNotContain("G99", range, StringComparison.Ordinal);
         Assert.DoesNotContain("G80", range, StringComparison.Ordinal);
+        Assert.Contains("\nG99\nG70 P", text, StringComparison.Ordinal);
     }
 
     // D278, D388 item 4: a contour section that a CALL also names is written as an O program too.
@@ -805,5 +809,17 @@ public sealed class FanucCyclesTests
 
         Assert.Contains("M98 P0500", text, StringComparison.Ordinal);
         Assert.Contains("\nO0500\n", text, StringComparison.Ordinal);
+    }
+
+    // D278: the control runs the blocks P to Q of a G70, whose codes and F take effect (B-64484EN-1 p.76, p.281), so a
+    // feed after the G70 writes its feed mode again.
+    [Fact]
+    public void ContourCycles_AFeedAfterTheG70_WritesItsFeedModeAgain()
+    {
+        string text = FanucCompile.TextOf(FanucCompile.Run(ContourProgramWith("",
+            "FEED_MODE=PER_MIN\nRAPID X=40 Z=2\nCYCLE=FINISH CONTOUR=500\nCYCLE_CALL\nCYCLE=OFF\nLINE X=100 F=200",
+            "RAPID X=20", "LINE Z=-10 F=0.2", "LINE X=40"), FanucCompile.Lathe()));
+
+        Assert.Contains("\nG99\nG70 P1 Q2\nG1 G18 G98 X100. F200.\n", text, StringComparison.Ordinal);
     }
 }

@@ -66,14 +66,19 @@ internal static class FanucContour
 
         if (contours.Find(program, contour) is FanucContourRange written)
         {
-            // D278: a later G70 repeats only P and Q.
+            // D278: a later G70 repeats only P and Q, with the modes of the range in front of it; the control runs
+            // the blocks P to Q, whose codes and F take effect (B-64484EN-1 p.76, p.281), so afterwards they are
+            // unknown as after the first copy.
+            WriteModes(write, written.Modes);
             write.Write(CycleLine(code, written));
+            ForgetAfter(write, written.Forgotten);
             return true;
         }
 
         // D278: the contour's own labels take free numbers of this O program (D277), so no N stands twice in it.
         contours.SetLabels(contour, FanucLabels.Renumbered(contour, write.Steps, write.Labels));
-        if (contours.Inline(contour, EntryState(write, contour)) is not InlinedSection inlined
+        Dictionary<string, string> modes = ModesOf(write, contour);
+        if (contours.Inline(contour, EntryState(write, contour, modes)) is not InlinedSection inlined
             || !Checks(write, entry, inlined, contour))
         {
             return false;
@@ -117,38 +122,90 @@ internal static class FanucContour
             lines[lastIndex] = "N" + Number(last) + " " + lines[lastIndex];
         }
 
-        var range = new FanucContourRange(first, last);
+        var forgotten = new List<string>(inlined.WrittenKeys) { "F" };
+        forgotten.AddRange(modes.Keys);
+        var range = new FanucContourRange(first, last) { Modes = modes, Forgotten = forgotten };
         contours.Add(program, contour, range);
+        WriteModes(write, modes);
         write.Write(CycleLine(code, range));
         foreach (string line in lines)
         {
             write.Write(line);
         }
 
-        // D278: after the section every code its blocks wrote is unknown, since the control does not run them where
-        // they stand.
-        foreach (string key in inlined.WrittenKeys)
+        ForgetAfter(write, forgotten);
+        return true;
+    }
+
+    // D278 (B-64484EN-1 p.90): the modes the range runs under stand in front of the G7x line, where the program's
+    // target state differs, since between P and Q only G00 to G03, G04, macro branches and repeats and the drawing
+    // dimensions may stand (PS0325, p.91).
+    private static void WriteModes(FanucBlock write, IReadOnlyDictionary<string, string> modes)
+    {
+        var codes = new List<string>();
+        foreach (KeyValuePair<string, string> mode in modes)
+        {
+            if (write.Target.ActiveOf(mode.Key) != mode.Value)
+            {
+                codes.Add(mode.Value);
+                write.Target.Set(mode.Key, mode.Value);
+            }
+        }
+
+        if (codes.Count > 0)
+        {
+            write.Write(string.Join(" ", codes));
+        }
+    }
+
+    // D278: after the cycle the codes and F the blocks of the range wrote, the motion and the modes of the range are
+    // unknown, since the control does not run the blocks where they stand in the text.
+    private static void ForgetAfter(FanucBlock write, IReadOnlyList<string> forgotten)
+    {
+        foreach (string key in forgotten)
         {
             write.Target.Forget(key);
         }
 
         write.MakeUnknown(FanucCodes.Motion);
-        return true;
+        write.MakeUnknown("F");
     }
 
-    // D278: the blocks of the contour are written from an unknown motion state, so the first writes G00 or G01 and its
-    // words; the feed mode, the plane and G90/G91 are left unknown as well, so that the first block writes the ones
-    // the contour runs under wherever a later G70 stands (the control runs the range under its own modal state). The
-    // cycle, the compensation and the units are pinned to what the contour's NCX blocks have, so that no other code,
-    // G80 or G40 among them, is written inside the range.
-    private static TargetState EntryState(FanucBlock write, Section contour)
+    // The plane, the feed mode and G90/G91 of the contour's NCX blocks, as the walk of the section has them; G90/G91
+    // only outside system A, which has no such codes.
+    private static Dictionary<string, string> ModesOf(FanucBlock write, Section contour)
+    {
+        var modes = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (FirstStepOf(write, contour) is BlockStep first)
+        {
+            modes[FanucCodes.Plane] = FanucCodes.PlaneCode(first.Before.Frame.Workplane);
+            modes[FanucCodes.FeedMode] = FanucCodes.FeedModeCode(first.Before.Motion.FeedMode, write.System);
+        }
+
+        if (write.System != GcodeSystem.A)
+        {
+            modes[FanucCodes.Distance] = "G90";
+        }
+
+        return modes;
+    }
+
+    // D278: the blocks of the contour are written from an unknown motion state, so the first writes G00 or G01 and
+    // its words. Gap closed 2026-10-27 (delegated): D278's "from an unknown state" cannot hold for the plane, the feed
+    // mode and G90/G91, because only G00 to G03, G04, macro branches and repeats and the drawing dimensions may stand
+    // between P and Q (B-64484EN-1 p.90; PS0325, p.91): those are pinned to the contour's values and written in front
+    // of the cycle line (WriteModes), and the cycle, the compensation and the units are pinned to the contour's
+    // values; the length offset and the origin stay as the program has them. The range then holds G00 to G03, G04,
+    // axis words and F only.
+    private static TargetState EntryState(FanucBlock write, Section contour, IReadOnlyDictionary<string, string> modes)
     {
         var state = new TargetState();
         state.TakeOver(write.Target);
-        foreach (string key in (string[])[FanucCodes.Motion, "F", FanucCodes.FeedMode, FanucCodes.Plane,
-            FanucCodes.Distance])
+        state.Forget(FanucCodes.Motion);
+        state.Forget("F");
+        foreach (KeyValuePair<string, string> mode in modes)
         {
-            state.Forget(key);
+            state.Set(mode.Key, mode.Value);
         }
 
         state.Set(FanucCodes.Cycle, "G80");
@@ -158,14 +215,6 @@ internal static class FanucContour
             if (FanucCodes.UnitsCode(first.Before.Frame.Units, write.System) is string units)
             {
                 state.Set(FanucCodes.Units, units);
-            }
-        }
-
-        foreach (string key in (string[])[FanucCodes.Length, FanucCodes.Origin])
-        {
-            if (write.Target.ActiveOf(key) is null or "?")
-            {
-                state.Forget(key);
             }
         }
 
