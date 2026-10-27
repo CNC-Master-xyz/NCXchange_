@@ -29,7 +29,28 @@ internal static class SiemensArcs
     // its own Z mirror; nothing else changes (decisions.md D298; machine-config 5, SUB_frame).
     public static bool Mirrored(SiemensBlock write)
     {
+        // Under TRACYL the plane is G19, which holds Z, and NCX's Z is the Z of the transformation only on a cylinder
+        // about Z (D146).
+        if (write.After.Frame.Cylinder is not null)
+        {
+            return SiemensAxes.IsZNegated(write) && write.After.Frame.CylinderAxis == "Z";
+        }
+
         return SiemensAxes.IsZNegated(write) && write.After.Frame.Workplane != Workplane.XY;
+    }
+
+    /// <summary>
+    /// True under CYLINDER=n, where an arc of NCX is written with the other motion code (D146).
+    /// </summary>
+    // D146: the cylinder plane of NCX turns ARC=CCW from the cylinder axis toward C (virtual machine 3.2;
+    // Plane.CylinderAbout). TRACYL works in G19 (Arbeitsvorbereitung 2013, connector p.352: N50 G19), the plane of the
+    // 2nd and 3rd geometry axes, whose G3 turns from Y toward Z (Programmierhandbuch Grundlagen 2013, connector p.154:
+    // "G19: Arbeitsebene Y/Z, Zustellrichtung X, Ebenenanwahl 2. - 3. Geometrieachse"), and Y is the circumference,
+    // the C word, and Z the cylinder axis (Arbeitsvorbereitung 2013, p.352-353). The same arc in the same coordinates
+    // turns from C toward the cylinder axis on the control, so ARC=CCW is G2 and ARC=CW is G3.
+    public static bool TurnedByTheCylinderPlane(SiemensBlock write)
+    {
+        return write.After.Frame.Cylinder is not null;
     }
 
     /// <summary>
@@ -78,6 +99,18 @@ internal static class SiemensArcs
             SiemensMotion.WriteAxes(write, axes);
             WriteCenter(write);
             write.Main.Word(SiemensLine.ArcRank, "AR=" + write.Format("ANGLE", sweep));
+            return;
+        }
+
+        if (write.After.Frame.Cylinder is not null)
+        {
+            // D146: TURN= takes the end point and the center from the events of the virtual machine, which keeps them
+            // in the cylinder plane; that form is not written under TRACYL.
+            write.Error(DiagnosticCodes.SiemensCylinderNotWritable,
+                $"{angle.ToCanonical()} under CYLINDER: a sweep of a turn or more needs TURN= with the end point of "
+                + "the developed surface, which this compiler does not write under TRACYL; split the sweep below one "
+                + "turn (controllers siemens.md 3; D84, D146).");
+            write.WrittenAll();
             return;
         }
 
@@ -170,7 +203,10 @@ internal static class SiemensArcs
 
             bool incremental = address.Length > 1 && address[0] == 'I';
             string axis = incremental ? address.Substring(1) : address;
-            if (CenterLetter(axis) is not string letter)
+            // D146: under TRACYL the center takes the letter of its axis on the developed surface, J for C (Y) and K
+            // for the cylinder axis (Z).
+            string written = write.After.Frame.Cylinder is not null ? SiemensAxes.LetterOf(write, axis) : axis;
+            if (CenterLetter(written) is not string letter)
             {
                 continue;
             }
@@ -179,7 +215,7 @@ internal static class SiemensArcs
             decimal factor = incremental
                 ? (axis == "Z" && SiemensAxes.IsZNegated(write) ? -1m : 1m)
                 : SiemensAxes.WordFactor(write, axis);
-            string? value = Scaled(write, word.Value, SiemensAxes.DecimalsAddress(write, axis), factor);
+            string? value = Scaled(write, word.Value, SiemensAxes.DecimalsAddress(write, written), factor);
             if (value is not null)
             {
                 write.Main.Word(SiemensLine.ArcRank,
