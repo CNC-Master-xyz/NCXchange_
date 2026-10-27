@@ -16,7 +16,7 @@ dialect = "iTNC530"                # 30i | 31i-T | 0i-TF | iTNC530 | TNC640 | 84
 builder = "dmg"                    # machine builder id, used by RAW:DMG and by the builder function tables
 gcode_system = "A"                 # Fanuc lathes only: A (G98/G99 feed, U/W incremental, G90 = turning cycle), B (G94/G95, G90/G91, cycles G77/G78/G79) or C (as B, with G70/G71 for inch and mm and cycles G20/G21/G24; D174)
 s_binds_to_spindle_word = true     # Fanuc: one S word, owned by the spindle of the M code in the same block; RPM:role is written into that role's SPINDLE block
-limits = "warn"                    # warn | clamp: what the expander does with RPM, F and targets beyond the machine limits (D64)
+limits = "warn"                    # warn | clamp: what the expander does with RPM, F and targets beyond the machine limits (D64); clamp rewrites F against the linear axes its block names and only the absolute axis words of RAPID and LINE under FRAME=MACHINE (D192, D203)
 channels = [1]
 units_default = "MM"
 default_spindle = "S1"
@@ -175,11 +175,12 @@ incremental_letter = "U"           # Fanuc lathes: U/W/H/V are the incremental f
 kind = "linear"                    # linear | rotary
 limits = [-10, 650]                # min and max in machine coordinates (the G53 / M91 frame), for the travel-limit analytics (D100)
 rapid = 30000                      # mm/min, for the runtime estimate
-max_feed = 10000                   # mm/min, the F this axis can follow; the expander warns or clamps (D64)
+max_feed = 10000                   # mm/min (deg/min on a rotary axis), the F this axis can follow; VM441 compares the path feed of the axes a block moves, the expander warns or clamps (D64, D192)
 acceleration = 3000                # mm/s^2, for the trapezoidal profile of the runtime estimate
 programming = "diameter"           # X axis of a lathe: diameter | radius | switchable (D60); the reader interprets the source with it, the compiler writes it
 home = 0                           # reference point 1 in machine coordinates (the G53 / M91 frame), for HOME (D100)
 home2 = -50                        # reference point 2 (G30 P2), optional
+frames_in_diameter = false         # diameter axis only: true when the control keeps frame offsets and actual-value variables in diameters (Siemens MD20360 bits 3 and 6); default false, radii (D125, D388)
 clamp = { ON = "M10", OFF = "M11" }   # rotary axis clamping, written by the compiler around 3+2 machining when set
 
 [[axis]]
@@ -188,6 +189,7 @@ ncx = "C"
 letter = "C"
 kind = "rotary"
 owner = "S1"                       # rotary axis of a work spindle
+parallel = "Z"                     # rotary axis only: the linear axis it turns about, the cylinder axis of CYLINDER=n; X, Y or Z, default Z; a work spindle always turns about Z (D146)
 modulo = true                      # rotary axis only: its limits are the display range, never compared or clamped (D193)
 limits = [0, 360]                 # degrees, modulo axis: the display range, not a travel limit (D100)
 home = 0                           # the spindle zero mark, machine frame (D100)
@@ -195,7 +197,7 @@ home = 0                           # the spindle zero mark, machine frame (D100)
 
 `modulo = true` on a rotary axis says that its `limits` are the display range of the control (the Fanuc roll-over axis, the Heidenhain `isModulo`, the Siemens modulo range): they are never compared, never clamped and never reported by the travel-limit analytic. Without the key the `limits` of a rotary axis are travel limits like those of a linear axis, compared in the MACHINE frame, reported by the travel-limit analytic and clamped under `limits = "clamp"`; a swivel `B` is written that way. The key decides only the limits, not how a modulo position wraps (D193).
 
-`home` and `limits` are machine coordinates (the G53 / M91 frame). `HOME` on an axis without `home` (or without `home2` under `POINT=2`) is a WARNING at check time, once per run and axis, and an ERROR only in a compiler that must write the coordinates (D100). `[positions]` names further machine-frame positions, each a set of axis values; expansion rules reach them through `{position:NAME}` (section 5a).
+`home` and `limits` are machine coordinates (the G53 / M91 frame). The file writes the X values the way the axis is programmed: diameters for `programming = "diameter"` or `"switchable"`, radii for `"radius"` or without `programming`. The VM halves `home`, `home2` and `limits` of a diameter axis once, where it takes them, into the radii it stores (D28, D137); `[positions]` stays as written, and `{position:NAME}` becomes an X word that the VM halves under `DIAMETER=ON`, so on a switchable machine such a rule carries `requires = { DIAMETER = "ON" }` and `restore = ["DIAMETER"]` (5a). Values copied from Siemens machine data (the software limit switches, the display in the machine coordinate system) are radii on a facing axis and must be doubled (SINUMERIK 840D sl/828D Funktionshandbuch Grundfunktionen 2012 p. 901-902); a Fanuc stroke check (parameters 1320/1321) is a diameter already (D137). `owner` of a rotary axis names what it turns (D325): a work spindle or a table that holds the workpiece makes it a table axis, counted only while its owner is the workpiece holder; a tool holder (turret, tool carrier, swivel head) makes it a head axis that turns the tool vector; a tool spindle makes it the spindle's own rotation (the C-axis mode of a tool spindle), which turns no tool vector. A rotary axis without `owner` is taken as a head axis, and the tool-vector report names that assumption in a WARNING. `owner` may name a table resource; `parallel` then says which linear axis the table axis turns about, the cylinder axis of `CYLINDER=n` (D146). The letter without digits gives the machine axis a rotary axis turns about (DIN 66217). `HOME` on an axis without `home` (or without `home2` under `POINT=2`) is a WARNING at check time, once per run and axis, and an ERROR only in a compiler that must write the coordinates (D100). `[positions]` names further machine-frame positions, each a set of axis values; expansion rules reach them through `{position:NAME}` (section 5a).
 
 ```toml
 [positions]                        # named positions in machine coordinates (D100)
@@ -345,7 +347,7 @@ pre = ["FUNC:PECK_MODE=RETRACT"]   # Doosan M291 before G83, as an NCX word so t
 
 - `states`: the states of the function table whose words trigger the rule, `states = ["ON"]` on the clutch of the through-spindle coolant, so that the sequence runs when the coolant is switched on and not when it is switched off. Without the key every state of the table triggers it. One rule per table: a word triggers the state it sets, under the state names this section gives its table, so `SPINDLE=CW` triggers `CW`, `RPM`, `ORIENT` and `RPM_MAX` their own state, `CSS=ON` and `VC` the state `VC` and `CSS=OFF` the state `CSS_OFF`, `SPINDLE_MODE`, `COOLANT` and `FUNC` their value, `SPINDLE_SYNC` with two roles `ON` and `SPINDLE_SYNC=OFF` the state `OFF`, and `PHASE` the state `PHASE` (D198). The tool change and a catalog cycle have no states and take no key.
 - `pre` and `post`: lists of NCX blocks inserted before and after the block. They are NCX text, not native lines, so the VM executes them and the reader can recognize them; native text goes through `RAW:BUILDER`. A native line that is part of the cycle rather than a word of the program is the `before` key of section 6 (D256). A block may contain `{position:NAME}`, which expands to the axis words of that entry of `[positions]`, e.g. `pre = ["RAPID {position:tool_change} FRAME=MACHINE"]` (D100).
-- `requires`: state conditions that must hold while the function is written, as state variable = value (`SPINDLE = "OFF"`, `COOLANT = "OFF"`, `SPINDLE_MODE = "AXIS"`). The expander inserts the words that establish them, preceded by `@SAVE` of the variables named in `restore`.
+- `requires`: state conditions that must hold while the function is written, as state variable = value (`SPINDLE = "OFF"`, `COOLANT = "OFF"`, `SPINDLE_MODE = "AXIS"`). The expander inserts the words that establish them, preceded by `@SAVE` of the variables named in `restore`. A rule whose `pre` or `post` reaches a `[positions]` entry through `{position:NAME}` writes an X word, which the VM halves under `DIAMETER=ON`; on a switchable machine it carries `requires = { DIAMETER = "ON" }` and `restore = ["DIAMETER"]`, as the DMG tool-change cycle L710 writes `DIAMON` before `G153 X` and restores the mode (D137).
 - `restore`: the state variables to put back after the block, through `@RESTORE`; the VM re-applies the saved value from its own snapshot, so the rule never has to know the speed the spindle had. Restoring costs cycle time (a spindle stop and start), which the runtime estimate counts and a WARNING reports at compile time.
 
 The triggering block of a catalog cycle is the block that names the cycle (`CYCLE=name` or `CYCLE:<controller>=n`), never a `CYCLE_CALL` block, and the rule covers the cycle while it is active: `@SAVE`, `requires` and `pre` stand before that block, `post` and `@RESTORE` directly after the `CYCLE=OFF` that ends the cycle, and directly before every other block that ends it (the next `CYCLE`, a `TOOL`, the `PROGRAM=END`, or the `SUB=END` of a subprogram, where generated blocks stay in their section). A required state therefore holds at every hole, and a `post` that moves cannot drill while the cycle is still modal on the control. The expander finds the end in the text of the section, without VM state, and a `JUMP` out of the range skips `post` and `@RESTORE` like any block it jumps over (D204).

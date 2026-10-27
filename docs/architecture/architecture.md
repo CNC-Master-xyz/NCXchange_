@@ -279,7 +279,7 @@ A key the catalog does not know is accepted as a provisional word when it has th
 
 ### 4.2 Numbers and geometry (D62)
 
-Stored numbers are `decimal` with the original text, so that a program is reproduced digit for digit. Geometry (arc centres from `R`, arc length, the angle between tool vectors, distances) is computed in `double` in a small `Ncx.Core.Geometry` namespace: `Vec3`, `Arc`, `Plane`, an `Angle` helper. That is all levels 0 and 1 of the VM need, so `Ncx.Core` takes no math package. `System.Numerics.Vector3` is single precision and is not used. When the kinematics module needs rotation matrices, frames and an inverse for 5-axis poses, it takes MathNet.Numerics (MIT) in `Ncx.Kinematics` only; nothing of it leaks into the model or the NCX text.
+Stored numbers are `decimal` with the original text, so that a program is reproduced digit for digit. Geometry (arc centres from `R`, arc length, the angle between tool vectors, distances) is computed in `double` in a small `Ncx.Core.Geometry` namespace: `Vec3`, `Arc`, `Plane`, an `Angle` helper. That is all levels 0 and 1 of the VM need, so `Ncx.Core` takes no math package. `System.Numerics.Vector3` is single precision and is not used. When the kinematics module needs rotation matrices, frames and an inverse for 5-axis poses, it takes MathNet.Numerics (MIT) in `Ncx.Kinematics` only; nothing of it leaks into the model or the NCX text. A `double` goes back into a stored number only through `Vec3.RoundToDecimal`, at the one VM precision of 6 decimals, half away from zero, whatever the units (virtual machine 3.2, D121).
 
 ## 5. Virtual machine (Ncx.Core)
 
@@ -467,7 +467,7 @@ stateDiagram-v2
     Loaded --> Empty : TOOL=0
 ```
 
-Not drawn: `TOOL=k` in `Loaded` changes the tool without a preload and stays in `Loaded`; `PRELOAD=m2` in `Pending` replaces the pending preload. Leaving `Pending`: `TOOL=m` and the bare `TOOL` change to the preloaded tool and consume the preload; `TOOL=k` with another tool changes too but is a WARNING (the magazine cycles twice); `PRELOAD=0` only drops the preload and returns to the state the spindle was in (`Pending` remembers whether it held a tool, so the return may also be to `Empty`). A bare `TOOL` in `Empty` or `Loaded` is an ERROR (nothing preloaded); `PRELOAD=n` of the tool already in the spindle is a WARNING and changes nothing. Every transition into `Loaded` with a new tool raises `TOOL_END` for the old tool and `TOOL_BEGIN` for the new one.
+Not drawn: `TOOL=k` in `Loaded` changes the tool without a preload and stays in `Loaded`; `PRELOAD=m2` in `Pending` replaces the pending preload. Leaving `Pending`: `TOOL=m` and the bare `TOOL` change to the preloaded tool and consume the preload; `TOOL=k` with another tool changes too and consumes the preload as well, with a WARNING (the magazine cycles twice, D132); `PRELOAD=0` only drops the preload and returns to the state the spindle was in (`Pending` remembers whether it held a tool, so the return may also be to `Empty`). A bare `TOOL` in `Empty` or `Loaded` is an ERROR (nothing preloaded); `PRELOAD=n` of the tool already in the spindle is a WARNING and changes nothing. Every transition into `Loaded` with a new tool raises `TOOL_END` for the old tool and `TOOL_BEGIN` for the new one.
 
 ### 5.3 Events
 

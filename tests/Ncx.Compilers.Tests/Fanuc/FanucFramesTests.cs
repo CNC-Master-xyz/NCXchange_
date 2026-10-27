@@ -158,7 +158,8 @@ public sealed class FanucFramesTests
     public void Transformations_OnAndOff_AreTheCodesOfFanuc4()
     {
         string body = FanucCompile.Body(
-            "TOOL=1 OFFSET:LEN=1\nTCPM=ON\nTCPM=OFF\nPOLAR=ON\nPOLAR=OFF\nCYLINDER=30\nCYLINDER=OFF");
+            "TOOL=1 OFFSET:LEN=1\nTCPM=ON\nTCPM=OFF\nPOLAR=ON\nPOLAR=OFF\nCYLINDER=30\nCYLINDER=OFF",
+            FanucCompile.TableRotaryAxis);
 
         Assert.Equal("T1 M6\nG43.4 H1\nG49\nG12.1\nG13.1\nG7.1 C30.\nG7.1 C0\nG43 H1\n", body);
     }

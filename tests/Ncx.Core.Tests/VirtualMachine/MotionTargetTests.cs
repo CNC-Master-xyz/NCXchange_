@@ -45,13 +45,29 @@ public sealed class MotionTargetTests
         Assert.Equal(AxisPosition.Unknown, vm.Position("X"));
     }
 
-    // VM 3.1, D35: after HOME the axis is known in the MACHINE frame only, and the current value in the workpiece
-    // frame the block programs in is unknown.
+    // D183: after HOME the axis is known in the MACHINE frame only; the workpiece frame differs from it on X by shifts
+    // alone, so IX adds to the machine position, and X stays known in the MACHINE frame only (VM 3.1, D35).
     [Fact]
-    public void Line_IncrementalWordAfterHome_IsAnErrorInTheWorkpieceFrame()
+    public void D183_IncrementalWordAfterHome_AddsInTheMachineFrame()
     {
         VmHarness vm = new VmHarness(VmMachines.MillTurn())
-            .Execute("UNITS=MM F=100 SPINDLE:TOOL=CW", "HOME X", "LINE IX=5");
+            .Execute("UNITS=MM F=100 SPINDLE:TOOL=CW", "HOME X", "SHIFT X=7", "LINE IX=5");
+
+        vm.AssertNoDiagnostics();
+        Assert.Equal(new AxisPosition(305m, PositionFrame.Machine, Known: true), vm.Position("X"));
+    }
+
+    // D183: a ROTATE in a plane holding X, a MIRROR of X or a TILT makes the two frames differ by more than shifts, and
+    // IX after HOME is the VM202 ERROR; so is IC on a rotary axis right after TILT_AXIS with MOVE=TURN (D126).
+    [Theory]
+    [InlineData("ROTATE=30", "LINE IX=5")]
+    [InlineData("MIRROR=X", "LINE IX=5")]
+    [InlineData("TILT B=45", "LINE IX=5")]
+    [InlineData("TILT_AXIS B=30 MOVE=TURN", "RAPID IB=10")]
+    public void D183_IncrementalWordAfterHomeUnderATurningEntry_IsAnError(string entry, string motion)
+    {
+        VmHarness vm = new VmHarness(VmMachines.MillTurn())
+            .Execute("UNITS=MM F=100 SPINDLE:TOOL=CW", "HOME X", entry, motion);
 
         Assert.Equal([DiagnosticCodes.IncrementalFromUnknownPosition], vm.Codes());
     }

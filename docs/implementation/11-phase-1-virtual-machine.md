@@ -78,7 +78,7 @@ Files: `src/Ncx.Core/VirtualMachine/Validation/`, one file per family of VM 5 (s
 
 Cite: VM 5 (every item), 3.9, language 4.13 rules; D64, D89, D99, D100, D103.
 
-Tests first: one test per ERROR and per WARNING of VM 5, named after the rule, with the smallest input that triggers it (a two- or three-block file inside the frame); the expected diagnostics of each example as text files `tests/Ncx.Acceptance/Expected/<name>.check.txt` (without a machine file: `PATTERN_LOOP` one WARNING for the unresolved expressions, `INCREMENTAL_SUB` none after D99 and D100 except the `HOME` WARNINGs, `MILLTURN_TRANSFER` the D103 "not checked" WARNINGs for `TURRET1`, `SUB`, `SUB_CHUCK`, `MAIN_CHUCK` and `Z2` and the "spindle OFF before a `LINE`" WARNING at `LINE C=90` (the holder `TURRET1` created on the spot has no spindle, so the default spindle `MAIN` is checked; the `SUB` created on the spot has its own C axis, D103), `POLAR_FACE` only the `HOME C` WARNING (D100), `2.5D_FRAESEN` none), compared as whole files.
+Tests first: one test per ERROR and per WARNING of VM 5, named after the rule, with the smallest input that triggers it (a two- or three-block file inside the frame); the expected diagnostics of each example as text files `tests/Ncx.Acceptance/Expected/<name>.check.txt` (without a machine file: `PATTERN_LOOP` one WARNING for the unresolved expressions, `INCREMENTAL_SUB` none after D99 and D100 except the `HOME` WARNINGs, `MILLTURN_TRANSFER` the D103 "not checked" WARNINGs for `TURRET1`, `SUB`, `SUB_CHUCK`, `MAIN_CHUCK` and `Z2` and no "spindle OFF before a `LINE`" WARNING (the default spindle is `TOOL`, and the turning `LINE`s cut while the spindle of the workpiece holder `MAIN` runs, which passes the rule, D129; the `SUB` created on the spot has its own C axis, D103), `POLAR_FACE` only the `HOME C` WARNING (D100), `2.5D_FRAESEN` none), compared as whole files.
 
 Acceptance (D103 reading of the phase table): no ERROR for any of the five examples without a machine file.
 
@@ -114,7 +114,7 @@ Then `docs/reading-the-code.md` (P0-07 tour) is written from `Program.cs` throug
 
 - The STATIC pass over uncalled subprograms with the D99 default entry state and the suppressed validations is the place where a wrong assumption stays hidden until a compiler needs the state; keep the suppressed list short and name every suppression in the diagnostics table.
 - `Snapshot()` on every block for `Before` and `After` costs allocations on the 834-block `3D_FRAESEN` programs and the megabyte corpus files; measure in P1-05 and, if needed, snapshot lazily per changed part. Correctness first; the code-guidelines forbid `Span<T>` in the parts an NC programmer touches, and the VM core is not such a part.
-- The arc resolver uses `double`; the tolerance comparison must be against the configured `decimal` tolerance converted once. Never let a `double` reach the position store as anything but a rounded `decimal` with the units' decimals (D62).
+- The arc resolver uses `double`; the tolerance comparison must be against the configured `decimal` tolerance converted once. Never let a `double` reach the position store as anything but a `decimal` rounded to the one VM precision of 6 decimals, half away from zero, in `MM` and `INCH` alike (D62, D121).
 - Events and snapshots are the plugin surface (D106); every public property here is an API promise. Keep the records small and name them after the specification.
 
 ## Exit checklist

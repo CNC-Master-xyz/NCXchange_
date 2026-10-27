@@ -26,6 +26,8 @@ internal static class VectorValidation
                 "language 4.3; VM 5; D81"),
             ValidationRule.Error(DiagnosticCodes.VectorNotUnitLength,
                 "Vector words not of unit length within the arc tolerance.", "VM 3.1, 5; D36, D81"),
+            ValidationRule.Error(DiagnosticCodes.VectorUnderCycleCall, "Vector words in a CYCLE_CALL block.",
+                "language 4.3, 5 rule 2; VM 3.1, 5; D185"),
         ],
     };
 }

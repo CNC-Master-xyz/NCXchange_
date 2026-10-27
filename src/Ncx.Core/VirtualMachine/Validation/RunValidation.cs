@@ -28,6 +28,7 @@ internal sealed class RunValidation
 
     // The expressions STATIC mode left unresolved, each once, and the block of the first (virtual machine 1, 5).
     private readonly HashSet<Word> _unresolved = new(ReferenceEqualityComparer.Instance);
+    private readonly MaxFeedCheck _maxFeed = new();
     private Block? _firstUnresolved;
 
     // VM484 comes once per program (D374).
@@ -99,6 +100,7 @@ internal sealed class RunValidation
             _tipUnderTiltReported = false;
         }
 
+        _maxFeed.BeforeBlock(context);
         _compensationBefore = state.Motion.Comp;
         _workpieceHolderBefore = state.Frame.WorkpieceHolder;
         _positionsBefore = _comparesLimits && MotionRules.IsMotion(block)
@@ -123,7 +125,7 @@ internal sealed class RunValidation
     {
         FrameValidation.CheckSetposNamesAnAxis(context);
         FrameValidation.CheckToleranceWords(context);
-        MotionValidation.CheckFeedAboveMaxFeed(context);
+        _maxFeed.AfterBlock(context);
         if (_positionsBefore is not null)
         {
             MotionValidation.CheckLimits(context, _positionsBefore);
