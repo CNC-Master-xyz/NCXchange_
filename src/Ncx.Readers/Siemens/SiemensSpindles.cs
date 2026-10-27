@@ -28,36 +28,43 @@ internal static class SiemensSpindles
     }
 
     /// <summary>
-    /// The role of spindle n of the control: the role whose templates write S{n}= or M{n}=, else the role of the
-    /// resource S{n} (controller-mapping 4; machine-config 5); null when the machine names none.
+    /// The role of spindle n of the control: the role of the spindle whose number is n, its number being the address
+    /// extension its templates write, S{n}= or M{n}=, else the digits of its resource id, as the compiler numbers it
+    /// (machine-config 5; controller-mapping 4; D294); null when no spindle has the number.
     /// </summary>
-    // TODO(question): machine-config names no number for the spindle whose templates write the plain S and M3, the
-    // configured master spindle, which SETMS(n) and S0= need; the reader takes n from its resource id S{n}, as the
-    // example files name their spindles.
     public static string? RoleOf(SiemensBlock block, int spindle)
     {
         MachineConfig machine = block.Machine;
-        foreach (KeyValuePair<string, FunctionTable> table in machine.SpindleTables)
-        {
-            foreach (string template in table.Value.States.Values)
-            {
-                if (Extension(template, 'S') == spindle || Extension(template, 'M') == spindle)
-                {
-                    return table.Key;
-                }
-            }
-        }
-
-        string id = "S" + spindle.ToString(System.Globalization.CultureInfo.InvariantCulture);
         foreach (KeyValuePair<string, string> role in machine.Roles)
         {
-            if (role.Value == id && machine.FindResource(id)?.IsSpindle == true)
+            if (machine.FindResource(role.Value)?.IsSpindle == true
+                && NumberOf(machine, role.Key, role.Value) == spindle)
             {
                 return role.Key;
             }
         }
 
         return null;
+    }
+
+    // The number of a spindle: the first extension its templates write, else the digits of its resource id; null for
+    // neither (D294).
+    private static int? NumberOf(MachineConfig machine, string role, string id)
+    {
+        if (machine.SpindleTables.TryGetValue(role, out FunctionTable? table))
+        {
+            foreach (string template in table.States.Values)
+            {
+                if ((Extension(template, 'S') ?? Extension(template, 'M')) is int extension)
+                {
+                    return extension;
+                }
+            }
+        }
+
+        string digits = new([.. id.SkipWhile(character => !char.IsAsciiDigit(character))
+            .TakeWhile(char.IsAsciiDigit)]);
+        return digits.Length > 0 ? SiemensNumbers.WholeNumber(digits) : null;
     }
 
     /// <summary>

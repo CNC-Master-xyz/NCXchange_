@@ -1,3 +1,4 @@
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.Writing;
 using static Ncx.Readers.Tests.Siemens.SiemensRead;
@@ -79,6 +80,17 @@ public sealed class SiemensToolTests
     {
         Assert.Equal(Lines("SPINDLE:SUB=CW RPM:SUB=1000", "SPINDLE:MAIN=CCW RPM:MAIN=500"),
             CheckedBody("SETMS(2)\nS1000 M3\nSETMS\nS500 M4", MillTurn()));
+    }
+
+    // D294: a spindle's number is the address extension its templates write, else the digits of its resource id, so
+    // SETMS(1) finds the main spindle of a machine that names it SP1; a spindle with neither keeps SETMS(n) RAW.
+    [Fact]
+    public void SetmsN_MatchesTheDigitsOfTheResourceId()
+    {
+        MachineConfig machine = MillTurnWith("\"S1\"", "\"SP1\"");
+
+        Assert.Equal(Lines("SPINDLE:MAIN=CW RPM:MAIN=1000", Raw("SETMS(7)")),
+            CheckedBody("SETMS(2)\nSETMS(1)\nS1000 M3\nSETMS(7)", machine));
     }
 
     // Rule 3: S2= and M2=3 address spindle 2, S1= and M1=4 spindle 1 (siemens 5).
