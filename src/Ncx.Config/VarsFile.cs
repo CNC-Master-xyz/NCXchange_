@@ -1,3 +1,4 @@
+using System.Globalization;
 using Ncx.Core.Model;
 
 namespace Ncx.Config;
@@ -8,6 +9,9 @@ namespace Ncx.Config;
 /// </summary>
 public sealed record VarsFile
 {
+    // The names that read the state of the control, the only ones with an index (language 4.12, D145).
+    private const string SystemPrefix = "SYS_";
+
     /// <summary>
     /// The start value of each variable in file order: Q1 = 10 as an integer, Q2 = 5.5 as a decimal, QS1 = "TEXT" as
     /// a string.
@@ -43,14 +47,25 @@ public sealed record VarsFile
         }
 
         // Every key of the file names a variable; its start value is a number or a string, kept as written
-        // (machine-config 8).
+        // (machine-config 8). The key is the name as the program writes it, without $: a bare key, or a quoted key
+        // with the index of a SYS_ register as plain whole numbers, "SYS_WEAR_Z[99]", comma-separated for a
+        // multi-index, "SYS_X[3,1]" (D120, D145).
         ConfigTable root = document.Root("machine-config 8");
         var variables = new Dictionary<string, Value>(StringComparer.Ordinal);
         foreach (string name in root.Keys)
         {
+            if (KeyOf(name) is not string key)
+            {
+                diagnostics.Error(root.LineOf(name), DiagnosticCodes.ValueNotAllowed,
+                    $"\"{name}\" names no variable as a program writes it: a name such as Q1, or a SYS_ name with the "
+                    + "index of its register as plain whole numbers, \"SYS_WEAR_Z[99]\" or \"SYS_X[3,1]\" "
+                    + "(machine-config 8, D120).");
+                continue;
+            }
+
             if (root.NumberOrString(name) is Value value)
             {
-                variables[name] = value;
+                variables[key] = value;
             }
         }
 
@@ -60,5 +75,50 @@ public sealed record VarsFile
         }
 
         return new VarsFile { Variables = variables };
+    }
+
+    // The key under which the variable store looks the start value up: the name, and for a SYS_ register the index
+    // as whole numbers without leading zeros; null for a key of another form (D120). The name is an ADDR of
+    // language 3, an index stands on a SYS_ name only (D145).
+    private static string? KeyOf(string key)
+    {
+        int bracket = key.IndexOf('[', StringComparison.Ordinal);
+        string name = bracket < 0 ? key : key.Substring(0, bracket);
+        if (!IsName(name))
+        {
+            return null;
+        }
+
+        if (bracket < 0)
+        {
+            return name;
+        }
+
+        if (!name.StartsWith(SystemPrefix, StringComparison.Ordinal) || !key.EndsWith(']'))
+        {
+            return null;
+        }
+
+        var indexes = new List<string>();
+        foreach (string index in key.Substring(bracket + 1, key.Length - bracket - 2).Split(','))
+        {
+            if (index.Length == 0 || !index.All(char.IsAsciiDigit)
+                || !int.TryParse(index, NumberStyles.None, CultureInfo.InvariantCulture, out int register))
+            {
+                return null;
+            }
+
+            indexes.Add(register.ToString(CultureInfo.InvariantCulture));
+        }
+
+        return name + "[" + string.Join(',', indexes) + "]";
+    }
+
+    // [A-Z][A-Z0-9_]*, an ADDR of language 3.
+    private static bool IsName(string name)
+    {
+        return name.Length > 0 && char.IsAsciiLetterUpper(name[0])
+            && name.All(character => char.IsAsciiLetterUpper(character) || char.IsAsciiDigit(character)
+                || character == '_');
     }
 }

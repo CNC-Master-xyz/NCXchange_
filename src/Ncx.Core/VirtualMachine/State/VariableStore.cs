@@ -198,9 +198,8 @@ internal sealed class VariableStore
     /// <param name="index">The register or table row; null without one.</param>
     public static string StartValueKey(string name, int? index)
     {
-        // TODO(question): machine-config 8 shows plain keys only (Q1 = 10), and virtual machine 2.7 reads an indexed
-        // register "from the vars file" without saying how the file names it (wave-1 question #89); the key is the
-        // name as the program writes it with its index, "SYS_WEAR_Z[99]" = 0.012, until D120 is answered.
+        // The key is the name as the program writes it, without $, with the index as a plain whole number,
+        // "SYS_WEAR_Z[99]" = 0.012 (D120; machine-config 8).
         return index is int register ? name + "[" + register.ToString(CultureInfo.InvariantCulture) + "]" : name;
     }
 

@@ -157,10 +157,9 @@ internal sealed partial class Evaluator
         // A value the state does not give, a register the virtual machine does not hold, comes from <file>.vars.toml
         // in INTERPRETED mode, and is an ERROR without one there (virtual machine 2.7, 3.6); the message names the vars
         // file as the way out (implementation 14, phase 4 risks).
-        // TODO(question): virtual machine 2.7 reads a register the virtual machine does not hold from the vars file,
-        // and 3.6 names only the ERROR, for a name the configuration does not map as for an unknown state (wave-1
-        // question #89); the vars file counts for both, so that a run without a machine file, whose default machine
-        // maps no SYS_ name, can read a register, until D120 is answered.
+        // The vars file counts wherever the virtual machine has no value, also for a name the configuration does not
+        // map, so that a run without a machine file, whose default machine maps no SYS_ name, can read a register
+        // (D120; virtual machine 2.7, 3.6).
         if (_vars.GetSystemStartValue(variable.Name, register) is VariableValue start)
         {
             return ResultOf(start);
