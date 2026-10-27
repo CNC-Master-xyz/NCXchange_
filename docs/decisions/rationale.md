@@ -8,7 +8,7 @@ Status: 2026-10-01, six rounds answered; the fourth round (2026-09-11) got follo
 
 Sixth round, asked 2026-09-13: seventy-five questions found while building wave 1 (the tasks P0-01 to P0-06, P2-01 to P2-04a, P1-01 to P1-03a and P4-01a). They cover 87 of the 111 questions those tasks recorded; the other 24 are answered by the documents or are a matter of implementation. Of the seventy-five, 23 were settled on 2026-10-01 from the manual library and stand in "Answered (ninth round, 2026-10-01)" below; 52 are still open here. Until an entry is answered, the code keeps the least committal workaround, marked `TODO(question)` where it applies, and the answer replaces workaround and marker in the commit that changes the specification. `../implementation/03-open-questions.md` maps every question and its code location to its entry here, or to the section that already answers it. The entries are grouped by when the answer is needed; the last group holds facts about controllers and machines that a manual or the machine has to confirm, each with the recommendation that applies if it does.
 
-Status 2026-10-27: every entry below was answered or decided on the maintainer's delegation and moved to "Answered (tenth to thirteenth rounds, 2026-10-27)", except D165. The fourteenth round, D388 to D392, was asked the same day while implementing the measurement points and is open.
+Status 2026-10-27: every entry below was answered or decided on the maintainer's delegation and moved to "Answered (tenth to thirteenth rounds, 2026-10-27)", except D165. The fourteenth round, D388 to D392, was asked the same day while implementing the measurement points and answered by the maintainer the same day ("Answered (fourteenth round, 2026-10-27)").
 
 ### Later
 
@@ -20,9 +20,11 @@ Where: LICENSE; code-guidelines 9 (license line); optionally the D75 row.
 ANSWER:
 Proposed from the manual library 2026-09-27: the library does not answer this (searched the whole cached library for 'MIT License', 'MIT-Lizenz', 'Open-Source-Lizenz', 'Open Source License', 'GNU General Public', 'Apache License' and 'BSD License': no file matches any of them. 'Urheberrechtsinhaber' / 'copyright holder' matches exactly three files, all three Philips MillPlus IT manuals, and in each it is the publisher's own reservation of rights beside '© Heidenhain Numeric B.V. Eindhoven, Niederlande 2008' ('Vervielfältigen ... ist lediglich zulässig mit schriftlicher Zustimmung des Urheberrechtsinhabers', page 18 of the V600 Programmierhandbuch). No manual discusses open-source licensing or how to name a copyright holder. Nothing in a CNC manual bears on who holds the copyright of NCXchange; this is the maintainer's to state). The recommendation above stands for the maintainer.
 
-### Fourteenth round: found while implementing the measurement points (branch `cam-tool-point`), asked 2026-10-27
+---
 
-Questions the decisions D369 and D372 to D376 do not answer, and the two CAM requests R1-13 and R1-14 of `/Users/peterburgener/project_spike/plans/2026-10-01-ncxchange-requests-release1.md`, which no decision covers. Each entry names the conservative option the code takes meanwhile; the code marks it with the D number.
+## Answered (fourteenth round, 2026-10-27; settled in `decisions.md`)
+
+Questions the decisions D369 and D372 to D376 do not answer, and the two CAM requests R1-13 and R1-14 of `/Users/peterburgener/project_spike/plans/2026-10-01-ncxchange-requests-release1.md`, which no decision covers; found while implementing the measurement points (branch `cam-tool-point`) and asked 2026-10-27. Each entry names the conservative option the code took meanwhile. The maintainer answered all five the same day; D390 to D392 as coded, D388 and D389 as recommended, which replaced the interim behaviour.
 
 #### D388 A Fanuc tool change without a length offset (R1-13)
 Question: `TOOL=1 RPM=6000` compiles for `fanuc-mill-30i` to `T1 M6` and `S6000 M3` and no `G43 H1`, so the control never applies the tool length and the tip runs one tool length below the programmed Z. Heidenhain (`TOOL CALL`) and Siemens (the active edge) apply the length either way. Should a Fanuc tool change without `OFFSET:LEN` (and without a point word that D373 maps) apply the length register of the tool's own number, or at least warn when a motion follows the change with no length offset active?

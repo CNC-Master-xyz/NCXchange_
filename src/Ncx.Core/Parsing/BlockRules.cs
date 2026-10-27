@@ -269,9 +269,9 @@ internal static class BlockRules
     }
 
     // TOOL_POINT, TIP_OFFSET and POINT_RADIUS are valid in a TOOL block or in a block of their own (language 4.4,
-    // D372). D391: a block of their own carries nothing but the point words, SKIP and a COMMENT; the conservative
-    // reading until D391 is answered, because a point change takes effect with the next tool-axis motion and a block
-    // that moves or switches something else would hide where it starts.
+    // D372). A block of their own carries nothing but the point words, SKIP and a COMMENT (decisions.md D391), because
+    // a point change takes effect with the next tool-axis motion and a block that moves or switches something else
+    // would hide where it starts.
     private static void CheckPointWords(Block block, Diagnostics diagnostics)
     {
         Word? pointWord = null;

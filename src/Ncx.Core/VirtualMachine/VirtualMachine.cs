@@ -249,8 +249,8 @@ public sealed partial class VirtualMachine
 
     // The point words are modal per holder (D372). D390: TOOL_POINT with a role addresses the holder of the role as
     // TOOL does; without one, and TIP_OFFSET and POINT_RADIUS always, they address the holder of the TOOL_POINT or
-    // TOOL of their block, else the holder of the last TOOL, as OFFSET does (virtual machine 3.8 rule 2). The
-    // conservative reading until D390 is answered: on a machine with one holder it is default_holder either way.
+    // TOOL of their block, else the holder of the last TOOL, as OFFSET does (virtual machine 3.8 rule 2; decisions.md
+    // D390): a point change belongs to the tool that is cutting.
     private void ResolvePointWords(BlockContext context, string? toolHolder)
     {
         Block block = context.Block;

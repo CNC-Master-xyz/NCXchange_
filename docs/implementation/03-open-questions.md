@@ -464,8 +464,8 @@ The twelve requests of opencam, the first client of NCXchange, for its release 1
 | 228 | P1-03 (the VM half, `CycleRules.cs` and its D190 TODO(question)), with P2-01 for the `[cycles]` key and P4-02 for the runtime estimate, all closed | Does REAM feed out only to `CLEARANCE` on every machine, as D190's change 2 says, or to a plane the machine file states, since the 840D sl `CYCLE85` and the newer Heidenhain cycle 201 feed out to the retract plane? | D378 (open) | D190 |
 | 229 | P3-06 Fanuc compiler, follow-up on branch cam-tool-point | Should a Fanuc tool change without a length offset apply H of the tool number, or warn at the next motion? | D388 (open); meanwhile nothing changes, and a named point gives G43 H from the mapping (D392) | R1-13 |
 | 230 | P3-06 Fanuc compiler, follow-up on branch cam-tool-point | Does the Fanuc compiler replace ( and ) in a comment text, or refuse them, and is there a comment length limit? | D389 (open); meanwhile the ERROR CMP312 in `FanucProgramFrame.WithoutBrackets` | R1-14 |
-| 231 | CAM-tool-point, P1-01 and P1-02 | Which holder does a point word without a role address, and which do TIP_OFFSET and POINT_RADIUS follow? | D390 (open); coded as recommended in `VirtualMachine.ResolvePointWords` | R1-11 |
-| 232 | CAM-tool-point, P0-04 | What may a block of the point words carry beside them? | D391 (open); coded as recommended, PAR017 in `BlockRules.CheckPointWords` | R1-11 |
+| 231 | CAM-tool-point, P1-01 and P1-02 | Which holder does a point word without a role address, and which do TIP_OFFSET and POINT_RADIUS follow? | settled 2026-10-27 (D390, as coded in `VirtualMachine.ResolvePointWords`) | R1-11 |
+| 232 | CAM-tool-point, P0-04 | What may a block of the point words carry beside them? | settled 2026-10-27 (D391, as coded: PAR017 in `BlockRules.CheckPointWords`) | R1-11 |
 | 233 | CAM-tool-point, P3-03 with the three family compilers | Does an explicit TOOL_POINT=1 write the register of the mapping? | D392 (open); coded as recommended, `HolderState.PointNamed` and `CompilerBase.PointRegistersOf` | R1-11, R1-13 |
 
 ## Manual audit 2026-10-26
