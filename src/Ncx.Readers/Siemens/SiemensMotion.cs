@@ -503,10 +503,59 @@ internal static class SiemensMotion
         if (value is null)
         {
             block.Draft.KeepAsRaw($"{word.Address}{word.Text} has no NCX value: {problem}");
+            return null;
         }
 
-        return value;
+        return FeedInNcxUnits(block, value, word);
     }
+
+    /// <summary>
+    /// A feed in the unit of NCX: under G70 or G71 whose unit differs from the basic system of the machine
+    /// (base_units, MD10240), the feed stays in the basic system on the control, so the reader converts it into the
+    /// unit UNITS names, with the WARNING RDR507 naming the code (D292; NC-Programmierung SW4.92 p.164-166,
+    /// cnc-manuals); any other feed as it is.
+    /// </summary>
+    /// <param name="block">The block being read.</param>
+    /// <param name="feed">The feed as the source gives it.</param>
+    /// <param name="word">The feed word, for the WARNING.</param>
+    public static Value FeedInNcxUnits(SiemensBlock block, Value feed, SourceWord word)
+    {
+        string? code = block.Facts.UnitsCode;
+        string? units = code switch
+        {
+            "G70" => "INCH",
+            "G71" => "MM",
+            _ => null,
+        };
+        string? basic = block.Machine.Machine.ResolvedBaseUnits;
+        if (units is null || basic is null || string.Equals(units, basic, StringComparison.OrdinalIgnoreCase))
+        {
+            return feed;
+        }
+
+        bool toInch = units == "INCH";
+        Value converted;
+        if (SiemensNumbers.NumberOf(feed) is decimal number)
+        {
+            converted = SiemensNumbers.Of(Math.Round(toInch ? number / MillimetresPerInch : number * MillimetresPerInch,
+                FeedDecimals, MidpointRounding.AwayFromZero));
+        }
+        else
+        {
+            string text = feed is ExprValue expression ? expression.Text : feed.ToCanonical();
+            converted = SiemensExpression.Parse(block, "(" + text + (toInch ? ") / 25.4" : ") * 25.4"), out _)
+                ?? feed;
+        }
+
+        block.Draft.Warnings.Add(new SiemensWarning(DiagnosticCodes.SiemensFeedInTheBasicSystem,
+            $"{word.Address}={word.Text} stands under {code}, which leaves the feed in the basic system {basic} of the "
+            + $"machine; the reader converts it into {units}: {converted.ToCanonical()} (D292)."));
+        return converted;
+    }
+
+    // 25.4 mm to the inch, and the decimals a converted feed keeps (D121).
+    private const decimal MillimetresPerInch = 25.4m;
+    private const int FeedDecimals = 6;
 
     // A line ends in its own direction, which a CT after it continues (controllers siemens.md 3).
     private static void Tangent(SiemensBlock block, SiemensPlane plane, Dictionary<string, decimal> start)

@@ -94,6 +94,12 @@ internal sealed class SiemensFacts
     public string DiameterMode { get; set; } = "DIAMOF";
 
     /// <summary>
+    /// The code of group 13 the source wrote last, G70, G71, G700 or G710; null for the reset state of the group,
+    /// whose feeds are in the basic system (D292).
+    /// </summary>
+    public string? UnitsCode { get; set; }
+
+    /// <summary>
     /// The master spindle SETMS(n) selected; null for the configured one.
     /// </summary>
     public int? MasterSpindle { get; set; }
@@ -211,6 +217,7 @@ internal sealed class SiemensFacts
             WorkingPlane = WorkingPlane,
             FeedType = FeedType,
             DiameterMode = DiameterMode,
+            UnitsCode = UnitsCode,
             MasterSpindle = MasterSpindle,
             ModalCycle = ModalCycle,
             TransformOn = TransformOn,
@@ -245,6 +252,7 @@ internal sealed class SiemensFacts
         WorkingPlane = other.WorkingPlane;
         FeedType = other.FeedType;
         DiameterMode = other.DiameterMode;
+        UnitsCode = other.UnitsCode;
         MasterSpindle = other.MasterSpindle;
         ModalCycle = other.ModalCycle;
         TransformOn = other.TransformOn;
@@ -303,6 +311,12 @@ internal sealed class SiemensFacts
             if (call.WrittenFeed?.ToCanonical() != agreed.WrittenFeed?.ToCanonical())
             {
                 agreed.WrittenFeed = null;
+            }
+
+            // Callers that differ in group 13 leave the unit of the feeds open; the reader then converts none (D292).
+            if (call.UnitsCode != agreed.UnitsCode)
+            {
+                agreed.UnitsCode = null;
             }
         }
 

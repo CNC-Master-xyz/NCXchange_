@@ -165,6 +165,21 @@ public sealed class SiemensMotionTests
             CheckedBody("G0 X1 Y1\nG1 X=R1*2 Y=R2+1 F100"));
     }
 
+    // D292: G70 and G71 switch only the geometry, the feeds stay in the basic system of MD10240 (base_units, here the
+    // units_default MM), so under G70 the reader converts every feed from mm into inch with the WARNING RDR507;
+    // G700 switches the feeds too and converts nothing (NC-Programmierung SW4.92 p.164-166, cnc-manuals).
+    [Fact]
+    public void FeedUnderG70OnAMetricBase_IsConvertedWithTheWarning()
+    {
+        NcxProgram program = FramedProgram("G70 G1 X1 F254\nG1 X2 F=R1\nG700 G1 X3 F10\nG71 G1 X4 F500");
+
+        Assert.Equal(Lines("LINE X=1 F=10 UNITS=INCH", "LINE X=2 F={($R1) / 25.4}", "LINE X=3 F=10",
+                "LINE X=4 F=500 UNITS=MM"),
+            BodyOf(NcxWriter.Write(program)));
+        Assert.Equal([DiagnosticCodes.SiemensFeedInTheBasicSystem, DiagnosticCodes.SiemensFeedInTheBasicSystem],
+            Codes(program));
+    }
+
     // G70, G71, G700 and G710 are UNITS (controller-mapping 1, UNITS).
     [Fact]
     public void G70G71G700G710_AreUnits()

@@ -225,14 +225,14 @@ internal static class SiemensGroups
         block.KeepAsRawWord(word);
     }
 
-    // G70 and G700 are inch, G71 and G710 metric (controller-mapping 1, UNITS).
-    // TODO(question): controller-mapping 1 has the reader report which pair the source used, G70/G71 for the geometry
-    // only or G700/G710 for everything, so that the compiler keeps it, and no word or key carries it yet (the draft
-    // decision of phase 5); both pairs are read as UNITS, and under G70 on a metric machine the feed stays metric on
-    // the control while NCX reads it in inches.
+    // G70 and G700 are inch, G71 and G710 metric, UNITS as written (controller-mapping 1, UNITS; D292). G70 and G71
+    // switch only the geometry and leave the feeds in the basic system of MD10240, so where the pair differs from
+    // base_units the reader converts the feeds under it (SiemensMotion.FeedInNcxUnits); G700 and G710 switch the feeds
+    // too (NC-Programmierung SW4.92 p.164-166, cnc-manuals).
     private static void ReadUnits(SiemensBlock block, SourceWord word, string command)
     {
         block.MarkRead(word);
+        block.Facts.UnitsCode = command;
         AddModal(block, "UNITS", command is "G70" or "G700" ? "INCH" : "MM");
     }
 

@@ -341,7 +341,7 @@ The tasks of wave 3 (P3-03, P3-04, P3-06, P3-07, P4-02 with its review fixes, P4
 | 112 | P5-01 | Do G54 to G599 and G500 end the programmable frame on the control? (the marker cites wave-2 question #59, D244) | settled 2026-10-01 (D340) (with 99) | `src/Ncx.Readers/Siemens/SiemensFrames.cs:41` |
 | 113 | P5-01 | Is G75 without FP the fixed point 1, HOME with POINT=1? | settled 2026-10-27 (D260) | `src/Ncx.Readers/Siemens/SiemensFrames.cs:293` |
 | 114 | P5-01 | Words of the states of the spindle tables and of [spindle_sync], and a PHASE code without an angle (the marker cites D154) | settled 2026-10-27 (D154) | `src/Ncx.Readers/Siemens/SiemensFunctions.cs:105` |
-| 115 | P5-01 | Which word or key tells G70/G71 (geometry only) from G700/G710? | D292 | `src/Ncx.Readers/Siemens/SiemensGroups.cs:206` |
+| 115 | P5-01 | Which word or key tells G70/G71 (geometry only) from G700/G710? | settled 2026-10-27 (D292) | `src/Ncx.Readers/Siemens/SiemensGroups.cs:206` |
 | 116 | P5-01 | Which code of group 1 is active before the source writes one? (the marker cites wave-2 question #56, D242) | settled 2026-10-01 (D340) (with 99) | `src/Ncx.Readers/Siemens/SiemensMotion.cs:236` |
 | 117 | P5-01 | Should MSG("...") become a word of its own, MESSAGE="..."? | settled 2026-10-01 (D326) | `src/Ncx.Readers/Siemens/SiemensRaw.cs:70` |
 | 118 | P5-01 | What does RET do in a main program? | settled 2026-10-01 (D346) (with 108) | `src/Ncx.Readers/Siemens/SiemensReader.cs:346` |

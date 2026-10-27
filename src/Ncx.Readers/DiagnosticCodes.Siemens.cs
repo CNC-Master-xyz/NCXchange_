@@ -51,6 +51,13 @@ public static partial class DiagnosticCodes
     public const string SiemensDivisionRoundingUnknown = "RDR506";
 
     /// <summary>
+    /// RDR507, a WARNING: a feed under G70 or G71 whose unit differs from the basic system of the machine (base_units,
+    /// MD10240) stays in the basic system on the control, so the reader converts it into the unit UNITS names and names
+    /// the code (D292).
+    /// </summary>
+    public const string SiemensFeedInTheBasicSystem = "RDR507";
+
+    /// <summary>
     /// RDR509, a WARNING: G75 FP=1, or G75 without FP, which the control reads as FP=1, approaches fixed point 1, and
     /// NCX has no POINT for it, since POINT=1 is the reference point G74 approaches; the block is kept as RAW (D260).
     /// </summary>
