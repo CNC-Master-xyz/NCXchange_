@@ -241,7 +241,7 @@ A job (which programs run on which channel) is described in a job manifest next 
 | `SUB=END` | | End of the subprogram section: return to the caller (Fanuc `M99`, Heidenhain `LBL 0`, Siemens `RET` or `M17`). | file |
 | `RETURN` | | Return to the caller before `SUB=END` is reached, for example under a condition. In a program (not in a subprogram) it is a WARNING and treated as `JUMP=END`. | block |
 | `CALL=100` | sub name, or string for an external program | Call a subprogram of the file by its `NAME` (`M98 P100`, `CALL LBL 100`, `L100`) or an external program by file name (`CALL="O9010"`, `CALL PGM`, `EXTCALL`; on Fanuc the code of the external call is the machine's `external_call`, `M98` without it, D322). | block |
-| `ARG:A=1` | number or expression; addr = argument name | Argument of the `CALL` in the same block (`G65 P9010 A1`). The callee sees it as a local variable. | block |
+| `ARG:V1=1` | number or expression; addr = argument name | Argument of the `CALL` in the same block (`G65 P9010 A1`, whose `A` is the local `#1`, `V1`). Every name an `ARG` assigns is a local of that call: it hides a caller variable of the same name until `SUB=END` or `RETURN` (D149). A Siemens `VAR` parameter is not an `ARG`. | block |
 | `TIMES=3` | integer or expression | Repeat count for `CALL` (`M98 P100 L3`) or `REPEAT`; 1 when it is missing (D212). | block |
 | `REPEAT=1` | label | Repeat the blocks from the label to this block `TIMES` more times, once when `TIMES` is missing (`CALL LBL 1 REP 3`, `REPEAT LABEL P=3`; D212). | block |
 

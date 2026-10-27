@@ -34,8 +34,12 @@ internal sealed class VariableStore
     private readonly SystemVariables _systemVariables;
     private readonly Dictionary<string, VariableValue> _variables = new();
     private readonly Stack<Dictionary<string, VariableValue>> _callerLocals = new();
+    private readonly Stack<HashSet<string>> _callerArgumentNames = new();
     private readonly Dictionary<string, VariableValue> _systemStartValues = new();
     private Dictionary<string, VariableValue> _locals = new();
+
+    // D149: the names the ARG words of the call that runs assigned, locals of that call whatever their name.
+    private HashSet<string> _argumentNames = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The variables of a channel at the start of a run.
@@ -140,6 +144,18 @@ internal sealed class VariableStore
     }
 
     /// <summary>
+    /// Assigns an ARG of the CALL that is entered: the name is a local of that call, hiding a caller variable of that
+    /// name until SUB=END or RETURN (D149, virtual machine 3.6).
+    /// </summary>
+    /// <param name="name">The address of the ARG word: V1, A, Q5.</param>
+    /// <param name="value">The value, a number, a string or UNKNOWN.</param>
+    public void SetArgument(string name, VariableValue value)
+    {
+        _argumentNames.Add(name);
+        Set(name, value);
+    }
+
+    /// <summary>
     /// Reads a SYS_ name from the state of the channel through the mapping of the configuration (virtual machine 2.7,
     /// 3.6, D51); UNKNOWN when the configuration does not map it or the state is unknown. INTERPRETED mode turns
     /// UNKNOWN into the vars file value or the ERROR; STATIC mode keeps it (virtual machine 2.7).
@@ -214,7 +230,9 @@ internal sealed class VariableStore
         // D148: the callee's locals start unassigned apart from the ARG values, as the locals of a Fanuc G65 macro
         // call do, whose level is raised at the call and restored at the return (decisions.md).
         _callerLocals.Push(_locals);
+        _callerArgumentNames.Push(_argumentNames);
         _locals = new();
+        _argumentNames = new(StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -230,6 +248,7 @@ internal sealed class VariableStore
         }
 
         _locals = _callerLocals.Pop();
+        _argumentNames = _callerArgumentNames.Pop();
     }
 
     /// <summary>
@@ -247,11 +266,11 @@ internal sealed class VariableStore
         return visible.AsReadOnly();
     }
 
-    // The locals V1 to V33 live with the call that runs, every other variable for the program's lifetime (virtual
-    // machine 4).
+    // The locals V1 to V33 and the ARG names of the call that runs live with that call (D149), every other variable
+    // for the program's lifetime (virtual machine 4).
     private Dictionary<string, VariableValue> TableOf(string name)
     {
-        return IsLocal(name) ? _locals : _variables;
+        return IsLocal(name) || _argumentNames.Contains(name) ? _locals : _variables;
     }
 
     // The coordinate of an axis in a frame: in the workpiece frame read through the setpos shift, in the MACHINE frame
