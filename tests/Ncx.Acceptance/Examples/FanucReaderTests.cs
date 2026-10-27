@@ -128,9 +128,9 @@ public sealed partial class FanucReaderTests
     // The Nakamura pair with nakamura-ntjx.toml keeps as RAW the builder codes of its [raw] table, G411, G300, G333,
     // G131, as RAW:NAKAMURA, the data setting G10 as RAW:FANUC (the RAW address is the controller or builder dialect,
     // language 4.1; [raw] names the builder codes, machine-config 5; G10 is the control's, controller-mapping 9 and
-    // controllers fanuc.md 9 rule 7), and the three blocks of path 2 that read system variables the machine file does
-    // not map (#11099, #5024, #5025; language 4.12, D51) as RAW:FANUC until D250 is answered; nothing else. The output
-    // formats to itself.
+    // controllers fanuc.md 9 rule 7), and the one block of path 2 that reads #5024, which D250 leaves unmapped as a
+    // likely stale line (#11099 and #5025 are $SYS_WEAR_Z[99] and $SYS_MPOS_B; language 4.12, D51), as RAW:FANUC;
+    // nothing else. The output formats to itself.
     [Theory]
     [InlineData("NAKAMURA_WY250L_O1000.nc")]
     [InlineData("NAKAMURA_WY250L_O1000.P-2.nc")]
@@ -139,6 +139,7 @@ public sealed partial class FanucReaderTests
         NcxProgram read = Read(source, Load("docs/spec/examples/machines/nakamura-ntjx.toml"));
         string text = NcxWriter.Write(read);
 
+        int unmapped = 0;
         foreach (Block block in read.Blocks)
         {
             if (block.Find("RAW") is not Word raw)
@@ -150,10 +151,12 @@ public sealed partial class FanucReaderTests
             bool builderCode = BuilderCode().IsMatch(native);
             bool dataSetting = DataSetting().IsMatch(native);
             bool unmappedSystemVariable = UnmappedSystemVariable().IsMatch(native);
+            unmapped += unmappedSystemVariable ? 1 : 0;
             Assert.True(raw.Addr == "NAKAMURA" ? builderCode : dataSetting || unmappedSystemVariable,
                 $"{source}({block.Line}): {raw.ToCanonical()}");
         }
 
+        Assert.Equal(source.Contains(".P-2", StringComparison.Ordinal) ? 1 : 0, unmapped);
         FormatsToItself(text, source);
     }
 
@@ -277,7 +280,7 @@ public sealed partial class FanucReaderTests
     [GeneratedRegex(@"G0*10(?![0-9.])", RegexOptions.CultureInvariant)]
     private static partial Regex DataSetting();
 
-    [GeneratedRegex(@"#(11099|5024|5025)(?![0-9])", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"#5024(?![0-9])", RegexOptions.CultureInvariant)]
     private static partial Regex UnmappedSystemVariable();
 
     // G411 x1. I{n}: the jump on the part status to the block Nn (controller-mapping 6 and 8).
