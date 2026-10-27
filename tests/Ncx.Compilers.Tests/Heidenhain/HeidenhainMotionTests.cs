@@ -291,6 +291,7 @@ public sealed class HeidenhainMotionTests
     }
 
     // Heidenhain 8 rule 4: the canonical form CC plus C; DR+ is CCW (language 4.3; controller-mapping 2, CENTER:X).
+    // D364: the radii about X50 Y50 agree within one output step, so the program's own pole stays.
     [Fact]
     public void Rule4_ArcWithCenter_IsCcPlusC()
     {
@@ -301,7 +302,8 @@ public sealed class HeidenhainMotionTests
             HeidenhainCompile.Body(result));
     }
 
-    // Controller-mapping 2, CENTER:IX: the incremental centre is CC IX IY, incremental from the start of the arc.
+    // Controller-mapping 2, CENTER:IX: the incremental centre is CC IX IY, incremental from the start of the arc, on
+    // the grid of that offset, the program's own where its radii agree within one output step (D364).
     [Fact]
     public void Rule4_ArcWithIncrementalCenter_IsCcWithIncrementalWords()
     {
@@ -423,8 +425,23 @@ public sealed class HeidenhainMotionTests
         Assert.Equal(11, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainCompensationWithoutLine).Line);
     }
 
+    // D365: IPA+10 of ANGLE=10.00004, four decimals, turns the start 1000 from the pole to a point 0.0007 from the
+    // rounded end, more than half an output step on Y: the decimals are the one lever of CP, so the block is written
+    // and the WARNING CMP031 names the point the control reaches; ANGLE=10.0001 reaches the rounded end.
+    [Theory]
+    [InlineData("10.00004", 1)]
+    [InlineData("10.0001", 0)]
+    public void D365_SweepMissingTheRoundedEnd_IsTheWarningCmp031(string sweep, int count)
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "RAPID X=1000 Y=0", "LINE Z=-1 F=100", "ARC=CCW CENTER:X=0 CENTER:Y=0 ANGLE=" + sweep));
+
+        Assert.Equal(count, result.Diagnostics.Items.Count(item => item.Code == DiagnosticCodes.ArcEndPointOffTheGrid));
+    }
+
     // Heidenhain 8 rule 4, controllers heidenhain.md 2, D84: a sweep beyond a turn is CP IPA about the pole, the sign
-    // of IPA that of the direction, with the travel of the helix.
+    // of IPA that of the direction, with the travel of the helix. The control computes the end of CP IPA about the
+    // pole, so the pole is the rounded centre (D364 picks among the grid points only where the end point is written).
     [Fact]
     public void Rule4_SweepBeyondATurn_IsCpIpaAboutThePole()
     {

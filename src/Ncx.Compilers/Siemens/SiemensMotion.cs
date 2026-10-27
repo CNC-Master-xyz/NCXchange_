@@ -90,7 +90,8 @@ internal static class SiemensMotion
     /// </summary>
     public static void WritePlane(SiemensBlock write)
     {
-        string plane = write.After.Frame.Workplane switch
+        // D146: under TRACYL the plane is the G19 that the switch-on wrote, whatever WORKPLANE holds.
+        string plane = write.After.Frame.Cylinder is not null ? "G19" : write.After.Frame.Workplane switch
         {
             Workplane.ZX => "G18",
             Workplane.YZ => "G19",
@@ -365,7 +366,7 @@ internal static class SiemensMotion
     }
 
     // G0 rapid, G1 at the feed, G2 and G3 arcs (controllers siemens.md 3); on a side whose datum runs Z the other way
-    // an arc in a plane that holds Z turns the other way.
+    // an arc in a plane that holds Z turns the other way, and so does an arc under TRACYL (D146).
     private static string MotionCode(SiemensBlock write, string verb)
     {
         if (verb == "RAPID")
@@ -379,16 +380,22 @@ internal static class SiemensMotion
         }
 
         bool clockwise = write.Block.Has("ARC", null, "CW");
-        return clockwise != SiemensArcs.Mirrored(write) ? "G2" : "G3";
+        bool turned = SiemensArcs.Mirrored(write) != SiemensArcs.TurnedByTheCylinderPlane(write);
+        return clockwise != turned ? "G2" : "G3";
     }
 
-    // G41 left of the contour, G42 right, G40 off (controllers siemens.md 3); mirrored with the arcs.
+    // G41 left of the contour, G42 right, G40 off (controllers siemens.md 3); mirrored with the arcs. D146: under
+    // TRACYL the cylinder plane of NCX (cylinder axis, then C) and the G19 of the control (Y = C, then Z) run the other
+    // way round, which mirrors left and right as it turns CCW into G2 (Arbeitsvorbereitung 2013, connector p.352;
+    // Grundlagen 2013, connector p.154). Gap closed 2026-10-28 (delegated): COMP=LEFT is G42 and COMP=RIGHT G41 while
+    // CYLINDER is on.
     private static string CompensationCode(SiemensBlock write)
     {
+        bool turned = SiemensArcs.Mirrored(write) != SiemensArcs.TurnedByTheCylinderPlane(write);
         return write.After.Motion.Comp switch
         {
-            Compensation.Left => SiemensArcs.Mirrored(write) ? "G42" : "G41",
-            Compensation.Right => SiemensArcs.Mirrored(write) ? "G41" : "G42",
+            Compensation.Left => turned ? "G42" : "G41",
+            Compensation.Right => turned ? "G41" : "G42",
             _ => "G40",
         };
     }
@@ -408,10 +415,10 @@ internal static class SiemensMotion
             decimal factor = axis == "Z" && SiemensAxes.IsZNegated(write) ? -1m : 1m;
             string? value = word.Value switch
             {
-                IntegerValue integer => write.FormatComputed(vector[1], integer.Number * factor),
+                IntegerValue integer => write.Format(vector[1], integer.Number * factor),
                 DecimalValue number => factor == 1m
                     ? write.Format(vector[1], number.Number)
-                    : write.FormatComputed(vector[1], number.Number * factor),
+                    : write.Format(vector[1], number.Number * factor),
                 ExprValue expression when SiemensExpressions.Text(write, expression) is string text =>
                     factor == 1m ? text : "-(" + text + ")",
                 _ => null,

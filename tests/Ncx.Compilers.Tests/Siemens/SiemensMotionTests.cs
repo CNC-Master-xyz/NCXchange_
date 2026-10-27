@@ -86,12 +86,54 @@ public sealed class SiemensMotionTests
     }
 
     // Siemens 12 rule 2: TURN= for sweeps beyond a turn, with the end point the virtual machine computes (siemens 3:
-    // TURN=2 adds two full turns before the end point; D84).
+    // TURN=2 adds two full turns before the end point; D84). D364: the radii about X50 Y50 agree within one output
+    // step, so the program's own centre stays.
     [Fact]
     public void SweepBeyondOneTurn_IsWrittenWithTheEndPointAndTurn()
     {
         Assert.Equal(Lines("G0 X60 Y50 Z0", "G3 X59.513 Y53.083 Z-5.4 I=AC(50) J=AC(50) TURN=2 F200"),
             MillBody("RAPID X=60 Y=50 Z=0", "ARC=CCW IZ=-5.4 CENTER:X=50 CENTER:Y=50 ANGLE=737.956 F=200"));
+    }
+
+    // D364: the absolute centre X50 Y50 of N310 of 2.5D_FRAESEN lies 20.00013 from the written start and 20 from the
+    // written end, within one output step, so it stays; under an arc_radius_tolerance of 0.0001 the compiler searches
+    // the grid and takes I=AC(50.001) J=AC(50.001), whose radii agree better; an incremental centre lies on the grid of
+    // the offset from the written start.
+    [Theory]
+    [InlineData("CENTER:X=50 CENTER:Y=50", "", "I=AC(50) J=AC(50)")]
+    [InlineData("CENTER:X=50 CENTER:Y=50", "0.0001", "I=AC(50.001) J=AC(50.001)")]
+    [InlineData("CENTER:IX=-0.534 CENTER:IY=-19.993", "0.0001", "I-0.533 J-19.992")]
+    public void ArcWithCentre_SearchesTheGridOnlyWhereItsRadiiMissTheTolerance(string centre, string tolerance,
+        string written)
+    {
+        MachineConfig machine = SiemensCompile.Mill();
+        if (tolerance.Length > 0)
+        {
+            machine = machine with
+            {
+                Machine = machine.Machine with
+                {
+                    ArcRadiusTolerance = decimal.Parse(tolerance, System.Globalization.CultureInfo.InvariantCulture),
+                },
+            };
+        }
+
+        string text = SiemensCompile.TextOf(SiemensCompile.Run(SiemensCompile.Program(SiemensCompile.MillHeader,
+            "RAPID X=50.534 Y=69.993", "ARC=CCW X=70 Y=50 " + centre + " F=100"), machine));
+
+        Assert.Contains("G0 X50.534 Y69.993\nG3 X70 Y50 " + written + " F100\n", text, StringComparison.Ordinal);
+    }
+
+    // D365: AR=10 of ANGLE=10.0004 turns the start 1000 from the centre to a point 0.007 from the rounded end, more
+    // than half an output step, so the compiler writes the end-point form with the centre, Siemens's lever, the centre
+    // its own, whose radii agree within one step (D364); ANGLE=10 reaches the rounded end and stays AR=.
+    [Theory]
+    [InlineData("10.0004", "G3 X984.807 Y173.655 I=AC(0) J=AC(0) F100")]
+    [InlineData("10", "G3 I=AC(0) J=AC(0) AR=10 F100")]
+    public void SweepWithTheCentre_MissingTheRoundedEnd_IsWrittenWithTheEndPoint(string sweep, string written)
+    {
+        Assert.Equal(Lines("G0 X1000 Y0", written),
+            MillBody("RAPID X=1000 Y=0", "ARC=CCW CENTER:X=0 CENTER:Y=0 ANGLE=" + sweep + " F=100"));
     }
 
     // Siemens 12 rule 2: on an older 840D the sweep is split into turns, each back to its start with the tool axis

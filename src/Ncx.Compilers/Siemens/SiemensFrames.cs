@@ -448,7 +448,7 @@ internal static partial class SiemensFrames
             string? text = word is not null
                 ? SiemensAxes.FrameValueOf(write, axis.Key, word.Value, letter)
                 : axis.Value is decimal stored
-                    ? write.FormatComputed(SiemensAxes.DecimalsAddress(write, letter),
+                    ? write.Format(SiemensAxes.DecimalsAddress(write, letter),
                         stored * SiemensAxes.FrameStateFactor(write, axis.Key))
                     : null;
             if (text is null)
@@ -637,7 +637,7 @@ internal static partial class SiemensFrames
             string letter = SiemensAxes.LetterOf(write, sum.Key);
             values.Set(placeholder, sum.Value == 0m
                 ? "0"
-                : write.FormatComputed(SiemensAxes.DecimalsAddress(write, letter),
+                : write.Format(SiemensAxes.DecimalsAddress(write, letter),
                     sum.Value * SiemensAxes.FrameStateFactor(write, sum.Key)));
         }
 
@@ -662,23 +662,15 @@ internal static partial class SiemensFrames
     }
 
     /// <summary>
-    /// The words a block under CYLINDER=n cannot carry on TRACYL (D146): an ARC, whose direction in the cylinder plane
-    /// (NCX Z then C) against G19 (Y then Z) waits on W3-5; a Y word, which TRACYL takes for the circumference; and a
-    /// rotary word other than the rotary axis of the workpiece holder, which is no length on this cylinder. Each is
-    /// the ERROR CMP536.
+    /// The words a block under CYLINDER=n cannot carry on TRACYL (D146): a Y word, which TRACYL takes for the
+    /// circumference, and a rotary word other than the rotary axis of the workpiece holder, which is no length on this
+    /// cylinder. Each is the ERROR CMP536. An ARC is written in G19 with the other motion code (SiemensArcs).
     /// </summary>
     public static void ReportCylinder(SiemensBlock write)
     {
         if (write.After.Frame.Cylinder is null)
         {
             return;
-        }
-
-        if (write.Block.Verb?.Key == "ARC")
-        {
-            write.Error(DiagnosticCodes.SiemensCylinderNotWritable,
-                "An ARC under CYLINDER: its direction in the cylinder plane (Z, then C) against the G19 of TRACYL (Y, "
-                + "then Z) is not settled, so it is not written (Arbeitsvorbereitung 2013, p.352; D146).");
         }
 
         foreach (SiemensAxisWord axis in SiemensAxes.Of(write.Block))

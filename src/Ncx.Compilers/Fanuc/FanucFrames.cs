@@ -230,7 +230,7 @@ internal static class FanucFrames
                 ? FanucExpressions.WordValue(write, FanucMotion.DecimalsAddress(write, axis.Key), word.Value,
                     FanucAxes.WordFactor(write, axis.Key))
                 : axis.Value is decimal shift
-                    ? write.FormatComputed(FanucMotion.DecimalsAddress(write, axis.Key),
+                    ? write.Format(FanucMotion.DecimalsAddress(write, axis.Key),
                         shift * FanucAxes.StateFactor(write, axis.Key))
                     : null;
             if (value is null)

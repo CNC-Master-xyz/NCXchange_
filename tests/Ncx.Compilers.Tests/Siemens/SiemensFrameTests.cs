@@ -373,10 +373,42 @@ public sealed class SiemensFrameTests
             "G0 C0"), body);
     }
 
-    // D146: an ARC under CYLINDER, whose direction in the cylinder plane against G19 waits on W3-5, a Y word and a
-    // rotary word other than the workpiece holder's (C2 of the sub spindle) are the ERROR CMP536.
+    // D146: the cylinder plane of NCX turns ARC=CCW from the cylinder axis Z toward C (virtual machine 3.2); TRACYL
+    // works in G19, which turns G3 from Y, the circumference, toward Z (Programmierhandbuch Grundlagen 2013 p.154:
+    // G19 "Ebenenanwahl 2. - 3. Geometrieachse"; Arbeitsvorbereitung 2013 p.352-353). The same arc in the same
+    // coordinates is therefore G2 for CCW and G3 for CW, with C as Y and its center as J.
     [Theory]
-    [InlineData("ARC=CW Z=-20 C=25 R=10")]
+    [InlineData("ARC=CW Z=-20 C=25 R=10", "G3 Z-20 Y25 CR=10")]
+    [InlineData("ARC=CCW Z=-20 C=25 R=10", "G2 Z-20 Y25 CR=10")]
+    [InlineData("ARC=CCW Z=-20 C=25 CENTER:Z=-20 CENTER:C=15", "G2 Z-20 Y25 K=AC(-20) J=AC(15)")]
+    [InlineData("ARC=CW Z=-20 C=25 CENTER:IZ=0 CENTER:IC=10", "G3 Z-20 Y25 K0 J10")]
+    public void Cylinder_Arc_TurnsTheOtherWayInTheG19OfTracyl(string arc, string written)
+    {
+        string body = MillTurnBody("SPINDLE_MODE:MAIN=AXIS", "CYLINDER=20", "LINE X=30 F=100", "LINE Z=-10 C=15",
+            arc);
+
+        Assert.Equal(Lines("M70", "TRACYL(40)", "G19", "G1 X30 F100", "G1 Z-10 Y15", written), body);
+    }
+
+    // D146: the orientation change that turns NCX CCW into G2 under the G19 of TRACYL mirrors left and right as well,
+    // so COMP=LEFT is G42 and COMP=RIGHT G41 while CYLINDER is on (Arbeitsvorbereitung 2013 p.352; Grundlagen 2013
+    // p.154; gap closed 2026-10-28), and G41 again after TRAFOOF.
+    [Theory]
+    [InlineData("LEFT", "G42")]
+    [InlineData("RIGHT", "G41")]
+    public void Cylinder_Compensation_IsMirroredInTheG19OfTracyl(string side, string code)
+    {
+        string body = MillTurnBody("SPINDLE_MODE:MAIN=AXIS", "CYLINDER=20", "LINE X=30 F=100",
+            "LINE Z=-10 C=15 COMP=" + side);
+
+        Assert.Contains(code + " ", body, StringComparison.Ordinal);
+        Assert.DoesNotContain(code == "G42" ? "G41" : "G42", body, StringComparison.Ordinal);
+    }
+
+    // D146: a Y word, a rotary word other than the workpiece holder's (C2 of the sub spindle) and a sweep of a turn or
+    // more, whose TURN= end point needs the plane of the developed surface, are the ERROR CMP536.
+    [Theory]
+    [InlineData("ARC=CW ANGLE=400 CENTER:Z=-20 CENTER:C=15")]
     [InlineData("LINE Y=5")]
     [InlineData("LINE C2=10")]
     public void Cylinder_ArcYOrAnotherRotaryWord_IsTheErrorCmp536(string block)

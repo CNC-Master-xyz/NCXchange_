@@ -106,9 +106,9 @@ public static partial class DiagnosticCodes
     public const string SiemensFrameBeforeTilt = "CMP535";
 
     /// <summary>
-    /// CMP536: a word under CYLINDER that TRACYL cannot take: an ARC, whose direction against G19 is not settled, a Y
-    /// word, or a rotary word other than the rotary axis of the workpiece holder (840D sl/828D Arbeitsvorbereitung
-    /// 2013 p.352-353; D146).
+    /// CMP536: a word under CYLINDER that TRACYL cannot take: a Y word, a rotary word other than the rotary axis of
+    /// the workpiece holder, or an ARC of a turn or more, whose TURN= form is not written under TRACYL (840D sl/828D
+    /// Arbeitsvorbereitung 2013 p.352-353; D146). An ARC below one turn is written in G19 with the other motion code.
     /// </summary>
     public const string SiemensCylinderNotWritable = "CMP536";
 

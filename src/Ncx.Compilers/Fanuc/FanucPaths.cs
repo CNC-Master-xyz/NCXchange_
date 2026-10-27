@@ -281,7 +281,7 @@ internal static partial class FanucPaths
         if (key == Feed)
         {
             return state.Unknown.Contains(Feed) ? FanucModalValue.NotKnown
-                : state.Motion.Feed is decimal feed ? FanucModalValue.Of(write.FormatComputed(Feed, feed))
+                : state.Motion.Feed is decimal feed ? FanucModalValue.Of(write.Format(Feed, feed))
                 : FanucModalValue.None;
         }
 

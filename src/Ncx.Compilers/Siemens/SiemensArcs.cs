@@ -1,4 +1,5 @@
 using System.Globalization;
+using Ncx.Core.Geometry;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.Events;
 using Ncx.Core.VirtualMachine.State;
@@ -29,7 +30,28 @@ internal static class SiemensArcs
     // its own Z mirror; nothing else changes (decisions.md D298; machine-config 5, SUB_frame).
     public static bool Mirrored(SiemensBlock write)
     {
+        // Under TRACYL the plane is G19, which holds Z, and NCX's Z is the Z of the transformation only on a cylinder
+        // about Z (D146).
+        if (write.After.Frame.Cylinder is not null)
+        {
+            return SiemensAxes.IsZNegated(write) && write.After.Frame.CylinderAxis == "Z";
+        }
+
         return SiemensAxes.IsZNegated(write) && write.After.Frame.Workplane != Workplane.XY;
+    }
+
+    /// <summary>
+    /// True under CYLINDER=n, where an arc of NCX is written with the other motion code (D146).
+    /// </summary>
+    // D146: the cylinder plane of NCX turns ARC=CCW from the cylinder axis toward C (virtual machine 3.2;
+    // Plane.CylinderAbout). TRACYL works in G19 (Arbeitsvorbereitung 2013, connector p.352: N50 G19), the plane of the
+    // 2nd and 3rd geometry axes, whose G3 turns from Y toward Z (Programmierhandbuch Grundlagen 2013, connector p.154:
+    // "G19: Arbeitsebene Y/Z, Zustellrichtung X, Ebenenanwahl 2. - 3. Geometrieachse"), and Y is the circumference,
+    // the C word, and Z the cylinder axis (Arbeitsvorbereitung 2013, p.352-353). The same arc in the same coordinates
+    // turns from C toward the cylinder axis on the control, so ARC=CCW is G2 and ARC=CW is G3.
+    public static bool TurnedByTheCylinderPlane(SiemensBlock write)
+    {
+        return write.After.Frame.Cylinder is not null;
     }
 
     /// <summary>
@@ -73,11 +95,38 @@ internal static class SiemensArcs
         }
 
         decimal sweep = decimal.Parse(angle.Value.ToCanonical(), CultureInfo.InvariantCulture);
+        if (sweep < FullTurn && ArcOf(write.Step) is MotionEvent swept && SweptEndBeyond(write, swept, sweep))
+        {
+            // D365: AR= with the centre leaves the end to the control, which would miss the rounded end point by
+            // more than ROUND_LIMIT or half an output step; the lever of Siemens is the end-point form with the centre.
+            foreach (SiemensAxisWord axis in axes)
+            {
+                write.Written(axis.Word);
+            }
+
+            AddPoint(write, swept.To, swept, withToolAxis: true);
+            AddAbsoluteCenter(write, swept);
+            write.Written("CENTER");
+            return;
+        }
+
         if (sweep < FullTurn)
         {
             SiemensMotion.WriteAxes(write, axes);
             WriteCenter(write);
             write.Main.Word(SiemensLine.ArcRank, "AR=" + write.Format("ANGLE", sweep));
+            return;
+        }
+
+        if (write.After.Frame.Cylinder is not null)
+        {
+            // D146: TURN= takes the end point and the center from the events of the virtual machine, which keeps them
+            // in the cylinder plane; that form is not written under TRACYL.
+            write.Error(DiagnosticCodes.SiemensCylinderNotWritable,
+                $"{angle.ToCanonical()} under CYLINDER: a sweep of a turn or more needs TURN= with the end point of "
+                + "the developed surface, which this compiler does not write under TRACYL; split the sweep below one "
+                + "turn (controllers siemens.md 3; D84, D146).");
+            write.WrittenAll();
             return;
         }
 
@@ -161,6 +210,11 @@ internal static class SiemensArcs
     // siemens.md 3, 12 rule 2; controller-mapping 2, CENTER).
     private static void WriteCenter(SiemensBlock write)
     {
+        if (WriteCenterOnTheGrid(write))
+        {
+            return;
+        }
+
         foreach (Word word in write.Block.Words)
         {
             if (word.Key != "CENTER" || word.Addr is not string address)
@@ -170,7 +224,10 @@ internal static class SiemensArcs
 
             bool incremental = address.Length > 1 && address[0] == 'I';
             string axis = incremental ? address.Substring(1) : address;
-            if (CenterLetter(axis) is not string letter)
+            // D146: under TRACYL the center takes the letter of its axis on the developed surface, J for C (Y) and K
+            // for the cylinder axis (Z).
+            string written = write.After.Frame.Cylinder is not null ? SiemensAxes.LetterOf(write, axis) : axis;
+            if (CenterLetter(written) is not string letter)
             {
                 continue;
             }
@@ -179,7 +236,7 @@ internal static class SiemensArcs
             decimal factor = incremental
                 ? (axis == "Z" && SiemensAxes.IsZNegated(write) ? -1m : 1m)
                 : SiemensAxes.WordFactor(write, axis);
-            string? value = Scaled(write, word.Value, SiemensAxes.DecimalsAddress(write, axis), factor);
+            string? value = Scaled(write, word.Value, SiemensAxes.DecimalsAddress(write, written), factor);
             if (value is not null)
             {
                 write.Main.Word(SiemensLine.ArcRank,
@@ -189,15 +246,166 @@ internal static class SiemensArcs
         }
     }
 
+    // D364: the center of literal CENTER words on the output grid, I=AC() on the grid of the plane addresses and I on
+    // the grid of the offset from the written start: the one of the nine grid points around the rounded center whose
+    // radii from the written start and to the written end agree best (ArcOnTheGrid), with CMP030 where they still
+    // differ by more than [machine] arc_radius_tolerance. False where the block or the virtual machine gives no such
+    // center: an expression, a center under TRACYL, a start, end or center the virtual machine does not know, or AR=
+    // with the center, whose end the control computes, so that no written end point is there to agree with (D365).
+    private static bool WriteCenterOnTheGrid(SiemensBlock write)
+    {
+        (string First, string Second, string Tool) plane = Plane(write);
+        MotionEvent? arc = ArcOf(write.Step);
+        if (write.After.Frame.Cylinder is not null || arc?.Center is null || write.Block.Find("ANGLE") is not null)
+        {
+            return false;
+        }
+
+        var words = new Dictionary<string, Word>(StringComparer.Ordinal);
+        foreach (Word word in write.Block.Words)
+        {
+            if (word.Key != "CENTER" || word.Addr is not string address)
+            {
+                continue;
+            }
+
+            string axis = address.Length > 1 && address[0] == 'I' ? address.Substring(1) : address;
+            if ((axis != plane.First && axis != plane.Second) || word.Value is not (IntegerValue or DecimalValue))
+            {
+                return false;
+            }
+
+            words[axis] = word;
+        }
+
+        if (!words.TryGetValue(plane.First, out Word? firstWord)
+            || !words.TryGetValue(plane.Second, out Word? secondWord)
+            || CentreOnTheGrid(write, arc, plane.First, plane.Second, words) is not GridCentre centre)
+        {
+            return false;
+        }
+
+        WriteGridWord(write, plane.First, firstWord, centre.First, centre.WrittenStartFirst);
+        WriteGridWord(write, plane.Second, secondWord, centre.Second, centre.WrittenStartSecond);
+        return true;
+    }
+
+    // The centre on the grid of its written form, CMP030 reported; null where the virtual machine does not know the
+    // start, the end or the centre in the plane.
+    private static GridCentre? CentreOnTheGrid(SiemensBlock write, MotionEvent arc, string first, string second,
+        Dictionary<string, Word>? words)
+    {
+        if (arc.Center is null || !KnownIn(arc.Center, first, second) || !KnownIn(arc.From, first, second)
+            || !KnownIn(arc.To, first, second))
+        {
+            return null;
+        }
+
+        GridAxis firstAxis = GridAxisOf(write, arc, first, words?[first]);
+        GridAxis secondAxis = GridAxisOf(write, arc, second, words?[second]);
+        decimal tolerance = ArcOnTheGrid.ToleranceOf(write.Machine, write.After.Frame.Units,
+            Math.Max(firstAxis.CentreStep, secondAxis.CentreStep));
+        GridCentre centre = ArcOnTheGrid.Choose(firstAxis, secondAxis, tolerance);
+        if (ArcOnTheGrid.Report(centre, tolerance) is string message)
+        {
+            write.Warning(DiagnosticCodes.ArcRadiiDifferOnTheGrid, message);
+        }
+
+        return centre;
+    }
+
+    // One plane axis: the point written with its state factor (a diameter, D60), an absolute centre the same way, an
+    // incremental one in radius values; null word for the absolute I=AC() of TURN=.
+    private static GridAxis GridAxisOf(SiemensBlock write, MotionEvent arc, string axis, Word? word)
+    {
+        bool incremental = word?.Addr is string address && address.Length > 1 && address[0] == 'I';
+        string letter = SiemensAxes.LetterOf(write, axis);
+        decimal step = ArcOnTheGrid.StepOf(write.Numbers.WrittenDecimalsOf(SiemensAxes.DecimalsAddress(write, letter)));
+        decimal factor = Math.Abs(SiemensAxes.StateFactor(write, axis));
+        return new GridAxis(arc.From[axis].Value, arc.To[axis].Value, arc.Center![axis].Value, step / factor,
+            incremental ? step : step / factor, incremental);
+    }
+
+    // I=AC() of the absolute centre in the state factor, I of the incremental one from the written start.
+    private static void WriteGridWord(SiemensBlock write, string axis, Word word, decimal centre, decimal start)
+    {
+        write.Written(word);
+        string letter = CenterLetter(axis)!;
+        string address = SiemensAxes.DecimalsAddress(write, SiemensAxes.LetterOf(write, axis));
+        bool incremental = word.Addr!.Length > 1 && word.Addr[0] == 'I';
+        if (incremental)
+        {
+            decimal sign = axis == "Z" && SiemensAxes.IsZNegated(write) ? -1m : 1m;
+            write.Main.Word(SiemensLine.ArcRank,
+                SiemensAxes.Address(letter, write.Format(address, (centre - start) * sign), "", false));
+            return;
+        }
+
+        write.Main.Word(SiemensLine.ArcRank, SiemensAxes.Address(letter,
+            write.Format(address, centre * SiemensAxes.StateFactor(write, axis)), "AC", expression: false));
+    }
+
+    private static bool KnownIn(IReadOnlyDictionary<string, AxisPosition> points, string first, string second)
+    {
+        return points.TryGetValue(first, out AxisPosition one) && one.Known
+            && points.TryGetValue(second, out AxisPosition two) && two.Known;
+    }
+
+    // D365: true where AR= with the centre of the block, as written, turns the written start to a point that lies
+    // farther from the rounded end point than ROUND_LIMIT allows, or than half an output step without it. False where
+    // the check has nothing to compute: a centre from an expression, the cylinder plane, or a start, end or centre the
+    // virtual machine does not know.
+    private static bool SweptEndBeyond(SiemensBlock write, MotionEvent arc, decimal sweep)
+    {
+        (string First, string Second, string Tool) plane = Plane(write);
+        if (write.After.Frame.Cylinder is not null || arc.Center is null || !KnownIn(arc.Center, plane.First,
+            plane.Second) || !KnownIn(arc.From, plane.First, plane.Second) || !KnownIn(arc.To, plane.First,
+            plane.Second))
+        {
+            return false;
+        }
+
+        var centre = new Dictionary<string, decimal>(StringComparer.Ordinal);
+        var start = new Dictionary<string, decimal>(StringComparer.Ordinal);
+        var end = new Dictionary<string, decimal>(StringComparer.Ordinal);
+        decimal step = 0m;
+        foreach (string axis in new[] { plane.First, plane.Second })
+        {
+            bool incremental = write.Block.Find("CENTER", "I" + axis) is not null;
+            Word? word = write.Block.Find("CENTER", incremental ? "I" + axis : axis);
+            if (word?.Value is not (IntegerValue or DecimalValue))
+            {
+                return false;
+            }
+
+            decimal pointStep = ArcOnTheGrid.StepOf(write.Numbers.WrittenDecimalsOf(
+                SiemensAxes.DecimalsAddress(write, SiemensAxes.LetterOf(write, axis))));
+            decimal factor = Math.Abs(SiemensAxes.StateFactor(write, axis));
+            step = Math.Max(step, pointStep / factor);
+            start[axis] = ArcOnTheGrid.Written(arc.From[axis].Value, pointStep / factor);
+            end[axis] = ArcOnTheGrid.Written(arc.To[axis].Value, pointStep / factor);
+            centre[axis] = incremental
+                ? start[axis] + ArcOnTheGrid.Written(arc.Center[axis].Value - start[axis], pointStep)
+                : ArcOnTheGrid.Written(arc.Center[axis].Value, pointStep / factor);
+        }
+
+        decimal written = Math.Round(sweep, write.Numbers.WrittenDecimalsOf("ANGLE"), MidpointRounding.AwayFromZero);
+        decimal signed = arc.Direction == ArcDirection.Counterclockwise ? written : -written;
+        PlanePoint reached = ArcOnTheGrid.SweptEnd(new PlanePoint(start[plane.First], start[plane.Second]),
+            new PlanePoint(centre[plane.First], centre[plane.Second]), signed);
+        return ArcOnTheGrid.EndBeyond(reached, new PlanePoint(end[plane.First], end[plane.Second]), step,
+            write.After.Frame.RoundLimit.Value) is not null;
+    }
+
     // The value of a center word with its factor.
     private static string? Scaled(SiemensBlock write, Value value, string address, decimal factor)
     {
         return value switch
         {
             IntegerValue integer => factor == 1m ? write.Format(address, integer.Number)
-                : write.FormatComputed(address, integer.Number * factor),
+                : write.Format(address, integer.Number * factor),
             DecimalValue number => factor == 1m ? write.Format(address, number.Number)
-                : write.FormatComputed(address, number.Number * factor),
+                : write.Format(address, number.Number * factor),
             ExprValue expression when SiemensExpressions.Text(write, expression) is string text => factor switch
             {
                 1m => text,
@@ -254,7 +462,7 @@ internal static class SiemensArcs
             }
 
             string letter = SiemensAxes.LetterOf(write, name);
-            string value = write.FormatComputed(SiemensAxes.DecimalsAddress(write, letter),
+            string value = write.Format(SiemensAxes.DecimalsAddress(write, letter),
                 position.Value * SiemensAxes.StateFactor(write, name));
             words.Add(SiemensAxes.Address(letter, value, "", expression: false));
         }
@@ -275,6 +483,15 @@ internal static class SiemensArcs
     {
         (string First, string Second, string Tool) plane = Plane(write);
         var words = new List<string>();
+        if (CentreOnTheGrid(write, arc, plane.First, plane.Second, words: null) is GridCentre centre)
+        {
+            words.Add(SiemensAxes.Address(CenterLetter(plane.First)!, write.Format(SiemensAxes.DecimalsAddress(
+                write, plane.First), centre.First * SiemensAxes.StateFactor(write, plane.First)), "AC", false));
+            words.Add(SiemensAxes.Address(CenterLetter(plane.Second)!, write.Format(SiemensAxes.DecimalsAddress(
+                write, plane.Second), centre.Second * SiemensAxes.StateFactor(write, plane.Second)), "AC", false));
+            return words;
+        }
+
         foreach (string name in new[] { plane.First, plane.Second })
         {
             if (arc.Center is null || !arc.Center.TryGetValue(name, out AxisPosition center) || !center.Known
@@ -283,7 +500,7 @@ internal static class SiemensArcs
                 continue;
             }
 
-            string value = write.FormatComputed(SiemensAxes.DecimalsAddress(write, name),
+            string value = write.Format(SiemensAxes.DecimalsAddress(write, name),
                 center.Value * SiemensAxes.StateFactor(write, name));
             words.Add(SiemensAxes.Address(letter, value, "AC", expression: false));
         }

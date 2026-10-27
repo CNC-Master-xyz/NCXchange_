@@ -42,7 +42,8 @@ public sealed class FanucMotionTests
     }
 
     // Controller-mapping 2, CENTER:X; language 6: the absolute centre is written as I J from the start point, G3 X70.
-    // Y50. I-.534 J-19.993 of 2.5D_FRAESEN.
+    // Y50. I-.534 J-19.993 of 2.5D_FRAESEN. D364: the radii of that centre differ by 0.00013, within one output step,
+    // so the program's own centre stays.
     [Fact]
     public void Arc_WithAbsoluteCentre_WritesIJFromTheStartPoint()
     {
@@ -50,6 +51,33 @@ public sealed class FanucMotionTests
             "RAPID X=50.534 Y=69.993\nARC=CCW X=70 Y=50 CENTER:X=50 CENTER:Y=50 F=100");
 
         Assert.Equal("G17 X50.534 Y69.993\nG3 X70. Y50. I-0.534 J-19.993 F100.\n", body);
+    }
+
+    // D354: under helix_feed = "arc", the Fanuc default (parameter 1403#5 = 0), F of a helix is scaled by the plane
+    // length over the path length, 62.832 / 63.031 of a turn of radius 10 with 5 down, and the next block writes the
+    // NCX feed again; under "path" F stays as NCX writes it.
+    [Theory]
+    [InlineData("", "G3 X10. Y0. Z-5. I-10. J0. F99.685\nG1 X20. F100.\n")]
+    [InlineData("helix_feed = \"path\"", "G3 X10. Y0. Z-5. I-10. J0. F100.\nG1 X20.\n")]
+    public void D354_HelixFeed_IsScaledToTheArcInThePlane(string key, string written)
+    {
+        string text = FanucCompile.TextOf(FanucCompile.Run(FanucCompile.Program("RAPID X=10 Y=0 Z=0",
+            "ARC=CCW X=10 Y=0 Z=-5 CENTER:X=0 CENTER:Y=0 F=100", "LINE X=20"),
+            FanucCompile.Mill(FanucCompile.SourceHabits + "\n" + key)));
+
+        Assert.Contains("G17 X10. Y0. Z0.\n" + written, text, StringComparison.Ordinal);
+    }
+
+    // D354: an F from an expression is written as it stands, with the WARNING CMP324 naming parameter 1403#5.
+    [Fact]
+    public void D354_HelixFeedFromAnExpression_IsTheWarningCmp324()
+    {
+        CompileResult result = FanucCompile.Run(FanucCompile.Program("VAR:R=100", "RAPID X=10 Y=0 Z=0",
+            "ARC=CCW X=10 Y=0 Z=-5 CENTER:X=0 CENTER:Y=0 F={$R}"), FanucCompile.Mill());
+
+        Diagnostic warning = Assert.Single(result.Diagnostics.Items,
+            item => item.Code == DiagnosticCodes.FanucHelixFeedNotScaled);
+        Assert.Contains("1403#5", warning.Message, StringComparison.Ordinal);
     }
 
     // Controller-mapping 2, CENTER:IX: the incremental centre is I J as the block writes it.
@@ -62,7 +90,8 @@ public sealed class FanucMotionTests
     }
 
     // Language 4.3 ANGLE, D84; controller-mapping 2: a sweep of 720 degrees and a rest becomes two full turns and the
-    // rest, the travel of the tool axis shared out over the sweep.
+    // rest, the travel of the tool axis shared out over the sweep. D354: F of the helix along the arc in the plane,
+    // 157.080 / 157.159 of F100.
     [Fact]
     public void Arc_WithASweepBeyond360_IsSplitIntoTurns()
     {
@@ -70,7 +99,7 @@ public sealed class FanucMotionTests
             "RAPID X=10 Y=0 Z=0\nARC=CCW IZ=-5 CENTER:X=0 CENTER:Y=0 ANGLE=900 F=100");
 
         Assert.Equal(
-            "G17 X10. Y0. Z0.\nG3 X10. Y0. Z-2. I-10. J0. F100.\nG3 X10. Y0. Z-4. I-10. J0.\n"
+            "G17 X10. Y0. Z0.\nG3 X10. Y0. Z-2. I-10. J0. F99.949\nG3 X10. Y0. Z-4. I-10. J0.\n"
             + "G3 X-10. Y0. Z-5. I-10. J0.\n", body);
     }
 
