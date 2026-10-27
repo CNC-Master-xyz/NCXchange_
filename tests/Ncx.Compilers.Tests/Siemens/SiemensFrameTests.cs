@@ -57,6 +57,35 @@ public sealed class SiemensFrameTests
         Assert.Equal(Lines("G54", "TRANS X10", "TRANS", "G55"), MillBody("ORIGIN=1", "SHIFT X=10", "ORIGIN=2"));
     }
 
+    // D125: SHIFT X=20 under DIAMETER=ON is a diameter, and a frame on a facing axis is a radius on the control
+    // unless MD20360 bit 3 says otherwise (Funktionshandbuch Grundfunktionen 2012 p.901-903), so TRANS X10; also
+    // where the chain is written again from the entry the virtual machine stores, ATRANS after AROT.
+    [Fact]
+    public void Shift_OfXUnderDiameterOn_IsTransWithTheRadius()
+    {
+        Assert.Equal(Lines("TRANS X10 Z5", "AROT RPL=30", "TRANS X10 Z5"),
+            MillTurnBody("SHIFT X=20 Z=5", "ROTATE=30", "ROTATE=RESET"));
+    }
+
+    // D125, D388: a machine whose X axis keeps frames in diameters ([[axis]] frames_in_diameter, MD20360 bit 3)
+    // writes the diameter as the program gives it.
+    [Fact]
+    public void Shift_OfXOnAnAxisWithFramesInDiameter_IsTransWithTheDiameter()
+    {
+        MachineConfig machine = Replaced(MillTurnFile, "programming = \"switchable\"",
+            "programming = \"switchable\"\nframes_in_diameter = true");
+
+        Assert.Equal(Lines("TRANS X20 Z5", "AROT RPL=30", "TRANS X20 Z5"),
+            Body(Run(Program(MillTurnHeader, "SHIFT X=20 Z=5", "ROTATE=30", "ROTATE=RESET"), machine)));
+    }
+
+    // D125: an expression of X under DIAMETER=ON is halved in the TRANS.
+    [Fact]
+    public void Shift_OfAnXExpressionUnderDiameterOn_IsHalved()
+    {
+        Assert.Equal(Lines("R1=40", "TRANS X=(R1)/2"), MillTurnBody("VAR:R1=40", "SHIFT X={$R1}"));
+    }
+
     // Siemens 12 rule 4: CYCLE800(...) from the [transform] template of millturn1.toml, {move} in the place of _ST
     // from [transform] move and {dir} in the place of _DIR from MOVE, TURN and MOVE -1 and STAY 0, the angles of the
     // tilt; TILT=RESET is TILT_OFF, CYCLE800() (machine-config 5; controller-mapping 1, TILT; D262).
@@ -232,14 +261,15 @@ public sealed class SiemensFrameTests
     }
 
     // D125: under DIAMETER=ON the VM stores the X of SHIFT X=20 as the radius 10; the TRANS that MIRROR=OFF rewrites
-    // from the chain entry writes it back as the diameter 20, as the SHIFT block did.
+    // from the chain entry writes the same radius 10 as the SHIFT block did, since a frame of the control on a facing
+    // axis is a radius (Funktionshandbuch Grundfunktionen 2012 p.901-903).
     [Fact]
-    public void D125_ShiftRewrittenFromTheChainUnderDiamon_KeepsTheDiameter()
+    public void D125_ShiftRewrittenFromTheChainUnderDiamon_KeepsTheRadius()
     {
         string body = MillTurnBody("DIAMETER=ON", "SHIFT X=20 Z=-2", "MIRROR=Z", "MIRROR=OFF");
 
-        Assert.DoesNotContain("X10", body, StringComparison.Ordinal);
-        Assert.Equal(2, body.Split("TRANS X20 Z-2").Length - 1);
+        Assert.DoesNotContain("X20", body, StringComparison.Ordinal);
+        Assert.Equal(2, body.Split("TRANS X10 Z-2").Length - 1);
     }
 
     // Controller-mapping 1, TCPM, CYLINDER and POLAR: TRAORI, TRACYL with the working diameter, TRANSMIT and TRAFOOF of

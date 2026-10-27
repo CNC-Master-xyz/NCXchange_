@@ -102,6 +102,47 @@ internal static partial class SiemensAxes
     }
 
     /// <summary>
+    /// The factor from a word of a SHIFT to the value of TRANS, ATRANS or the _X0 of CYCLE800: as for a motion word,
+    /// except on a diameter X axis whose frames the control keeps in radii, which takes the radius of the diameter
+    /// the program wrote (D125: "a Siemens reader keeps TRANS X as a radius unless the machine file sets the MD20360
+    /// bit 3 equivalent"; [[axis]] frames_in_diameter, D388; Funktionshandbuch Grundfunktionen 2012 p.901-903).
+    /// </summary>
+    public static decimal FrameWordFactor(SiemensBlock write, string axis)
+    {
+        if (axis != "X" || FramesInDiameter(write))
+        {
+            return WordFactor(write, axis);
+        }
+
+        return write.After.Frame.Diameter ? 0.5m : 1m;
+    }
+
+    /// <summary>
+    /// The factor from a frame value of the virtual machine, a radius (D28), to the value of TRANS or ATRANS: 2 only
+    /// where the X axis keeps its frames in diameters (D125, D388).
+    /// </summary>
+    public static decimal FrameStateFactor(SiemensBlock write, string axis)
+    {
+        return axis == "X" && !FramesInDiameter(write) ? 1m : StateFactor(write, axis);
+    }
+
+    /// <summary>
+    /// The value of a SHIFT word on an axis as TRANS writes it, with the frame factor of the axis (D125).
+    /// </summary>
+    public static string? FrameValueOf(SiemensBlock write, string axis, Value value, string letter)
+    {
+        decimal factor = FrameWordFactor(write, axis);
+        string decimals = DecimalsAddress(write, letter);
+        return value switch
+        {
+            IntegerValue integer => Number(write, decimals, integer.Number, factor),
+            DecimalValue number => Number(write, decimals, number.Number, factor),
+            ExprValue expression => Scaled(SiemensExpressions.Text(write, expression), factor),
+            _ => null,
+        };
+    }
+
+    /// <summary>
     /// True on the side of a workpiece holder whose datum runs Z the other way, SUB_frame = "datum": the virtual
     /// machine keeps the holder's own frame with +Z out of its chuck, and the compiler negates Z (machine-config 5;
     /// virtual machine 3.4; D57). A block in the machine frame is not on a side.
@@ -212,6 +253,13 @@ internal static partial class SiemensAxes
             2m => "(" + text + ")*2",
             _ => "(" + text + ")/2",
         };
+    }
+
+    // The frames of X are diameters where the X axis is written in diameters and the machine sets frames_in_diameter
+    // (MD20360 bit 3; D125, D388); a radius otherwise, the default of the control.
+    private static bool FramesInDiameter(SiemensBlock write)
+    {
+        return WritesDiameter(write) && write.Machine.ResolveAxis("X")?.FramesInDiameter == true;
     }
 
     // The X axis is written in diameters where it is programmed so, or switchable and switched on (D60).

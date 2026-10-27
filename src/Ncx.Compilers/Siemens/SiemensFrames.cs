@@ -345,8 +345,9 @@ internal static partial class SiemensFrames
 
     // TRANS X Y Z or ATRANS X Y Z, the values of the SHIFT block as written where it appends the entry, else of the
     // entry (controllers siemens.md 4). The entry holds what the virtual machine stores: under DIAMETER=ON its X is the
-    // radius of the diameter the SHIFT wrote (D125), so it is written with the state factor of the axis, as a computed
-    // position is, while a word of the block is written with the factor of an X word.
+    // radius of the diameter the SHIFT wrote (D125). A frame of the control on a facing axis is a radius unless the
+    // machine keeps frames in diameters ([[axis]] frames_in_diameter, MD20360 bit 3; D125, D388), so the frame
+    // factors of SiemensAxes apply, not those of a motion word.
     private static void WriteShift(SiemensBlock write, TransformEntry entry, bool first, bool appended)
     {
         var words = new List<string>();
@@ -358,10 +359,10 @@ internal static partial class SiemensFrames
             Value? value = word?.Value
                 ?? (axis.Value is decimal known ? new DecimalValue(known, Invariant(known)) : null);
             string? text = word is not null
-                ? SiemensAxes.ValueOf(write, axis.Key, word.Value, letter)
+                ? SiemensAxes.FrameValueOf(write, axis.Key, word.Value, letter)
                 : axis.Value is decimal stored
                     ? write.FormatComputed(SiemensAxes.DecimalsAddress(write, letter),
-                        stored * SiemensAxes.StateFactor(write, axis.Key))
+                        stored * SiemensAxes.FrameStateFactor(write, axis.Key))
                     : null;
             if (text is null)
             {
