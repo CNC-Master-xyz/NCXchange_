@@ -52,6 +52,12 @@ public sealed record FrameSnapshot
     public required decimal? Cylinder { get; init; }
 
     /// <summary>
+    /// The cylinder axis of CYLINDER=n, X, Y or Z (D146); Z while the transformation is off. The compilers map their
+    /// native letters from it (D146: Siemens TRACYL Z along the cylinder).
+    /// </summary>
+    public string CylinderAxis { get; init; } = "Z";
+
+    /// <summary>
     /// polar: true under POLAR=ON.
     /// </summary>
     public required bool Polar { get; init; }

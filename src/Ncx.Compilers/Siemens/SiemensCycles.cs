@@ -325,13 +325,14 @@ internal static partial class SiemensCycles
         }
 
         string? feed = null;
+        // D292: the feed in the basic system where G70/G71 leave feeds there.
         if (Parameter(cycle, "CYCLE_F") is Value value)
         {
-            feed = SiemensExpressions.ValueText(write, value, "F");
+            feed = SiemensFeedUnits.Text(write, value);
         }
         else if (write.After.Motion.Feed is decimal known)
         {
-            feed = write.Format("F", known);
+            feed = SiemensFeedUnits.Text(write, known);
         }
 
         return feed is not null && write.Target.Changes("F", feed)
@@ -391,7 +392,10 @@ internal static partial class SiemensCycles
                 continue;
             }
 
-            positions[index] = ValueOf(write, cycle, entry, word, surface);
+            // D292: a positional cycle feed (FFR, S_FB, FFD) is a feed too, in the basic system under G70/G71.
+            positions[index] = word.Key == "CYCLE_F" && SiemensFeedUnits.Converts(write)
+                ? SiemensFeedUnits.Text(write, word.Value)
+                : ValueOf(write, cycle, entry, word, surface);
         }
 
         if (!FillReturnPlane(write, cycle, entry, positions) || !FillAxis(write, cycle, entry, positions)

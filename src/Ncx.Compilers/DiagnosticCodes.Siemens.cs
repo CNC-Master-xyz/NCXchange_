@@ -60,6 +60,14 @@ public static partial class DiagnosticCodes
     public const string SiemensToolPointNotMapped = "CMP514";
 
     /// <summary>
+    /// CMP515, a WARNING: a tool name of TOOL or PRELOAD that the control may not take, with a character other than an
+    /// ASCII letter, a digit, an underscore or a hyphen, or longer than 31 characters; it is written as it stands, case
+    /// kept (840D sl NC-Programmierung SW4.92 p.67: no special characters; Bedienhandbuch Fräsen 2013 p.554-555: at
+    /// most 31 ASCII characters; D172).
+    /// </summary>
+    public const string SiemensToolNameNotPortable = "CMP515";
+
+    /// <summary>
     /// CMP530: ORIGIN names a datum beyond G599, the last settable frame of the control (controllers siemens.md 4;
     /// controller-mapping 1, ORIGIN).
     /// </summary>
@@ -91,10 +99,39 @@ public static partial class DiagnosticCodes
     public const string SiemensRetractNotWritable = "CMP534";
 
     /// <summary>
+    /// CMP535: a ROTATE, a MIRROR or another tilt before a tilt in the chain, which CYCLE800 with a new swivel plane
+    /// deletes, and no rule for an additive swivel is drafted (840D sl/828D Bedienhandbuch Fräsen 2013 p.481, 483;
+    /// D333).
+    /// </summary>
+    public const string SiemensFrameBeforeTilt = "CMP535";
+
+    /// <summary>
+    /// CMP536: a word under CYLINDER that TRACYL cannot take: an ARC, whose direction against G19 is not settled, a Y
+    /// word, or a rotary word other than the rotary axis of the workpiece holder (840D sl/828D Arbeitsvorbereitung
+    /// 2013 p.352-353; D146).
+    /// </summary>
+    public const string SiemensCylinderNotWritable = "CMP536";
+
+    /// <summary>
+    /// CMP537, a WARNING: a shift of X before a tilt under DIAMETER=ON goes into _X0 of CYCLE800 as a radius, and
+    /// whether MD20360 bit 14 makes the cycle take a diameter is not verified (Funktionshandbuch Grundfunktionen 2012
+    /// p.901-903; D125, D333).
+    /// </summary>
+    public const string SiemensTiltShiftUnderDiameter = "CMP537";
+
+    /// <summary>
     /// CMP550: an ARC with ANGLE whose start, center or end the virtual machine does not know, so that neither AR nor
     /// TURN can be written (language 4.3, ANGLE; controllers siemens.md 12 rule 2; D84).
     /// </summary>
     public const string SiemensArcNotWritable = "CMP550";
+
+    /// <summary>
+    /// CMP551, an INFO: UNITS differs from the basic system of the machine (base_units, MD10240) and the machine has no
+    /// G700/G710 (extended_units, MD10260), so G70 or G71 is written and every feed under it converted into the basic
+    /// system, which the control keeps feeds in under G70/G71 (840D sl NC-Programmierung SW4.92 p.115, p.164-166;
+    /// D292).
+    /// </summary>
+    public const string SiemensFeedConverted = "CMP551";
 
     /// <summary>
     /// CMP570: a cycle the cycle catalog of the machine has no entry for (language 4.7.1; machine-config 6).
@@ -183,14 +220,11 @@ public static partial class DiagnosticCodes
     public const string SiemensWordUnderARawModalCall = "CMP596";
 
     /// <summary>
-    /// CMP597: JUMP=END in a subprogram whose PROC line, a RAW line of the file, declares SAVE: the return
-    /// RET("label",,$P_STACK) that ends the program from the call (D344) cannot stand there, since RET "can only be
-    /// used in subprograms that were not defined with the attribute SAVE" (840D sl NC-Programmierung SW4.92, p.523).
-    /// The manual contradicts itself: its DISPLOF example (p.518) ends a PROC ... SAVE DISPLOF with RET, and p.526 says
-    /// a return over several levels evaluates the SAVE of each level; CMP597 is the conservative reading of p.523.
+    /// CMP597, retired 2026-10-27 (D381): JUMP=END in a subprogram whose PROC line declares SAVE was an ERROR, the
+    /// conservative reading of 840D sl NC-Programmierung SW4.92 p.523. RET is allowed in a SAVE subprogram, so the
+    /// compiler writes RET("label",,$P_STACK) there as in any other subprogram. The number is not reused.
     /// </summary>
-    // TODO(question): which reading of the manual holds, RET forbidden in a SAVE subprogram (p.523) or allowed (the
-    // examples of p.518 and the rule of p.526), is open (open questions, manual audit 2026-10-26, row 1).
+    [Obsolete("Retired by D381: RET is allowed in a SAVE subprogram, so JUMP=END there is the parameterized return.")]
     public const string SiemensReturnInSaveSubprogram = "CMP597";
 
     /// <summary>
@@ -199,6 +233,12 @@ public static partial class DiagnosticCodes
     /// siemens.md 8, 12 rule 1; 840D sl NC-Programmierung SW4.92, p.510-512).
     /// </summary>
     public const string SiemensProcLineNotOwn = "CMP598";
+
+    /// <summary>
+    /// CMP599: a variable that the file assigns a string in one place and a number in another: the compiler declares
+    /// it DEF STRING, and a STRING takes no number (840D sl NC-Programmierung SW4.92 p.431; D169, D261).
+    /// </summary>
+    public const string SiemensVariableTypeMixed = "CMP599";
 
     /// <summary>
     /// CMP610: SYNC without a wait template in [sync], or with a mark outside its mark_range (machine-config 5;

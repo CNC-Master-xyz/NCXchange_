@@ -99,10 +99,11 @@ public sealed class SiemensFrameTests
     }
 
     // D240: $AA_IW[X] reads a diameter under DIAMON and maps one to one; $AA_IM[X] reads a radius (MD20360 bits 6/7
-    // off), so the reader doubles it under DIAMON with the WARNING RDR510, the factor not yet measured, and takes it
-    // as written under DIAMOF or with frames_in_diameter.
+    // off), half the diameter $SYS_MPOS_X reads under DIAMETER=ON (language 4.12), so the reader writes the NCX name
+    // halved under DIAMON with the WARNING RDR510, the factor not yet measured, and takes it as written under DIAMOF
+    // or with frames_in_diameter. The compiler writes $SYS_MPOS_X back as ($AA_IM[X]*2), so R1 keeps its value.
     [Fact]
-    public void AaImX_UnderDiamon_IsDoubled()
+    public void AaImX_UnderDiamon_IsTheNcxNameHalved()
     {
         const string variables = "call_depth = 8\n\n[system_variables]\nSYS_POS_X = \"$AA_IW[X]\"\n"
             + "SYS_MPOS_X = \"$AA_IM[X]\"\n";
@@ -112,7 +113,7 @@ public sealed class SiemensFrameTests
 
         NcxProgram program = FramedProgram("DIAMON\nR1=$AA_IM[X]\nR2=$AA_IW[X]\nDIAMOF\nR3=$AA_IM[X]", machine);
 
-        Assert.Equal(Lines("DIAMETER=ON", "VAR:R1={(2 * $SYS_MPOS_X)}", "VAR:R2={$SYS_POS_X}", "DIAMETER=OFF",
+        Assert.Equal(Lines("DIAMETER=ON", "VAR:R1={($SYS_MPOS_X / 2)}", "VAR:R2={$SYS_POS_X}", "DIAMETER=OFF",
                 "VAR:R3={$SYS_MPOS_X}"),
             BodyOf(NcxWriter.Write(program)));
         Assert.Equal([DiagnosticCodes.SiemensMachinePositionDoubled], Codes(program));

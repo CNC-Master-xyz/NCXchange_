@@ -58,11 +58,9 @@ internal static partial class SiemensSpindles
 
     /// <summary>
     /// The number n of a spindle as S{n}= and M{n}=3 address it: the extension its templates write, else the digits of
-    /// its resource id (controllers siemens.md 1, 5); null when neither gives one.
+    /// its resource id (machine-config 5, D294; controllers siemens.md 1, 5); null when neither gives one, which
+    /// SETMS reports as the ERROR CMP511.
     /// </summary>
-    // TODO(question): machine-config names no number for the spindle whose templates write the plain S and M3, the
-    // configured master spindle, which SETMS(n) needs (the P5-01 question of the reader); the number is taken from its
-    // resource id S{n}, as the example files name their spindles and as the reader does, until that is answered.
     public static int? NumberOf(SiemensBlock write, string role)
     {
         if (write.Machine.SpindleTables.TryGetValue(role, out FunctionTable? table))

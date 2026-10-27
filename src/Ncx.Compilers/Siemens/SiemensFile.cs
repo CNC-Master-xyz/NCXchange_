@@ -50,6 +50,9 @@ internal sealed partial class SiemensFile
     // The names a RAW:SIEMENS block of a unit declares itself, DEF REAL LEN the reader kept (D261).
     private readonly Dictionary<Section, HashSet<string>> _rawDeclared = [];
 
+    // The names a VAR word of the file assigns a string to, which the definition part declares STRING (D169).
+    private readonly HashSet<string> _stringNames = new(StringComparer.Ordinal);
+
     // The RAW PROC line of a subprogram, PROC NAME SAVE as the reader keeps it (controller-mapping 6, SUB=BEGIN): a
     // RAW PROC line that is the first block of the SUB section, as the reader declares the subprogram by a PROC at the
     // top of its unit only (SiemensUnits.Read); a PROC inside a unit stays a RAW line of its own
@@ -185,6 +188,16 @@ internal sealed partial class SiemensFile
     }
 
     /// <summary>
+    /// True where a VAR word of the file assigns the name a string, so that its DEF is STRING, the one type the control
+    /// compares with == and &lt;&gt; as text (D169).
+    /// </summary>
+    /// <param name="name">The NCX variable name.</param>
+    public bool HoldsString(string name)
+    {
+        return _stringNames.Contains(name);
+    }
+
+    /// <summary>
     /// True where more than one unit of the file uses the name: a DEF is local to its unit, so the value does not
     /// carry over and the compiler may not declare the name twice (D261).
     /// </summary>
@@ -271,9 +284,9 @@ internal sealed partial class SiemensFile
 
     /// <summary>
     /// True when the RAW PROC line of the subprogram declares the attribute SAVE, PROC NAME(...) SAVE as the reader
-    /// keeps it (controller-mapping 6, SUB=BEGIN), in which no RET may stand: RET "can only be used in subprograms that
-    /// were not defined with the attribute SAVE" (840D sl NC-Programmierung SW4.92, p.511, p.523). The compiler's own
-    /// PROC line never declares SAVE (SiemensFlow.ProcLine).
+    /// keeps it (controller-mapping 6, SUB=BEGIN), whose plain end is M17 rather than RET (D381; 840D sl
+    /// NC-Programmierung SW4.92, p.511, p.523). The compiler's own PROC line never declares SAVE
+    /// (SiemensFlow.ProcLine).
     /// </summary>
     public bool DeclaresSave(Section sub)
     {
@@ -481,6 +494,10 @@ internal sealed partial class SiemensFile
                 if (word.Key == "VAR" && word.Addr is string assigned)
                 {
                     AddName(unit, assigned);
+                    if (word.Value is StringValue)
+                    {
+                        _stringNames.Add(assigned);
+                    }
                 }
 
                 if (word.Value is ExprValue { Tree: ExprNode tree })

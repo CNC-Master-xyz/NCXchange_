@@ -61,6 +61,18 @@ internal static partial class SiemensFlow
             }
 
             write.Written(word);
+
+            // D169: a name the file assigns a string is DEF STRING, which takes no number; NCX keeps no type, so the
+            // mix is an ERROR here rather than a program the control refuses (SW4.92 p.431).
+            if (word.Value is not StringValue && write.File.HoldsString(variable))
+            {
+                write.Error(DiagnosticCodes.SiemensVariableTypeMixed,
+                    $"{variable} is assigned a string elsewhere in the file and is declared DEF STRING, and here a "
+                    + "number, which a STRING variable does not take (840D sl NC-Programmierung SW4.92, p.431; D169, "
+                    + "D261).");
+                continue;
+            }
+
             string? name = SiemensExpressions.VariableName(write, variable);
             string? value = word.Value switch
             {
@@ -226,26 +238,10 @@ internal static partial class SiemensFlow
             return;
         }
 
-        // RET "can only be used in subprograms that were not defined with the attribute SAVE", and the manual names
-        // no exception for the parameterized form and no other way to leave a SAVE subprogram to the program end
-        // (840D sl NC-Programmierung SW4.92, p.511, p.523-526; D344): an ERROR where a RAW PROC line declares SAVE.
-        // TODO(question): the manual contradicts itself: the DISPLOF example of SW4.92 p.518 (Beispiel 1) is PROC
-        // CYCLE(AXIS TOMOV, REAL POSITION) SAVE DISPLOF ... RET (also SW4.94 EN p.508, BS.000504 p.175-176, 840D
-        // Arbeitsvorbereitung 2006 p.127-128), and p.526 says a return over several levels evaluates the SAVE of each
-        // level. CMP597 keeps the conservative reading of p.523 until that is answered (open questions, manual
-        // audit 2026-10-26, row 1).
-        if (write.File.DeclaresSave(sub))
-        {
-            write.Error(DiagnosticCodes.SiemensReturnInSaveSubprogram,
-                $"JUMP=END in block {write.Block.Line.ToString(CultureInfo.InvariantCulture)} of the subprogram "
-                + $"{sub.Name ?? sub.Number?.ToString(CultureInfo.InvariantCulture)}, which its PROC line declares "
-                + "SAVE: the return RET(\"label\",,$P_STACK) that ends the program from the call cannot stand in a "
-                + "subprogram with the attribute SAVE (840D sl NC-Programmierung SW4.92, p.523; D344); the manual "
-                + "contradicts itself, its example on p.518 ends a SAVE subprogram with RET, and this ERROR is the "
-                + "conservative reading until that is answered.");
-            return;
-        }
-
+        // D381: RET stands in a SAVE subprogram as in any other, plain and parameterized. The p.523 sentence is about
+        // RET's G64 benefit, which SAVE takes away ("Voraussetzung dafür ist, dass das Unterprogramm kein SAVE-Attribut
+        // besitzt", 840D/810D Arbeitsvorbereitung 2006 p.92), not a ban: Siemens ends PROC ... SAVE DISPLOF with RET
+        // (NC-Programmierung SW4.92 p.518), and a return over several levels evaluates the SAVE of each level (p.526).
         SiemensCycles.EndModalCall(write);
         WriteConditional(write, condition, "RET(\"" + label + "\",,$P_STACK)");
     }
@@ -405,11 +401,12 @@ internal static partial class SiemensFlow
     }
 
     /// <summary>
-    /// DEF REAL name in the definition part of a unit, after its EXTERN lines and before its first executable block,
-    /// for every variable the unit uses that the control does not have already: an R parameter, a name [variables]
-    /// map covers, a parameter of the PROC, a name a RAW DEF of the unit declares and a name of [variables] declared
-    /// are left out. A name more than one unit uses and declared does not name is an ERROR, since a DEF is local to
-    /// its unit and the value would not carry over (controllers siemens.md 8, 12 rule 7; machine-config 7; D261).
+    /// DEF REAL name, or DEF STRING[200] name for a name assigned a string (D169), in the definition part of a unit,
+    /// after its EXTERN lines and before its first executable block, for every variable the unit uses that the control
+    /// does not have already: an R parameter, a name [variables] map covers, a parameter of the PROC, a name a RAW DEF
+    /// of the unit declares and a name of [variables] declared are left out. A name more than one unit uses and
+    /// declared does not name is an ERROR, since a DEF is local to its unit and the value would not carry over
+    /// (controllers siemens.md 8, 12 rule 7; machine-config 7; D261).
     /// </summary>
     /// <param name="write">The block being written, the head of the unit.</param>
     /// <param name="unit">The program or subprogram.</param>
@@ -433,7 +430,10 @@ internal static partial class SiemensFlow
                 continue;
             }
 
-            write.Write("DEF REAL " + name);
+            // D169: a name the file assigns a string is DEF STRING[200], the longest string of the control
+            // (NC-Programmierung SW4.92, connector p.431), since only STRING compares as text with == and <>
+            // (Arbeitsvorbereitung 2013 p.71); every other name stays REAL (D261).
+            write.Write((write.File.HoldsString(name) ? "DEF STRING[200] " : "DEF REAL ") + name);
         }
     }
 
