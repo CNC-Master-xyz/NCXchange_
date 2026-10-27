@@ -76,7 +76,7 @@ SETPOS, the path tolerance, the tilted plane and the blank (language 4.1, 4.2; V
 |---|---|---|---|
 | `VM050` | ERROR | SETPOS with an axis unknown in every frame, except directly after a HOME of that axis that found no reference point. | VM 3.4, 5; D100, D101 |
 | `VM051` | ERROR | A TILT_AXIS axis word on an axis the machine does not declare rotary. | language 4.2; VM 3.4, 5; D117 |
-| `VM420` | ERROR | TOLERANCE:ROTARY or TOLERANCE_MODE without an active TOLERANCE. | language 4.1; VM 5; D85 |
+| `VM420` | ERROR | TOLERANCE:ROTARY or TOLERANCE_MODE without an active TOLERANCE, ROUND_LIMIT:ROTARY without an active ROUND_LIMIT. | language 4.1; VM 5; D85, D363 |
 | `VM421` | ERROR | SETPOS without an axis word. | language 4.2; VM 5 |
 | `VM422` | WARNING | ROT on a target without table kinematics: the machine file has no rotary axis on a table. Not checked without a machine file. | language 4.2; VM 5; D82 |
 | `VM423` | ERROR | STOCK without all six coordinate words of its form, X Y Z and MAX:X MAX:Y MAX:Z. | language 4.2; VM 5; D351 |

@@ -28,7 +28,8 @@ internal static class FrameValidation
                 "A TILT_AXIS axis word on an axis the machine does not declare rotary.", "language 4.2; VM 3.4, 5; "
                 + "D117"),
             ValidationRule.Error(DiagnosticCodes.ToleranceWordWithoutTolerance,
-                "TOLERANCE:ROTARY or TOLERANCE_MODE without an active TOLERANCE.", "language 4.1; VM 5; D85"),
+                "TOLERANCE:ROTARY or TOLERANCE_MODE without an active TOLERANCE, ROUND_LIMIT:ROTARY without an active "
+                + "ROUND_LIMIT.", "language 4.1; VM 5; D85, D363"),
             ValidationRule.Error(DiagnosticCodes.SetposWithoutAxis, "SETPOS without an axis word.",
                 "language 4.2; VM 5"),
             ValidationRule.Warning(DiagnosticCodes.RotWithoutTableKinematics,
@@ -83,6 +84,7 @@ internal static class FrameValidation
     /// </summary>
     public static void CheckToleranceWords(BlockContext context)
     {
+        CheckRoundLimitRotary(context);
         if (context.State.Frame.Tolerance.Value is not null)
         {
             return;
@@ -100,6 +102,21 @@ internal static class FrameValidation
                 $"{word.ToCanonical()} stands only with an active TOLERANCE, and the path tolerance is OFF (language "
                 + "4.1, virtual machine 5, D85).");
         }
+    }
+
+    // ROUND_LIMIT:ROTARY stands only with an active ROUND_LIMIT, the same ERROR as TOLERANCE:ROTARY without TOLERANCE
+    // (language 4.1, virtual machine 5, D363); the ROUND_LIMIT of the same block makes it active.
+    private static void CheckRoundLimitRotary(BlockContext context)
+    {
+        if (context.State.Frame.RoundLimit.Value is not null
+            || context.Block.Find("ROUND_LIMIT", "ROTARY") is not Word rotary)
+        {
+            return;
+        }
+
+        context.Diagnostics.Error(context.Block, DiagnosticCodes.ToleranceWordWithoutTolerance,
+            $"{rotary.ToCanonical()} stands only with an active ROUND_LIMIT, and the rounding allowance is OFF "
+            + "(language 4.1, virtual machine 5, D363).");
     }
 
     /// <summary>

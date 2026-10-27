@@ -154,4 +154,27 @@ public sealed class FrameValidationTests
 
         VmHarness.Run(text, VmMachines.Default()).AssertNoDiagnostics();
     }
+
+    // VM 5, language 4.1, D363: ROUND_LIMIT:ROTARY without an active ROUND_LIMIT is the same ERROR as
+    // TOLERANCE:ROTARY without TOLERANCE.
+    [Fact]
+    public void RoundLimitRotary_WithoutRoundLimit_IsAnError()
+    {
+        VmHarness vm = new VmHarness(VmMachines.Default()).Execute("ROUND_LIMIT:ROTARY=0.01");
+
+        Diagnostic diagnostic = RuleAssert.Only(vm, DiagnosticCodes.ToleranceWordWithoutTolerance);
+        Assert.Contains("ROUND_LIMIT", diagnostic.Message);
+    }
+
+    // VM 3 step 3, D363: the ROUND_LIMIT of the block makes it active; after ROUND_LIMIT=OFF it is not.
+    [Fact]
+    public void RoundLimitRotary_WithTheRoundLimitOfItsBlock_IsAccepted_AfterOffIsAnError()
+    {
+        VmHarness vm = new VmHarness(VmMachines.Default())
+            .Execute("ROUND_LIMIT=0.001 ROUND_LIMIT:ROTARY=0.01", "ROUND_LIMIT:ROTARY=0.02");
+        vm.AssertNoDiagnostics();
+
+        vm.Execute("ROUND_LIMIT=OFF", "ROUND_LIMIT:ROTARY=0.02");
+        RuleAssert.Only(vm, DiagnosticCodes.ToleranceWordWithoutTolerance);
+    }
 }

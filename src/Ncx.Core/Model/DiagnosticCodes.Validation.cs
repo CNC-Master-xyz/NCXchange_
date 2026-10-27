@@ -14,7 +14,8 @@ public static partial class DiagnosticCodes
     public const string RawPresent = "VM400";
 
     /// <summary>
-    /// VM420: TOLERANCE:ROTARY or TOLERANCE_MODE without an active TOLERANCE (language 4.1, virtual machine 5, D85).
+    /// VM420: TOLERANCE:ROTARY or TOLERANCE_MODE without an active TOLERANCE, ROUND_LIMIT:ROTARY without an active
+    /// ROUND_LIMIT (language 4.1, virtual machine 5, D85, D363).
     /// </summary>
     public const string ToleranceWordWithoutTolerance = "VM420";
 

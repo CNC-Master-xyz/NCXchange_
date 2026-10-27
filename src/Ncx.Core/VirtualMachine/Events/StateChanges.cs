@@ -99,6 +99,10 @@ internal sealed class StateChanges
         Compare("TOLERANCE:ROTARY", EventText.Number(before.Tolerance.Rotary, _before, "TOLERANCE:ROTARY"),
             EventText.Number(after.Tolerance.Rotary, _after, "TOLERANCE:ROTARY"));
         Compare("TOLERANCE_MODE", EventText.Ident(before.Tolerance.Mode), EventText.Ident(after.Tolerance.Mode));
+        Compare("ROUND_LIMIT", OffOr(before.RoundLimit.Value, _before, "ROUND_LIMIT"),
+            OffOr(after.RoundLimit.Value, _after, "ROUND_LIMIT"));
+        Compare("ROUND_LIMIT:ROTARY", EventText.Number(before.RoundLimit.Rotary, _before, "ROUND_LIMIT:ROTARY"),
+            EventText.Number(after.RoundLimit.Rotary, _after, "ROUND_LIMIT:ROTARY"));
         Compare("WORKPIECE", before.WorkpieceHolder ?? "", after.WorkpieceHolder ?? "");
     }
 

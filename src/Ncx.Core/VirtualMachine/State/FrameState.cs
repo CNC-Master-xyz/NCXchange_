@@ -4,7 +4,7 @@ namespace Ncx.Core.VirtualMachine.State;
 
 /// <summary>
 /// The frame rows of virtual machine 2.1: units, workplane, origin, the transform chain, the setpos shifts, the
-/// kinematic transformations, the rotary settings, the path mode and the tolerance settings, the workpiece holder and the frame of the block.
+/// kinematic transformations, the rotary settings, the path mode, the tolerance settings and the rounding allowance, the workpiece holder and the frame of the block.
 /// Mutable; only the virtual machine changes it (code-guidelines 7).
 /// </summary>
 internal sealed class FrameState
@@ -39,6 +39,9 @@ internal sealed class FrameState
         // and PROGRAM=END put it back (virtual machine 2.1, 4; D349, D350).
         StartPathMode = machine.Dynamics?.PathMode ?? PathMode.ExactStop;
         PathMode = StartPathMode;
+
+        // The rounding allowance starts OFF: without ROUND_LIMIT rounding is not reported (virtual machine 2.1, D363).
+        RoundLimit = new RoundLimitState { Value = null, Rotary = null };
         Diameter = false;
 
         // The workpiece holder starts at default_workpiece from TOML (virtual machine 2.1).
@@ -97,6 +100,11 @@ internal sealed class FrameState
     public PathMode PathMode { get; set; }
 
     /// <summary>
+    /// round limit, rotary round limit: the rounding allowance of ROUND_LIMIT (D363).
+    /// </summary>
+    public RoundLimitState RoundLimit { get; set; }
+
+    /// <summary>
     /// The start value of the path mode, the machine's [dynamics] path_mode or exact stop without one (D350).
     /// </summary>
     public PathMode StartPathMode { get; }
@@ -135,6 +143,7 @@ internal sealed class FrameState
             RotaryFeed = RotaryFeed,
             Tolerance = Tolerance,
             PathMode = PathMode,
+            RoundLimit = RoundLimit,
             WorkpieceHolder = WorkpieceHolder,
             MachineFrameBlock = MachineFrameBlock,
         };

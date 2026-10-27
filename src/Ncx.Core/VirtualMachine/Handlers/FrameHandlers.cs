@@ -5,7 +5,7 @@ using Ncx.Core.VirtualMachine.State;
 namespace Ncx.Core.VirtualMachine.Handlers;
 
 /// <summary>
-/// The frame words of language 4.2 and the units, path mode and path tolerance of 4.1: the rows of virtual machine 2.1. The frame
+/// The frame words of language 4.2 and the units, path mode, path tolerance and rounding allowance of 4.1: the rows of virtual machine 2.1. The frame
 /// verbs SHIFT, TILT, TILT_AXIS and SETPOS with their axis words are step 4, not state words (virtual machine 3); their
 /// RESET forms are state words and handled here.
 /// </summary>
@@ -37,6 +37,7 @@ internal static class FrameHandlers
         handlers["PATH_MODE"] = ApplyPathMode;
         handlers["TOLERANCE"] = ApplyTolerance;
         handlers["TOLERANCE_MODE"] = ApplyToleranceMode;
+        handlers["ROUND_LIMIT"] = ApplyRoundLimit;
     }
 
     // UNITS=MM or INCH, UNKNOWN until then (language 4.1, virtual machine 2.1).
@@ -259,6 +260,36 @@ internal static class FrameHandlers
     {
         ToleranceMode mode = BlockContext.IdentOf(word) == "ROUGH" ? ToleranceMode.Rough : ToleranceMode.Finish;
         context.State.Frame.Tolerance = context.State.Frame.Tolerance with { Mode = mode };
+    }
+
+    // ROUND_LIMIT=value or OFF, ROUND_LIMIT:ROTARY=degrees: state only, read by the compiler (language 4.1, virtual
+    // machine 2.1, D363). OFF ends the report; the rotary allowance stands only with ROUND_LIMIT, as TOLERANCE:ROTARY
+    // does with TOLERANCE.
+    private static void ApplyRoundLimit(Word word, BlockContext context)
+    {
+        FrameState frame = context.State.Frame;
+        if (word.Addr is not null)
+        {
+            string rotaryKey = BlockContext.StateKey("ROUND_LIMIT", word.Addr);
+            decimal? rotary = context.TryNumber(word, rotaryKey, out decimal degrees)
+                ? degrees
+                : frame.RoundLimit.Rotary;
+            frame.RoundLimit = frame.RoundLimit with { Rotary = rotary };
+            return;
+        }
+
+        if (BlockContext.IdentOf(word) == "OFF")
+        {
+            frame.RoundLimit = new RoundLimitState { Value = null, Rotary = null };
+            context.State.Unknown.Remove("ROUND_LIMIT");
+            context.State.Unknown.Remove(BlockContext.StateKey("ROUND_LIMIT", "ROTARY"));
+            return;
+        }
+
+        decimal? limit = context.TryNumber(word, "ROUND_LIMIT", out decimal value)
+            ? value
+            : frame.RoundLimit.Value ?? 0m;
+        frame.RoundLimit = frame.RoundLimit with { Value = limit };
     }
 
     // A number of a chain word; null for an expression, which STATIC mode does not evaluate (virtual machine 1).

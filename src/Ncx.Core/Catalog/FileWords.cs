@@ -2,8 +2,8 @@ namespace Ncx.Core.Catalog;
 
 /// <summary>
 /// The file and program words of language 4.1: the frame of the file and of its programs, the header words, units,
-/// comments, stops, dwell, source text kept as RAW, the optional block skip, the path-control mode and the path
-/// tolerance.
+/// comments, stops, dwell, source text kept as RAW, the optional block skip, the path-control mode, the path
+/// tolerance and the rounding allowance.
 /// </summary>
 internal static class FileWords
 {
@@ -211,6 +211,24 @@ internal static class FileWords
             Section = "4.1",
             Description = "What the control optimizes for under the tolerance, accuracy or speed; default FINISH "
                 + "(D85).",
+        },
+
+        // The rounding allowance, one word with the fixed address ROTARY as TOLERANCE has (D363).
+        new WordDefinition
+        {
+            Key = "ROUND_LIMIT",
+            Group = WordKind.Program,
+            ValueKinds = ValueKinds.NumberOrExpr | ValueKinds.Ident,
+            AllowedIdents = ["OFF"],
+            AddrKind = AddrKind.ToleranceKind,
+            AddrRanks = new Dictionary<string, int> { ["ROTARY"] = CanonicalRanks.RoundLimitRotary },
+            AddressedValueKinds = ValueKinds.NumberOrExpr,
+            Scope = Scope.Modal,
+            CanonicalRank = CanonicalRanks.RoundLimit,
+            Section = "4.1",
+            Description = "How far rounding to the machine's decimals may move the programmed point, in the active "
+                + "units, OFF for no report; ROUND_LIMIT:ROTARY is the allowance of the rotary axes in degrees. State "
+                + "only, no control form (D363).",
         },
     ];
 }

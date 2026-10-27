@@ -103,6 +103,7 @@ Words are grouped by area. "Modal" means the value stays until changed. "Block" 
 | `TOLERANCE=0.02` | number in the active units, or `OFF` | Path tolerance of the control for 3D and 5-axis programs: how far the control may deviate from the programmed path when it smooths block transitions (Heidenhain `CYCL DEF 32 TOLERANCE`, Siemens `CYCLE832` and `CTOL`, Fanuc `G5.1 Q1` with the tolerance parameter). `OFF` returns to the control's default. The machine configuration maps the word to the control's form (`[tolerance]`); options it cannot express stay `RAW`. D85. | modal |
 | `TOLERANCE:ROTARY=0.05` | number, degrees | Orientation tolerance of the rotary axes under the same smoothing (cycle 32 `TA`, `CYCLE832` orientation tolerance, Siemens `OTOL`). Only with `TOLERANCE`. | modal |
 | `TOLERANCE_MODE=FINISH` | `FINISH`, `ROUGH` | What the control optimizes for under the tolerance: accuracy or speed (cycle 32 `HSC-MODE`, `CYCLE832` technology 1 or 3). Default `FINISH`. | modal |
+| `ROUND_LIMIT=0.001` | number in the active units, an expression, or `OFF`; `ROUND_LIMIT:ROTARY=0.01` in degrees | How far rounding to the decimals of the machine's addresses may move the programmed point. Rounding is silent; the compiler measures the distance between the tool's programmed point and the point the written file produces, over the linear axes of the block, and warns above the allowance. `ROUND_LIMIT:ROTARY` is the allowance of the rotary axes and the angle addresses and stands only with an active `ROUND_LIMIT`. Ties are rounded half away from zero on the decimal value as written. State only, no control form; `OFF` at the start, and `PROGRAM=END` sets it `OFF`. D363. | modal |
 
 ### 4.2 Frame
 
@@ -156,7 +157,7 @@ Direction: `CW` and `CCW` are seen looking against the tool axis onto the workin
 
 Axis words require a verb. A block with `X=10` and no verb is an ERROR; this catches the classic "forgot the G1" mistake at parse time and keeps state-only blocks free of coordinates.
 
-Chamfers and corner roundings that controllers attach to a motion block (Fanuc `,C2` and `,R4`, Siemens `CHF=`, `CHR=`, `RND=`, Heidenhain `CHF` and `RND` blocks) have no NCX word: readers expand them into the explicit `LINE` and `ARC` blocks they stand for, which every controller can execute (D58).
+Chamfers and corner roundings that controllers attach to a motion block (Fanuc `,C2` and `,R4`, Siemens `CHF=`, `CHR=`, `RND=`, Heidenhain `CHF` and `RND` blocks) have no NCX word: readers expand them into the explicit `LINE` and `ARC` blocks they stand for, which every controller can execute (D58). A later word for a corner rounding is called `CORNER=`, beside `CHAMFER=`, since `ROUND_LIMIT` is the rounding allowance of 4.1 (D363).
 
 ### 4.4 Tool
 
@@ -354,7 +355,7 @@ A machine may need more than the program says: a spindle that has to stop before
    9. Tool words: `PRELOAD`, `TOOL`, `OFFSET`, `OFFSET:LEN`, `OFFSET:RAD`, `COMP`.
    10. Spindle words: `SPINDLE`, `RPM`, `CSS`, `VC`, `RPM_MAX`, `SPINDLE_MODE`, `ORIENT`, `SPINDLE_SYNC`, `PHASE`.
    11. `COOLANT`, `FUNC`, `MFUNC`.
-   12. Frame and state words: `UNITS`, `WORKPLANE`, `ORIGIN`, `DIAMETER`, `WORKPIECE`, `FRAME`, `SHIFT=RESET`, `ROTATE`, `MIRROR`, `TILT=RESET`, `TILT_AXIS=RESET`, `MOVE`, `ROT`, `POINT`, `CYLINDER`, `POLAR`, `TCPM`, `ROTARY_PATH`, `ROTARY_FEED`, `PATH_MODE` (D349), `TOLERANCE`, `TOLERANCE:ROTARY`, `TOLERANCE_MODE`.
+   12. Frame and state words: `UNITS`, `WORKPLANE`, `ORIGIN`, `DIAMETER`, `WORKPIECE`, `FRAME`, `SHIFT=RESET`, `ROTATE`, `MIRROR`, `TILT=RESET`, `TILT_AXIS=RESET`, `MOVE`, `ROT`, `POINT`, `CYLINDER`, `POLAR`, `TCPM`, `ROTARY_PATH`, `ROTARY_FEED`, `PATH_MODE` (D349), `TOLERANCE`, `TOLERANCE:ROTARY`, `TOLERANCE_MODE`, `ROUND_LIMIT`, `ROUND_LIMIT:ROTARY` (D363).
    13. Cycle words: `CYCLE`, `AXIS`, `SURFACE`, `CLEARANCE`, `DEPTH`, `SAFE`, `CYCLE_RETRACT`, `PECK`, `CYCLE_F`, `CYCLE_DWELL`, `PITCH`, `CONTOUR`, then the native parameters of a `CYCLE:<controller>=n` block in source order (D94).
    14. Channel words: `SYNC`, `WITH`, `START_CHANNEL`, `WAIT_CHANNEL`.
    15. Variable and flow words: `VAR`, `LABEL`, `JUMP`, `CALL`, `ARG`, `TIMES`, `REPEAT`, `RETURN`, `IF`.

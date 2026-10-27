@@ -82,6 +82,11 @@ public sealed record FrameSnapshot
     public required PathMode PathMode { get; init; }
 
     /// <summary>
+    /// round limit and rotary round limit, which the compiler reads (D363).
+    /// </summary>
+    public required RoundLimitState RoundLimit { get; init; }
+
+    /// <summary>
     /// workpiece holder: the resource id of the holder the program machines (D57); null when the machine names none.
     /// </summary>
     public required string? WorkpieceHolder { get; init; }
