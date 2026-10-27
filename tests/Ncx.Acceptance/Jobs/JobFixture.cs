@@ -19,7 +19,7 @@ internal static class JobFixture
     /// <summary>
     /// The vars file of path 2 of the pair, the start values of $SYS_WEAR_Z[99] and $SYS_MPOS_B (D250).
     /// </summary>
-    public const string NakamuraPath2Vars = "NAKAMURA_WY250L_O1000.path2.vars.toml";
+    public const string NakamuraPath2Vars = "NAKAMURA_WY250L_O1000.P-2.vars.toml";
 
     /// <summary>
     /// Reads a fixture as UTF-8 text.

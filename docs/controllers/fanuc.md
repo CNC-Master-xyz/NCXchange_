@@ -18,7 +18,7 @@ N410 M2
 ```
 
 - `%` opens and closes the file (a tape convention; the closing `%` is the file end, not the program end). A file may hold several `O` programs one after another; the control stores each under its `O` number.
-- `Oxxxx` (four digits, eight on 30i) names the program; a comment in parentheses after it is the program name shown on the screen. Nakamura names the files of a two-path job by suffix (`O1000` and `O1000.P-2`).
+- `Oxxxx` (four digits, eight on 30i) names the program; a comment in parentheses after it is the program name shown on the screen. Nakamura names the files of a two-path job by suffix (`O1000` and `O1000.P-2`). The reader writes `CHANNEL=n` for any file whose name ends in `.P-n` (n = 1..10), on any Fanuc machine; `ncx convert --channel n` wins over the suffix, and a channel the machine file does not have is the ERROR `RDR107` (D223; controller-mapping 7).
 - `N` block numbers are optional and need not be in order; they matter as jump targets (`GOTO 300`) and as `P`/`Q` references of the turning cycles.
 - `( ... )` is a comment, anywhere in the block. Nothing else is. Some controls restrict the character set to ASCII capitals.
 - `/` or `/n` at the block start is the optional block skip: the block runs unless switch n is on.

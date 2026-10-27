@@ -10,4 +10,11 @@ public sealed record ReadOptions
     /// undecided (D40, D66, D106); empty by default.
     /// </summary>
     public IReadOnlyList<ISourceRule> Rules { get; init; } = [];
+
+    /// <summary>
+    /// The channel the programs of the file run on, from ncx convert --channel n: the reader writes CHANNEL=n on every
+    /// PROGRAM=BEGIN, and it wins over a channel the file name gives (D223; controller-mapping 7; architecture 10);
+    /// null when the command line names none.
+    /// </summary>
+    public int? Channel { get; init; }
 }

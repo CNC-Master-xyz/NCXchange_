@@ -33,6 +33,9 @@ public sealed partial class FanucReader : ReaderBase
     private FanucState? _fanuc;
     private TemplateSet? _templates;
 
+    // The channel of the file being read, from the command line or the file name (D223).
+    private long? _fileChannel;
+
     /// <summary>
     /// The Fanuc family, Fanuc and the ISO dialects (controllers fanuc.md).
     /// </summary>
@@ -58,6 +61,7 @@ public sealed partial class FanucReader : ReaderBase
     protected override void BeginStructure(IReadOnlyList<SourceBlock> blocks)
     {
         FanucState fanuc = Facts();
+        _fileChannel = ChannelOfFile(blocks);
         foreach (SourceBlock block in blocks)
         {
             if (block.IsTrivia)
@@ -107,7 +111,7 @@ public sealed partial class FanucReader : ReaderBase
             {
                 role = StructureRole.SectionBegin;
                 number = decimal.ToInt64(decimal.Truncate(programNumber));
-                channel = ChannelOfFile();
+                channel = _fileChannel;
                 fanuc.Channel = channel;
                 fanuc.ProgramNumbers.Add(number.Value);
                 fanuc.SectionName = number.Value.ToString(CultureInfo.InvariantCulture);
@@ -252,25 +256,37 @@ public sealed partial class FanucReader : ReaderBase
         return ends == 1;
     }
 
-    // Nakamura names the files of one job by path, O1000 for path 1 and O1000.P-2 for path 2 (controllers fanuc.md 1;
-    // controller-mapping 7, CHANNEL): the path is the channel the programs of the file run on (language 4.14).
-    // TODO(question): controller-mapping 7 takes the path "from the file name or a TOML rule", machine-config names no
-    // such rule, and the documents give the file names of the builder nakamura only, whose path 1 carries no suffix;
-    // the reader writes CHANNEL=n for a file named .P-n on a machine of the builder nakamura and no CHANNEL otherwise,
-    // where the job names the channel (language 4.14), until D223 is answered.
-    private long? ChannelOfFile()
+    // The channel of the file (D223; controller-mapping 7, CHANNEL; language 4.14): ncx convert --channel n, else the
+    // suffix .P-n of the file name on any Fanuc machine, as Nakamura names the files of one job by path, O1000 and
+    // O1000.P-2 (controllers fanuc.md 1); .P-1 is channel 1. Without either the reader writes no CHANNEL: channel 1
+    // (language 4.1), unless a job binds the file (D15). A channel the machine file does not have is an ERROR, RDR107,
+    // on the first O line; a machine file without channels has channel 1 (language 4.1).
+    private long? ChannelOfFile(IReadOnlyList<SourceBlock> blocks)
     {
-        if (!FanucMacro.IsBuilderNakamura(Machine))
+        long? channel = Options.Channel;
+        if (channel is null)
         {
-            return null;
+            Match path = PathSuffix().Match(Path.GetFileName(Diagnostics.File));
+            channel = path.Success
+                ? long.Parse(path.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture)
+                : null;
         }
 
-        Match path = PathSuffix().Match(Path.GetFileName(Diagnostics.File));
-        return path.Success ? long.Parse(path.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture) : null;
+        IReadOnlyList<int> channels = Machine.Machine.Channels.Count == 0 ? [1] : Machine.Machine.Channels;
+        if (channel is long number && !channels.Contains((int)number))
+        {
+            SourceBlock? first = blocks.FirstOrDefault(block => block.Find("O") is not null);
+            Diagnostics.Error(first?.Line ?? 1, DiagnosticCodes.FanucChannelNotOfTheMachine,
+                $"The file runs on channel {number}, which the machine file does not have (channels "
+                + $"{string.Join(", ", channels)}); CHANNEL={number} is written as the file names it (D223; "
+                + "controller-mapping 7).");
+        }
+
+        return channel;
     }
 
-    // The path suffix of a Nakamura file name, .P-2 of O1000.P-2, with an extension after it or none.
-    [GeneratedRegex(@"\.P-([1-9])(?:\.[A-Za-z0-9]+)?$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    // The path suffix of a file name, .P-2 of O1000.P-2, n = 1..10, with an extension after it or none (D223).
+    [GeneratedRegex(@"\.P-(10|[1-9])(?:\.[A-Za-z0-9]+)?$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex PathSuffix();
 
     /// <summary>

@@ -46,4 +46,10 @@ public static partial class DiagnosticCodes
     /// caller's V1..V33 at the return, so the write does not reach the caller (D148; virtual machine 3.6).
     /// </summary>
     public const string FanucSharedLocalWritten = "RDR106";
+
+    /// <summary>
+    /// RDR107, an ERROR: the channel of the file, from ncx convert --channel or from the suffix .P-n of its name, is
+    /// not a channel of the machine file; CHANNEL=n is written as given (D223; controller-mapping 7).
+    /// </summary>
+    public const string FanucChannelNotOfTheMachine = "RDR107";
 }

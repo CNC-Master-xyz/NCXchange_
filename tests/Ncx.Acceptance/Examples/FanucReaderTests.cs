@@ -132,8 +132,8 @@ public sealed partial class FanucReaderTests
     // not map (#11099, #5024, #5025; language 4.12, D51) as RAW:FANUC until D250 is answered; nothing else. The output
     // formats to itself.
     [Theory]
-    [InlineData("NAKAMURA_WY250L_O1000.path1.nc")]
-    [InlineData("NAKAMURA_WY250L_O1000.path2.nc")]
+    [InlineData("NAKAMURA_WY250L_O1000.nc")]
+    [InlineData("NAKAMURA_WY250L_O1000.P-2.nc")]
     public void Convert_NakamuraPath_KeepsOnlyTheNamedCodesAsRaw(string source)
     {
         NcxProgram read = Read(source, Load("docs/spec/examples/machines/nakamura-ntjx.toml"));
@@ -161,8 +161,8 @@ public sealed partial class FanucReaderTests
     // N2 M2 section after N30 M30 stands in front of PROGRAM=END with LABEL=2 (controller-mapping 6 and 8; language
     // 4.13, the Nakamura sample; D5).
     [Theory]
-    [InlineData("NAKAMURA_WY250L_O1000.path1.nc")]
-    [InlineData("NAKAMURA_WY250L_O1000.path2.nc")]
+    [InlineData("NAKAMURA_WY250L_O1000.nc")]
+    [InlineData("NAKAMURA_WY250L_O1000.P-2.nc")]
     public void Convert_NakamuraPath_KeepsTheLabelOfEveryG411Target(string source)
     {
         NcxProgram read = Read(source, Load("docs/spec/examples/machines/nakamura-ntjx.toml"));

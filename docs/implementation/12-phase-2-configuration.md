@@ -65,7 +65,7 @@ dotnet run --project src/Ncx.Cli -- check docs/spec/examples/POLAR_FACE.ncx --ma
 ## Risks and open ends
 
 - The schema is finalized by the compilers (machine-config status line); P2-01 will not get every key right and P3-04, P3-06, P5-02 will add keys. Keep the loader strict on types and lenient on unknown keys until P5-02, then turn unknown keys into ERRORs in a decision of its own.
-- `Template.Matches` on free-form builder lines (`G340 T0101. A02.`) must tolerate the spacing and the trailing whitespace the Nakamura files carry (`G411F12. `); test with lines copied from `NAKAMURA_WY250L_O1000.path1.nc`.
+- `Template.Matches` on free-form builder lines (`G340 T0101. A02.`) must tolerate the spacing and the trailing whitespace the Nakamura files carry (`G411F12. `); test with lines copied from `NAKAMURA_WY250L_O1000.nc`.
 - The dynamics values of D100 are guesses; the runtime estimate of P4-02 is only as good as they are, and the report says so.
 
 ## Exit checklist

@@ -541,7 +541,7 @@ internal static class FanucToolWords
 
         // TODO(question): fanuc 5 gives the S of a block to the spindle of the M code in it, otherwise to the spindle
         // selected last, and fanuc 4 does not say whether the speed limit of G50 S and G92 S is one per spindle; the
-        // limit is written alone, as NAKAMURA_WY250L_O1000.path1.nc writes G50S2500 before any M code, until that is
+        // limit is written alone, as NAKAMURA_WY250L_O1000.nc writes G50S2500 before any M code, until that is
         // answered.
         if (id is null || state == "RPM_MAX")
         {
