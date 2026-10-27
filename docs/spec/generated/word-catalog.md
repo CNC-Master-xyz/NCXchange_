@@ -43,12 +43,12 @@ variable) sort under their rank by the address text. The ten verbs share one ran
 | 210 | `IB` | number, expression |  | is one |  | block | 4.3 | Incremental target of the axis B, the current position plus the value. |
 | 220 | `IC` | number, expression |  | is one |  | block | 4.3 | Incremental target of the axis C, the current position plus the value. |
 | 230 | incremental machine axis words (D93) | number, expression |  | is one |  | block | 4.3 | `I` followed by a machine axis name: `IC2`, `IW`, `IZ2`, in the order of the absolute words. |
-| 240 | `TX` | number, expression |  | is one |  | block | 4.3 | X part of the tool axis direction at the end of a LINE under TCPM=ON, a unit vector (D81). |
-| 250 | `TY` | number, expression |  | is one |  | block | 4.3 | Y part of the tool axis direction at the end of a LINE under TCPM=ON, a unit vector (D81). |
-| 260 | `TZ` | number, expression |  | is one |  | block | 4.3 | Z part of the tool axis direction at the end of a LINE under TCPM=ON, a unit vector (D81). |
-| 270 | `NX` | number, expression |  | is one |  | block | 4.3 | X part of the surface normal at the end of the LINE, only together with TX TY TZ (D81). |
-| 280 | `NY` | number, expression |  | is one |  | block | 4.3 | Y part of the surface normal at the end of the LINE, only together with TX TY TZ (D81). |
-| 290 | `NZ` | number, expression |  | is one |  | block | 4.3 | Z part of the surface normal at the end of the LINE, only together with TX TY TZ (D81). |
+| 240 | `TX` | number, expression |  | is one |  | block | 4.3 | X part of the tool axis direction at the end point of a RAPID, LINE or ARC under TCPM=ON, a unit vector (D81, D185). |
+| 250 | `TY` | number, expression |  | is one |  | block | 4.3 | Y part of the tool axis direction at the end point of a RAPID, LINE or ARC under TCPM=ON, a unit vector (D81, D185). |
+| 260 | `TZ` | number, expression |  | is one |  | block | 4.3 | Z part of the tool axis direction at the end point of a RAPID, LINE or ARC under TCPM=ON, a unit vector (D81, D185). |
+| 270 | `NX` | number, expression |  | is one |  | block | 4.3 | X part of the surface normal at the end of the RAPID, LINE or ARC, only together with TX TY TZ (D81, D185). |
+| 280 | `NY` | number, expression |  | is one |  | block | 4.3 | Y part of the surface normal at the end of the RAPID, LINE or ARC, only together with TX TY TZ (D81, D185). |
+| 290 | `NZ` | number, expression |  | is one |  | block | 4.3 | Z part of the surface normal at the end of the RAPID, LINE or ARC, only together with TX TY TZ (D81, D185). |
 | 300 | `CENTER:X` | number, expression |  | is one | `X` | block | 4.3 | Arc center on a plane axis, CENTER:X absolute, CENTER:IX incremental from the start point of the arc (the I J K of Fanuc and Siemens). |
 | 310 | `CENTER:Y` | number, expression |  | is one | `Y` | block | 4.3 | Arc center on a plane axis, CENTER:X absolute, CENTER:IX incremental from the start point of the arc (the I J K of Fanuc and Siemens). |
 | 320 | `CENTER:Z` | number, expression |  | is one | `Z` | block | 4.3 | Arc center on a plane axis, CENTER:X absolute, CENTER:IX incremental from the start point of the arc (the I J K of Fanuc and Siemens). |
