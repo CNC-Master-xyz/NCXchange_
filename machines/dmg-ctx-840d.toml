@@ -23,6 +23,7 @@ trailing_zeros = false
 block_numbers = { enabled = true, start = 10, step = 10 }
 line_ending = "CRLF"
 program_end = "M30"                # written for PROGRAM=END (D48)
+channel_files = "program_name"     # job output: the NAME of each channel's program, 1000.MPF and 2000.MPF of the DMG templates (D310)
 sub_end = "RET"
 
 [roles]

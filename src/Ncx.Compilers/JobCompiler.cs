@@ -85,17 +85,25 @@ public sealed partial class JobCompiler
         var outputs = new List<ChannelOutput>();
         List<int> jobChannels = ChannelsOf(channels);
         MachineConfig jobMachine = JobMachine(machine, jobChannels);
+        var libraries = new List<CompiledFile>();
         foreach (JobChannel channel in channels)
         {
-            var view = new JobView { Channel = channel.Channel, Channels = jobChannels };
+            var view = new JobView { Channel = channel.Channel, Channels = jobChannels, Library = channel.Library };
             CompileResult result = _compiler.Compile(channel.Build(), jobMachine, options with { Job = view });
             foreach (Diagnostic diagnostic in result.Diagnostics.Items)
             {
                 diagnostics.Add(diagnostic);
             }
 
+            // D316: the library file of the job stands after the channel files, under its own name.
             foreach (CompiledFile file in result.Files)
             {
+                if (channel.Library is string library && file.Name.StartsWith(library, StringComparison.Ordinal))
+                {
+                    libraries.Add(file);
+                    continue;
+                }
+
                 outputs.Add(new ChannelOutput { Channel = channel.Channel, Program = channel.Program, File = file });
             }
         }
@@ -105,7 +113,9 @@ public sealed partial class JobCompiler
             return Stopped(diagnostics);
         }
 
-        return new CompileResult { Files = ChannelOutputNaming.Name(outputs, job, machine), Diagnostics = diagnostics };
+        List<CompiledFile> named = ChannelOutputNaming.Name(outputs, job, machine, diagnostics);
+        named.AddRange(libraries);
+        return new CompileResult { Files = named, Diagnostics = diagnostics };
     }
 
     // The machine as a channel program of the job sees it (language 4.8; machine-config 5): a SYNC without WITH waits

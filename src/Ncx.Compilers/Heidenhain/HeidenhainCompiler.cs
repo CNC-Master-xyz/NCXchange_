@@ -38,6 +38,41 @@ public sealed class HeidenhainCompiler : CompilerBase
     protected override string FileExtension => ".h";
 
     /// <summary>
+    /// D316, D388 (13): on Heidenhain each SUB that no channel program of a job calls becomes a program of its own,
+    /// &lt;job name&gt;_LIB_&lt;sub&gt;.h, which another program calls with CALL PGM: the body of its LBL section
+    /// between BEGIN PGM and END PGM, without M2 or M30, which a called program must not contain (D274; iTNC 530
+    /// Benutzerhandbuch Klartext 340490, connector p.523, Programmier-Hinweise). The units are the machine's
+    /// units_default, since a SUB no program calls runs from the default entry state (D99).
+    /// </summary>
+    private protected override List<CompiledFile> LibraryFiles(string library, IReadOnlyList<Section> subs)
+    {
+        string units = Machine.Machine.UnitsDefault == "INCH" ? "INCH" : "MM";
+        var files = new List<CompiledFile>();
+        foreach (Section sub in subs)
+        {
+            IReadOnlyList<OutputLine> lines = SubLines(sub);
+            if (lines.Count < 2)
+            {
+                continue;
+            }
+
+            string name = library + "_" + sub.Name;
+            OutputBuffer output = NewOutput();
+            Block begin = lines[0].Block;
+            output.Line("BEGIN PGM " + name + " " + units, begin);
+            for (int index = 1; index < lines.Count - 1; index++)
+            {
+                output.Add([lines[index]]);
+            }
+
+            output.Line("END PGM " + name + " " + units, lines[^1].Block);
+            files.Add(new CompiledFile { Name = name + FileExtension, Text = output.ToText(Diagnostics) });
+        }
+
+        return files;
+    }
+
+    /// <summary>
     /// An ARC with a tool vector is the ERROR CMP017: LN, the only Klartext block with a tool vector, has no arc form
     /// (D185).
     /// </summary>

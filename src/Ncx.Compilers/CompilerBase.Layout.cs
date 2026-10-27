@@ -21,7 +21,56 @@ public abstract partial class CompilerBase
     {
         NcxProgram program = _program ?? throw NotCompiling();
         string stem = Path.GetFileNameWithoutExtension(program.FileName);
-        return Machine.Format?.ProgramLayout == ProgramLayout.FilePerProgram ? FilePerProgram() : OneFile(stem);
+        List<CompiledFile> files =
+            Machine.Format?.ProgramLayout == ProgramLayout.FilePerProgram ? FilePerProgram() : OneFile(stem);
+        if (Options.Job?.Library is string library && UncalledSubs() is { Count: > 0 } uncalled)
+        {
+            files.AddRange(LibraryFiles(library, uncalled));
+        }
+
+        return files;
+    }
+
+    // The SUB sections of the file that no program of this compile calls, in file order (D99, D264).
+    private List<Section> UncalledSubs()
+    {
+        NcxProgram source = _program ?? throw NotCompiling();
+        var uncalled = new List<Section>();
+        foreach (Section sub in source.Subs)
+        {
+            if (!_programs.Exists(program => program.CalledSubs.Contains(sub)))
+            {
+                uncalled.Add(sub);
+            }
+        }
+
+        return uncalled;
+    }
+
+    /// <summary>
+    /// D316: the library file of a job, which holds every SUB that no channel program calls, once, named &lt;job
+    /// name&gt;_LIB with the family's extension (D388 (13)): the frame of the file around the subprograms as the family
+    /// writes them, on Fanuc one O program per SUB as under file_per_program (ready for //CNC_MEM/USER/LIBRARY), on
+    /// Siemens one SPF unit per SUB. A family whose subprograms are no programs of their own overrides it.
+    /// </summary>
+    /// <param name="library">The name of the library file without extension.</param>
+    /// <param name="subs">The subprograms no channel program calls, in file order.</param>
+    private protected virtual List<CompiledFile> LibraryFiles(string library, IReadOnlyList<Section> subs)
+    {
+        OutputBuffer output = NewOutput();
+        output.Add(_fileBegin);
+        WriteSubprograms(output, subs);
+        output.Add(_fileEnd);
+        return [new CompiledFile { Name = library + FileExtension, Text = output.ToText(Diagnostics) }];
+    }
+
+    /// <summary>
+    /// The lines of a subprogram as its first walk wrote them (D99); empty for one no walk wrote or one written inline
+    /// (D278).
+    /// </summary>
+    private protected IReadOnlyList<OutputLine> SubLines(Section sub)
+    {
+        return _subs.TryGetValue(sub, out SubText? text) && !IsInlined(sub) ? text.Lines : [];
     }
 
     // program_layout = "one_file": every program and subprogram of the NCX file in one output file (machine-config 2,
@@ -51,10 +100,11 @@ public abstract partial class CompilerBase
             output.Add(program.Footer);
         }
 
+        // D316: in a channel program of a job an uncalled SUB goes to the library file of the job instead.
         var uncalled = new List<Section>();
         foreach (Section sub in source.Subs)
         {
-            if (!placed.Contains(sub))
+            if (!placed.Contains(sub) && Options.Job is null)
             {
                 uncalled.Add(sub);
             }
@@ -68,8 +118,8 @@ public abstract partial class CompilerBase
     // program_layout = "file_per_program": one output file per program, the subprograms copied after the M30 of every
     // program that calls them (machine-config 2, D48; language 4.13, D99). D264: a SUB that no program calls is
     // written once, into the first program's file, after that program's subprograms and its M30, before its footer.
-    // In a channel program of a job D316 applies instead: the job compiler reports such a SUB, and its library file
-    // holds it, since one channel cannot reach another channel's file.
+    // In a channel program of a job D316 applies instead: the job compiler reports such a SUB, and the library file of
+    // the job holds it (LibraryFiles), since one channel cannot reach another channel's file.
     private List<CompiledFile> FilePerProgram()
     {
         NcxProgram source = _program ?? throw NotCompiling();
@@ -194,7 +244,7 @@ public abstract partial class CompilerBase
         return OutputLinesOf(RaiseBlockWrite(program.Begin, lines), block);
     }
 
-    private OutputBuffer NewOutput()
+    private protected OutputBuffer NewOutput()
     {
         return new OutputBuffer(Machine.Format, BlockNumberPrefix, TakesBlockNumber, OwnBlockNumber);
     }

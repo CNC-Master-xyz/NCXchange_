@@ -36,7 +36,7 @@ public sealed class JobBindingTests
         Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM96\nM30\n%\n", texts[1]);
     }
 
-    // D56 and the TODO(question) of JobCompiler.Destination: a word that no mark stands before stands after the
+    // D56 and D313: a word that no mark stands before stands after the
     // header of the program of its channel.
     [Fact]
     public void BoundWord_BeforeEveryMark_StandsAfterTheHeaderOfTheOtherProgram()
@@ -49,7 +49,7 @@ public sealed class JobBindingTests
     }
 
     // Implementation 16, P6-02 tests first: a channels = "all" word appears in both programs behind a generated wait,
-    // the first mark of mark_range that the job does not use (the TODO(question) of JobCompiler.GeneratedMark).
+    // the first mark of mark_range that the job does not use (D315).
     [Fact]
     public void AllChannelsWord_InChannel1_StandsInBothProgramsBehindAGeneratedWait()
     {
@@ -271,7 +271,7 @@ public sealed class JobBindingTests
         Assert.Equal(5, error.Line);
     }
 
-    // The TODO(question) of JobCompiler.BindWords: a bound word in a subprogram runs at every CALL and has no one place
+    // D311: a bound word in a subprogram runs at every CALL and has no one place
     // in the program of another channel: CMP703.
     [Fact]
     public void BoundWord_InASubprogram_IsCmp703()
@@ -295,7 +295,7 @@ public sealed class JobBindingTests
         Assert.Equal(8, error.Line);
     }
 
-    // Language 4.8, WITH, and the TODO(question) of JobCompiler.Destination: channel 2 takes no part in the mark before
+    // Language 4.8, WITH, and D313: channel 2 takes no part in the mark before
     // the word bound to it, so its program has no same mark: CMP704.
     [Fact]
     public void BoundWord_OwningChannelTakesNoPartInTheMarkBefore_IsCmp704()
@@ -307,7 +307,7 @@ public sealed class JobBindingTests
         Assert.Equal(DiagnosticCodes.NoSameMarkInChannel, JobCompile.ErrorOf(result).Code);
     }
 
-    // Virtual machine 3.7, D56 and the TODO(question) of JobCompiler.RunWrittenJob: channel 1 waits for the end of
+    // Virtual machine 3.7, D56 and D314: channel 1 waits for the end of
     // channel 2 before a word bound to every channel, whose generated wait stands after the header of channel 2, so
     // neither channel can go on in the job as written: CMP712 on the generated wait of channel 2, and nothing is
     // written.
@@ -327,7 +327,7 @@ public sealed class JobBindingTests
         Assert.Equal(5, error.OriginLine);
     }
 
-    // Virtual machine 3.7, D56 and the TODO(question) of JobCompiler.RunWrittenJob: the generated wait before a word
+    // Virtual machine 3.7, D56 and D314: the generated wait before a word
     // bound to every channel stands in channel 1 before the START_CHANNEL that starts channel 2, so it can never be
     // released: CMP712, and nothing is written.
     [Fact]
@@ -367,6 +367,47 @@ public sealed class JobBindingTests
     public void AllChannelsWord_MachineWithoutMarkRange_IsCmp711()
     {
         string machine = JobCompile.Machine("[sync]\nwait = \"M{mark}\"", spindleSync: "channels = \"all\"");
+
+        CompileResult result = JobCompile.Run(machine,
+            JobCompile.Program(1000, "SYNC=110", "SPINDLE_SYNC=MAIN,SUB"), JobCompile.Program(1000, "SYNC=110"));
+
+        Assert.Equal(DiagnosticCodes.NoMarkForGeneratedSync, JobCompile.ErrorOf(result).Code);
+    }
+
+    // D315: the generated mark skips [sync] reserved_marks as it skips the marks the job uses and start_mark.
+    [Fact]
+    public void AllChannelsWord_ReservedMarks_TheGeneratedWaitSkipsThem()
+    {
+        string machine = JobCompile.Machine(JobCompile.DefaultSync + "\nreserved_marks = [100, 101]",
+            spindleSync: "channels = \"all\"");
+
+        List<string> texts = JobCompile.TextsOf(JobCompile.Run(machine,
+            JobCompile.Program(1000, "SYNC=110", "SPINDLE_SYNC=MAIN,SUB"), JobCompile.Program(1000, "SYNC=110")));
+
+        Assert.Contains("M110\nM102\nM96\n", texts[0], StringComparison.Ordinal);
+        Assert.Contains("M110\nM102\nM96\n", texts[1], StringComparison.Ordinal);
+    }
+
+    // D315: when every mark of the range is used, the generated wait reuses the first mark that is not reserved.
+    [Fact]
+    public void AllChannelsWord_EveryMarkUsed_ReusesTheFirstMarkNotReserved()
+    {
+        string sync = "[sync]\nwait = \"M{mark}\"\nmark_range = [110, 112]\nreserved_marks = [110]";
+        string machine = JobCompile.Machine(sync, spindleSync: "channels = \"all\"");
+
+        List<string> texts = JobCompile.TextsOf(JobCompile.Run(machine,
+            JobCompile.Program(1000, "SYNC=110", "SYNC=111", "SYNC=112", "SPINDLE_SYNC=MAIN,SUB"),
+            JobCompile.Program(1000, "SYNC=110", "SYNC=111", "SYNC=112")));
+
+        Assert.Contains("M112\nM111\nM96\n", texts[0], StringComparison.Ordinal);
+    }
+
+    // D315: when every mark of the range is reserved, the job compiler has no mark for the generated wait: CMP711.
+    [Fact]
+    public void AllChannelsWord_EveryMarkReserved_IsCmp711()
+    {
+        string sync = "[sync]\nwait = \"M{mark}\"\nmark_range = [110, 111]\nreserved_marks = [110, 111]";
+        string machine = JobCompile.Machine(sync, spindleSync: "channels = \"all\"");
 
         CompileResult result = JobCompile.Run(machine,
             JobCompile.Program(1000, "SYNC=110", "SPINDLE_SYNC=MAIN,SUB"), JobCompile.Program(1000, "SYNC=110"));

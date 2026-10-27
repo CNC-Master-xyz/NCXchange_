@@ -1,5 +1,6 @@
 using Ncx.Core.Machine;
 using Ncx.Core.Model;
+using Ncx.Core.Parsing;
 
 namespace Ncx.Compilers.Tests.Jobs;
 
@@ -140,8 +141,9 @@ public sealed class JobCompilerTests
         Assert.Equal("%\nO2000 (TWO)\nG21\nG18 G99 G40 G80\nM110\nM30\n%\n", texts[1]);
     }
 
-    // Language 4.13, D99: a channel file holds the subprograms its program calls, and a subprogram that no channel
-    // program calls stands in no channel file, with the WARNING CMP720.
+    // Language 4.13, D99, D316: a channel file holds the subprograms its program calls; a subprogram that no channel
+    // program calls stands in no channel file but once in the library file JOB_LIB of the job, with the WARNING CMP720
+    // that names it.
     [Fact]
     public void Subprograms_CalledByOneChannel_StandInItsFileAlone()
     {
@@ -163,6 +165,7 @@ public sealed class JobCompilerTests
             "FILE=END") + "\n";
         var job = new JobManifest
         {
+            Name = "JOB",
             Machine = "test.toml",
             Channels =
             [
@@ -175,13 +178,18 @@ public sealed class JobCompilerTests
             new Dictionary<string, string> { ["BOTH.ncx"] = file });
 
         List<string> texts = JobCompile.TextsOf(result);
+        Assert.Equal(3, texts.Count);
         Assert.Contains("\nO0100\n", texts[0], StringComparison.Ordinal);
         Assert.DoesNotContain("O0200", texts[0], StringComparison.Ordinal);
         Assert.DoesNotContain("O0100", texts[1], StringComparison.Ordinal);
+        Assert.DoesNotContain("O0200", texts[1], StringComparison.Ordinal);
+        Assert.Equal("JOB_LIB.nc", result.Files[2].Name);
+        Assert.Equal("%\nO0200\nG4 X2.\nM99\n%\n", texts[2]);
         Diagnostic warning = Assert.Single(result.Diagnostics.Items,
             diagnostic => diagnostic.Code == DiagnosticCodes.SubprogramOfNoChannel);
         Assert.Equal(Severity.Warning, warning.Severity);
         Assert.Equal(12, warning.Line);
+        Assert.Contains("library file JOB_LIB", warning.Message, StringComparison.Ordinal);
     }
 
     // Virtual machine 3.7: two channels that wait at different marks are the deadlock ERROR of the job, and nothing is
@@ -196,7 +204,7 @@ public sealed class JobCompilerTests
         Assert.Equal(Ncx.Core.Model.DiagnosticCodes.SyncDeadlock, error.Code);
     }
 
-    // Virtual machine 3.7, machine-config 5 and the TODO(question) of JobCompiler.RunWrittenJob: channel 2 starts at
+    // Virtual machine 3.7, machine-config 5 and D314: channel 2 starts at
     // the START_CHANNEL of channel 1, so the start mark written as the first block of channel 1 can never be released;
     // the job as written deadlocks, which is the ERROR CMP712 on that SYNC, and nothing is written.
     [Fact]
@@ -250,5 +258,61 @@ public sealed class JobCompilerTests
                 ["C3.ncx"] = JobCompile.Program(1000, block),
                 ["C4.ncx"] = JobCompile.Program(1000, block),
             });
+    }
+
+    // D304: channels at one mark that name different participants are the compile's ERROR CMP713, since the wait codes
+    // written for them would pair different path lists (Fanuc PS0160), and nothing is written.
+    [Fact]
+    public void Mark_ChannelsWithDifferentParticipants_IsCmp713AndNothingIsWritten()
+    {
+        string machine = JobCompile.Machine(channels: "[1, 2, 3]");
+
+        CompileResult result = JobCompile.Run(machine,
+            JobCompile.Program(1000, "SYNC=110 WITH=1,2"),
+            JobCompile.Program(1000, "DWELL=1", "SYNC=110"),
+            JobCompile.Program(1000, "DWELL=1", "DWELL=1", "SYNC=110"));
+
+        Diagnostic error = JobCompile.ErrorOf(result);
+        Assert.Equal(DiagnosticCodes.MarkParticipantsDiffer, error.Code);
+        Assert.Equal("C2.ncx", error.File);
+        Assert.Contains("PS0160", error.Message, StringComparison.Ordinal);
+    }
+
+    // D142: the comment lines of a channel program keep their place before the block they stood before, also when the
+    // job compiler inserts blocks in front of it, and those of the other channel's program stay out.
+    [Fact]
+    public void Build_CommentLines_KeepTheirPlaceInTheChannelProgram()
+    {
+        string file = string.Join('\n',
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"ONE\" NUMBER=1000",
+            "FEED_MODE=PER_REV COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
+            "; one",
+            "SYNC=110",
+            "PROGRAM=END",
+            "PROGRAM=BEGIN NAME=\"TWO\" NUMBER=2000",
+            "FEED_MODE=PER_REV COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
+            "; two",
+            "SYNC=110",
+            "PROGRAM=END",
+            "FILE=END") + "\n";
+        NcxProgram parsed = Parser.Parse(file, "BOTH.ncx", new ParserOptions());
+        var channel = new JobChannel
+        {
+            Channel = 2,
+            File = parsed,
+            Program = parsed.Programs[1],
+            Marks = new ChannelMarks(parsed),
+            FileDiagnostics = new Diagnostics("BOTH.ncx"),
+            Diagnostics = new Diagnostics("BOTH.ncx"),
+        };
+        channel.InsertAfter(parsed.Programs[1].FirstBlock, parsed.Blocks[3]);
+
+        NcxProgram built = channel.Build();
+
+        Trivia comment = Assert.Single(built.Trivia);
+        Assert.Equal("; two", comment.Text);
+        Assert.NotNull(built.Blocks[comment.BlockIndex].Find("SYNC"));
+        Assert.Equal(4, comment.BlockIndex);
     }
 }

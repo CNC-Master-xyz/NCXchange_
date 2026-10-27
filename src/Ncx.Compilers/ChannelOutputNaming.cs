@@ -1,5 +1,6 @@
 using System.Globalization;
 using Ncx.Core.Machine;
+using Ncx.Core.Model;
 
 namespace Ncx.Compilers;
 
@@ -10,12 +11,10 @@ namespace Ncx.Compilers;
 /// %_N_1000_MPF and %_N_2000_MPF of the DMG templates. Without channel_files each channel keeps the name the compiler
 /// of its family gives the file of its program.
 /// </summary>
-// TODO(question): implementation 16 names the files "O1000, O1000.P-2 per the Nakamura convention from [machine]
-// channels and a [format] key; _C1/_C2 for the STAMA form; %_N_1000_MPF/%_N_2000_MPF for Siemens" and no document
-// gives the key, the extension of the Nakamura files or what happens when two channels would write one file; the key
-// is channel_files (the TODO(question) of OutputFormat.ChannelFiles), the Nakamura files are written as the plan names
-// them, without an extension, and two channels that would write one file are told apart by _C1, _C2, until that is
-// answered.
+// D310: [format] channel_files = "path_suffix" | "channel_suffix" | "program_name"; path_suffix writes O<NUMBER> with
+// at least four digits for the first channel and O<NUMBER>.P-n for channel n, without an extension; without the key
+// each channel keeps its family name. Two channels that would write one file are told apart by _C<n> with the WARNING
+// CMP721, the same rule as D266.
 internal static class ChannelOutputNaming
 {
     // O with at least four digits, O0001 (controllers fanuc.md 1).
@@ -27,7 +26,10 @@ internal static class ChannelOutputNaming
     /// <param name="outputs">The file of every channel as the compiler of the family named it.</param>
     /// <param name="job">The job manifest, whose [job] name the channel suffix form takes.</param>
     /// <param name="machine">The machine: [format] channel_files and [machine] channels.</param>
-    public static List<CompiledFile> Name(List<ChannelOutput> outputs, JobManifest job, MachineConfig machine)
+    /// <param name="diagnostics">The diagnostics of the job, which take the WARNING CMP721 of a name two channels
+    /// would write.</param>
+    public static List<CompiledFile> Name(List<ChannelOutput> outputs, JobManifest job, MachineConfig machine,
+        Diagnostics diagnostics)
     {
         var names = new List<string>();
         foreach (ChannelOutput output in outputs)
@@ -41,7 +43,12 @@ internal static class ChannelOutputNaming
             string name = names[index];
             if (names.FindAll(other => string.Equals(other, name, StringComparison.OrdinalIgnoreCase)).Count > 1)
             {
+                string taken = name;
                 name = WithChannel(name, outputs[index].Channel);
+                diagnostics.Warning(1, DiagnosticCodes.ChannelFileNameTaken, string.Create(CultureInfo.InvariantCulture,
+                    $"Channel {outputs[index].Channel} would write the file {taken}, which another channel of the job "
+                    + $"writes too (names are compared case-insensitively), so it is named {name} (machine-config 2, "
+                    + $"D310)."));
             }
 
             files.Add(outputs[index].File with { Name = name });

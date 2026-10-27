@@ -50,6 +50,18 @@ internal sealed class JobChannel
     public required ChannelMarks Marks { get; init; }
 
     /// <summary>
+    /// The subprograms of the file that no channel program of the job calls, which this channel's compile writes into
+    /// the library file of the job (D316); empty for every channel but the first of its file.
+    /// </summary>
+    public List<Section> LibrarySubs { get; } = [];
+
+    /// <summary>
+    /// The name of the library file, without extension, that this channel's compile writes LibrarySubs into (D316);
+    /// null for none.
+    /// </summary>
+    public string? Library { get; set; }
+
+    /// <summary>
     /// Inserts a block before a block of the file, after those inserted there before.
     /// </summary>
     public void InsertBefore(int index, Block block)
@@ -82,37 +94,72 @@ internal sealed class JobChannel
     /// <summary>
     /// The channel program as the compiler of the family writes it (language 4.13, 4.14): FILE=BEGIN, the program of
     /// the channel with the blocks the job compiler inserted and without the words it took out, the subprograms the
-    /// program calls, FILE=END; every section on the channel of the job, expanded already. A block whose words are all
-    /// taken out is left out. The program reports on diagnostics of its own, which start with FileDiagnostics.
+    /// program calls, those of the library file (D316), FILE=END; every section on the channel of the job, expanded
+    /// already. A block whose words are all taken out is left out. The comment and blank lines keep their place: each
+    /// stands before the block that now takes the place of the block it stood before, and those of the sections the
+    /// channel leaves out go with them (D142). The program reports on diagnostics of its own, which start with
+    /// FileDiagnostics.
     /// </summary>
     public NcxProgram Build()
     {
         Block fileBegin = File.FileBegin ?? throw NoFrame();
         Block fileEnd = File.FileEnd ?? throw NoFrame();
         var blocks = new List<Block> { fileBegin };
-        var sections = new List<Section> { AddSection(Program, blocks) };
+        var places = new Dictionary<int, int> { [0] = 0 };
+        var sections = new List<Section> { AddSection(Program, blocks, places) };
         foreach (Section sub in Marks.Subs)
         {
-            sections.Add(AddSection(sub, blocks));
+            sections.Add(AddSection(sub, blocks, places));
         }
 
+        foreach (Section sub in LibrarySubs)
+        {
+            sections.Add(AddSection(sub, blocks, places));
+        }
+
+        places[File.Blocks.Count - 1] = blocks.Count;
         blocks.Add(fileEnd);
+        places[File.Blocks.Count] = blocks.Count;
         var diagnostics = new Diagnostics(File.FileName);
         foreach (Diagnostic diagnostic in FileDiagnostics.Items)
         {
             diagnostics.Add(diagnostic);
         }
 
-        return File with { Blocks = blocks, Sections = sections, Diagnostics = diagnostics };
+        return File with
+        {
+            Blocks = blocks,
+            Sections = sections,
+            Diagnostics = diagnostics,
+            Trivia = TriviaAt(places),
+        };
     }
 
-    // The blocks of one section with the insertions, and the section around them on the channel of the job.
-    private Section AddSection(Section section, List<Block> blocks)
+    // The comment and blank lines of the file at their new places, in their order (D142).
+    private List<Trivia> TriviaAt(Dictionary<int, int> places)
+    {
+        var trivia = new List<Trivia>();
+        foreach (Trivia line in File.Trivia)
+        {
+            if (places.TryGetValue(line.BlockIndex, out int place))
+            {
+                trivia.Add(line with { BlockIndex = place });
+            }
+        }
+
+        // A stable sort: the lines before one block keep their order.
+        return [.. trivia.OrderBy(line => line.BlockIndex)];
+    }
+
+    // The blocks of one section with the insertions, and the section around them on the channel of the job; places
+    // takes the new index each block of the file starts at.
+    private Section AddSection(Section section, List<Block> blocks, Dictionary<int, int> places)
     {
         int first = blocks.Count;
         int last = first;
         for (int index = section.FirstBlock; index <= section.LastBlock; index++)
         {
+            places[index] = blocks.Count;
             AddAll(blocks, _before, index);
             if (Remaining(index) is Block block)
             {

@@ -128,7 +128,7 @@ public sealed class ChannelWordTests
     }
 
     // Language 4.8: START_CHANNEL=2 starts the program of channel 2, which waits for it and executes its first block
-    // in the round after the word (the TODO(question) of JobRunner.StartChannels).
+    // in the round after the word (D309).
     [Fact]
     public void StartChannel_ChannelNamedByStartChannel_StartsInTheRoundAfterTheWord()
     {

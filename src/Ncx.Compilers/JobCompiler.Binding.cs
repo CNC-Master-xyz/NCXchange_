@@ -17,14 +17,10 @@ public sealed partial class JobCompiler
     // Every block of every expanded channel program in the order of the manifest and of the program, the generated
     // blocks among them: the words bound to another channel move, the words bound to every channel are duplicated
     // (D56).
-    // TODO(question): machine-config 5a puts the blocks of an expansion rule around the block that triggers it, and
-    // architecture 5.5 expands the program once before it runs, but no document says whether those blocks follow a
-    // word that the job compiler moves or duplicates into another channel program; they stay around the block of the
-    // program that writes the word, and only the bound word moves or is duplicated, itself not expanded again, until
-    // that is answered.
-    // TODO(question): D56 does not say what the job compiler does with a bound word in a subprogram, whose blocks run
-    // at every CALL, maybe behind other marks each time (virtual machine 3.9); it is the ERROR CMP703, as a mark in a
-    // subprogram that a word would go after is, until that is answered.
+    // D328: a rule's generated blocks stay in the program that writes the word; only the bound word moves or is
+    // duplicated, it is not expanded again, and bound words among the generated blocks move by the same rule.
+    // D311: a bound word that must be moved or duplicated may not stand in a SUB, and neither may the mark it would
+    // follow: the ERROR CMP703 (virtual machine 3.8 rule 2a).
     private static void BindWords(List<JobChannel> channels, MachineConfig machine)
     {
         int? generatedMark = GeneratedMark(channels, machine);
@@ -135,7 +131,8 @@ public sealed partial class JobCompiler
         {
             from.Diagnostics.Error(block, DiagnosticCodes.NoMarkForGeneratedSync,
                 $"{Text(words)}: {table} must stand in every channel program behind a SYNC, and [sync] of the machine "
-                + "gives no wait template or no mark_range for it (machine-config 5, D56).");
+                + "gives no wait template or no mark_range for it, or reserves every mark of the range (machine-config "
+                + "5, D56, D315).");
             return;
         }
 
@@ -192,11 +189,9 @@ public sealed partial class JobCompiler
     // The block of the other channel's program a word goes after (D56; virtual machine 3.7: marks are matched in
     // execution order): the SYNC of the same release as the last mark before the word, or the PROGRAM=BEGIN of the
     // program when no mark stands before the word; null after the ERROR.
-    // TODO(question): D56 and implementation 16 move the word "to the owning channel's program at the same mark"
-    // without saying where between that mark and the next, nor what becomes of it when the owning channel takes no
-    // part in that mark (WITH); it stands directly after the mark, where the channels have just been released together,
-    // after the PROGRAM=BEGIN when no mark stands before it, and a channel without the same mark is the ERROR CMP704,
-    // until that is answered.
+    // D313: the word stands directly after the SYNC of the same release in the owning channel's program, as an NCX
+    // rule, after the PROGRAM=BEGIN when no mark stands before it; a channel without that mark is the ERROR CMP704
+    // (virtual machine 3.8 rule 2a).
     private static int? Destination(JobChannel from, int index, JobChannel to)
     {
         Block block = from.File.Blocks[index];

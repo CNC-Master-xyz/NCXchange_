@@ -40,7 +40,7 @@ public sealed class DeadlockTests
     }
 
     // VM 3.7: a channel that waits at a mark of a channel that has finished can never go on; the deadlock names the
-    // finished channel (the TODO(question) of JobRunner.ReportDeadlock).
+    // finished channel (D305).
     [Fact]
     public void Deadlock_MarkOfAChannelThatHasFinished_IsErrorNamingIt()
     {
