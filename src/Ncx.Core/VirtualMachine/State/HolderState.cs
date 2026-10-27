@@ -3,25 +3,21 @@ using Ncx.Core.Model;
 namespace Ncx.Core.VirtualMachine.State;
 
 /// <summary>
-/// The tool rows of virtual machine 2.3 for one tool holder: the tool in the spindle, the preloaded tool and the
-/// offset registers. Mutable; only the virtual machine changes it, through the tool change rules of virtual machine
-/// 3.5 (code-guidelines 7).
+/// The tool rows of virtual machine 2.3 for one tool holder: the tool in the spindle and the preloaded tool. In a job
+/// they are one per job, read and changed by every channel in round order (D308); the offsets stay per channel
+/// (HolderOffsets). Mutable; only the virtual machine changes it, through the tool change rules of virtual machine 3.5
+/// (code-guidelines 7).
 /// </summary>
 internal sealed class HolderState
 {
     // Tool 0 is the empty spindle: TOOL=0 empties it (language 4.4).
     private static readonly ToolRef s_emptySpindle = new(0);
 
-    // spindleTool starts 0, preloaded none, and the offsets length, radius and combined 0 (virtual machine 2.3); the
-    // measurement point starts at point 1 with a = 0 and r = 0 (D372).
+    // spindleTool starts 0 and preloaded none (virtual machine 2.3).
     public HolderState()
     {
         SpindleTool = s_emptySpindle;
         Preloaded = null;
-        OffsetLen = 0;
-        OffsetRad = 0;
-        OffsetCombined = 0;
-        ResetPoint();
     }
 
     /// <summary>
@@ -33,61 +29,6 @@ internal sealed class HolderState
     /// preloaded; null for none. PRELOAD=0 clears it (language 4.4).
     /// </summary>
     public ToolRef? Preloaded { get; set; }
-
-    public int OffsetLen { get; set; }
-
-    public int OffsetRad { get; set; }
-
-    public int OffsetCombined { get; set; }
-
-    /// <summary>
-    /// toolPoint: the measurement point k of the tool, from 1 (D372).
-    /// </summary>
-    public int ToolPoint { get; set; }
-
-    /// <summary>
-    /// tipOffset: the axial offset a of the point from the tool tip, in the units of its block (D372).
-    /// </summary>
-    public decimal TipOffset { get; set; }
-
-    /// <summary>
-    /// pointRadius: the register radius r of the point (D372).
-    /// </summary>
-    public decimal PointRadius { get; set; }
-
-    /// <summary>
-    /// The point in effect: the point words take effect with the next tool-axis motion (language 4.4, D372), and the
-    /// tip, the reported radius and the tool list follow these; TipRules.Activate takes them over from ToolPoint,
-    /// TipOffset and PointRadius. 1 initially.
-    /// </summary>
-    public int ActiveToolPoint { get; set; } = 1;
-
-    /// <summary>
-    /// The TIP_OFFSET in effect since the last tool-axis motion; null while UNKNOWN (virtual machine 1). 0 initially.
-    /// </summary>
-    public decimal? ActiveTipOffset { get; set; } = 0m;
-
-    /// <summary>
-    /// The POINT_RADIUS in effect since the last tool-axis motion; null while UNKNOWN (virtual machine 1). 0 initially.
-    /// </summary>
-    public decimal? ActivePointRadius { get; set; } = 0m;
-
-    /// <summary>
-    /// True when the program named the point of the tool with TOOL_POINT since its TOOL, and no OFFSET word replaced
-    /// the registers since; only then does a compiler write the registers of the [tool_points] mapping (D393).
-    /// </summary>
-    public bool PointNamed { get; set; }
-
-    /// <summary>
-    /// Point 1 with a = 0 and r = 0: the start of a holder and what a TOOL without point words leaves (D372).
-    /// </summary>
-    public void ResetPoint()
-    {
-        ToolPoint = 1;
-        TipOffset = 0m;
-        PointRadius = 0m;
-        PointNamed = false;
-    }
 
     /// <summary>
     /// Where the holder stands in the tool change states of architecture 5.2.
@@ -109,24 +50,25 @@ internal sealed class HolderState
     }
 
     /// <summary>
-    /// An immutable copy of the holder as it is now.
+    /// An immutable copy of the holder as one channel sees it now: the shared tool rows with that channel's offsets.
     /// </summary>
-    public HolderSnapshot Snapshot()
+    /// <param name="offsets">The offsets of the holder in the channel of the snapshot (D308).</param>
+    public HolderSnapshot Snapshot(HolderOffsets offsets)
     {
         return new HolderSnapshot
         {
             SpindleTool = SpindleTool,
             Preloaded = Preloaded,
-            OffsetLen = OffsetLen,
-            OffsetRad = OffsetRad,
-            OffsetCombined = OffsetCombined,
-            ToolPoint = ToolPoint,
-            TipOffset = TipOffset,
-            PointRadius = PointRadius,
-            ActiveToolPoint = ActiveToolPoint,
-            ActiveTipOffset = ActiveTipOffset,
-            ActivePointRadius = ActivePointRadius,
-            PointNamed = PointNamed,
+            OffsetLen = offsets.OffsetLen,
+            OffsetRad = offsets.OffsetRad,
+            OffsetCombined = offsets.OffsetCombined,
+            ToolPoint = offsets.ToolPoint,
+            TipOffset = offsets.TipOffset,
+            PointRadius = offsets.PointRadius,
+            ActiveToolPoint = offsets.ActiveToolPoint,
+            ActiveTipOffset = offsets.ActiveTipOffset,
+            ActivePointRadius = offsets.ActivePointRadius,
+            PointNamed = offsets.PointNamed,
             ToolChange = ToolChange,
         };
     }

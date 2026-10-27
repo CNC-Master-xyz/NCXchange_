@@ -66,18 +66,34 @@ public sealed class DeadlockTests
             + "finish (ch2.ncx line 3)", deadlock.Message, StringComparison.Ordinal);
     }
 
-    // VM 3.7, language 4.8: the channels waiting at one mark with different participants are not released (the
-    // TODO(question) of JobRunner.MarkReleasable); the deadlock names both sets.
+    // D304: a channel that reaches a mark while another participant of either list waits there with a different set is
+    // the ERROR VM573, raised at once; the job stops there instead of running into the deadlock VM571.
     [Fact]
-    public void Deadlock_OneMarkWithDifferentParticipants_IsErrorNamingThem()
+    public void Mark_ReachedWithDifferentParticipants_IsVm573AndStopsTheJob()
     {
         JobHarness job = JobHarness.Run(
             JobHarness.File("SYNC=100 WITH=1,2", "PROGRAM=END"),
-            JobHarness.File("SYNC=100 WITH=1,2,3", "PROGRAM=END"),
-            JobHarness.File("SYNC=100 WITH=2,3", "PROGRAM=END"));
+            JobHarness.File("UNITS=MM", "SYNC=100 WITH=1,2,3", "PROGRAM=END"),
+            JobHarness.File("UNITS=MM", "UNITS=MM", "SYNC=100 WITH=2,3", "PROGRAM=END"));
 
-        Diagnostic deadlock = job.Single(DiagnosticCodes.SyncDeadlock);
-        Assert.Contains("channel 1 waits at SYNC=100 with 1,2", deadlock.Message, StringComparison.Ordinal);
-        Assert.Contains("channel 2 waits at SYNC=100 with 1,2,3", deadlock.Message, StringComparison.Ordinal);
+        Diagnostic error = job.Single(DiagnosticCodes.SyncParticipantsDiffer);
+        Assert.Equal(Severity.Error, error.Severity);
+        Assert.Equal("ch2.ncx", error.File);
+        Assert.Equal(4, error.Line);
+        Assert.StartsWith("Channels at mark 100 name different participants: channel 1 WITH=1,2; channel 2 "
+            + "WITH=1,2,3", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(DiagnosticCodes.SyncDeadlock, job.Codes());
+        Assert.True(job.Result.Stopped);
+        Assert.Equal(3, job.Result.Rounds);
+    }
+
+    // D305: VM571 no longer says that every channel waits; it names what each channel waits for.
+    [Fact]
+    public void Deadlock_Text_NamesWhatEachChannelWaitsFor()
+    {
+        string rule = Ncx.Core.VirtualMachine.Validation.DiagnosticTable.Find(DiagnosticCodes.SyncDeadlock)?.Rule ?? "";
+
+        Assert.DoesNotContain("every channel waits", rule, StringComparison.Ordinal);
+        Assert.Contains("no channel can execute a block", rule, StringComparison.Ordinal);
     }
 }

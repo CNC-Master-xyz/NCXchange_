@@ -25,6 +25,12 @@ public sealed partial class VirtualMachine
     internal int? JobChannels { get; init; }
 
     /// <summary>
+    /// The spindle and tool rows the channels of the job share, read and changed by every channel's virtual machine in
+    /// round order (virtual machine 2.8, D308); null outside a job, where the run has rows of its own.
+    /// </summary>
+    internal ResourceState? JobResources { get; init; }
+
+    /// <summary>
     /// The subprograms the walks of this run entered by CALL (D99).
     /// </summary>
     internal IReadOnlySet<Section> CalledSubs => _calledSubs;

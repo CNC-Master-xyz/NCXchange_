@@ -2,6 +2,7 @@ using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine;
 using Ncx.Core.VirtualMachine.Events;
+using Ncx.Core.VirtualMachine.State;
 
 namespace Ncx.Core.Jobs;
 
@@ -21,6 +22,9 @@ public sealed partial class JobRunner
     private readonly Diagnostics _diagnostics;
     private readonly int _channelCount;
     private readonly SharedResources _shared;
+
+    // The spindle and holder state of the job, which every channel reads and changes in round order (D308).
+    private readonly ResourceState _resources;
     private readonly List<ChannelRun> _channels = [];
     private readonly List<SyncEvent> _timeline = [];
 
@@ -59,6 +63,7 @@ public sealed partial class JobRunner
         }
 
         _channelCount = ids.Count;
+        _resources = new ResourceState(machine, _channelCount);
     }
 
     /// <summary>
@@ -75,17 +80,15 @@ public sealed partial class JobRunner
     public ChannelRun Add(ChannelProgram channel, NcxProgram program,
         IReadOnlyDictionary<string, Value>? startValues = null, Func<string, NcxProgram?>? externalPrograms = null)
     {
-        // One virtual machine per channel program (virtual machine 3.7), with the state of its channel.
-        // TODO(question): virtual machine 2.8 makes the resources per job, shared by all channels, and 2.3 and 2.4 keep
-        // the tool and spindle state per resource, but no document says whether a channel sees the state another
-        // channel set (the spindle the other path started), and a shared holder would let a TOOL without a role on path
-        // 2 change the turret of path 1, since it reaches default_holder (D219); every channel keeps its own state of
-        // the resources, as a channel program checked alone does, and the job checks the resources of [shared] between
-        // marks (SharedResources), until that is answered.
+        // One virtual machine per channel program (virtual machine 3.7). D308: the spindle state (2.4) and the holder
+        // state (2.3) are one per job, read and changed by every channel's virtual machine in round order; lastHolder,
+        // the offsets and the point words (D388 (7)), coolant, functions and the rest of virtual machine 2 stay per
+        // channel. D219 keeps path 2's T words off path 1's holder, since TOOL resolves the holder of its channel.
         var vm = new VirtualMachine.VirtualMachine(_machine, _options, program.Diagnostics, _mode, startValues)
         {
             ExternalPrograms = externalPrograms,
             JobChannels = _channelCount,
+            JobResources = _resources,
         };
         var run = new ChannelRun(channel, program, vm);
         _channels.Add(run);
@@ -148,13 +151,9 @@ public sealed partial class JobRunner
         return !_stopped;
     }
 
-    // Every channel starts with the job, except a channel that a START_CHANNEL of the job names, which waits for it
-    // (language 4.8). A channel whose run an ERROR stops before its first block stops the job; the others still begin,
-    // so that the pre-pass of every file is reported (virtual machine 3.6).
-    // TODO(question): language 4.8 and virtual machine 3.7 do not say which channels of a job start with it and which
-    // wait for a START_CHANNEL, nor what a START_CHANNEL of a channel that runs or has run does; a channel that a
-    // START_CHANNEL of any file of the job names waits for it, every other channel starts with the job, and a
-    // START_CHANNEL of a channel that runs or has run starts nothing and warns, until that is answered.
+    // D309: a channel named by a START_CHANNEL anywhere in the job's files waits to be started; every other channel
+    // starts in the first round (language 4.8). A channel whose run an ERROR stops before its first block stops the
+    // job; the others still begin, so that the pre-pass of every file is reported (virtual machine 3.6).
     private void StartChannels()
     {
         HashSet<int> startedByWord = ChannelsStartedByWord();
@@ -185,7 +184,11 @@ public sealed partial class JobRunner
         }
 
         channel.Section = channel.Vm.State.Program.Section;
-        CheckHeaderChannel(channel);
+        if (!CheckHeaderChannel(channel))
+        {
+            channel.Stopped = true;
+            _stopped = true;
+        }
     }
 
     // One round (virtual machine 3.7): every channel that is neither finished nor waiting executes one block, then the

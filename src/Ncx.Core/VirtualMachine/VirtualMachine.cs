@@ -731,11 +731,12 @@ public sealed partial class VirtualMachine
     }
 
     // The state of a channel at the start of a run, from the machine, with the pre-pass over the file; reading an
-    // unassigned variable follows the options of the run (virtual machine 2, 3.6, D38).
-    private ChannelState NewState(int channelId)
+    // unassigned variable follows the options of the run (virtual machine 2, 3.6, D38). The program a job runs on a
+    // channel shares the spindle and tool rows of the job (D308); every other walk has rows of its own.
+    private ChannelState NewState(int channelId, ResourceState? resources = null)
     {
         MachineConfig machine = Machine with { Variables = Machine.Variables with { Unassigned = Options.Unassigned } };
-        var state = new ChannelState(machine, channelId, _startValues);
+        var state = new ChannelState(machine, channelId, _startValues, resources);
         FillPrePass(state);
         return state;
     }

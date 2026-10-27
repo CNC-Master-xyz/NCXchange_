@@ -104,8 +104,8 @@ public sealed class ModalSummaryTests
         vm.Execute("PRELOAD=6", "PROGRAM=END");
         Assert.Equal(new ToolRef(5), holder.SpindleTool);
         Assert.Equal(new ToolRef(6), holder.Preloaded);
-        Assert.Equal(4, holder.OffsetLen);
-        Assert.Equal(4, holder.OffsetRad);
+        Assert.Equal(4, vm.State.Offsets["H1"].OffsetLen);
+        Assert.Equal(4, vm.State.Offsets["H1"].OffsetRad);
     }
 
     // VM 4, row "spindle direction, rpm, vc, mode, sync and phase, css": modal; PROGRAM=END sets OFF, mode SPINDLE,

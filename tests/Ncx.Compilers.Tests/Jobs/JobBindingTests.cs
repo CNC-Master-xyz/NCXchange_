@@ -229,13 +229,15 @@ public sealed class JobBindingTests
 
     // D98 and the risks of phase 6: a diagnostic on a moved word names the block it stands after in the program of its
     // channel as its line and the block it came from as its OriginLine. Here the sub spindle of channel 2 is a C axis
-    // there, and SPINDLE_SYNC needs it as a spindle (virtual machine 3.8 rule 5).
+    // there, and SPINDLE_SYNC needs it as a spindle (virtual machine 3.8 rule 5). The spindle state is one per job
+    // (D308), so channel 2 turns it back into a spindle after the mark, before channel 1 reaches SPINDLE_SYNC in the
+    // run of the job; the compile of channel 2 alone, which keeps its own state, finds the C axis.
     [Fact]
     public void BoundWord_DiagnosticOnTheMovedWord_NamesTheMarkAndTheLineItCameFrom()
     {
         CompileResult result = JobCompile.Run(JobCompile.Machine(),
             JobCompile.Program(1000, "SYNC=110", "DWELL=1", "SPINDLE_SYNC=MAIN,SUB"),
-            JobCompile.Program(1000, "SPINDLE_MODE:SUB=AXIS", "SYNC=110"));
+            JobCompile.Program(1000, "SPINDLE_MODE:SUB=AXIS", "SYNC=110", "SPINDLE_MODE:SUB=SPINDLE"));
 
         Diagnostic error = JobCompile.ErrorOf(result);
         Assert.Equal("C2.ncx", error.File);

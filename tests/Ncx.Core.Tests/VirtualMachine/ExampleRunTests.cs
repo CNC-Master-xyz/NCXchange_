@@ -34,7 +34,7 @@ public sealed class ExampleRunTests
 
         vm.AssertNoDiagnostics();
         Assert.Equal(new ToolRef(1), vm.State.Holders["H1"].SpindleTool);
-        Assert.Equal(1, vm.State.Holders["H1"].OffsetLen);
+        Assert.Equal(1, vm.State.Offsets["H1"].OffsetLen);
         Assert.False(vm.State.Coolant["STANDARD"]);
     }
 
@@ -99,7 +99,7 @@ public sealed class ExampleRunTests
         }
 
         Assert.Equal(new ToolRef(12), vm.State.Holders["ROLE_TURRET1"].SpindleTool);
-        Assert.Equal(12, vm.State.Holders["ROLE_TURRET1"].OffsetLen);
+        Assert.Equal(12, vm.State.Offsets["ROLE_TURRET1"].OffsetLen);
         Assert.Equal("ROLE_SUB", vm.State.Frame.WorkpieceHolder);
         Assert.True(vm.State.Motion.Position.ContainsKey("C_SUB"));
     }

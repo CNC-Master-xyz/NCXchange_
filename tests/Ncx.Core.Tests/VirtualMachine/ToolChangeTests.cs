@@ -239,8 +239,8 @@ public sealed class ToolChangeTests
         VmHarness vm = new VmHarness(VmMachines.Default()).Execute("TOOL:TURRET1=3", "OFFSET=3");
 
         Assert.Equal([DiagnosticCodes.NotCheckedNoMachineFile], vm.Codes());
-        Assert.Equal(3, vm.State.Holders["ROLE_TURRET1"].OffsetCombined);
-        Assert.Equal(0, vm.State.Holders["H1"].OffsetCombined);
+        Assert.Equal(3, vm.State.Offsets["ROLE_TURRET1"].OffsetCombined);
+        Assert.Equal(0, vm.State.Offsets["H1"].OffsetCombined);
         Assert.Equal("ROLE_TURRET1", vm.State.LastHolder);
     }
 
@@ -251,8 +251,8 @@ public sealed class ToolChangeTests
         VmHarness vm = new VmHarness(VmMachines.MillTurn()).Execute("TOOL:TURRET2=3", "OFFSET=3");
 
         vm.AssertNoDiagnostics();
-        Assert.Equal(3, vm.State.Holders["H2"].OffsetCombined);
-        Assert.Equal(0, vm.State.Holders["H1"].OffsetCombined);
+        Assert.Equal(3, vm.State.Offsets["H2"].OffsetCombined);
+        Assert.Equal(0, vm.State.Offsets["H1"].OffsetCombined);
     }
 
     // Language 4.4: OFFSET:LEN, OFFSET:RAD and OFFSET set the length, radius and combined registers.
@@ -262,9 +262,9 @@ public sealed class ToolChangeTests
         VmHarness vm = new VmHarness(VmMachines.Default())
             .Execute("TOOL=1", "OFFSET:LEN=11 OFFSET:RAD=12", "OFFSET=13");
 
-        Assert.Equal(11, Holder(vm).OffsetLen);
-        Assert.Equal(12, Holder(vm).OffsetRad);
-        Assert.Equal(13, Holder(vm).OffsetCombined);
+        Assert.Equal(11, vm.State.Offsets["H1"].OffsetLen);
+        Assert.Equal(12, vm.State.Offsets["H1"].OffsetRad);
+        Assert.Equal(13, vm.State.Offsets["H1"].OffsetCombined);
     }
 
     // VM 3.8 rule 2: in the block of a TOOL the offsets go to that TOOL's holder.
@@ -273,8 +273,8 @@ public sealed class ToolChangeTests
     {
         VmHarness vm = new VmHarness(VmMachines.MillTurn()).Execute("TOOL:TURRET2=3 OFFSET:LEN=3");
 
-        Assert.Equal(3, vm.State.Holders["H2"].OffsetLen);
-        Assert.Equal(0, vm.State.Holders["H1"].OffsetLen);
+        Assert.Equal(3, vm.State.Offsets["H2"].OffsetLen);
+        Assert.Equal(0, vm.State.Offsets["H1"].OffsetLen);
     }
 
     // Language 4.4: TOOL=1 OFFSET=1 PRELOAD=2 in one block changes to 1 and prepares 2 (the Nakamura G340).
@@ -286,7 +286,7 @@ public sealed class ToolChangeTests
         vm.AssertNoDiagnostics();
         Assert.Equal(new ToolRef(1), Holder(vm).SpindleTool);
         Assert.Equal(new ToolRef(2), Holder(vm).Preloaded);
-        Assert.Equal(1, Holder(vm).OffsetCombined);
+        Assert.Equal(1, vm.State.Offsets["H1"].OffsetCombined);
     }
 
     // Language 4.4: the tool is an integer or a string.

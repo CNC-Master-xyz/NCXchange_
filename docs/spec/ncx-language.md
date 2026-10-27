@@ -238,10 +238,10 @@ Two kinds of turning cycle exist on Fanuc lathes and the catalog must carry both
 |---|---|---|---|
 | `SYNC=100` | integer | Rendezvous mark: the channel waits until every participating channel has reached `SYNC=100`, then all continue (Fanuc wait M codes `M100`..`M199`, Siemens `WAITM`). Marks may be reused: the same number may appear several times in a program, and the channels pair them in execution order (the DMG templates wait at 0, 80 and 90 repeatedly). A `SYNC` as the first block after the header is the program start synchronization (Nakamura `M199`). | block |
 | `WITH=1,2` | list of integers | Participating channels of the `SYNC` in the same block. Default: all channels of the job. The compiler writes the machine's form (Fanuc `P12`/`P123` path lists or the `P3`/`P7` bitmask, Siemens channel arguments). | block |
-| `START_CHANNEL=2` | integer | Start the program of channel 2 (Siemens `START`). Optional `NAME` selects the program. | block |
+| `START_CHANNEL=2` | integer | Start the program of channel 2 (Siemens `START`). Optional `NAME` selects the program. A channel that a `START_CHANNEL` anywhere in the job's files names waits to be started; a running or finished channel is not started again, a WARNING (virtual machine 3.7, D309). | block |
 | `WAIT_CHANNEL=2` | integer | Wait until channel 2 has finished (Siemens `WAITE`). | block |
 
-A job (which programs run on which channel) is described in a job manifest next to the files (`machine-config.md`, section 8).
+A job (which programs run on which channel) is described in a job manifest next to the files (`machine-config.md`, section 8). The channels at one mark name the same participants, or it is an ERROR (D304). A `WITH`, `WAIT_CHANNEL` or `START_CHANNEL` naming a channel the machine does not have is an ERROR; one naming a channel the machine has but the job does not run is a WARNING, and the word is taken as if that channel were not named (D306). The rules of the job are in virtual machine 3.7.
 
 ### 4.9 Variables and control flow
 
@@ -348,7 +348,7 @@ A program may also loop instead of ending: Fanuc `M99` in a main program jumps b
 
 ### 4.14 Multi-channel programs
 
-`CHANNEL=n` in the header of a program says which channel it runs on; the programs of a job may stand in one file or in one file each. The job manifest lists the channel programs that run together; `SYNC` marks synchronize them (4.8).
+`CHANNEL=n` in the header of a program says which channel it runs on; the programs of a job may stand in one file or in one file each. The job manifest lists the channel programs that run together; `SYNC` marks synchronize them (4.8). In a job the manifest decides the channel: a header `CHANNEL` that differs from it is an ERROR, since a reader resolved the T words and the channel-bound functions for the header's channel; a header without `CHANNEL` runs on the manifest's channel (D307). The spindle and holder state is one per job, the offsets stay per channel (virtual machine 2.8, D308).
 
 ### 4.15 Generated blocks
 

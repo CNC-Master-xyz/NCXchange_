@@ -27,7 +27,7 @@ public sealed class HolderStateTests
     [Fact]
     public void Offsets_AtStart_AreZero()
     {
-        HolderState holder = Holder();
+        HolderOffsets holder = new ChannelState(StateMachines.MillTurn()).Offsets["H1"];
 
         Assert.Equal(0, holder.OffsetLen);
         Assert.Equal(0, holder.OffsetRad);
@@ -56,19 +56,19 @@ public sealed class HolderStateTests
     public void Offsets_ChangedAfterASnapshot_SnapshotKeepsThem()
     {
         var state = new ChannelState(StateMachines.MillTurn());
-        state.Holders["H2"].OffsetLen = 1;
-        state.Holders["H2"].OffsetRad = 2;
-        state.Holders["H2"].OffsetCombined = 56;
+        state.Offsets["H2"].OffsetLen = 1;
+        state.Offsets["H2"].OffsetRad = 2;
+        state.Offsets["H2"].OffsetCombined = 56;
 
         ChannelSnapshot snapshot = state.Snapshot();
-        state.Holders["H2"].OffsetLen = 0;
-        state.Holders["H2"].OffsetRad = 0;
-        state.Holders["H2"].OffsetCombined = 0;
+        state.Offsets["H2"].OffsetLen = 0;
+        state.Offsets["H2"].OffsetRad = 0;
+        state.Offsets["H2"].OffsetCombined = 0;
 
         Assert.Equal(1, snapshot.Holders["H2"].OffsetLen);
         Assert.Equal(2, snapshot.Holders["H2"].OffsetRad);
         Assert.Equal(56, snapshot.Holders["H2"].OffsetCombined);
-        Assert.Equal(0, state.Holders["H2"].OffsetCombined);
+        Assert.Equal(0, state.Offsets["H2"].OffsetCombined);
     }
 
     // Architecture 5.2: a holder is created Empty.

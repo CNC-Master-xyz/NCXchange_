@@ -608,18 +608,20 @@ classDiagram
 
 ### 5.4 Job scheduler
 
-A job runs one VM per channel program in rounds. `SYNC` marks pair in execution order; a deadlock is reported with the marks and channels involved.
+A job runs one VM per channel program in rounds. `SYNC` marks pair in execution order; channels reaching one mark with different participants are an ERROR at once (VM573, D304); when no channel can execute a block and some channel has not finished, whether the others wait or have finished, the deadlock is reported with what each channel waits for (VM571, D305). The spindle and holder state is one per job, which every channel's VM reads and changes in round order; lastHolder, the offsets and the rest of the state stay per channel (virtual machine 2.8, D308).
 
 ```mermaid
 flowchart TD
     A([start job]) --> B[load manifest, one VM per channel, shared resources]
     B --> C{any channel neither finished nor waiting?}
-    C -- no --> D{all waiting?}
-    D -- yes --> E[ERROR deadlock: list marks per channel]
-    D -- no --> F([job finished, timeline per channel])
+    C -- no --> D{all finished?}
+    D -- no --> E[ERROR deadlock: what each channel waits for]
+    D -- yes --> F([job finished, timeline per channel])
     C -- yes --> G[every runnable channel executes one block]
     G --> H{SYNC reached?}
-    H -- yes --> I[mark channel waiting at m with its WITH set]
+    H -- yes --> X{another participant waits at m with another set?}
+    X -- yes --> Y[ERROR VM573, job stops]
+    X -- no --> I[mark channel waiting at m with its WITH set]
     I --> J{all participants waiting at m?}
     J -- yes --> K[release them, raise SYNC_RELEASE]
     J -- no --> C
