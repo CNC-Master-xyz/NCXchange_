@@ -24,6 +24,11 @@ units_default = "MM"
 default_spindle = "S1"
 default_holder = "H1"
 default_workpiece = "TABLE1"
+arc_tolerance = 0.01               # optional, mm like rapid and max_feed, converted for an INCH program: |start - center| against |end - center| (D36); absent means 0.01 mm and 0.0005 in (D139)
+arc_radius_tolerance = 0.005       # optional, mm, converted for an INCH program: the radius difference of a written arc beyond which the compiler reports CMP030; absent means one output step of the centre's address (D364)
+dwell_increment = 0.001            # optional, Fanuc: seconds per unit of G4 P, of G4 X/U without a decimal point and of a cycle P; default 0.001 (D159)
+base_units = "mm"                  # optional, Siemens: "mm" | "inch", the basic system of MD10240; default units_default (D292)
+extended_units = false             # optional, Siemens: MD10260 = 1, G700/G710 available; default false (D292)
 tool_table = "dmu50.tools.toml"   # optional (D10): tool kind, length, radius per tool number; when missing, {kind} takes the default and the compiler writes a warning block at the head of the program naming the expected file and the tools it lacks, so nobody runs the program by accident
 ```
 
@@ -41,6 +46,10 @@ radius = 4
 Without the table, or for a tool it does not describe, `{kind}` takes the default kind `ROTARY`, and the compiler writes the warning block of D10 at the head of that program only, after its header: comment lines of the controller, under `comment_charset` (section 2), that name D10, the expected file and the tools without data with the kind written. The block stops nothing, and a machine whose templates need no tool data gets no warning (D265).
 
 `ncx_schema` is the format version of the machine-configuration schema, with the meaning `NCX=1` has in language 4.1: not the release of `ncx` and not the content of the file. A machine file and a cycle catalog may carry it as their first key; a file without it is version 1, and a version this build does not read is the ERROR CFG009 that names the file and the version. The number changes only when the schema breaks, so it stays 1 through release 1.0, and the shipped files carry it (D348).
+
+`dwell_increment` is the unit of the Fanuc dwell that the control takes from its increment system, or 1 ms under parameter 1015#7 DWT. The reader reads `G4 X` or `U` with a decimal point as seconds and multiplies `P`, and `X` or `U` without a decimal point, by the increment; the compiler always writes `G4 X` with a decimal point in seconds and a cycle `P` as round(seconds / dwell_increment). NCX assumes parameter 3405#1 DWL = 0: a dwell is in seconds, never in revolutions under G95 (D159; Fanuc 30i-B operator's manual B-64484EN p.188, parameter manual B-64490EN-05 p.59 and p.195).
+
+`base_units` and `extended_units` describe the Siemens group 13 pair; `units_default` stays the reset value of the group (MD20150). Where `UNITS` equals the basic system the compiler writes G71/G70; where it differs it writes G710/G700 under `extended_units = true`, otherwise G70/G71 with every feed converted into the basic system and an INFO naming the conversion. The reader takes G700/G710 as written and converts the feeds under a G70/G71 that differs from the basic system, with a WARNING (D292; SINUMERIK 840D sl function manual basic functions p.346 for MD10240, programming manual SW4.94 p.158 for MD10260).
 
 `controller` selects the reader and compiler; `dialect` selects their variant tables. `default_*` resolve NCX words without a role address. `check`, `trace`, `annotate` and `analyze` run without a machine file against a built-in default machine (`ncx-virtual-machine.md`, section 3.8, D103); `convert` and `compile` need one (D77).
 

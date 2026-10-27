@@ -18,11 +18,11 @@ internal static class ArcRules
     /// </summary>
     public static decimal Tolerance(VmOptions options, Units units)
     {
-        // Machine-config names no key for the tolerance, so the options carry it, null for the defaults of D36 (wave-1
-        // questions #54 and #91). Before UNITS, itself an ERROR, the millimetre default applies.
+        // [machine] arc_tolerance in millimetres, converted for an INCH program, or null for the defaults of D36
+        // (D139). Before UNITS, itself an ERROR, the millimetre value applies.
         if (options.ArcTolerance is decimal configured)
         {
-            return configured;
+            return units == Units.Inch ? configured / 25.4m : configured;
         }
 
         return units == Units.Inch ? 0.0005m : 0.01m;

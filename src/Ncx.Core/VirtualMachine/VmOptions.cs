@@ -39,8 +39,8 @@ public sealed record VmOptions
     public int CallDepth { get; init; } = 8;
 
     /// <summary>
-    /// The arc tolerance in the active units; null for the defaults of D36, 0.01 mm and 0.0005 in (virtual machine
-    /// 3.2).
+    /// The arc tolerance in millimetres, converted for an INCH program; null for the defaults of D36, 0.01 mm and
+    /// 0.0005 in (virtual machine 3.2, D139).
     /// </summary>
     public decimal? ArcTolerance { get; init; }
 
@@ -57,16 +57,17 @@ public sealed record VmOptions
     public int? JobChannels { get; init; }
 
     /// <summary>
-    /// The options a machine file gives: the block cap, the call depth and unassigned of [variables] (machine-config 7,
-    /// virtual machine 3.6); everything else at its default.
+    /// The options a machine file gives: the arc tolerance of [machine] (D139), the block cap, the call depth and
+    /// unassigned of [variables] (machine-config 7, virtual machine 3.6); everything else at its default.
     /// </summary>
     /// <param name="machine">The machine file, or the built-in default machine of D103.</param>
     public static VmOptions ForMachine(MachineConfig machine)
     {
-        // TODO(question): machine-config names no key for the arc tolerance of D36 ("the tolerance from the machine
-        // configuration", virtual machine 3.2); it stays null, the D36 defaults per units, until one is named (D139).
+        // [machine] arc_tolerance is the tolerance of D36, in millimetres; without it the D36 defaults per unit apply
+        // (D139).
         return new VmOptions
         {
+            ArcTolerance = machine.Machine.ArcTolerance,
             BlockCap = machine.Variables.BlockCap,
             CallDepth = machine.Variables.CallDepth,
             Unassigned = machine.Variables.Unassigned,

@@ -249,6 +249,43 @@ internal sealed class ConfigTable
     }
 
     /// <summary>
+    /// A number greater than 0, a length or a time; null when the key is missing, and a value that is no number or
+    /// not greater than 0 is reported, the second as CFG005 (D139, D159, D364).
+    /// </summary>
+    public decimal? PositiveNumber(string key)
+    {
+        decimal? number = Number(key);
+        if (number is null || number > 0)
+        {
+            return number;
+        }
+
+        Diagnostics.Error(LineOf(key), DiagnosticCodes.ValueNotAllowed,
+            $"{Place(key)} must be greater than 0, not {number.Value.ToString(CultureInfo.InvariantCulture)} "
+            + $"({Section}).");
+        return null;
+    }
+
+    /// <summary>
+    /// A whole number from first to last; null when the key is missing, and a value that is no whole number or lies
+    /// outside the range is reported, the second as CFG005 (D271, D339).
+    /// </summary>
+    public int? IntegerInRange(string key, int first, int last)
+    {
+        int? number = Integer(key);
+        if (number is null || (number >= first && number <= last))
+        {
+            return number;
+        }
+
+        Diagnostics.Error(LineOf(key), DiagnosticCodes.ValueNotAllowed,
+            $"{Place(key)} must be a whole number from {first.ToString(CultureInfo.InvariantCulture)} to "
+            + $"{last.ToString(CultureInfo.InvariantCulture)}, not {number.Value.ToString(CultureInfo.InvariantCulture)} "
+            + $"({Section}).");
+        return null;
+    }
+
+    /// <summary>
     /// A whole number the table requires; a missing key is the ERROR that names the table (P2-01).
     /// </summary>
     public int? RequiredInteger(string key)

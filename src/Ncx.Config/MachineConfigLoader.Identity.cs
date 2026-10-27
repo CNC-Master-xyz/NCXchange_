@@ -10,12 +10,16 @@ public static partial class MachineConfigLoader
     [
         "name", "controller", "dialect", "builder", "gcode_system", "s_binds_to_spindle_word", "limits", "channels",
         "units_default", "default_spindle", "default_holder", "default_workpiece", "tool_table", "kinematics",
+        "arc_tolerance", "arc_radius_tolerance", "dwell_increment", "base_units", "extended_units",
     ];
 
     private static readonly string[] s_controllers = ["fanuc", "heidenhain", "siemens"];
     private static readonly string[] s_gcodeSystems = ["A", "B", "C"];
     private static readonly string[] s_limitPolicies = ["warn", "clamp"];
     private static readonly string[] s_units = ["MM", "INCH"];
+
+    // base_units takes the words of MD10240 in the lower case of the D292 row.
+    private static readonly string[] s_baseUnits = ["mm", "inch"];
 
     private static readonly string[] s_formatKeys =
     [
@@ -74,6 +78,20 @@ public static partial class MachineConfigLoader
             DefaultSpindle = table.Text("default_spindle"),
             DefaultHolder = table.Text("default_holder"),
             DefaultWorkpiece = table.Text("default_workpiece"),
+
+            // The tolerances are lengths in millimetres like rapid and max_feed (D139, D364).
+            ArcTolerance = table.PositiveNumber("arc_tolerance"),
+            ArcRadiusTolerance = table.PositiveNumber("arc_radius_tolerance"),
+            DwellIncrement = table.PositiveNumber("dwell_increment") ?? 0.001m,
+
+            // The basic system and G700/G710 of a Siemens control, MD10240 and MD10260 (D292).
+            BaseUnits = table.Choice("base_units", s_baseUnits) switch
+            {
+                "mm" => "MM",
+                "inch" => "INCH",
+                _ => null,
+            },
+            ExtendedUnits = table.Flag("extended_units"),
         };
     }
 
