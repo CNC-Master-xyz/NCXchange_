@@ -68,6 +68,19 @@ internal static partial class SiemensCycles
             return;
         }
 
+        if (AtCallPosition(write))
+        {
+            // D379: a cycle with a reference point of its own, SLOT1 and SLOT2, is called once at each position with
+            // _CPA/_CPO, the reference point of a single position (Bedienhandbuch Fräsen 840D sl/828D 2013, connector
+            // p.361-363, the input window "Längsnut (SLOT1)"); the motion to the position stands before it, and
+            // WriteAfter writes the call.
+            EndModalCall(write);
+            SiemensMotion.Change(write, "G0", SiemensLine.MotionRank, "G0");
+            SiemensMotion.WriteDistance(write);
+            SiemensMotion.WriteAxes(write, axes);
+            return;
+        }
+
         if (CallOf(write) is not string call)
         {
             // The ERROR of the call stands alone for its block.
@@ -83,6 +96,12 @@ internal static partial class SiemensCycles
             write.Write("MCALL " + call);
             write.Target.Set(ModalCall, call);
         }
+        else if (CycleFeed(write) is string feed)
+        {
+            // D387: a cycle feed that changes inside the modal range stands on the position block, where the modal F
+            // is both the feed of this call and the path feed after it, as the reader reads "X10 Y10 F200" back.
+            write.Main.Word(SiemensLine.FeedRank, feed);
+        }
 
         // The block with the position calls the modal cycle there, at rapid in the plane (virtual machine 3.3).
         SiemensMotion.Change(write, "G0", SiemensLine.MotionRank, "G0");
@@ -96,7 +115,8 @@ internal static partial class SiemensCycles
     /// </summary>
     public static void WriteAfter(SiemensBlock write)
     {
-        if (write.Block.Verb?.Key != "CYCLE_CALL" || SiemensAxes.Of(write.Block).Count > 0)
+        if (write.Block.Verb?.Key != "CYCLE_CALL"
+            || (SiemensAxes.Of(write.Block).Count > 0 && !AtCallPosition(write)))
         {
             return;
         }
@@ -119,6 +139,45 @@ internal static partial class SiemensCycles
         {
             write.Write("MCALL");
             write.Target.Set(ModalCall, Off);
+        }
+    }
+
+    /// <summary>
+    /// MCALL alone before a block that programs F or S without a motion while a modal call this compiler armed stands:
+    /// F or S with G0 or G1 active calls the modal subprogram at the position reached (SW4.92 p.540; controllers
+    /// siemens.md 7). A modal call that a RAW line armed is left to RawModalCallStands (D259), an unknown one to the
+    /// next motion (D343); the next CYCLE_CALL at a position arms the call again.
+    /// </summary>
+    /// <param name="write">The block being written.</param>
+    public static void EndModalCallBeforeBareFeed(SiemensBlock write)
+    {
+        Block block = write.Block;
+        if (block.Verb is Word verb && (s_motions.Contains(verb.Key) || verb.Key == "CYCLE_CALL"))
+        {
+            return;
+        }
+
+        bool programs = false;
+        foreach (Word word in block.Words)
+        {
+            if (word.Key is "F" or "RPM")
+            {
+                programs = true;
+            }
+        }
+
+        if (programs)
+        {
+            EndModalCallBeforeFeed(write);
+        }
+    }
+
+    // MCALL alone before an F or S line while a modal call this compiler armed stands, which the line would call.
+    private static void EndModalCallBeforeFeed(SiemensBlock write)
+    {
+        if (write.ActiveOf(ModalCall) is string active && active is not (Off or RawArmed))
+        {
+            EndModalCall(write);
         }
     }
 
@@ -212,7 +271,8 @@ internal static partial class SiemensCycles
         write.MakeUnknown(ModalCall);
     }
 
-    // A definition writes nothing of its own: the call writes it, where the control needs it (language 4.7).
+    // A definition writes nothing of its own: the call writes it, where the control needs it (language 4.7). The words
+    // the entry cannot write are reported here, once (D362).
     private static void WriteDefinition(SiemensBlock write, Word cycle)
     {
         foreach (string key in s_cycleWords)
@@ -222,6 +282,12 @@ internal static partial class SiemensCycles
 
         if (cycle.Addr is null)
         {
+            if (cycle.Value is IdentValue name && name.Name != Off
+                && write.Machine.CycleCatalog.Find(name.Name) is CycleEntry entry && entry.Signature.Count > 0)
+            {
+                CheckWords(write, entry);
+            }
+
             return;
         }
 
@@ -239,11 +305,23 @@ internal static partial class SiemensCycles
     // feed where it has none (controllers siemens.md 7; controller-mapping 5, CYCLE_F; machine-config 6).
     private static void WriteCycleFeed(SiemensBlock write)
     {
+        if (CycleFeed(write) is string feed)
+        {
+            // An F alone under an armed call would call that one (SW4.92 p.540), so that one ends first.
+            EndModalCallBeforeFeed(write);
+            write.Write(feed);
+        }
+    }
+
+    // The F word of the cycle feed where the control does not have it active yet, recorded as active; null where the
+    // cycle takes no modal F or the control has it.
+    private static string? CycleFeed(SiemensBlock write)
+    {
         CycleSnapshot cycle = write.After.Cycle;
         CycleEntry? entry = cycle.Controller is null ? write.Machine.CycleCatalog.Find(cycle.Name ?? "") : null;
         if (entry is null || entry.CycleF is null || !entry.IsAddressWord("CYCLE_F"))
         {
-            return;
+            return null;
         }
 
         string? feed = null;
@@ -256,10 +334,9 @@ internal static partial class SiemensCycles
             feed = write.Format("F", known);
         }
 
-        if (feed is not null && write.Target.Changes("F", feed))
-        {
-            write.Write(SiemensAxes.Address("F", feed, "", Parameter(cycle, "CYCLE_F") is ExprValue));
-        }
+        return feed is not null && write.Target.Changes("F", feed)
+            ? SiemensAxes.Address("F", feed, "", Parameter(cycle, "CYCLE_F") is ExprValue)
+            : null;
     }
 
     // The call of the active cycle with its positional parameters: CYCLE81(RTP, RFP, SDIS, DP, ...); null, with an
@@ -295,7 +372,8 @@ internal static partial class SiemensCycles
         Value? surface = Parameter(cycle, "SURFACE");
         foreach (Word word in cycle.Parameters)
         {
-            if (word.Key is "CYCLE_RETRACT" or "SAFE"
+            // CYCLE_RETRACT and AXIS are rule words of the family, which FillReturnPlane and FillAxis write (D157).
+            if (word.Key is "SAFE" || entry.RuleWords.Contains(word.Key)
                 || (word.Key == "CYCLE_F" && entry.IsAddressWord("CYCLE_F")))
             {
                 continue;
@@ -303,19 +381,21 @@ internal static partial class SiemensCycles
 
             if (entry.NativeOf(word.Key) is not string native || Index(entry, native) is not int index)
             {
-                // TODO(question): D181: the documents do not say how PECK is written with FDEP, FDPR and _DAM of
-                // CYCLE83, and the catalog maps it to no position; a word no position carries is an ERROR, until D181
-                // is answered.
-                write.Error(DiagnosticCodes.SiemensCycleWordNotWritable,
-                    $"{word.ToCanonical()} has no position in {entry.Native} of the cycle catalog, and no rule of the "
-                    + "family carries it (machine-config 6; controllers siemens.md 12 rule 5; D181).");
-                return false;
+                // D362: a derivable value and the control's own behaviour are not written; a lost value is the ERROR
+                // CMP571, which stands once at the CYCLE block (CheckWords), and the call is not written.
+                if (IsLost(entry, word, cycle.Parameters))
+                {
+                    return false;
+                }
+
+                continue;
             }
 
             positions[index] = ValueOf(write, cycle, entry, word, surface);
         }
 
-        if (!FillReturnPlane(write, cycle, entry, positions) || !FillAxis(write, cycle, entry, positions))
+        if (!FillReturnPlane(write, cycle, entry, positions) || !FillAxis(write, cycle, entry, positions)
+            || !FillCallPosition(write, entry, positions))
         {
             return false;
         }
@@ -328,13 +408,14 @@ internal static partial class SiemensCycles
             }
         }
 
+        FillWholeDepth(write, cycle, entry, positions);
+        FillHeldDistances(write, cycle, entry, positions);
         return true;
     }
 
     // The cycle always returns to RTP: RTP = SAFE for CYCLE_RETRACT=SAFE, RTP = CLEARANCE for CYCLE_RETRACT=CLEARANCE
-    // (controller-mapping 5, CYCLE_RETRACT).
-    // TODO(question): D188: without SAFE, CYCLE_RETRACT=SAFE gives RTP no value; the compiler, which must write it,
-    // reports the ERROR, as D188 recommends, until D188 is answered.
+    // (controller-mapping 5, CYCLE_RETRACT). D188: without SAFE, CYCLE_RETRACT=SAFE gives RTP no value, and the
+    // compiler, which must write it, reports the ERROR.
     private static bool FillReturnPlane(SiemensBlock write, CycleSnapshot cycle, CycleEntry entry, string?[] positions)
     {
         if (entry.NativeOf("SAFE") is not string native || Index(entry, native) is not int index)
@@ -447,21 +528,19 @@ internal static partial class SiemensCycles
         return SiemensAxes.DecimalsAddress(write, SiemensAxes.LetterOf(write, cycle.Axis));
     }
 
-    // A native cycle of CYCLE:SIEMENS=n with its native parameters: the native name, the parameters at the positions
-    // of the signature where the catalog has the cycle, else in source order (language 4.7.1, D94). D144: n is the
-    // native cycle as the family's catalog writes it (CYCLE952, LONGHOLE), so the call takes it as written.
+    // A native cycle of CYCLE:SIEMENS=n with its native parameters at the positions of the signature of its catalog
+    // entry (language 4.7.1, D94). D144: n is the native cycle as the family's catalog writes it (CYCLE952,
+    // LONGHOLE), so the call takes it as written. D279: a native cycle whose signature the catalog does not know is
+    // an ERROR; its parameters are not written in source order, which may put them at the wrong positions.
     private static string? NativeCallOf(SiemensBlock write, CycleSnapshot cycle, string native)
     {
         CycleEntry? entry = write.Machine.CycleCatalog.FindNative(native);
         if (entry is null || entry.Signature.Count == 0)
         {
-            var values = new List<string?>();
-            foreach (Word word in cycle.Parameters)
-            {
-                values.Add(SiemensExpressions.ValueText(write, word.Value, word.Key));
-            }
-
-            return Call(native, values.ToArray());
+            write.Error(DiagnosticCodes.SiemensNativeCycleSignatureUnknown,
+                $"CYCLE:SIEMENS={native} has no entry with a signature in the cycle catalog of the machine, and its "
+                + "parameters are not written by guessing their positions (D279; language 4.7.1, D94).");
+            return null;
         }
 
         var positions = new string?[entry.Signature.Count];
