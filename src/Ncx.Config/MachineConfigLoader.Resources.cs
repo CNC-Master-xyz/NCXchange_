@@ -13,11 +13,12 @@ public static partial class MachineConfigLoader
     private static readonly string[] s_axisKeys =
     [
         "id", "ncx", "letter", "incremental_letter", "kind", "owner", "limits", "rapid", "max_feed", "acceleration",
-        "programming", "home", "home2", "clamp", "modulo",
+        "programming", "home", "home2", "clamp", "modulo", "parallel", "frames_in_diameter",
     ];
 
     private static readonly string[] s_axisKinds = ["linear", "rotary"];
     private static readonly string[] s_programmings = ["diameter", "radius", "switchable"];
+    private static readonly string[] s_linearAxes = ["X", "Y", "Z"];
     private static readonly string[] s_dynamicsKeys = ["block_time", "path_mode", "corner_speed", "rapid_exact_stop"];
     private static readonly string[] s_pathModes = ["continuous", "exact_stop"];
     private static readonly string[] s_onOff = ["ON", "OFF"];
@@ -106,6 +107,27 @@ public static partial class MachineConfigLoader
             };
             decimal? home = table.Number("home");
             decimal? home2 = table.Number("home2");
+
+            // parallel: the linear axis a rotary axis turns about, the cylinder axis of CYLINDER=n (D146);
+            // frames_in_diameter: whether frame offsets of a diameter axis are diameters (MD20360, D125, D388).
+            string? parallel = table.Choice("parallel", s_linearAxes);
+            bool framesInDiameter = table.Flag("frames_in_diameter");
+
+            // parallel belongs to a rotary axis and frames_in_diameter to a diameter or switchable axis; anywhere else
+            // the key says nothing true of its axis (CFG005, D146, D388).
+            if (table.Has("parallel") && kind != AxisKind.Rotary)
+            {
+                table.Diagnostics.Error(table.LineOf("parallel"), DiagnosticCodes.ValueNotAllowed,
+                    $"{table.Name} sets parallel, which only a rotary axis takes (machine-config 4, D146).");
+            }
+
+            if (table.Has("frames_in_diameter")
+                && programming is not (Programming.Diameter or Programming.Switchable))
+            {
+                table.Diagnostics.Error(table.LineOf("frames_in_diameter"), DiagnosticCodes.ValueNotAllowed,
+                    $"{table.Name} sets frames_in_diameter, which only an axis with programming = \"diameter\" or "
+                    + "\"switchable\" takes (machine-config 4, D388).");
+            }
             IReadOnlyDictionary<string, string> clamp =
                 table.Table("clamp")?.Templates(s_onOff) ?? new Dictionary<string, string>();
             if (id is null || ncxName is null || kind is not AxisKind axisKind)
@@ -130,6 +152,8 @@ public static partial class MachineConfigLoader
                 Programming = programming,
                 Home = home,
                 Home2 = home2,
+                Parallel = parallel,
+                FramesInDiameter = framesInDiameter,
                 Clamp = clamp,
             });
         }

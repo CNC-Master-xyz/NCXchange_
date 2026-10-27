@@ -52,7 +52,13 @@ internal static class SiemensTools
     /// </summary>
     public static void WriteOffset(SiemensBlock write)
     {
-        if (!write.Block.Has("OFFSET"))
+        // D375: TIP_OFFSET and POINT_RADIUS are never written to the control, no TOFFL, TOFF, TOFFR and no DL; a named
+        // point selects its edge, which the mapping of [tool_points] gives (D373, D393).
+        write.Written("TOOL_POINT");
+        write.Written("TIP_OFFSET");
+        write.Written("POINT_RADIUS");
+        bool selectsPoint = write.Block.Has("TOOL_POINT") && write.PointRegisters?.Edge is not null;
+        if (!write.Block.Has("OFFSET") && !selectsPoint)
         {
             return;
         }
@@ -84,6 +90,12 @@ internal static class SiemensTools
         if (CancelsLength(write))
         {
             return 0;
+        }
+
+        // A named point selects the edge of the mapping, D k or the edge of its row (D373, D393).
+        if (write.PointRegisters?.Edge is int pointEdge)
+        {
+            return pointEdge;
         }
 
         if (write.Block.Find("OFFSET", null) is not null || state.OffsetCombined != 0)

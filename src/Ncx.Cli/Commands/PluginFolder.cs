@@ -31,7 +31,7 @@ internal static class PluginFolder
                 return PluginProject.Of(named, workingDirectory);
             }
 
-            diagnostics.Error(Program.CommandLine, DiagnosticCodes.PluginProjectNotFound,
+            diagnostics.CommandLineError(DiagnosticCodes.PluginProjectNotFound,
                 $"The folder {folder} holds no project file of a plugin, or more than one; ncx plugin {command} takes "
                 + "the folder that ncx plugin new made (architecture 10).");
             return null;
@@ -65,7 +65,7 @@ internal static class PluginFolder
                 + "(architecture 10)."
             : $"The working directory holds the plugins {string.Join(", ", names)}, which ncx plugin new made; name "
                 + $"the one to {command}: ncx plugin {command} {names[0]} (architecture 10).";
-        diagnostics.Error(Program.CommandLine, DiagnosticCodes.PluginProjectNotFound, message);
+        diagnostics.CommandLineError(DiagnosticCodes.PluginProjectNotFound, message);
         return null;
     }
 

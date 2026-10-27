@@ -231,6 +231,17 @@ public sealed class SiemensFrameTests
             MillTurnBody("DIAMETER=OFF", "RAPID X=20", "DIAMETER=ON", "RAPID X=40"));
     }
 
+    // D125: under DIAMETER=ON the VM stores the X of SHIFT X=20 as the radius 10; the TRANS that MIRROR=OFF rewrites
+    // from the chain entry writes it back as the diameter 20, as the SHIFT block did.
+    [Fact]
+    public void D125_ShiftRewrittenFromTheChainUnderDiamon_KeepsTheDiameter()
+    {
+        string body = MillTurnBody("DIAMETER=ON", "SHIFT X=20 Z=-2", "MIRROR=Z", "MIRROR=OFF");
+
+        Assert.DoesNotContain("X10", body, StringComparison.Ordinal);
+        Assert.Equal(2, body.Split("TRANS X20 Z-2").Length - 1);
+    }
+
     // Controller-mapping 1, TCPM, CYLINDER and POLAR: TRAORI, TRACYL with the working diameter, TRANSMIT and TRAFOOF of
     // [transform] (millturn1.toml; D96).
     [Fact]

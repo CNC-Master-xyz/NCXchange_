@@ -81,9 +81,22 @@ public sealed class ResourceResolutionTests
     {
         VmHarness vm = new VmHarness(VmMachines.Default()).Execute("SPINDLE:SUB=CW RPM:SUB=100", "TOOL:TURRET1=3");
 
-        Assert.Equal(SpindleDirection.Clockwise, vm.State.Spindles["SUB"].Direction);
-        Assert.Equal(100m, vm.State.Spindles["SUB"].Rpm);
-        Assert.Equal(new ToolRef(3), vm.State.Holders["TURRET1"].SpindleTool);
+        Assert.Equal(SpindleDirection.Clockwise, vm.State.Spindles["ROLE_SUB"].Direction);
+        Assert.Equal(100m, vm.State.Spindles["ROLE_SUB"].Rpm);
+        Assert.Equal(new ToolRef(3), vm.State.Holders["ROLE_TURRET1"].SpindleTool);
+    }
+
+    // D170: a resource created on the spot is ROLE_<role>, never a default-machine id: SPINDLE:S2=CW names no role
+    // and creates ROLE_S2 instead of driving the default machine's tool spindle S2; the axis stays C_<role>.
+    [Fact]
+    public void D170_ResourceCreatedOnTheSpot_TakesTheIdRoleAndItsRole()
+    {
+        VmHarness vm = new VmHarness(VmMachines.Default()).Execute("SPINDLE:S2=CW", "WORKPIECE=SUB");
+
+        Assert.Equal(SpindleDirection.Off, vm.State.Spindles["S2"].Direction);
+        Assert.Equal(SpindleDirection.Clockwise, vm.State.Spindles["ROLE_S2"].Direction);
+        Assert.Equal("ROLE_SUB", vm.State.Frame.WorkpieceHolder);
+        Assert.True(vm.State.Motion.Position.ContainsKey("C_SUB"));
     }
 
     // VM 3.8 rule 1: a role of the wrong resource type is an ERROR.
@@ -400,8 +413,8 @@ public sealed class ResourceResolutionTests
     {
         VmHarness vm = new VmHarness(VmMachines.Default()).Execute("WORKPIECE=SUB");
 
-        Assert.Equal("SUB", vm.State.Frame.WorkpieceHolder);
-        Assert.True(vm.State.Spindles.ContainsKey("SUB"));
+        Assert.Equal("ROLE_SUB", vm.State.Frame.WorkpieceHolder);
+        Assert.True(vm.State.Spindles.ContainsKey("ROLE_SUB"));
     }
 
     // Language 4.10, VM 3.8 rule 1: the workpiece holder is a work spindle or a table.

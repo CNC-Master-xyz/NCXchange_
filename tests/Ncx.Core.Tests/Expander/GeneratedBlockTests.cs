@@ -68,8 +68,9 @@ public sealed class GeneratedBlockTests
         Assert.NotEqual(NcxWriter.Write(expanded), ExpanderHarness.WriteWithGenerated(expanded));
     }
 
-    // A diagnostic on a generated block names the block it was generated for: file(line, from 12) (language 4.15,
-    // D98). HOME on an axis without a reference point is the WARNING of D100.
+    // A diagnostic on a generated block names the block it was generated for: file(line, from 12), the line of its
+    // origin (language 4.15, D98, D200), and its message starts with the rule and its reason (D200). HOME on an axis
+    // without a reference point is the WARNING of D100.
     [Fact]
     public void D98_DiagnosticOnAGeneratedBlock_NamesTheOriginatingLine()
     {
@@ -82,7 +83,8 @@ public sealed class GeneratedBlockTests
         Diagnostic warning = Assert.Single(diagnostics.Items);
         Assert.Equal(DiagnosticCodes.HomeWithoutReferencePoint, warning.Code);
         Assert.Equal(4, warning.OriginLine);
-        Assert.StartsWith("test.ncx(4, from 4): WARNING VM060: ", warning.ToText(), StringComparison.Ordinal);
+        Assert.StartsWith("test.ncx(4, from 4): WARNING VM060: [tool_change] (pre): ", warning.ToText(),
+            StringComparison.Ordinal);
     }
 
     // Pseudo-words in a user file are an ERROR (D95): the parser reports it, the expander leaves the program as it is,
@@ -130,7 +132,7 @@ public sealed class GeneratedBlockTests
         Diagnostic error = Assert.Single(expanded.Diagnostics.Items);
         Assert.Equal(DiagnosticCodes.UnknownKey, error.Code);
         Assert.Equal(4, error.OriginLine);
-        Assert.StartsWith("[tool_change] pre \"FOO=1\": ", error.Message, StringComparison.Ordinal);
+        Assert.StartsWith("[tool_change] (pre): \"FOO=1\": ", error.Message, StringComparison.Ordinal);
     }
 
     // A rule text must be a block: a comment-only line is none (language 3, Block; machine-config 5a).

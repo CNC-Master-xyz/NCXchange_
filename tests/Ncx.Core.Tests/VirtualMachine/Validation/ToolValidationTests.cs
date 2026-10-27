@@ -90,6 +90,41 @@ public sealed class ToolValidationTests
         VmHarness.Run(text, VmMachines.Default()).AssertNoDiagnostics();
     }
 
+    // D372: a point word on a holder that holds no tool is an ERROR, VM481.
+    [Theory]
+    [InlineData("TOOL_POINT=2")]
+    [InlineData("TOOL=0 TIP_OFFSET=1")]
+    public void PointWord_OnAHolderWithoutATool_IsAnError(string block)
+    {
+        RuleAssert.Only(new VmHarness(VmMachines.Default()).Execute(block), DiagnosticCodes.PointWordWithoutTool);
+    }
+
+    // D372: a negative TIP_OFFSET or POINT_RADIUS is an ERROR, VM482.
+    [Theory]
+    [InlineData("TOOL=5 TIP_OFFSET=-1")]
+    [InlineData("TOOL=5 POINT_RADIUS=-0.5")]
+    public void PointValue_Negative_IsAnError(string block)
+    {
+        RuleAssert.Only(new VmHarness(VmMachines.Default()).Execute(block), DiagnosticCodes.NegativePointValue);
+    }
+
+    // D372: TOOL_POINT of 0 or less is an ERROR, VM483.
+    [Theory]
+    [InlineData("TOOL=5 TOOL_POINT=0")]
+    [InlineData("TOOL=5 TOOL_POINT=-2")]
+    public void ToolPoint_ZeroOrLess_IsAnError(string block)
+    {
+        RuleAssert.Only(new VmHarness(VmMachines.Default()).Execute(block), DiagnosticCodes.ToolPointNotPositive);
+    }
+
+    // D372: the point words of a loaded tool with values in range are accepted.
+    [Fact]
+    public void PointWords_OfALoadedToolInRange_AreAccepted()
+    {
+        new VmHarness(VmMachines.Default()).Execute("TOOL=5 TOOL_POINT=2 TIP_OFFSET=0 POINT_RADIUS=8", "TOOL_POINT=1")
+            .AssertNoDiagnostics();
+    }
+
     // VM 5, D99: a subprogram the program calls belongs to it, so the form of the subprogram counts for the program.
     [Fact]
     public void Offset_OtherFormInACalledSubprogram_IsAnError()

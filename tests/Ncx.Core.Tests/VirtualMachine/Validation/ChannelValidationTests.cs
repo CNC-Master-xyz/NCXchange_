@@ -46,4 +46,26 @@ public sealed class ChannelValidationTests
 
         VmHarness.Run(text, VmMachines.Default()).AssertNoDiagnostics();
     }
+
+    // D196: a file for one path of a multi-channel machine is no single-channel job without a manifest, so its SYNC
+    // does not warn; check --job checks the marks.
+    [Fact]
+    public void Sync_InAFileForOnePathOfATwoChannelMachine_DoesNotWarn()
+    {
+        Ncx.Core.Machine.MachineConfig machine = VmMachines.Default();
+        machine = machine with { Machine = machine.Machine with { Channels = [1, 2] } };
+
+        VmHarness.Run(VmHarness.File("SYNC=100", "PROGRAM=END"), machine).AssertNoDiagnostics();
+    }
+
+    // D196: a machine file without the channels key has one channel.
+    [Fact]
+    public void Sync_OnAMachineWithoutChannelsKey_Warns()
+    {
+        Ncx.Core.Machine.MachineConfig machine = VmMachines.Default();
+        machine = machine with { Machine = machine.Machine with { Channels = [] } };
+
+        RuleAssert.Only(VmHarness.Run(VmHarness.File("SYNC=100", "PROGRAM=END"), machine),
+            DiagnosticCodes.SyncInSingleChannelJob);
+    }
 }

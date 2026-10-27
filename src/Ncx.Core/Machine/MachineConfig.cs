@@ -37,6 +37,12 @@ public sealed record MachineConfig
     public ToolChangeConfig? ToolChange { get; init; }
 
     /// <summary>
+    /// [tool_points] with the [[tool_point]] rows: the registers of a tool's measurement points (machine-config 3,
+    /// D373); null when the file has no such table, and then a point other than 1 writes nothing (CMP016).
+    /// </summary>
+    public ToolPointsTable? ToolPoints { get; init; }
+
+    /// <summary>
     /// [home]: the reference point templates (machine-config 3); null when the file has none, as on Heidenhain.
     /// </summary>
     public HomeConfig? Home { get; init; }

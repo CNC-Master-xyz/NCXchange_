@@ -27,6 +27,18 @@ internal static class EventText
     }
 
     /// <summary>
+    /// The figures of TOOL_END and PROGRAM_END (virtual machine 7, D235): the blocks, the feed and the rapid distance,
+    /// the motions of unknown length and the derived total distance.
+    /// </summary>
+    public static string Statistics(int blocks, decimal feedDistance, decimal rapidDistance, int unknownLengthMotions)
+    {
+        return $"blocks {blocks.ToString(CultureInfo.InvariantCulture)}, feedDistance {Number(feedDistance)}, "
+            + $"rapidDistance {Number(rapidDistance)}, "
+            + $"unknownLengthMotions {unknownLengthMotions.ToString(CultureInfo.InvariantCulture)}, "
+            + $"distance {Number(feedDistance + rapidDistance)}";
+    }
+
+    /// <summary>
     /// A number, or ? for none or unknown.
     /// </summary>
     public static string Number(decimal? value)

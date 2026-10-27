@@ -11,7 +11,8 @@ namespace Ncx.Compilers;
 //
 //   CMP001-CMP099  compiler framework (P3-03): CMP001-CMP009 what a machine takes at all and the subprograms
 //                  (D94, D99), CMP010-CMP019 the templates of the machine (machine-config 3), CMP020-CMP029 the
-//                  numbers and the lines of the output (machine-config 2)
+//                  numbers and the lines of the output (machine-config 2), CMP030-CMP039 the rounding of the output
+//                  and the tool data of the machine (D364, D365, D370, D376)
 //
 // The compilers of the controller families take ranges of their own in parts next to their folders.
 
@@ -39,6 +40,25 @@ public static partial class DiagnosticCodes
     /// output file (machine-config 2, D48, D99).
     /// </summary>
     public const string UncalledSubprogramNotWritten = "CMP003";
+
+    /// <summary>
+    /// CMP016, an INFO: the program names a measurement point other than 1 and the machine file has no [tool_points],
+    /// so nothing selects it; once per program (machine-config 3, D373).
+    /// </summary>
+    public const string ToolPointWithoutForm = "CMP016";
+
+    /// <summary>
+    /// CMP032, a WARNING: the program's TIP_OFFSET or POINT_RADIUS of a point differs from the [[tool.point]] row of
+    /// the tool table by more than one output step of the tool-axis address; no coordinate is corrected
+    /// (machine-config 1, D370, D376).
+    /// </summary>
+    public const string ToolPointDiffersFromTable = "CMP032";
+
+    /// <summary>
+    /// CMP033, a WARNING: an OFFSET word on a holder whose tool named its measurement point replaces the register of
+    /// the [tool_points] mapping with its own (D393).
+    /// </summary>
+    public const string OffsetReplacesPointRegister = "CMP033";
 
     /// <summary>
     /// CMP010: a word of the program needs a template that the machine file does not give, so nothing can be written

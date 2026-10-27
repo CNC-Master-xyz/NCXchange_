@@ -18,6 +18,9 @@ public sealed class MachineConfigLoaderTableKeysTests
         controller = "fanuc"
         default_spindle = "S1"
 
+        [coolant]
+        STANDARD = { ON = "M8", OFF = "M9" }
+
         [roles]
         MAIN = "S1"
         SUB = "S2"
@@ -47,6 +50,9 @@ public sealed class MachineConfigLoaderTableKeysTests
             name = "Test mill"
             controller = "siemens"
 
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
+
             [tolerance]
             ON = "CYCLE832({tol},{mode},1)"
             ON_ROTARY = "CYCLE832({tol},1{mode},{rotary})"
@@ -74,6 +80,9 @@ public sealed class MachineConfigLoaderTableKeysTests
             name = "Test mill"
             controller = "fanuc"
 
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
+
             [tolerance]
             ON = "G5.1 Q1"
             held_value = -0.01
@@ -82,7 +91,7 @@ public sealed class MachineConfigLoaderTableKeysTests
         Diagnostic error = Assert.Single(diagnostics.Items);
         Assert.Equal(Severity.Error, error.Severity);
         Assert.Equal(DiagnosticCodes.ValueNotAllowed, error.Code);
-        Assert.Equal(7, error.Line);
+        Assert.Equal(10, error.Line);
     }
 
     // D269: the rot map gives {rot} its words per ROT option; D349: the two path mode templates, empty where the
@@ -94,6 +103,9 @@ public sealed class MachineConfigLoaderTableKeysTests
             [machine]
             name = "Test mill"
             controller = "heidenhain"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
 
             [transform]
             TILT_ON = "PLANE SPATIAL SPA{a} SPB{b} SPC{c} {move} {rot}"
@@ -120,6 +132,9 @@ public sealed class MachineConfigLoaderTableKeysTests
             name = "Test mill"
             controller = "heidenhain"
 
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
+
             [transform]
             rot = { TABLE = "TABLE ROT", CORD = "COORD ROT" }
             """);
@@ -138,6 +153,9 @@ public sealed class MachineConfigLoaderTableKeysTests
             name = "Test mill"
             controller = "fanuc"
 
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
+
             [transform]
             PATH_MODE_EXACT_STOP = "G61"
             PATH_MODE_CONTINUOUS = "G64"
@@ -155,6 +173,9 @@ public sealed class MachineConfigLoaderTableKeysTests
             [machine]
             name = "Test mill"
             controller = "siemens"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
 
             [tool_change]
             change = "T{tool} M6"
@@ -178,6 +199,9 @@ public sealed class MachineConfigLoaderTableKeysTests
             name = "Test lathe"
             controller = "siemens"
 
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
+
             [sync]
             wait = "WAITM({mark},{channels})"
             mark_range = [0, 99]
@@ -199,6 +223,10 @@ public sealed class MachineConfigLoaderTableKeysTests
             name = "Test mill"
             controller = "fanuc"
 
+            [coolant]
+            STANDARD.ON = "M8"
+            STANDARD.OFF = "M9"
+
             [dynamics]
             path_mode = "continuous"
             {line}
@@ -217,6 +245,9 @@ public sealed class MachineConfigLoaderTableKeysTests
             name = "Test mill"
             controller = "heidenhain"
 
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
+
             [stock]
             BOX = "BLK FORM 0.1 {axis} X{x} Y{y} Z{z}\nBLK FORM 0.2 X{max_x} Y{max_y} Z{max_z}"
             CYLINDER = "BLK FORM CYLINDER {axis} R{radius} L{length} DIST{dist}"
@@ -234,6 +265,9 @@ public sealed class MachineConfigLoaderTableKeysTests
             [machine]
             name = "Test mill"
             controller = "siemens"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
 
             [stock]
             BOXX = "WORKPIECE()"
@@ -301,6 +335,10 @@ public sealed class MachineConfigLoaderTableKeysTests
             name = "Test lathe"
             controller = "fanuc"
             default_spindle = "{defaultSpindle}"
+
+            [coolant]
+            STANDARD.ON = "M8"
+            STANDARD.OFF = "M9"
 
             [roles]
             MAIN = "S1"

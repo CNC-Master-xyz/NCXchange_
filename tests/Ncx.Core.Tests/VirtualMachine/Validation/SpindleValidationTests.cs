@@ -81,6 +81,22 @@ public sealed class SpindleValidationTests
             warning.Message);
     }
 
+    // D129: the WARNING fires only when neither the spindle of the current tool holder nor the spindle of the
+    // current workpiece holder runs: turning with a stationary tool against the running work spindle MAIN is a normal
+    // cut, and with MAIN stopped as well the WARNING stands.
+    [Fact]
+    public void D129_SpindleOffWhileTheWorkSpindleRuns_IsNoWarning()
+    {
+        VmHarness vm = new VmHarness(VmMachines.MillTurn())
+            .Execute("UNITS=MM F=100 SPINDLE:MAIN=CW RPM:MAIN=1500", "TOOL=5", "LINE X=40", "LINE Z=-60");
+
+        Assert.DoesNotContain(DiagnosticCodes.SpindleOffBeforeLine, vm.Codes());
+
+        vm.Execute("SPINDLE:MAIN=OFF", "LINE X=50");
+
+        Assert.Contains(DiagnosticCodes.SpindleOffBeforeLine, vm.Codes());
+    }
+
     // D194: an ARC cuts as a LINE does, so the rule covers it too (decisions.md; virtual machine 5).
     [Fact]
     public void SpindleOff_BeforeAnArc_Warns()

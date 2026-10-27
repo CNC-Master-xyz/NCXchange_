@@ -76,7 +76,7 @@ public sealed class AnalyzeCommandTests : IDisposable
 
         Assert.Equal(0, exitCode);
         Assert.StartsWith("Tool list: 2.5D_FRAESEN.ncx, lines 33 to 51,", _cli.Output, StringComparison.Ordinal);
-        Assert.Contains("154.59   91.907  2        19", _cli.Output, StringComparison.Ordinal);
+        Assert.Contains("154.591  91.907  2        19", _cli.Output, StringComparison.Ordinal);
     }
 
     // D97, D67: a --from after --to is a usage error, exit 2 before the run starts, and nothing is written.

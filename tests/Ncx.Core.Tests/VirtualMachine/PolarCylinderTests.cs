@@ -250,4 +250,42 @@ public sealed class PolarCylinderTests
         Assert.Equal(PositionFrame.Polar, c.Frame);
         return Vec3.FromDecimals(x.Value, c.Value, 0m);
     }
+
+    // D146: on a table whose rotary axis A turns about X (parallel = "X"), the cylinder axis is X and the rotary word
+    // stays one C word, which names A; both are known in the cylinder frame after the first motion, and an arc lies in
+    // the plane of X and C with the radial tool axis Z.
+    [Fact]
+    public void D146_CylinderOnATableAxisParallelToX_UsesXAsTheCylinderAxis()
+    {
+        VmHarness vm = new VmHarness(VmMachines.TableMill(withRotaryAxis: true))
+            .Execute("UNITS=MM F=100", "CYLINDER=20", "LINE X=10 C=5");
+
+        Assert.DoesNotContain(DiagnosticCodes.CylinderWithoutRotaryAxis, vm.Codes());
+        Assert.Equal("X", vm.State.Frame.CylinderAxis);
+        Assert.Equal(new AxisPosition(10m, PositionFrame.Cylinder, Known: true), vm.Position("X"));
+        Assert.Equal(new AxisPosition(5m, PositionFrame.Cylinder, Known: true), vm.Position("A"));
+        Assert.Equal(Plane.CylinderAbout("X"), ArcRules.PlaneOf(vm.State.Frame));
+        Assert.Equal("Z", ArcRules.PlaneOf(vm.State.Frame).ToolAxis);
+    }
+
+    // D146: a work spindle's rotary axis turns about Z, the lathe's cylinder plane.
+    [Fact]
+    public void D146_CylinderOnAWorkSpindle_UsesZ()
+    {
+        VmHarness vm = new VmHarness(VmMachines.MillTurn()).Execute("UNITS=MM", "CYLINDER=30");
+
+        Assert.Equal("Z", vm.State.Frame.CylinderAxis);
+        Assert.Equal(Plane.Cylinder, ArcRules.PlaneOf(vm.State.Frame));
+    }
+
+    // D146: CYLINDER without a rotary axis on the workpiece holder is the ERROR VM215, and the transformation stays
+    // off.
+    [Fact]
+    public void D146_CylinderWithoutARotaryAxisOnTheWorkpieceHolder_IsAnError()
+    {
+        VmHarness vm = new VmHarness(VmMachines.TableMill(withRotaryAxis: false)).Execute("UNITS=MM", "CYLINDER=20");
+
+        Assert.Equal([DiagnosticCodes.CylinderWithoutRotaryAxis], vm.Codes());
+        Assert.Null(vm.State.Frame.Cylinder);
+    }
 }

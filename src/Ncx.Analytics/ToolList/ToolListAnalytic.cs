@@ -58,7 +58,7 @@ public sealed partial class ToolListAnalytic : IAnalytic
                 Begin(begin);
                 break;
             case ToolEvent { Phase: EventPhase.End } end:
-                _inSpindle.Remove(end.Holder);
+                End(end);
                 break;
             case MotionEvent motion:
                 AddMotion(motion);
@@ -85,10 +85,6 @@ public sealed partial class ToolListAnalytic : IAnalytic
 
     // A tool entering the spindle begins a use (virtual machine 3.5, 7; architecture 9). It was preloaded when the
     // holder had it preloaded before the change, as the PRELOAD words left it (virtual machine 3.5, 8).
-    // TODO(question): virtual machine 7 raises TOOL_END when a tool leaves the spindle and PROGRAM=END keeps it there
-    // (virtual machine 4), so the last tool of a program gets no TOOL_END (wave-2 question #26). Its use stays in the
-    // spindle until the next TOOL_BEGIN on its holder, or the end of the run, and the list names it with what it did,
-    // until that is answered.
     private void Begin(ToolEvent begin)
     {
         bool preloaded = begin.Before.Holders.TryGetValue(begin.Holder, out HolderSnapshot? before)
@@ -96,6 +92,19 @@ public sealed partial class ToolListAnalytic : IAnalytic
         var use = new ToolUse { Tool = begin.Tool, Holder = begin.Holder, Preloaded = preloaded };
         _inSpindle[begin.Holder] = use;
         _uses.Add(use);
+    }
+
+    // A tool leaving the spindle ends its use. D233: the TOOL_END raised at PROGRAM_END closes a tool that stays in the
+    // spindle; its use stays open there, so that the PROGRAM=END block, which the list counts when the next block
+    // begins or at the end of the run, still counts under it, and the next TOOL_BEGIN on the holder replaces it.
+    private void End(ToolEvent end)
+    {
+        bool stillInTheSpindle = end.After.Holders.TryGetValue(end.Holder, out HolderSnapshot? holder)
+            && holder.SpindleTool == end.Tool;
+        if (!stillInTheSpindle)
+        {
+            _inSpindle.Remove(end.Holder);
+        }
     }
 
     // The distance under the tool from the MOTION lengths (virtual machine 7, 8): cutting for LINE, ARC and the plunges

@@ -124,7 +124,7 @@ public sealed class ProgramRewriterTests
         Diagnostic error = Assert.Single(expanded.Diagnostics.Items);
         Assert.Equal(DiagnosticCodes.UnknownKey, error.Code);
         Assert.Equal(4, error.OriginLine);
-        Assert.StartsWith("SurroundingRewriter \"FOO=1\": ", error.Message, StringComparison.Ordinal);
+        Assert.StartsWith("SurroundingRewriter (around TOOL): \"FOO=1\": ", error.Message, StringComparison.Ordinal);
     }
 
     // A rewriter may write the pseudo-words; the expander parses its text with the option of generated text (D95).

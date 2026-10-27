@@ -9,6 +9,9 @@ namespace Ncx.Core.Tests.VirtualMachine.Events;
 /// </summary>
 public sealed class ToolEventTests
 {
+    // D235: the figures of a TOOL_END or PROGRAM_END without a motion.
+    private const string NoDistance = "feedDistance 0, rapidDistance 0, unknownLengthMotions 0, distance 0";
+
     // VM 7, row TOOL_BEGIN: the tool that enters the spindle, its holder and the rpm of the holder's spindle.
     [Fact]
     public void ToolBegin_ToolN_CarriesTheToolTheHolderAndTheRpm()
@@ -32,7 +35,7 @@ public sealed class ToolEventTests
         Assert.Equal(
             [
                 "TOOL_BEGIN(1): tool 1, holder H1, rpm 0",
-                "TOOL_END(2): tool 1, holder H1, rpm 0, distance 0, blocks 1",
+                "TOOL_END(2): tool 1, holder H1, rpm 0, blocks 1, " + NoDistance,
                 "TOOL_BEGIN(2): tool 2, holder H1, rpm 0",
             ],
             ToolLines(listener));
@@ -50,8 +53,13 @@ public sealed class ToolEventTests
         Assert.Equal(EventPhase.End, end.Phase);
         Assert.Equal(new ToolRef(1), end.Tool);
         Assert.Equal(110m, end.Distance);
+        Assert.Equal(70m, end.FeedDistance);
+        Assert.Equal(40m, end.RapidDistance);
         Assert.Equal(5, end.Blocks);
-        Assert.Equal("TOOL_END(8): tool 1, holder H1, rpm 0, distance 110, blocks 5", end.ToString());
+        Assert.Equal(
+            "TOOL_END(8): tool 1, holder H1, rpm 0, blocks 5, feedDistance 70, rapidDistance 40, "
+            + "unknownLengthMotions 0, distance 110",
+            end.ToString());
     }
 
     // VM 3.5, row TOOL=0; architecture 5.2, Loaded to Empty: the tool leaves the spindle and none enters.
@@ -61,7 +69,10 @@ public sealed class ToolEventTests
         FakeListener listener = EventRuns.Execute("TOOL=1", "TOOL=0");
 
         Assert.Equal(
-            ["TOOL_BEGIN(1): tool 1, holder H1, rpm 0", "TOOL_END(2): tool 1, holder H1, rpm 0, distance 0, blocks 1"],
+            [
+                "TOOL_BEGIN(1): tool 1, holder H1, rpm 0",
+                "TOOL_END(2): tool 1, holder H1, rpm 0, blocks 1, " + NoDistance,
+            ],
             ToolLines(listener));
     }
 
@@ -97,20 +108,46 @@ public sealed class ToolEventTests
             [
                 "TOOL_BEGIN(3): tool 1, holder H1, rpm 0",
                 "TOOL_BEGIN(4): tool 5, holder H2, rpm 0",
-                "TOOL_END(6): tool 1, holder H1, rpm 0, distance 0, blocks 1",
+                "TOOL_END(6): tool 1, holder H1, rpm 0, blocks 1, " + NoDistance,
                 "TOOL_BEGIN(6): tool 2, holder H1, rpm 0",
-                "TOOL_END(7): tool 5, holder H2, rpm 0, distance 10, blocks 2",
+                "TOOL_END(7): tool 5, holder H2, rpm 0, blocks 2, feedDistance 10, rapidDistance 0, "
+                + "unknownLengthMotions 0, distance 10",
             ],
             ToolLines(listener));
     }
 
-    // VM 4: PROGRAM=END keeps the tool in the spindle, so no tool leaves it and no TOOL_END is raised (VM 7).
+    // D233: PROGRAM=END keeps the tool in the spindle (VM 4) and raises TOOL_END for it, with its figures, directly
+    // before PROGRAM_END.
     [Fact]
-    public void ToolEnd_ProgramEnd_KeepsTheToolInTheSpindleAndRaisesNoToolEnd()
+    public void ToolEnd_ProgramEnd_ClosesTheToolStillInTheSpindleBeforeProgramEnd()
     {
-        FakeListener listener = EventRuns.Run(VmHarness.File("TOOL=1", "PROGRAM=END"));
+        FakeListener listener = EventRuns.Run(VmHarness.File("UNITS=MM", "TOOL=1", "RAPID X=0 Y=0 Z=5", "PROGRAM=END"));
 
-        Assert.Equal(["TOOL_BEGIN(3): tool 1, holder H1, rpm 0"], ToolLines(listener));
+        Assert.Equal(
+            [
+                "TOOL_BEGIN(4): tool 1, holder H1, rpm 0",
+                "TOOL_END(6): tool 1, holder H1, rpm 0, blocks 3, feedDistance 0, rapidDistance 0, "
+                + "unknownLengthMotions 1, distance 0",
+            ],
+            ToolLines(listener));
+        int toolEnd = listener.Lines.FindIndex(line => line.StartsWith("TOOL_END", StringComparison.Ordinal));
+        Assert.StartsWith("PROGRAM_END(6)", listener.Lines[toolEnd + 1], StringComparison.Ordinal);
+        Assert.Equal(new ToolRef(1), listener.Of<ToolEvent>()[^1].After.Holders["H1"].SpindleTool);
+    }
+
+    // D233: an uncalled SUB walk closes its tools at its SUB=END; a called one closes nothing there.
+    [Fact]
+    public void ToolEnd_UncalledSubEnd_ClosesItsTools()
+    {
+        FakeListener listener = EventRuns.Run(VmHarness.File(
+            "PROGRAM=END", "SUB=BEGIN NAME=10", "TOOL=3", "SUB=END"));
+
+        Assert.Equal(
+            [
+                "TOOL_BEGIN(5): tool 3, holder H1, rpm 0",
+                "TOOL_END(6): tool 3, holder H1, rpm 0, blocks 2, " + NoDistance,
+            ],
+            ToolLines(listener));
     }
 
     // VM 7, row PRELOAD: every PRELOAD with its tool and holder, PRELOAD=0 that clears the preload among them.

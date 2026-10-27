@@ -34,6 +34,27 @@ public sealed record HolderSnapshot
     public required int OffsetCombined { get; init; }
 
     /// <summary>
+    /// toolPoint: the measurement point k of TOOL_POINT, 1 by default (D372).
+    /// </summary>
+    public int ToolPoint { get; init; } = 1;
+
+    /// <summary>
+    /// tipOffset: the axial offset a of TIP_OFFSET from the tool tip, 0 by default (D372).
+    /// </summary>
+    public decimal TipOffset { get; init; }
+
+    /// <summary>
+    /// pointRadius: the register radius r of POINT_RADIUS, 0 by default (D372).
+    /// </summary>
+    public decimal PointRadius { get; init; }
+
+    /// <summary>
+    /// True when the program named the point with TOOL_POINT since the TOOL of the holder and no OFFSET word replaced
+    /// the registers since (D393).
+    /// </summary>
+    public bool PointNamed { get; init; }
+
+    /// <summary>
     /// Where the holder stood in the tool change states of architecture 5.2.
     /// </summary>
     public required ToolChangeState ToolChange { get; init; }

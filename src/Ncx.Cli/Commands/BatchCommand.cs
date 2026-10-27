@@ -62,8 +62,8 @@ internal static class BatchCommand
 
         // Every file is converted as ncx convert converts one program, and the batch never stops on an error: an
         // ERROR of a file is reported on the file and counted, a crash as well (implementation 13, P3-07).
-        // TODO(question): D209, as recommended: the batch writes nothing but its report where the command line names
-        // it, and no NCX file, until D209 is answered.
+        // The batch writes nothing but its report where the command line names it, and no NCX file, as convert writes
+        // only where the command line names a file (architecture 10; D209).
         // TODO(question): implementation 13 converts "every file of a folder" with one machine and does not say whether
         // the files of its folders count, whether a file whose name is no program of the machine's controller does, nor
         // whether the plugins of the working directory read along. Every file of the folder and of its folders counts,

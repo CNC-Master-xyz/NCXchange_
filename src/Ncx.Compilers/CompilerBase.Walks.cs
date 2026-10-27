@@ -101,7 +101,9 @@ public abstract partial class CompilerBase
         }
 
         WritePendingPreload(step);
+        CheckPoint(step);
         WriteBlock(step.Block, step.Before, step.After);
+        WritePointComment(step);
         WriteAutoPreload(step);
         List<string> lines = _lines;
         _lines = null;

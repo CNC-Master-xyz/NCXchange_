@@ -94,7 +94,7 @@ public sealed class PluginNewTests : IDisposable
         int exitCode = _workspace.New(name);
 
         Assert.Equal(2, exitCode);
-        Assert.StartsWith("ncx(1): ERROR CLI550: ", _workspace.Error, StringComparison.Ordinal);
+        Assert.StartsWith("ncx: ERROR CLI550: ", _workspace.Error, StringComparison.Ordinal);
         Assert.Empty(Directory.GetFileSystemEntries(_workspace.WorkingDirectory));
     }
 
@@ -108,7 +108,7 @@ public sealed class PluginNewTests : IDisposable
         int exitCode = _workspace.New("Sample");
 
         Assert.Equal(2, exitCode);
-        Assert.StartsWith("ncx(1): ERROR CLI551: ", _workspace.Error, StringComparison.Ordinal);
+        Assert.StartsWith("ncx: ERROR CLI551: ", _workspace.Error, StringComparison.Ordinal);
         Assert.Equal([mine], Directory.GetFiles(_workspace.PathOf("Sample")));
     }
 

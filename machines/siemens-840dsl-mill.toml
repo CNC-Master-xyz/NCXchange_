@@ -4,6 +4,8 @@
 # D100: every number under [[axis]], [positions], [dynamics] and the spindle limits is plausible for a machine of this class and not verified on the machine.
 # The tables of lathes, rotary axes and several channels ([diameter], [spindle_mode], [spindle_sync], [workpiece], [sync]) have nothing to configure on this machine; [transform] holds only the path mode templates G60 and G64 (D349).
 
+ncx_schema = 1                     # the version of the machine-configuration schema, not of NCXchange (machine-config 1, D348)
+
 [machine]
 name = "Generic 840D sl vertical mill"
 controller = "siemens"
@@ -18,14 +20,14 @@ default_workpiece = "TABLE1"
 
 [format]
 decimal_separator = "."
-decimals = { X = 3, Y = 3, Z = 3, F = 3, S = 0 }
+decimals = { X = 3, Y = 3, Z = 3, ANGLE = 3, F = 3, S = 0 }   # ANGLE, the arc sweep, three decimals like a Siemens angle (D366)
 trailing_zeros = false
 block_numbers = { enabled = true, start = 10, step = 10 }
 line_ending = "CRLF"
 program_end = "M30"                # written for PROGRAM=END (D48; siemens 12 rule 1)
 sub_end = "RET"                    # written for SUB=END and RETURN (siemens 12 rule 1)
 program_layout = "one_file"        # all programs and subprograms of the NCX file into one output file with %_N_NAME_MPF / _SPF headers (siemens 12 rule 1)
-max_line_length = 0                # 0 = unlimited
+max_line_length = 512              # the Siemens family value (D263)
 comment_charset = "ASCII"
 
 [tool_change]
@@ -38,7 +40,10 @@ offsets_with_change = false        # D from OFFSET, written where OFFSET stands 
 tool_name_allowed = true           # T="NAME" under tool management (siemens 5)
 change_named = "T=\"{name}\" M6"   # TOOL="NAME" and a bare TOOL after PRELOAD="NAME"; names are case-sensitive and without special characters (D172)
 preload_named = "T=\"{name}\""     # PRELOAD="NAME" (D172)
-# TODO(question): the preload templates of machine-config 3 use {tool}, while its placeholder list defines {tool} as the tool in the spindle after the block and {next} as the preloaded tool; this file follows the table of machine-config 3 (D150).
+# In the preload template both {tool} and {next} mean the n of PRELOAD=n (machine-config introduction, D150); {next} is the preferred spelling in new files.
+
+[tool_points]
+form = "edge"                      # point k is the cutting edge D k of the active tool (D373 improvement 2; Grundlagen 03/2013 p. 74)
 
 [home]
 template = "G74 {axes}"            # reference point approach with machine axis names, own block, no transformation active (siemens 3)
@@ -50,7 +55,7 @@ template = "PRESETON({axis},{value})"   # declares the current position of one a
 [roles]
 TOOL = "S1"                        # the only spindle of a mill (language 4.10)
 TABLE = "TABLE1"
-# TODO(question): language 4.10 recommends no role name for the tool holder of a mill, and the default machine of D103 calls both its holder and its tool spindle TOOL; H1 has no role here, TOOL and PRELOAD without a role address go to default_holder (VM 3.8 rule 2) (D128).
+# TOOL is the role of the tool spindle; the holder H1 has no role and is default_holder, which TOOL and PRELOAD without a role address reach (VM 3.8 rule 2, D128).
 
 [[resource]]
 id = "S1"
@@ -146,6 +151,7 @@ PATH_MODE_CONTINUOUS = "G64"
 
 [cycles]
 catalog = "siemens.toml"           # the 840D sl cycle catalog shipped with NCXchange (siemens 7)
+chip_break_lift = 1.0              # _VRT of CYCLE83, the lift of the chip break, 1 mm by default (840D sl PGH SW4.92, connector p.1087; D357); peck_clearance left out: the automatic _DIS1, 0.6 mm up to 30 mm depth, else depth/50, at most 7 mm (p.1088; ISO-Fräsen 2012 p.93-94)
 
 [variables]
 unassigned = "error"

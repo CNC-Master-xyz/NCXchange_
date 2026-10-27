@@ -353,6 +353,85 @@ public sealed class CycleCatalogLoaderTests
         Assert.Equal(4, warning.Line);
     }
 
+    // D164: defaults maps a native name to a number or the control's literal, kept as its text; D270: title is the
+    // text after CYCL DEF n.
+    [Fact]
+    public void Entry_DefaultsAndTitle_LoadAsTextByNativeName()
+    {
+        CycleCatalog catalog = LoadClean("""
+            [[cycle]]
+            name = "PECK"
+            native = 203
+            title = "UNIVERSALBOHREN"
+            defaults = { Q210 = 0, Q208 = "MAX", Q205 = 0.5 }
+            """, Controller.Heidenhain);
+
+        CycleEntry? peck = catalog.Find("PECK");
+
+        Assert.NotNull(peck);
+        Assert.Equal("UNIVERSALBOHREN", peck.Title);
+        Assert.Equal("0", peck.Defaults["Q210"]);
+        Assert.Equal("MAX", peck.Defaults["Q208"]);
+        Assert.Equal("0.5", peck.Defaults["Q205"]);
+        Assert.Equal("Q202", peck.NativeOf("PECK"));
+    }
+
+    // D114: a parameter name of the machine-axis form would be a machine axis word of D93 in a program, so the loader
+    // rejects it.
+    [Fact]
+    public void Entry_ParamWordOfTheMachineAxisForm_ReportsIt()
+    {
+        Diagnostic error = SingleReport("""
+            [[cycle]]
+            name = "GROOVE_X"
+            native = 254
+            params = { W2 = "Q219" }
+            """, Controller.Heidenhain);
+
+        Assert.Equal(Severity.Error, error.Severity);
+        Assert.Equal(DiagnosticCodes.CycleParameterAxisForm, error.Code);
+        Assert.Equal(4, error.Line);
+        Assert.Contains("W2", error.Message, StringComparison.Ordinal);
+    }
+
+    // D358: a machine key and a defaults entry of the same native parameter are CFG156, naming both places.
+    [Fact]
+    public void CheckHeldDistances_KeyBesideADefaultOfTheSameParameter_Warns()
+    {
+        CycleCatalog catalog = LoadClean("""
+            [[cycle]]
+            name = "CHIP_BREAK"
+            native = 203
+            defaults = { Q256 = 0.6 }
+            """, Controller.Heidenhain);
+        var diagnostics = new Diagnostics("machine.toml");
+
+        CycleCatalogLoader.CheckHeldDistances(catalog, ["chip_break_lift"], 12, diagnostics);
+
+        Diagnostic warning = Assert.Single(diagnostics.Items);
+        Assert.Equal(Severity.Warning, warning.Severity);
+        Assert.Equal(DiagnosticCodes.CycleDefaultBesideMachineKey, warning.Code);
+        Assert.Contains("chip_break_lift", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("Q256", warning.Message, StringComparison.Ordinal);
+    }
+
+    // D164, D358: a Heidenhain catalog that writes Q256 needs [cycles] chip_break_lift; without it the loader reports
+    // an ERROR for each entry that writes it rather than guess a lift.
+    [Fact]
+    public void CheckHeldDistances_HeidenhainQ256WithoutChipBreakLift_IsAnError()
+    {
+        CycleCatalog catalog = DrillingFamily.Catalog(Controller.Heidenhain);
+        var diagnostics = new Diagnostics("machine.toml");
+
+        CycleCatalogLoader.CheckHeldDistances(catalog, [], 12, diagnostics);
+        var withKey = new Diagnostics("machine.toml");
+        CycleCatalogLoader.CheckHeldDistances(catalog, ["chip_break_lift"], 12, withKey);
+
+        Assert.Equal(2, diagnostics.Items.Count);
+        Assert.All(diagnostics.Items, error => Assert.Equal(DiagnosticCodes.CycleChipBreakLiftMissing, error.Code));
+        Assert.Empty(withKey.Items);
+    }
+
     // Loads a catalog that is expected to be clean; a failure prints the diagnostics.
     private static CycleCatalog LoadClean(string toml, Controller controller)
     {

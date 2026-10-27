@@ -34,4 +34,10 @@ public sealed record VariablesConfig
     /// call_depth: how deep calls and repeats may nest; 8 when left out (virtual machine 3.6, 3.9).
     /// </summary>
     public int CallDepth { get; init; } = 8;
+
+    /// <summary>
+    /// repeat_counters: the variables the Fanuc compiler counts a REPEAT in, one per nesting depth, ["#199", "#198"];
+    /// empty when left out, and the compiler reports an ERROR for a REPEAT that needs one (machine-config 7, D280).
+    /// </summary>
+    public IReadOnlyList<string> RepeatCounters { get; init; } = [];
 }

@@ -19,7 +19,7 @@ NCX to Fanuc G-code, per section 10 of `controllers/fanuc.md`.
 
 ## Done when
 
-- `2.5D_FRAESEN.ncx` compiles to a program equivalent to `2.5D_FRAESEN.fanuc.nc`; the round trip Fanuc to NCX to Fanuc reproduces the source under the comparison rules; the same for `BOHREN` and `3D_FRAESEN` (M6).
+- The Fanuc output of `2.5D_FRAESEN` is checked by the round trip Fanuc to NCX to Fanuc, which reproduces the source under the comparison rules (D217, amended 2026-10-27: the example carries the Heidenhain reading where its notes list a difference); the same round trip for `BOHREN` and `3D_FRAESEN` (M6).
 - This closes phase 3.
 
 ## Log

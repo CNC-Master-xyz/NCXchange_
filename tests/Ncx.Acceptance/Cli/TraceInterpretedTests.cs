@@ -188,7 +188,8 @@ public sealed class TraceInterpretedTests : IDisposable
         Assert.Contains("possible endless loop", _cli.Error, StringComparison.Ordinal);
     }
 
-    // VM 3.6: an external program that the working directory does not hold is a missing call target: ERROR.
+    // VM 3.6: an external program that the working directory does not hold is a missing call target: ERROR, which
+    // names the file it looked for, <name>.ncx (D215).
     [Fact]
     public void TraceInterpreted_ExternalProgramTheWorkingDirectoryDoesNotHold_IsAnError()
     {
@@ -198,6 +199,7 @@ public sealed class TraceInterpretedTests : IDisposable
 
         Assert.Equal(1, exitCode);
         Assert.Contains("ERROR VM752", _cli.Error, StringComparison.Ordinal);
+        Assert.Contains("no external program NCX_P401_NO_SUCH_PROGRAM.ncx ", _cli.Error, StringComparison.Ordinal);
     }
 
     // The CSV rows of the last run that contain a text, in order.

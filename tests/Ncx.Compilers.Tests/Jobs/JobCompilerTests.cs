@@ -208,8 +208,8 @@ public sealed class JobCompilerTests
             JobCompile.Program(1000, "START_CHANNEL=2", "SYNC=110"), JobCompile.Program(1000, "SYNC=110"));
 
         Assert.Empty(result.Files);
-        Assert.Equal(["C1.ncx(2, from 2): ERROR CMP712: SYNC=199, which the job compiler writes for [sync] start_mark, "
-            + "can never be released in the job as written (machine-config 5, D56). Deadlock: channel 1 waits at "
+        Assert.Equal(["C1.ncx(2, from 2): ERROR CMP712: job compiler ([sync] start_mark): SYNC=199 can never be "
+            + "released in the job as written (machine-config 5, D56). Deadlock: channel 1 waits at "
             + "SYNC=199 with 1,2 (C1.ncx line 2); channel 2 waits to be started by START_CHANNEL=2; no channel can go "
             + "on and no mark can be released (virtual machine 3.7)."],
             result.Diagnostics.ToText().TrimEnd('\n').Split('\n'));

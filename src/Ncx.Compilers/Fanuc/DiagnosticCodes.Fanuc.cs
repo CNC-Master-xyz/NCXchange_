@@ -61,6 +61,12 @@ public static partial class DiagnosticCodes
     /// </summary>
     public const string FanucModalValueNotHeld = "CMP309";
 
+    /// <summary>
+    /// CMP312, a WARNING: a comment text with ( or ), whose first ) would end the Fanuc comment and leave the rest of
+    /// the line to run as code, is written with [ and ] (D390, R1-14).
+    /// </summary>
+    public const string FanucBracketInComment = "CMP312";
+
     // CMP310 was the ERROR of a CALL that carries both a pass-through ARG:Vn={$Vn} and an argument value. The
     // documents settle that block: D148's evidence has it that only a macro call can take arguments, and
     // controller-mapping 6 maps a CALL with ARG to G65 Pnnnn A1 B2, so it is the macro call and is written as one.
@@ -103,6 +109,19 @@ public static partial class DiagnosticCodes
     /// (language 4.6).
     /// </summary>
     public const string FanucMFuncWritten = "CMP340";
+
+    /// <summary>
+    /// CMP341: a measurement point that the registers form cannot map: no [[tool_point]] row, no step rule, or a point
+    /// above 1 under tool management (machine-config 3, D373).
+    /// </summary>
+    public const string FanucToolPointNotMapped = "CMP341";
+
+    /// <summary>
+    /// CMP342, a WARNING: the first tool-axis motion after a TOOL runs without a length offset, since the holder has
+    /// neither OFFSET:LEN, OFFSET nor the register of a named point and the change applies none; once per tool change
+    /// (D389, R1-13).
+    /// </summary>
+    public const string FanucToolWithoutLengthOffset = "CMP342";
 
     /// <summary>
     /// CMP360: the transform chain of the block cannot be written with the one G52, G68, G51.1 and G68.2 of a Fanuc
