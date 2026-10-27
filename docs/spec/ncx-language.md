@@ -203,7 +203,7 @@ A cycle is defined once (modal) and executed by `CYCLE_CALL` at each position. `
 | `DEPTH=-21.732` | number | Absolute coordinate of the hole bottom along the drilling axis (Fanuc `Z`, or `X` under `AXIS=X`; Q203 + Q201). | with `CYCLE` |
 | `SAFE=10` | number | Absolute coordinate of the safe plane along the drilling axis (G98 initial level, Q203 + Q204). Optional. | with `CYCLE` |
 | `CYCLE_RETRACT=CLEARANCE` | `CLEARANCE`, `SAFE` | Where the tool ends after each hole (G99 / G98). Default `CLEARANCE`. The word carries the `CYCLE_` prefix because `RETRACT` is a motion verb (D83, D87). | with `CYCLE` |
-| `PECK=1.2` | number | Peck depth (Q, Q202). | with `CYCLE` |
+| `PECK=1.2` | number | Peck depth (Q, Q202): the infeed per peck counted from `SURFACE`, or from `CLEARANCE` where the block gives no `SURFACE`. The first peck ends one `PECK` from that plane in the drilling direction, each further one a `PECK` deeper, and the last stops at `DEPTH` (D355). A known `PECK` above 0 splits the feed on any cycle of the built-in family (virtual machine 3.3, D190). | with `CYCLE` |
 | `CYCLE_F=565` | number | Plunge feed of the cycle, in the active feed mode. Its own word, so that the motion feed `F` of the program is never touched by a cycle definition (D29). | with `CYCLE` |
 | `CYCLE_DWELL=0.5` | number, seconds | Dwell at the bottom (P, Q211); its own word for the same reason. | with `CYCLE` |
 | `PITCH=1.5` | number | Thread pitch for `TAP` (Q239; Fanuc F/S in rigid tapping) and for the thread turning cycles, where it is the lead `F` of Fanuc `G92` and `G76` and equals the pitch on a single-start thread; a multi-start thread stays `RAW` until a decision. D175. | with `CYCLE` |

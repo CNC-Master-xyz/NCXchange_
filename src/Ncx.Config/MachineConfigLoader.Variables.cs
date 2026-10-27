@@ -1,3 +1,4 @@
+using System.Globalization;
 using Ncx.Core.Machine;
 
 namespace Ncx.Config;
@@ -5,13 +6,21 @@ namespace Ncx.Config;
 // Machine-config 6, 7 and 9: the cycle catalog, the variables, the system variables and the kinematic tree.
 public static partial class MachineConfigLoader
 {
-    private static readonly string[] s_cyclesKeys = ["catalog"];
+    private static readonly string[] s_cyclesKeys =
+    [
+        "catalog", "surface_clearance", "chip_break_lift", "peck_clearance", "ream_feed_out", "contour_type_ii",
+        "peck_rigid_tapping",
+    ];
+
     private static readonly string[] s_variablesKeys =
-        ["unassigned", "map", "declared", "block_cap", "call_depth"];
+        ["unassigned", "map", "declared", "block_cap", "call_depth", "repeat_counters"];
+
+    private static readonly string[] s_reamFeedOutValues = ["CLEARANCE", "SAFE"];
     private static readonly string[] s_unassignedValues = ["error", "0"];
     private static readonly string[] s_nodeKeys = ["id", "parent", "type", "direction"];
 
-    // [cycles]: the catalog file of the controller family (machine-config 6).
+    // [cycles]: the catalog file of the controller family (machine-config 6), the distances of the control's own
+    // cycles (D158, D357), the plane REAM feeds out to (D378) and the two cycle options of D388 item 11.
     private static CyclesConfig? ReadCycles(ConfigTable? table)
     {
         if (table is null)
@@ -20,7 +29,45 @@ public static partial class MachineConfigLoader
         }
 
         table.WarnUnknownKeys(s_cyclesKeys);
-        return new CyclesConfig { CatalogFile = table.Text("catalog") };
+        return new CyclesConfig
+        {
+            CatalogFile = table.Text("catalog"),
+            SurfaceClearance = Distance(table, "surface_clearance"),
+            ChipBreakLift = Distance(table, "chip_break_lift"),
+            PeckClearance = Distance(table, "peck_clearance"),
+            ReamFeedOut = ReadReamFeedOut(table),
+            ContourTypeII = table.Flag("contour_type_ii"),
+            PeckRigidTapping = table.Flag("peck_rigid_tapping"),
+        };
+    }
+
+    // D357: a distance of [cycles] is a decimal in millimetres whatever units_default is, zero or greater; a negative
+    // value is the ERROR CFG005 and is dropped, so the family's behaviour applies. D158's surface_clearance follows
+    // its neighbours (gap closed 2026-10-27, delegated).
+    private static decimal? Distance(ConfigTable table, string key)
+    {
+        decimal? value = table.Number(key);
+        if (value is decimal distance && distance < 0)
+        {
+            table.Diagnostics.Error(table.LineOf(key), DiagnosticCodes.ValueNotAllowed,
+                $"[cycles] {key} = {distance.ToString(CultureInfo.InvariantCulture)} is negative; a distance of "
+                + "[cycles] is in millimetres and zero or greater (machine-config 6, D357).");
+            return null;
+        }
+
+        return value;
+    }
+
+    // D378: ream_feed_out is "CLEARANCE" or "SAFE"; any other value is the ERROR CFG005, and the family default
+    // applies.
+    private static ReamFeedOut? ReadReamFeedOut(ConfigTable table)
+    {
+        return table.Choice("ream_feed_out", s_reamFeedOutValues) switch
+        {
+            "CLEARANCE" => Ncx.Core.Machine.ReamFeedOut.Clearance,
+            "SAFE" => Ncx.Core.Machine.ReamFeedOut.Safe,
+            _ => null,
+        };
     }
 
     // [variables]: unassigned is "error" or 0; block_cap and call_depth keep the defaults of virtual machine 3.6 when
@@ -41,6 +88,7 @@ public static partial class MachineConfigLoader
             Declared = Names(table.TextList("declared")),
             BlockCap = table.LongInteger("block_cap") ?? defaults.BlockCap,
             CallDepth = table.Integer("call_depth") ?? defaults.CallDepth,
+            RepeatCounters = table.TextList("repeat_counters"),
         };
     }
 

@@ -137,6 +137,7 @@ mode = { FINISH = 1, ROUGH = 3 }   # value of {mode}: 1 finish, 3 rough (siemens
 
 [cycles]
 catalog = "siemens.toml"           # the 840D sl cycle catalog shipped with NCXchange (siemens 7)
+chip_break_lift = 1.0              # _VRT of CYCLE83, the lift of the chip break, 1 mm by default (840D sl PGH SW4.92, connector p.1087; D357); peck_clearance left out: _DIS1 = 0 lets the cycle compute it (p.1088)
 
 [variables]
 unassigned = "error"

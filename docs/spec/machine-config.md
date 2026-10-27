@@ -322,6 +322,12 @@ A named function is written as `FUNC:SUB_CHUCK=OPEN` in NCX and compiles to the 
 ```toml
 [cycles]
 catalog = "heidenhain-cycles.toml"  # controller family catalog, shipped with NCXchange, user-extendable
+chip_break_lift = 0.6               # optional: the lift of CHIP_BREAK before it feeds on (Fanuc 5114, Heidenhain Q256, Siemens _VRT), mm (D357)
+peck_clearance = 1.0                # optional: the end of the rapid re-entry of PECK above the depth reached (Fanuc 5115, Siemens _DIS1), mm (D357)
+ream_feed_out = "CLEARANCE"         # optional: CLEARANCE | SAFE, where REAM stops feeding out under CYCLE_RETRACT=SAFE (D378)
+surface_clearance = 2.0             # optional, Fanuc reader: SURFACE = R - surface_clearance, SURFACE = 0 when absent (D158)
+contour_type_ii = false             # optional: the control has the type II pocketing of G71/G72 (D278, D388)
+peck_rigid_tapping = false          # optional: the control has peck rigid tapping, Q on G74/G84 (D279, D388)
 
 # excerpt of a catalog file
 [[cycle]]
@@ -338,6 +344,8 @@ contour = ["P", "Q"]                # first and last block of the contour, the S
 ```
 
 The built-in drilling family (`DRILL`, `DRILL_DWELL`, `PECK`, `CHIP_BREAK`, `TAP`, `REAM`, `BORE`) is defined in the same way inside NCXchange and can be overridden per machine. Four catalog files ship with `ncx`: `cycles/fanuc.toml` with the mill codes of the Fanuc family, `cycles/fanuc-lathe.toml` with the lathe drilling cycles along Z and along X and the turning cycles, which a Fanuc lathe names instead of the mill file, and `cycles/heidenhain.toml` and `cycles/siemens.toml` (D160). A catalog file is written in the numbers of Fanuc G-code system A, and the reader and the compiler translate them to the system of the machine through `gcode_system`, so no entry key ties an entry to a G-code system (`../controllers/fanuc.md` 3, D174). The `native` of an entry is the native cycle as the control writes it, a number for Heidenhain (`251`) and a string for Siemens and Fanuc (`"CYCLE952"`, `"G71"`, `"G83.5"`); a program that writes the cycle natively gives exactly that text after the controller address of its `CYCLE` word (`CYCLE:FANUC=G71`, `CYCLE:FANUC="G83.5"`; language 4.7, D144).
+
+The other keys of `[cycles]` are facts of the control that no cycle block carries. `chip_break_lift` and `peck_clearance` are decimals in millimetres whatever `units_default` is, zero or greater; a negative value is the ERROR CFG005. The VM reads them where it expands a drilling cycle (virtual machine 3.3), and so do the runtime estimate and the CAM's simulation (opencam D-061). A key left out means the family's documented behaviour: on Siemens the manual's 1 mm of `_VRT`, and the control computes `_DIS1` itself, which the VM takes as 0; on Heidenhain the re-approach is the cycle's `Q200`, the gap between `SURFACE` and `CLEARANCE`, so a Heidenhain file never needs `peck_clearance`; on Fanuc the VM takes 0, and the runtime report names the key it defaulted (D357). `ream_feed_out` applies only under `CYCLE_RETRACT=SAFE`: `REAM` feeds at `CYCLE_F` up to that plane and rapids the rest. Absent, the family default applies, `CLEARANCE` on Fanuc and Heidenhain and `SAFE` on Siemens, whose `CYCLE85` retracts at its retract feed to the retract plane; a TNC 640 or TNC 128 machine file writes `"SAFE"`, because cycle 201 there feeds to `Q204`. Any other value is the ERROR CFG005. Only the VM, the runtime estimate and the CAM's simulation read it; the compilers write nothing from it (D378). `surface_clearance` is read by the Fanuc reader only, and the Fanuc compiler writes `R` from `CLEARANCE` (D158). `contour_type_ii` and `peck_rigid_tapping` declare the two Fanuc options the reader and the compiler need (D388).
 
 Besides `name`, `native`, `params`, `absolute_from_surface` and the expansion rule keys of 5a, an entry may carry:
 
@@ -357,6 +365,7 @@ map = { Q = "#1{index:02}", QL = "#{index}", QR = "#5{index:02}" }   # compile H
 declared = ["XMW_1", "GC1_XDREMI"]        # optional: names the machine declares outside the program (Siemens GUD and the builder's variables). The Siemens compiler declares every other name a unit uses with DEF REAL in its definition part and never these, because a DEF of an already defined symbol is an alarm (D261)
 block_cap = 1000000
 call_depth = 8
+repeat_counters = ["#149", "#148"]  # optional, Fanuc: the counter variable of each REPEAT nesting depth (D280)
 
 [system_variables]                 # NCX SYS_ names to native system variables (D51); {index} is the NCX index
 SYS_POS_X = "#5041"                # workpiece coordinates
@@ -367,6 +376,8 @@ SYS_PART_MAIN = ""                 # part status of the Nakamura G411 machines h
 ```
 
 Every entry of `map` is a template of the variable's number with `{index}`, like the entries of `[system_variables]`, because a bare prefix does not state the width the control needs: `Q = "#1{index:02}"` writes `Q1` as `#101`, while the Siemens entry `Q = "R{index}"` writes `R1`, the spelling a SINUMERIK program uses, and not `R01`. An entry without `{index}` is an ERROR of the machine file. A variable name that no entry covers is an ERROR at compile time that names the variable; this includes the Heidenhain `QS` strings, because an R parameter is a field of type REAL and holds no string. Names the source itself wrote, a Siemens `R5` or a declared name, are written as they are (D173).
+
+`repeat_counters` names one variable per `REPEAT` nesting depth, the first for the outermost repeat. The Fanuc compiler writes the count from `TIMES` into it, the `IF` `GOTO` that loops, and the clearing that a `JUMP` leaving the section needs (D213). A `REPEAT` that needs a counter on a machine without the key, with too short a list, or with a counter the program uses itself is an ERROR; there is no fallback to `#33` downward. Choose variables from `#100`..`#149`, which exist without the extended-variables option (D280).
 
 ## 8. Job manifest and variable start values
 

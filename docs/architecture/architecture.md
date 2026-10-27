@@ -442,7 +442,7 @@ flowchart TD
     D -- SHIFT / TILT / TILT_AXIS / SETPOS --> E[update frame]
     D -- RAPID / LINE / ARC / RETRACT / HOME --> F[resolve target: absolute, incremental, diameter, arc center or radius, tool axis]
     F --> G[execute motion, raise MOTION]
-    D -- CYCLE_CALL --> H[cycle sequence along AXIS, raise CYCLE_CALL or expanded MOTION events]
+    D -- CYCLE_CALL --> H[cycle sequence along AXIS: raise CYCLE_CALL, then under ExpandCycles its MOTION events, D234]
     D -- none --> I[state-only block]
     E --> J
     G --> J
