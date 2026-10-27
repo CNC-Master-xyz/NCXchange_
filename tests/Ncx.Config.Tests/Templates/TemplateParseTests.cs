@@ -12,8 +12,9 @@ public sealed class TemplateParseTests
     // The machine file the templates of these tests stand in.
     private const string MachineFile = "machine.toml";
 
-    // Templates are strings with {placeholders}; every placeholder the introduction lists is read by its name
-    // (machine-config introduction).
+    // Templates are strings with {placeholders}; every placeholder the introduction lists is read by its name and
+    // without a diagnostic, the list complete with {point}, {channel}, {radius}, {order}, {pair} and {ratio} (D152),
+    // {rot} (D269) and the stock placeholders (D351) (machine-config introduction).
     [Theory]
     [InlineData("tool")]
     [InlineData("name")]
@@ -43,6 +44,19 @@ public sealed class TemplateParseTests
     [InlineData("tol")]
     [InlineData("rotary")]
     [InlineData("mode")]
+    [InlineData("point")]
+    [InlineData("channel")]
+    [InlineData("radius")]
+    [InlineData("order")]
+    [InlineData("pair")]
+    [InlineData("ratio")]
+    [InlineData("rot")]
+    [InlineData("max_x")]
+    [InlineData("max_y")]
+    [InlineData("max_z")]
+    [InlineData("diameter")]
+    [InlineData("length")]
+    [InlineData("dist")]
     public void Constructor_EveryPlaceholderOfTheIntroduction_IsReadByItsName(string name)
     {
         Template template = Parse("W{" + name + "}");
@@ -240,6 +254,35 @@ public sealed class TemplateParseTests
             """The template "T=\"{name}\"\nTC({offset" opens a placeholder that is never closed """
             + "(machine-config introduction).",
             diagnostic.Message);
+    }
+
+    // D152: a well-formed name outside the list of the introduction is a WARNING with its own CFG code, on the line of
+    // the template, and the placeholder is still read as a number.
+    [Theory]
+    [InlineData("L{level}", "{level}")]
+    [InlineData("T{toool:02}", "{toool:02}")]
+    [InlineData("P{position}", "{position}")]
+    public void Constructor_NameOutsideTheList_IsCfgWarningAndReadAsANumber(string text, string braces)
+    {
+        var diagnostics = new Diagnostics(MachineFile);
+
+        var template = new Template(text, 7, diagnostics);
+
+        Diagnostic diagnostic = Assert.Single(diagnostics.Items);
+        Assert.Equal(Severity.Warning, diagnostic.Severity);
+        Assert.Equal(DiagnosticCodes.TemplatePlaceholderNotListed, diagnostic.Code);
+        Assert.Equal(7, diagnostic.Line);
+        Assert.Contains(braces, diagnostic.Message, StringComparison.Ordinal);
+        Assert.False(Assert.Single(template.Placeholders).IsText);
+    }
+
+    // D269: {rot} holds the words of the ROT option, TABLE ROT or COORD ROT, as {move} holds those of MOVE.
+    [Fact]
+    public void IsText_Rot_IsTrue()
+    {
+        Template template = Parse("PLANE SPATIAL SPA{a} SPB{b} SPC{c} {move} {rot}");
+
+        Assert.True(template.Placeholders[4].IsText);
     }
 
     // A template of the machine file that parses without a diagnostic.

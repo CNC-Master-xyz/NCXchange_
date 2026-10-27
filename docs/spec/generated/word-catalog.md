@@ -8,8 +8,9 @@ tables of section 4 of `../ncx-language.md` with the section it comes from, the 
 `CENTER:IX`, `TOLERANCE:ROTARY`), the reset form of `SHIFT`, `TILT` and `TILT_AXIS`, the machine axis words
 (D93) and the native cycle parameters (D94). Words of one key with an open address (a role, a channel, a
 variable) sort under their rank by the address text. The eleven verbs share one rank; a block has at most
-one. The ranks were laid out in steps of ten; a word added later takes a free number between two of them
-(`MAX:X` 371, `PATH_MODE` 785, `ROUND_LIMIT` 813; D349, D351, D363, D372), and no rank is renumbered.
+one. The ranks of D90 go in steps of ten; a word added later takes a rank between two steps and nothing is
+renumbered (`MAX:X` 371, D351; `TOOL_POINT` 435, `TIP_OFFSET` 465, `POINT_RADIUS` 467, D372; `PATH_MODE` 785,
+D349; `ROUND_LIMIT` 813, D363).
 
 | Rank | Word | Value | Verb | Axis words | Address | Scope | Section | Meaning |
 |---:|---|---|---|---|---|---|---|---|
@@ -46,12 +47,12 @@ one. The ranks were laid out in steps of ten; a word added later takes a free nu
 | 210 | `IB` | number, expression |  | is one |  | block | 4.3 | Incremental target of the axis B, the current position plus the value. |
 | 220 | `IC` | number, expression |  | is one |  | block | 4.3 | Incremental target of the axis C, the current position plus the value. |
 | 230 | incremental machine axis words (D93) | number, expression |  | is one |  | block | 4.3 | `I` followed by a machine axis name: `IC2`, `IW`, `IZ2`, in the order of the absolute words. |
-| 240 | `TX` | number, expression |  | is one |  | block | 4.3 | X part of the tool axis direction at the end of a LINE under TCPM=ON, a unit vector (D81). |
-| 250 | `TY` | number, expression |  | is one |  | block | 4.3 | Y part of the tool axis direction at the end of a LINE under TCPM=ON, a unit vector (D81). |
-| 260 | `TZ` | number, expression |  | is one |  | block | 4.3 | Z part of the tool axis direction at the end of a LINE under TCPM=ON, a unit vector (D81). |
-| 270 | `NX` | number, expression |  | is one |  | block | 4.3 | X part of the surface normal at the end of the LINE, only together with TX TY TZ (D81). |
-| 280 | `NY` | number, expression |  | is one |  | block | 4.3 | Y part of the surface normal at the end of the LINE, only together with TX TY TZ (D81). |
-| 290 | `NZ` | number, expression |  | is one |  | block | 4.3 | Z part of the surface normal at the end of the LINE, only together with TX TY TZ (D81). |
+| 240 | `TX` | number, expression |  | is one |  | block | 4.3 | X part of the tool axis direction at the end point of a RAPID, LINE or ARC under TCPM=ON, a unit vector (D81, D185). |
+| 250 | `TY` | number, expression |  | is one |  | block | 4.3 | Y part of the tool axis direction at the end point of a RAPID, LINE or ARC under TCPM=ON, a unit vector (D81, D185). |
+| 260 | `TZ` | number, expression |  | is one |  | block | 4.3 | Z part of the tool axis direction at the end point of a RAPID, LINE or ARC under TCPM=ON, a unit vector (D81, D185). |
+| 270 | `NX` | number, expression |  | is one |  | block | 4.3 | X part of the surface normal at the end of the RAPID, LINE or ARC, only together with TX TY TZ (D81, D185). |
+| 280 | `NY` | number, expression |  | is one |  | block | 4.3 | Y part of the surface normal at the end of the RAPID, LINE or ARC, only together with TX TY TZ (D81, D185). |
+| 290 | `NZ` | number, expression |  | is one |  | block | 4.3 | Z part of the surface normal at the end of the RAPID, LINE or ARC, only together with TX TY TZ (D81, D185). |
 | 300 | `CENTER:X` | number, expression |  | is one | `X` | block | 4.3 | Arc center on a plane axis, CENTER:X absolute, CENTER:IX incremental from the start point of the arc (the I J K of Fanuc and Siemens). |
 | 310 | `CENTER:Y` | number, expression |  | is one | `Y` | block | 4.3 | Arc center on a plane axis, CENTER:X absolute, CENTER:IX incremental from the start point of the arc (the I J K of Fanuc and Siemens). |
 | 320 | `CENTER:Z` | number, expression |  | is one | `Z` | block | 4.3 | Arc center on a plane axis, CENTER:X absolute, CENTER:IX incremental from the start point of the arc (the I J K of Fanuc and Siemens). |
@@ -69,16 +70,19 @@ one. The ranks were laid out in steps of ten; a word added later takes a free nu
 | 410 | `FEED_MODE` | `PER_MIN`, `PER_REV` |  |  |  | modal | 4.3 | Feed per minute (G94) or per spindle revolution (G95); default PER_MIN. |
 | 420 | `PRELOAD` | integer, string |  |  | role, optional | modal | 4.4 | Prepares a tool in the magazine, modal until the change consumes it; PRELOAD=0 clears a pending preload (D47). |
 | 430 | `TOOL` | none, integer, string |  |  | role, optional | modal | 4.4 | The spindle or the addressed holder now carries this tool, TOOL=0 empties it; a bare TOOL changes to the preloaded tool (D47, D91). |
+| 435 | `TOOL_POINT` | integer |  |  | role, optional | modal | 4.4 | The measurement point k of the active tool, from 1; a TOOL without it resets the holder to point 1 (D372). |
 | 440 | `OFFSET` | integer |  |  | offset kind, optional | modal | 4.4 | Combined offset register; OFFSET:LEN the tool length offset register (G43 H), OFFSET:RAD the tool radius offset register (D); 0 cancels. |
 | 450 | `OFFSET:LEN` | integer |  |  | `LEN` | modal | 4.4 | Combined offset register; OFFSET:LEN the tool length offset register (G43 H), OFFSET:RAD the tool radius offset register (D); 0 cancels. |
 | 460 | `OFFSET:RAD` | integer |  |  | `RAD` | modal | 4.4 | Combined offset register; OFFSET:LEN the tool length offset register (G43 H), OFFSET:RAD the tool radius offset register (D); 0 cancels. |
+| 465 | `TIP_OFFSET` | number, expression |  |  |  | modal | 4.4 | The axial offset a of the measurement point from the tool tip, not negative; never written to the control (D372, D375). |
+| 467 | `POINT_RADIUS` | number, expression |  |  |  | modal | 4.4 | The register radius r of the measurement point, not negative, 0 for a point on the axis; never written to the control (D372, D375). |
 | 470 | `COMP` | `LEFT`, `RIGHT`, `OFF` |  |  |  | modal | 4.4 | Cutter radius compensation (G41, G42, G40), from the motion of the same block on. |
 | 480 | `SPINDLE` | `CW`, `CCW`, `OFF` |  |  | role, optional | modal | 4.5 | Spindle on clockwise, counterclockwise, off (M3, M4, M5); without an address the machine's default spindle. |
 | 490 | `RPM` | number, expression |  |  | role, optional | modal | 4.5 | Spindle speed, per spindle role. |
 | 500 | `CSS` | `ON`, `OFF` |  |  | role, optional | modal | 4.11 | Constant surface speed (G96, G97): the spindle follows VC while it is on. |
 | 510 | `VC` | number, expression |  |  | role, optional | modal | 4.11 | Cutting speed for CSS in m/min or ft/min (the S of G96 S140). |
 | 520 | `RPM_MAX` | number, expression |  |  | role, optional | modal | 4.11 | Speed limit under CSS (G50 S, LIMS). |
-| 530 | `SPINDLE_MODE` | `SPINDLE`, `AXIS` |  |  | role, optional | modal | 4.5 | Work spindle as rotating spindle or as positioning C axis (M70, SPOS); in AXIS mode its axis is driven with C. |
+| 530 | `SPINDLE_MODE` | `SPINDLE`, `AXIS` |  |  | role, required | modal | 4.5 | Work spindle as rotating spindle or as positioning C axis (M70, SPOS); in AXIS mode its axis is driven with C. |
 | 540 | `ORIENT` | number, expression |  |  | role, optional | block | 4.5 | Oriented spindle stop in degrees (M19, SPOS=); the spindle is stopped afterwards. |
 | 550 | `SPINDLE_SYNC` | list, `OFF` |  |  |  | modal | 4.5 | Synchronous spindles, a list of two spindle roles of which the second follows the first; OFF ends it (D56). |
 | 560 | `PHASE` | number, expression |  |  |  | with partner | 4.5 | Angular offset in degrees of a phase-synchronous run; only with SPINDLE_SYNC. |
@@ -93,11 +97,11 @@ one. The ranks were laid out in steps of ten; a word added later takes a free nu
 | 650 | `FRAME` | `MACHINE` |  |  |  | block | 4.2 | The coordinates of this block refer to the machine datum (G53, M91). |
 | 660 | `SHIFT=RESET` | `RESET` |  |  |  | modal | 4.2 | Removes the entry of `SHIFT` and what follows it from the frame chain; a frame word, not the verb. |
 | 670 | `ROTATE` | number, expression, `RESET` |  |  |  | modal | 4.2 | Rotation of the working plane about the tool axis in degrees, appended to the chain; ROTATE=RESET removes it and what follows. |
-| 680 | `MIRROR` | list, identifier |  |  |  | modal | 4.2 | Mirrors the named axes, an axis list or a single axis, appended to the chain; MIRROR=OFF. |
+| 680 | `MIRROR` | list, identifier |  |  |  | modal | 4.2 | Mirrors the named axes, an axis list or a single axis, appended to the chain; MIRROR=OFF cuts the chain at the last mirror (D124). |
 | 690 | `TILT=RESET` | `RESET` |  |  |  | modal | 4.2 | Removes the entry of `TILT` and what follows it from the frame chain; a frame word, not the verb. |
 | 700 | `TILT_AXIS=RESET` | `RESET` |  |  |  | modal | 4.2 | Removes the entry of `TILT_AXIS` and what follows it from the frame chain; a frame word, not the verb. |
 | 710 | `MOVE` | `TURN`, `MOVE`, `STAY` |  |  |  | block | 4.2 | How the machine reaches the tilted plane, with TILT or TILT_AXIS; default STAY (D82). |
-| 720 | `ROT` | `TABLE`, `COORD` |  |  |  | block | 4.2 | On table kinematics, whether the table turns or only the coordinate system, with TILT or TILT_AXIS; default TABLE (D82). |
+| 720 | `ROT` | `TABLE`, `COORD` |  |  |  | block | 4.2 | Whether the table turns or only the coordinate system, with TILT or TILT_AXIS; the option acts through a free rotary axis, whoever carries it; default TABLE (D82, D191). |
 | 730 | `POINT` | integer |  |  |  | block | 4.3 | The reference point HOME moves to, POINT=2 for the second (G30 P2); only with HOME. |
 | 740 | `CYLINDER` | number, expression, `OFF` |  |  |  | modal | 4.2 | Cylinder surface transformation, on with the reference radius as the value, off with OFF; there is no ON form (D54, D96, D102). |
 | 750 | `POLAR` | `ON`, `OFF` |  |  |  | modal | 4.2 | Face transformation, Cartesian programming of the face with X and C (G12.1, TRANSMIT; D54, D102). |

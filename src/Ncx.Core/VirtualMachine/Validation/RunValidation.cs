@@ -31,7 +31,11 @@ internal sealed class RunValidation
 
     // The expressions STATIC mode left unresolved, each once, and the block of the first (virtual machine 1, 5).
     private readonly HashSet<Word> _unresolved = new(ReferenceEqualityComparer.Instance);
+    private readonly MaxFeedCheck _maxFeed = new();
     private Block? _firstUnresolved;
+
+    // VM484 comes once per program (D374).
+    private bool _tipUnderTiltReported;
 
     // The state the block finds, for the rules that compare it with the state the block leaves.
     private Compensation _compensationBefore;
@@ -63,11 +67,11 @@ internal sealed class RunValidation
     /// </summary>
     public void CheckFile(NcxProgram program)
     {
-        // A job knows how many channels it runs; a file checked on its own decides by its programs (virtual machine
-        // 3.7, ChannelValidation).
+        // A job knows how many channels it runs; a file checked on its own decides by the machine and its programs
+        // (virtual machine 3.7, ChannelValidation, D196).
         bool singleChannelJob = _jobChannels is int channels
             ? channels < 2
-            : ChannelValidation.IsSingleChannelJob(program);
+            : ChannelValidation.IsSingleChannelJob(program, _machine);
         foreach (Section section in program.Sections)
         {
             FlowValidation.CheckSection(program, section, _diagnostics);
@@ -96,8 +100,10 @@ internal sealed class RunValidation
         if (block.Has("PROGRAM", null, "BEGIN"))
         {
             _offsetForms.Clear();
+            _tipUnderTiltReported = false;
         }
 
+        _maxFeed.BeforeBlock(context);
         _compensationBefore = state.Motion.Comp;
         _workpieceHolderBefore = state.Frame.WorkpieceHolder;
         _positionsBefore = _comparesLimits && MotionRules.IsMotion(block)
@@ -123,7 +129,7 @@ internal sealed class RunValidation
         FrameValidation.CheckSetposNamesAnAxis(context);
         FrameValidation.CheckToleranceWords(context);
         StockValidation.CheckStock(context, _stockPlacement);
-        MotionValidation.CheckFeedAboveMaxFeed(context);
+        _maxFeed.AfterBlock(context);
         if (_positionsBefore is not null)
         {
             MotionValidation.CheckLimits(context, _positionsBefore);
@@ -131,6 +137,11 @@ internal sealed class RunValidation
 
         ArcValidation.CheckCompensationChange(context, _compensationBefore);
         ToolValidation.CheckOffsetForms(context, _offsetForms);
+        ToolValidation.CheckPointWords(context);
+        if (!_tipUnderTiltReported)
+        {
+            _tipUnderTiltReported = ToolValidation.CheckTipUnderTilt(context);
+        }
         SpindleValidation.CheckSpindleBeforeLine(context);
         SpindleValidation.CheckRpmLimits(context);
         ResourceValidation.CheckWorkpieceChange(context, _workpieceHolderBefore);

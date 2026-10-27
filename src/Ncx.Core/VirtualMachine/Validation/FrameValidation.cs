@@ -47,6 +47,8 @@ internal static class FrameValidation
             ValidationRule.Warning(DiagnosticCodes.RotWithTiltAxis,
                 "ROT written with TILT_AXIS, on any target and without a machine file too: the control ignores the "
                 + "transformation type there.", "language 4.2; VM 5; D191"),
+            ValidationRule.Error(DiagnosticCodes.CylinderWithoutRotaryAxis,
+                "CYLINDER=n while the workpiece holder has no rotary axis.", "language 4.2; VM 3.4, 3.8, 5; D146"),
         ],
     };
 

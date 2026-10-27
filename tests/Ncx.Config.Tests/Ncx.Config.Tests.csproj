@@ -30,4 +30,13 @@
                       LogicalName="Fixtures/expected-machine-warnings.txt" />
   </ItemGroup>
 
+  <!--
+    A machine file and its tool table built into this assembly under the names Ncx.Config gives the shipped files,
+    machines/<file>, so that BuiltInFilesTests reads a built-in tool table before the repository ships one (D371).
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Fixtures/BuiltIn/sample.toml" LogicalName="machines/sample.toml" />
+    <EmbeddedResource Include="Fixtures/BuiltIn/sample.tools.toml" LogicalName="machines/sample.tools.toml" />
+  </ItemGroup>
+
 </Project>

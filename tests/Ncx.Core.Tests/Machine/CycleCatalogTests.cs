@@ -77,14 +77,17 @@ public sealed class CycleCatalogTests
         Assert.Equal("DRILL", siemens.FindNative("CYCLE81", Values("DTB", 0.5m))?.Name);
     }
 
-    // A block that leaves out a fixed value of every entry of its cycle fits none of them.
-    // TODO(question) in CycleCatalog: the default of an empty position (siemens 7) is not in the documents (D181).
+    // D181, D164: a block that leaves out a fixed value is compared through the default of the entry, an omitted VARI
+    // of CYCLE83 being 0, chip breaking; without a default it fits no entry that fixes the value.
     [Fact]
-    public void FindNative_FixedValueTheBlockLeavesOut_GivesNull()
+    public void FindNative_FixedValueTheBlockLeavesOut_TakesTheDefaultOfThePosition()
     {
         CycleCatalog siemens = DrillingFamily.Catalog(Controller.Siemens);
+        CycleCatalog withoutDefault = siemens.Override(
+            [new CycleEntry { Name = "CHIP_BREAK", Native = "CYCLE83", WrittenKeys = ["name", "native", "defaults"] }]);
 
-        Assert.Null(siemens.FindNative("CYCLE83", new Dictionary<string, decimal>()));
+        Assert.Equal("CHIP_BREAK", siemens.FindNative("CYCLE83", new Dictionary<string, decimal>())?.Name);
+        Assert.Null(withoutDefault.FindNative("CYCLE83", new Dictionary<string, decimal>()));
     }
 
     // Machine-config 6: an entry of a later file takes the place of the entry of the same name.
@@ -172,5 +175,22 @@ public sealed class CycleCatalogTests
     private static Dictionary<string, decimal> Values(string native, decimal value)
     {
         return new Dictionary<string, decimal> { [native] = value };
+    }
+
+    // D359: where a machine's TAP sets before = "", its G84 is always rigid: the reader takes TAP whatever stands
+    // before the block, and TAP_COMPENSATING, which has no before key, counts as not in that machine's catalog.
+    [Fact]
+    public void FindNativeByBeforeLine_TapWithEmptyBefore_IsAlwaysTapAndHidesTheEntryWithoutTheKey()
+    {
+        CycleCatalog catalog = DrillingFamily.Catalog(Controller.Fanuc).Override(
+        [
+            new CycleEntry { Name = "TAP", Native = "G84", Before = "", WrittenKeys = ["name", "native", "before"] },
+            new CycleEntry { Name = "TAP_COMPENSATING", Native = "G84", WrittenKeys = ["name", "native"] },
+        ]);
+
+        Assert.Equal("TAP", catalog.FindNativeByBeforeLine("G84", lineReaches: false)?.Name);
+        Assert.Equal("TAP", catalog.FindNativeByBeforeLine("G84", lineReaches: true)?.Name);
+        Assert.Null(catalog.Find("TAP_COMPENSATING"));
+        Assert.NotNull(catalog.Find("TAP"));
     }
 }

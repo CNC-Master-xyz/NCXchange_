@@ -69,4 +69,16 @@ public static partial class DiagnosticCodes
     /// arguments, MIN and MAX two or more, every other function one (language 4.12, D118).
     /// </summary>
     public const string ExpressionArgumentCount = "PAR111";
+
+    /// <summary>
+    /// An index on a variable that is not a SYS_ name, $Q1[2]: only a SYS_ name has registers or table rows for an
+    /// index to select (language 4.12, D145). It was VM907 of the evaluator before D145.
+    /// </summary>
+    public const string ExpressionIndexNeedsSystemVariable = "PAR112";
+
+    /// <summary>
+    /// An index written as a literal number that is no whole number of 0 or more, $SYS_WEAR_Z[-1], $SYS_WEAR_Z[99.5]
+    /// (language 4.12, D145).
+    /// </summary>
+    public const string ExpressionIndexNotAWholeNumber = "PAR113";
 }

@@ -195,6 +195,39 @@ public sealed class NcxBuilderTests
         Assert.Throws<ArgumentException>(() => builder.Comment(comment));
     }
 
+    // D142: a trivia line stands before the block begun after it, also where the lines of a reader's blocks decrease,
+    // as when it moves a section kept below M30 in front of PROGRAM=END.
+    [Fact]
+    public void D142_TriviaBetweenBlocksOfDecreasingLines_StaysWhereItWasCalled()
+    {
+        var builder = new NcxBuilder(new Diagnostics("built.ncx"));
+
+        builder.Begin(10).Verb("LINE").Word("X", null, Integer(1)).Word("F", null, Integer(100)).End();
+        builder.Trivia("; moved section");
+        builder.Begin(5).Verb("LINE").Word("X", null, Integer(2)).End();
+        builder.Trivia("; at the end");
+
+        Assert.Equal(
+            "LINE X=1 F=100\n; moved section\nLINE X=2\n; at the end\n", NcxWriter.Write(builder.Build()));
+    }
+
+    // D142: two blocks read from one source line keep a trivia line between them; the trivia records the index of
+    // the block it stands before and keeps the line of the block begun last as data.
+    [Fact]
+    public void D142_TriviaBetweenTwoBlocksOfOneSourceLine_StaysBetweenThem()
+    {
+        var builder = new NcxBuilder(new Diagnostics("built.ncx"));
+
+        builder.Trivia("; head");
+        builder.Begin(3).Verb("RAPID").Word("Z", null, Integer(50)).End();
+        builder.Trivia("");
+        builder.Begin(3).Verb("RAPID").Word("X", null, Integer(0)).End();
+        NcxProgram program = builder.Build();
+
+        Assert.Equal([new Trivia(0, "; head", 0), new Trivia(3, "", 1)], program.Trivia);
+        Assert.Equal("; head\nRAPID Z=50\n\nRAPID X=0\n", NcxWriter.Write(program));
+    }
+
     [Theory]
     [InlineData("LINE X=1")]
     [InlineData("; two\nlines")]

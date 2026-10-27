@@ -26,11 +26,10 @@ namespace Ncx.Acceptance.Examples;
 public sealed partial class HeidenhainReaderTests
 {
     // The blocks of examples/2.5D_FRAESEN.ncx that the Heidenhain reading writes otherwise, in their order; a reading
-    // of several lines inserts blocks after the one it replaces.
-    // TODO(question): the example gives the program NUMBER=1, which only the Fanuc O0001 carries (Klartext has no
-    // program number, controllers heidenhain.md 1), and keeps BLK FORM as a comment line, while heidenhain 7 rule 9
-    // keeps BLK FORM as RAW with a WARNING; the reader follows heidenhain 7, and the test compares every other block of
-    // the example as the phase plan says, until D217 is answered.
+    // of several lines inserts blocks after the one it replaces. The reader reproduces the example except the
+    // differences its notes list, each tied to its rule (D217): no NUMBER, which only the Fanuc O0001 carries (note 7;
+    // Klartext has no program number, controllers heidenhain.md 1), and BLK FORM as RAW:HEIDENHAIN with a WARNING
+    // (note 8; heidenhain 7 rule 9), which the example leaves out so that it still compiles to Fanuc.
     internal static readonly KeyValuePair<string, string>[] s_heidenhainReading =
     [
         new("PROGRAM=BEGIN NAME=\"2.5D FRAESEN\" NUMBER=1", "PROGRAM=BEGIN NAME=\"2.5D FRAESEN\""),
@@ -310,9 +309,9 @@ public sealed partial class HeidenhainReaderTests
     // The fourth operation of BOHREN.h: a cycle 203 whose Q213=3 lies between 0 and the number of infeeds, the mixed
     // form that has no NCX cycle and is read natively as CYCLE:HEIDENHAIN=203 (D163). It does not get there, because a
     // native parameter takes a number or an expression (language 4.7.1, D94) and Q208=MAX is a literal of the control,
-    // so the definition and the five calls that follow it stay RAW (heidenhain 7 rule 9). The blocks below are that
-    // residue, not the decided reading: it waits for D115, which asks what a parameter may carry, and D164, which
-    // writes Q208=MAX back (03-open-questions, wave 2 question 94; the marker in HeidenhainCycles.Native). Where every
+    // so the definition and the five calls that follow it stay RAW (heidenhain 7 rule 9). D115 decides this reading: a
+    // control literal is allowed only in a catalog's native defaults text, and the reader keeps a block that carries
+    // one RAW rather than invent a number (D5; HeidenhainCycles.Native). Where every
     // Q parameter has an NCX value the native form is written, which the reader test
     // CyclDef203_WithQ213BetweenZeroAndTheInfeeds_IsWrittenNatively pins.
     private static string RawMixedCycle203()

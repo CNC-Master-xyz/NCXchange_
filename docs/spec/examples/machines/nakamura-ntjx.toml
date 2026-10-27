@@ -3,6 +3,8 @@
 # Schema draft 4. Not verified on the machine.
 # D100 data (P2-04): home and limits in machine coordinates, rapid, max_feed and acceleration on every [[axis]], rpm_min, rpm_max and accel_time on every spindle table, the [positions] and [dynamics] tables. The numbers are plausible for a machine of this class and not verified on the machine.
 
+ncx_schema = 1                     # the version of the machine-configuration schema, not of NCXchange (machine-config 1, D348)
+
 [machine]
 name = "Nakamura NTJX"
 controller = "fanuc"
@@ -60,7 +62,7 @@ magazine = false                   # lower turret
 channel = 2
 
 # D100: home and limits are machine coordinates (the G53 frame); the reference point is the machine zero of X, Z, Y and B. The limits of a C axis are its display range, not a travel limit.
-# TODO(question): machine-config 4 does not say whether home, limits and [positions] of an X axis programmed in diameters (D60) are diameters, as the control shows them, or radii, as the VM stores X (VM 3.1); the X values of this file are diameters (D137).
+# D137: the X values of an axis programmed in diameters are written as diameters, the way the axis is programmed (Fanuc parameters 1320/1321 are diameter values too); the VM halves home and limits once on load, and [positions] stays as written.
 
 [[axis]]
 id = "X1"
@@ -128,7 +130,8 @@ home = 0
 [[axis]]
 id = "C2"
 ncx = "C2"                         # a program writes C; the VM resolves it to C2 while the sub spindle holds the workpiece (VM 3.8 rule 3)
-# TODO(question): docs/ does not give the address of the sub spindle C axis on the 18i-TB: C in the program of the path that commands it (as on the Mori Seiki) or the extended name C2= (D30, a 30i/31i form); C is written here (D179).
+# The NTJX is a two-path lathe, so its sub spindle C axis is the C2 axis commanded with plain C and H (Nakamura ECL-1 2013 p.235 §14-5-8; NT-Nurse 4800001EBG
+# p.347 "56 NTJX Drehmaschine mit 2 Bahnen"; Programmierhandbuch 2019 p.174-175, G28 H0 after M491). M432/M442 change which axis C drives, not the address (D179).
 letter = "C"
 incremental_letter = "H"
 kind = "rotary"
@@ -217,7 +220,10 @@ SUB_frame = "datum"                # G59 side programmed in machine Z; or mirror
 wait = "M{mark}"
 mark_range = [100, 199]
 paths = "list"                     # two paths: no P needed; NTY3: P12, P13, P23, P123 (or P3, P5, P6, P7 with parameter 8103#1 = 0)
-start_mark = 199                   # M199 program start synchronization, first block of both programs
+start_mark = 198                   # the program-start mark of the Super NTJX header template, "M198 (SYNCHRONISATION MIT *U*/*O*)" (18i-TB guide 2009 p.19-20;
+                                   # the WY template uses M199). The job compiler writes it after the header only when some channel program does not already pass
+                                   # it as its first mark with all channels, wherever that SYNC stands (machine-config 5, D314, D388)
+reserved_marks = [199]             # the G196 transfer cycle waits at M199, which a generated SYNC never takes (D315)
 
 [coolant]
 STANDARD = { ON = "M8", OFF = "M9" }
@@ -238,7 +244,7 @@ EJECTOR = { FORWARD = "M484" }
 BAR_LOADER = { CHANGE = "M58", FEED = "M61" }
 DOOR = { OPEN = "M62", CLOSE = "M63" }
 Y_REFERENCE = { CLAMP = "M370", FREE = "M371" }
-TAP_REVERSE = { ON = "M94", OFF = "M95" }   # M29, the rigid tapping line, is the "before" of the TAP entry of the catalog (D256)
+TAP_REVERSE = { ON = "M94", OFF = "M95" }   # M29 S{rpm}, the rigid tapping line of both paths, is the "before" of the catalog's TAP (D256); M29 is its only rigid-tapping code (4810004EDG-1 p.312), M429 the work counter (p.148-149; D377)
 THREAD_CHAMFER = { ON = "M23", OFF = "M24" }
 LOAD_MONITOR = { ON = "M300", OFF = "M301" }
 TOOL_COUNTER = { ON = "M303", OFF = "M304" }
@@ -261,3 +267,8 @@ TILT_OFF = "G369"
 catalog = "fanuc-lathe.toml"       # the Fanuc lathe catalog: drilling along Z and along X by for_axis, turning cycles in system A numbers (machine-config 6, D160, D174)
 [raw]                              # builder macros kept as RAW:NAKAMURA; G471..G486 and G480 are read as JUMP, not RAW
 known = ["G411", "G300", "G131", "G359", "G333", "G200", "G355", "G376", "G377", "G342", "G344", "G350", "G419", "G496", "G497"]
+
+[system_variables]                 # NCX SYS_ names to Fanuc system variables (machine-config 7, D51, D250)
+SYS_WEAR_Z = "#11{index:03}"       # Z wear of offset n, #11001-#11999 #_OFSZW[n] (30i-B operator's manual B-64484EN p.455)
+SYS_MPOS_B = "#5025"               # machine position of the 5th axis: the WY address order X, Z, C, Y, B makes B the 5th (#5021-#5040, B-64484EN p.488).
+                                   # #5024 stays unmapped, so its block stays RAW:FANUC with a WARNING; confirm the axis number on the machine (D250)

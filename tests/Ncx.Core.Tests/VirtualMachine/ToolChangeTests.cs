@@ -198,16 +198,27 @@ public sealed class ToolChangeTests
         Assert.Equal(new ToolRef(6), Holder(vm).Preloaded);
     }
 
-    // Architecture 5.2: TOOL=k with another tool changes too, with the WARNING of VM 3.5; VM 3.5 and the sample of
-    // code-guidelines 2 keep the other preload (an open question against the diagram, ToolChangeRules).
+    // Architecture 5.2: TOOL=k with another tool changes too, from Pending to Loaded, with the WARNING of VM 3.5 (D42);
+    // TOOL=k consumes any preload, so a bare TOOL after it has nothing preloaded (VM 3.5 row TOOL=n, D132).
     [Fact]
-    public void Transition_PendingByToolK_ChangesWithAWarningAndKeepsThePreload()
+    public void D132_PendingByToolK_ChangesWithAWarningAndConsumesThePreload()
     {
         VmHarness vm = new VmHarness(VmMachines.Default()).Execute("PRELOAD=5", "TOOL=4");
 
         Assert.Equal([DiagnosticCodes.PreloadMismatch], vm.Codes());
         Assert.Equal(new ToolRef(4), Holder(vm).SpindleTool);
-        Assert.Equal(new ToolRef(5), Holder(vm).Preloaded);
+        Assert.Null(Holder(vm).Preloaded);
+        Assert.Equal(ToolChangeState.Loaded, Holder(vm).ToolChange);
+    }
+
+    // D132: PRELOAD=5, TOOL=4, then a bare TOOL is the ERROR "nothing preloaded", not a change to 5.
+    [Fact]
+    public void D132_BareToolAfterToolKWithAnotherPreload_IsAnError()
+    {
+        VmHarness vm = new VmHarness(VmMachines.Default()).Execute("PRELOAD=5", "TOOL=4", "TOOL");
+
+        Assert.Equal([DiagnosticCodes.PreloadMismatch, DiagnosticCodes.NothingPreloaded], vm.Codes());
+        Assert.Equal(new ToolRef(4), Holder(vm).SpindleTool);
     }
 
     // Architecture 5.2: a bare TOOL in Empty or Loaded is an ERROR (nothing preloaded).
@@ -228,9 +239,9 @@ public sealed class ToolChangeTests
         VmHarness vm = new VmHarness(VmMachines.Default()).Execute("TOOL:TURRET1=3", "OFFSET=3");
 
         Assert.Equal([DiagnosticCodes.NotCheckedNoMachineFile], vm.Codes());
-        Assert.Equal(3, vm.State.Holders["TURRET1"].OffsetCombined);
+        Assert.Equal(3, vm.State.Holders["ROLE_TURRET1"].OffsetCombined);
         Assert.Equal(0, vm.State.Holders["H1"].OffsetCombined);
-        Assert.Equal("TURRET1", vm.State.LastHolder);
+        Assert.Equal("ROLE_TURRET1", vm.State.LastHolder);
     }
 
     // VM 3.8 rule 2: the same with a machine file, the second turret being no default.

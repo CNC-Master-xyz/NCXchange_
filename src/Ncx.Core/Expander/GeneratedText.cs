@@ -99,9 +99,9 @@ internal sealed class GeneratedText
     /// </summary>
     public static Block Mark(Block block, GeneratedBlock generated)
     {
-        // TODO(question): language 4.15 and virtual machine 3.10 do not say whether a generated block is skipped with
-        // the SKIP block it was generated for (D53); it carries the SKIP word of its origin, so that skip_blocks skips
-        // the stop, the retract or the mode code together with the block that needs them, until D201 is answered.
+        // A generated block carries the SKIP of its origin unless its own text writes one, so that skip_blocks skips or
+        // runs the group together, and the compiler writes the skip mark on every generated line (D201; language
+        // 4.15).
         IReadOnlyList<Word> words = block.Words;
         if (generated.Origin.Find("SKIP") is Word skip && !block.Has("SKIP"))
         {
@@ -144,11 +144,9 @@ internal sealed class GeneratedText
         };
     }
 
-    // A generated block has no line of its own in the file: it takes the line of the block it was generated for, and a
-    // diagnostic about its text names that block and the rule or rewriter that wrote it (language 4.15, D98).
-    // TODO(question): D98 renders a diagnostic on a generated block as file(line, from 12) without saying which line a
-    // generated block has, since it stands on no line of the file; it has the line of its origin, which reads
-    // file(12, from 12), until D200 is answered.
+    // A generated block has no line of its own in the file: it takes the line of the block it was generated for, which
+    // reads file(12, from 12), and a diagnostic about its text starts as one on the block would, with the rule or
+    // rewriter that wrote it and its reason, then names the text (language 4.15, D98, D200).
     private Block? Parse(string text, string parsedText, string writer, GeneratedBlock generated)
     {
         Block origin = generated.Origin;
@@ -159,7 +157,7 @@ internal sealed class GeneratedText
             _diagnostics.Add(diagnostic with
             {
                 OriginLine = origin.Line,
-                Message = $"{writer} \"{text}\": {diagnostic.Message}",
+                Message = $"{generated.Source} ({generated.Reason}): \"{text}\": {diagnostic.Message}",
             });
         }
 

@@ -12,10 +12,6 @@ namespace Ncx.Core.VirtualMachine.Validation;
 /// </summary>
 internal static class MotionValidation
 {
-    // Millimetres per inch: max_feed is a feed per minute in mm/min (machine-config 4), and F under UNITS=INCH is one
-    // in inches per minute (language 4.3).
-    private const decimal MillimetresPerInch = 25.4m;
-
     /// <summary>
     /// The rules of the family.
     /// </summary>
@@ -37,8 +33,10 @@ internal static class MotionValidation
             ValidationRule.Error(DiagnosticCodes.TwoFormsOfOneAxis,
                 "Two forms of one axis in one block (X=10 IX=5).", "language 4.3"),
             ValidationRule.Warning(DiagnosticCodes.FeedInRapid, "F in a RAPID block.", "VM 5"),
-            ValidationRule.Warning(DiagnosticCodes.FeedAboveMaxFeed, "F above an axis max_feed.",
-                "VM 5; machine-config 4; D64"),
+            ValidationRule.Warning(DiagnosticCodes.FeedAboveMaxFeed,
+                "F above the max_feed of an axis the LINE or ARC moves (rotary axes only in a rotary-only block under "
+                + "ROTARY_FEED=DEG_MIN), PER_REV with the known rpm, INCH times 25.4, CYCLE_F against the drilling "
+                + "axis; once per F or CYCLE_F word (MaxFeedCheck).", "VM 5; machine-config 4; D64, D192"),
             ValidationRule.Warning(DiagnosticCodes.TargetBeyondLimits,
                 "A target beyond the axis limits, compared in the MACHINE frame and not checked while the machine "
                 + "position is unknown.", "VM 5; machine-config 4; D64, D100"),
@@ -66,45 +64,6 @@ internal static class MotionValidation
     }
 
     /// <summary>
-    /// F above an axis max_feed is a WARNING (virtual machine 5, D64): max_feed is the feed in mm/min that the axis can
-    /// follow (machine-config 4). With limits = "clamp" the expander rewrites the value before the block runs and says
-    /// so itself (D64).
-    /// </summary>
-    // TODO(question): virtual machine 5 compares "F above an axis max_feed" without saying which axes (those the block
-    // moves, those of the machine), nor how a feed per revolution compares with a feed per minute; F per minute is
-    // compared where it is written with the max_feed of every linear axis of the machine, and a feed per revolution is
-    // not compared, until D192 is answered.
-    public static void CheckFeedAboveMaxFeed(BlockContext context)
-    {
-        ChannelState state = context.State;
-        if (context.Block.Find("F") is not Word feedWord
-            || MotionRules.NumberOf(feedWord) is not decimal feed
-            || state.Motion.FeedMode != FeedMode.PerMin)
-        {
-            return;
-        }
-
-        decimal feedPerMinute = state.Frame.Units == Units.Inch ? feed * MillimetresPerInch : feed;
-        var exceeded = new List<string>();
-        foreach (AxisDef axis in context.Machine.Axes)
-        {
-            if (axis.Kind == AxisKind.Linear && axis.MaxFeed is decimal maxFeed && feedPerMinute > maxFeed)
-            {
-                exceeded.Add($"{axis.NcxName} ({maxFeed.ToString(CultureInfo.InvariantCulture)} mm/min)");
-            }
-        }
-
-        if (exceeded.Count == 0)
-        {
-            return;
-        }
-
-        context.Diagnostics.Warning(context.Block, DiagnosticCodes.FeedAboveMaxFeed,
-            $"{feedWord.ToCanonical()} is above the max_feed of {string.Join(", ", exceeded)}, the feed the axis can "
-            + "follow (virtual machine 5, D64).");
-    }
-
-    /// <summary>
     /// A target beyond the axis limits is a WARNING, compared in the MACHINE frame and not checked while the machine
     /// position is unknown (virtual machine 5, D100): the limits are machine coordinates (machine-config 4). Every axis
     /// whose position the motion block changed is compared where it ended. With limits = "clamp" the expander rewrites
@@ -113,9 +72,9 @@ internal static class MotionValidation
     /// <param name="context">The motion block, after its verb moved the axes.</param>
     /// <param name="before">The position store before the block.</param>
     // D193: the limits of a rotary axis are travel limits like a linear axis's and are compared, unless its [[axis]]
-    // carries modulo = true, which makes them its display range (decisions.md; machine-config 4). Whether the machine
-    // coordinates of an X axis programmed in diameters are diameters is D137: the stored radius is compared with the
-    // limits as written.
+    // carries modulo = true, which makes them its display range (decisions.md; machine-config 4). The limits of an
+    // axis programmed in diameters are diameters, halved into radii before the stored radius is compared with them
+    // (D137); the message names the radii.
     public static void CheckLimits(BlockContext context, IReadOnlyDictionary<string, AxisPosition> before)
     {
         ChannelState state = context.State;
@@ -133,13 +92,13 @@ internal static class MotionValidation
                 continue;
             }
 
-            if (axis.Max is decimal max && machine > max)
+            if (axis.AsStoredRadius(axis.Max) is decimal max && machine > max)
             {
                 context.Diagnostics.Warning(context.Block, DiagnosticCodes.TargetBeyondLimits,
                     $"{axis.NcxName} ends at {Text(machine)} in the MACHINE frame, beyond its upper limit {Text(max)} "
                     + "(virtual machine 5, D100).");
             }
-            else if (axis.Min is decimal min && machine < min)
+            else if (axis.AsStoredRadius(axis.Min) is decimal min && machine < min)
             {
                 context.Diagnostics.Warning(context.Block, DiagnosticCodes.TargetBeyondLimits,
                     $"{axis.NcxName} ends at {Text(machine)} in the MACHINE frame, beyond its lower limit {Text(min)} "

@@ -45,9 +45,8 @@ internal static class HeidenhainCompile
     /// <param name="tables">TOML tables the file does not have.</param>
     public static MachineConfig MillAnd(string tables)
     {
-        return Load(ReadMachineFile() + "\n" + tables + "\n");
+        return Load(MachineText.With(ReadMachineFile(), tables));
     }
-
     /// <summary>
     /// Compiles an NCX text.
     /// </summary>

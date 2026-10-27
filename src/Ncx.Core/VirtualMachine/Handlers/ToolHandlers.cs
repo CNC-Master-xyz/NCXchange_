@@ -17,6 +17,9 @@ internal static class ToolHandlers
         handlers["PRELOAD"] = ApplyPreload;
         handlers["TOOL"] = ApplyTool;
         handlers["OFFSET"] = ApplyOffset;
+        handlers["TOOL_POINT"] = ApplyToolPoint;
+        handlers["TIP_OFFSET"] = ApplyTipOffset;
+        handlers["POINT_RADIUS"] = ApplyPointRadius;
         handlers["COMP"] = ApplyComp;
     }
 
@@ -59,7 +62,46 @@ internal static class ToolHandlers
             ToolChangeRules.ApplyTool(holder, tool, context.Block, diagnostics);
         }
 
+        // A TOOL resets its holder to point 1, a = 0, r = 0; the point words of the same block apply after TOOL in
+        // step 3 and set the point of the tool that arrives (D372).
+        holder.ResetPoint();
+        context.State.Unknown.Remove(BlockContext.StateKey("TIP_OFFSET", holderId));
+        context.State.Unknown.Remove(BlockContext.StateKey("POINT_RADIUS", holderId));
         context.State.LastHolder = holderId;
+    }
+
+    // TOOL_POINT=k: the measurement point of the tool on the holder of the word (D372); k of 0 or less is the
+    // validation's (VM483) and is kept as written.
+    private static void ApplyToolPoint(Word word, BlockContext context)
+    {
+        if (context.ResourceOf.TryGetValue(word, out string? holderId)
+            && BlockContext.IntegerOf(word) is int point)
+        {
+            // D393: a named point makes the compilers write the registers of the mapping, until the next TOOL or an
+            // OFFSET word on the holder.
+            context.State.Holders[holderId].ToolPoint = point;
+            context.State.Holders[holderId].PointNamed = true;
+        }
+    }
+
+    // TIP_OFFSET=a on the holder of the word (D372); UNKNOWN from an expression in STATIC mode (virtual machine 1).
+    private static void ApplyTipOffset(Word word, BlockContext context)
+    {
+        if (context.ResourceOf.TryGetValue(word, out string? holderId)
+            && context.TryNumber(word, BlockContext.StateKey(word.Key, holderId), out decimal offset))
+        {
+            context.State.Holders[holderId].TipOffset = offset;
+        }
+    }
+
+    // POINT_RADIUS=r on the holder of the word (D372); UNKNOWN from an expression in STATIC mode (virtual machine 1).
+    private static void ApplyPointRadius(Word word, BlockContext context)
+    {
+        if (context.ResourceOf.TryGetValue(word, out string? holderId)
+            && context.TryNumber(word, BlockContext.StateKey(word.Key, holderId), out decimal radius))
+        {
+            context.State.Holders[holderId].PointRadius = radius;
+        }
     }
 
     // OFFSET:LEN, OFFSET:RAD and OFFSET, the combined register, on the holder of the last TOOL (language 4.4, virtual
@@ -72,7 +114,9 @@ internal static class ToolHandlers
             return;
         }
 
+        // D393: an OFFSET word is the hand-written form of the registers and replaces those of a named point.
         HolderState holder = context.State.Holders[holderId];
+        holder.PointNamed = false;
         switch (word.Addr)
         {
             case "LEN":

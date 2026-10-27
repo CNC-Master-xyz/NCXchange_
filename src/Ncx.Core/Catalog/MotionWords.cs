@@ -103,17 +103,23 @@ internal static class MotionWords
         },
 
         VectorWord("TX", CanonicalRanks.Tx,
-            "X part of the tool axis direction at the end of a LINE under TCPM=ON, a unit vector (D81)."),
+            "X part of the tool axis direction at the end point of a RAPID, LINE or ARC under TCPM=ON, a unit "
+                + "vector (D81, D185)."),
         VectorWord("TY", CanonicalRanks.Ty,
-            "Y part of the tool axis direction at the end of a LINE under TCPM=ON, a unit vector (D81)."),
+            "Y part of the tool axis direction at the end point of a RAPID, LINE or ARC under TCPM=ON, a unit "
+                + "vector (D81, D185)."),
         VectorWord("TZ", CanonicalRanks.Tz,
-            "Z part of the tool axis direction at the end of a LINE under TCPM=ON, a unit vector (D81)."),
+            "Z part of the tool axis direction at the end point of a RAPID, LINE or ARC under TCPM=ON, a unit "
+                + "vector (D81, D185)."),
         VectorWord("NX", CanonicalRanks.Nx,
-            "X part of the surface normal at the end of the LINE, only together with TX TY TZ (D81)."),
+            "X part of the surface normal at the end of the RAPID, LINE or ARC, only together with TX TY TZ "
+                + "(D81, D185)."),
         VectorWord("NY", CanonicalRanks.Ny,
-            "Y part of the surface normal at the end of the LINE, only together with TX TY TZ (D81)."),
+            "Y part of the surface normal at the end of the RAPID, LINE or ARC, only together with TX TY TZ "
+                + "(D81, D185)."),
         VectorWord("NZ", CanonicalRanks.Nz,
-            "Z part of the surface normal at the end of the LINE, only together with TX TY TZ (D81)."),
+            "Z part of the surface normal at the end of the RAPID, LINE or ARC, only together with TX TY TZ "
+                + "(D81, D185)."),
 
         new WordDefinition
         {

@@ -15,7 +15,6 @@ public sealed class EvaluatorDiagnosticCodesTests
     [InlineData(DiagnosticCodes.SystemVariableUnknown)]
     [InlineData(DiagnosticCodes.ResultUndefined)]
     [InlineData(DiagnosticCodes.ResultOutOfRange)]
-    [InlineData(DiagnosticCodes.IndexNeedsSystemVariable)]
     [InlineData(DiagnosticCodes.IndexSelectsNoRegister)]
     public void EvaluationCode_Each_LiesInVm900ToVm949(string code)
     {

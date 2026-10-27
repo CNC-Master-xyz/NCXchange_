@@ -84,10 +84,17 @@ public static partial class DiagnosticCodes
     public const string DuplicateKey = "PAR015";
 
     /// <summary>
-    /// PAR016: IF, ARG, TIMES, WITH, FRAME, MOVE, ROT, POINT or PHASE without its verb or partner word in the block
-    /// (language 5 rule 5).
+    /// PAR016: IF, ARG, TIMES, WITH, FRAME, MOVE, ROT, POINT or PHASE without its verb or partner word in the block;
+    /// NAME without PROGRAM=BEGIN, SUB=BEGIN or START_CHANNEL; NUMBER or CHANNEL without PROGRAM=BEGIN; a cycle
+    /// parameter without CYCLE (language 5 rule 5, D116).
     /// </summary>
     public const string PartnerWordMissing = "PAR016";
+
+    /// <summary>
+    /// PAR017: TOOL_POINT, TIP_OFFSET or POINT_RADIUS in a block that is neither a TOOL block nor a block of their own
+    /// (language 4.4, D372, D392).
+    /// </summary>
+    public const string PointWordOutsideToolBlock = "PAR017";
 
     /// <summary>
     /// PAR020: the first block of the file is not FILE=BEGIN, or FILE=BEGIN stands on another block (language 4.1,

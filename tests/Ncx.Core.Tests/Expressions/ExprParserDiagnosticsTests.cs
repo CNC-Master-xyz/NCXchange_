@@ -46,6 +46,38 @@ public sealed class ExprParserDiagnosticsTests
             diagnostic.Message);
     }
 
+    // D145: only a SYS_ name takes an index; an index on any other variable is a PAR ERROR of the expression parser.
+    [Theory]
+    [InlineData("$Q1[2]")]
+    [InlineData("1 + $A[$SYS_TOOL]")]
+    public void D145_IndexOnAVariableThatIsNotASystemName_IsParError(string text)
+    {
+        SingleError(text, DiagnosticCodes.ExpressionIndexNeedsSystemVariable);
+    }
+
+    // D145: an index written as a literal number is a whole number of 0 or more; -1 and 99.5 are plainly wrong text.
+    [Theory]
+    [InlineData("$SYS_WEAR_Z[-1]")]
+    [InlineData("$SYS_WEAR_Z[99.5]")]
+    [InlineData("$SYS_WEAR_Z[(99.5)]")]
+    public void D145_LiteralIndexThatIsNoWholeNumberOfZeroOrMore_IsParError(string text)
+    {
+        SingleError(text, DiagnosticCodes.ExpressionIndexNotAWholeNumber);
+    }
+
+    // D145: a whole literal index and a computed one parse; the computed one is rounded when it is evaluated.
+    [Theory]
+    [InlineData("$SYS_WEAR_Z[0]")]
+    [InlineData("$SYS_WEAR_Z[99]")]
+    [InlineData("$SYS_WEAR_Z[$Q1 - 1]")]
+    public void D145_WholeOrComputedIndex_Parses(string text)
+    {
+        var diagnostics = new Diagnostics("test.ncx");
+
+        Assert.NotNull(ExprParser.Parse(text, 1, diagnostics));
+        Assert.Empty(diagnostics.Items);
+    }
+
     // The arguments of a call end with a parenthesis (language 4.12, primary).
     [Fact]
     public void Function_ArgumentsNotClosed_IsErrorNamingTheOpeningParenthesis()
@@ -205,10 +237,11 @@ public sealed class ExprParserDiagnosticsTests
     [Fact]
     public void Bracket_NotClosed_IsErrorNamingTheOpeningBracket()
     {
-        Diagnostic diagnostic = SingleError("$A[1", DiagnosticCodes.ExpressionUnbalancedBracket);
+        Diagnostic diagnostic = SingleError("$SYS_A[1", DiagnosticCodes.ExpressionUnbalancedBracket);
 
         Assert.Equal(
-            "The bracket at position 3 of {$A[1} is not closed: ] is expected at the end (language 4.12, variable).",
+            "The bracket at position 7 of {$SYS_A[1} is not closed: ] is expected at the end "
+            + "(language 4.12, variable).",
             diagnostic.Message);
     }
 
@@ -281,7 +314,7 @@ public sealed class ExprParserDiagnosticsTests
             count++;
         }
 
-        Assert.Equal(12, count);
+        Assert.Equal(14, count);
     }
 
     // D118: ATAN2 takes two arguments, MIN and MAX two or more, every other function one, and a wrong count is a PAR

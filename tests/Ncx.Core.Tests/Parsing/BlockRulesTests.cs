@@ -217,6 +217,44 @@ public sealed class BlockRulesTests
         BlockWithError(text, DiagnosticCodes.WordValueNotAccepted);
     }
 
+    // D114: in a block whose CYCLE value is not a built-in name or OFF, every key the word catalog does not know is a
+    // cycle parameter with a number or expression value, kept in source order.
+    [Fact]
+    public void D114_CatalogCycleParameters_AreKeptInSourceOrder()
+    {
+        Block block = ParseText.CleanBlock("CYCLE=RECT_POCKET LENGTH=60 WIDTH={$Q1} DEPTH=-10 CORNER_RADIUS=5");
+
+        Assert.Equal(["CYCLE", "LENGTH", "WIDTH", "DEPTH", "CORNER_RADIUS"], Keys(block));
+        Assert.Null(block.Find("LENGTH")?.Definition);
+    }
+
+    // D114: a key of the machine-axis form stays a D93 machine axis word in such a block, so without a verb it is an
+    // axis word without verb, never a cycle parameter.
+    [Fact]
+    public void D114_MachineAxisFormInACatalogCycleBlock_StaysAMachineAxisWord()
+    {
+        BlockWithError("CYCLE=RECT_POCKET LENGTH=60 Z2=5", DiagnosticCodes.AxisWordWithoutVerb);
+    }
+
+    // D114: a cycle parameter takes a number or an expression and no address.
+    [Theory]
+    [InlineData("CYCLE=RECT_POCKET LENGTH=ON", DiagnosticCodes.WordValueNotAccepted)]
+    [InlineData("CYCLE=RECT_POCKET LENGTH", DiagnosticCodes.WordValueNotAccepted)]
+    [InlineData("CYCLE=RECT_POCKET LENGTH:X=60", DiagnosticCodes.WordTakesNoAddress)]
+    public void D114_CatalogCycleParameterWithAnotherValue_IsError(string text, string code)
+    {
+        BlockWithError(text, code);
+    }
+
+    // D114: a built-in drilling cycle and CYCLE=OFF open nothing to keys the catalog does not know.
+    [Theory]
+    [InlineData("CYCLE=DRILL SURFACE=0 CLEARANCE=2 DEPTH=-15 LENGTH=60")]
+    [InlineData("CYCLE=OFF LENGTH=60")]
+    public void D114_UnknownKeyBesideABuiltInCycleOrOff_IsUnknownKey(string text)
+    {
+        BlockWithError(text, DiagnosticCodes.UnknownKey);
+    }
+
     // Any other key the catalog does not know is an ERROR, and the block is kept with its source text and the word
     // without a definition (virtual machine 3 step 1, architecture 4.1).
     [Theory]
@@ -298,6 +336,72 @@ public sealed class BlockRulesTests
     public void BlockRule5_WordWithItsPartner_IsAccepted(string text)
     {
         ParseText.CleanBlock(text);
+    }
+
+    // D116: NAME needs PROGRAM=BEGIN, SUB=BEGIN or START_CHANNEL; NUMBER and CHANNEL need PROGRAM=BEGIN; the cycle
+    // parameters need CYCLE. The partner is value-aware: PROGRAM=END is no partner of NAME.
+    [Theory]
+    [InlineData("NAME=\"SHAFT\"")]
+    [InlineData("PROGRAM=END NAME=\"SHAFT\"")]
+    [InlineData("SUB=END NAME=100")]
+    [InlineData("NUMBER=1")]
+    [InlineData("SUB=BEGIN NAME=100 NUMBER=1")]
+    [InlineData("CHANNEL=2")]
+    [InlineData("START_CHANNEL=2 CHANNEL=2")]
+    [InlineData("AXIS=X")]
+    [InlineData("SURFACE=0")]
+    [InlineData("CLEARANCE=2")]
+    [InlineData("DEPTH=-15")]
+    [InlineData("SAFE=10")]
+    [InlineData("CYCLE_RETRACT=SAFE")]
+    [InlineData("PECK=2")]
+    [InlineData("CYCLE_F=300")]
+    [InlineData("CYCLE_DWELL=0.5")]
+    [InlineData("PITCH=1.5")]
+    [InlineData("CONTOUR=100")]
+    [InlineData("CYCLE_CALL X=10 Y=10 DEPTH=-5")]
+    public void D116_WordWithoutItsPartner_IsError(string text)
+    {
+        BlockWithError(text, DiagnosticCodes.PartnerWordMissing);
+    }
+
+    // D116: with their partner the header words and the cycle parameters are accepted.
+    [Theory]
+    [InlineData("PROGRAM=BEGIN NAME=\"SHAFT\" NUMBER=1 CHANNEL=2")]
+    [InlineData("SUB=BEGIN NAME=100")]
+    [InlineData("START_CHANNEL=2 NAME=\"SHAFT_CH2\"")]
+    [InlineData("CYCLE=DRILL AXIS=Z SURFACE=0 CLEARANCE=2 DEPTH=-15 SAFE=10 CYCLE_RETRACT=SAFE CYCLE_F=300")]
+    [InlineData("CYCLE=PECK SURFACE=0 CLEARANCE=2 DEPTH=-15 PECK=2 CYCLE_F=300 CYCLE_DWELL=0.5")]
+    [InlineData("CYCLE=TAP SURFACE=0 CLEARANCE=2 DEPTH=-15 PITCH=1.5")]
+    public void D116_WordWithItsPartner_IsAccepted(string text)
+    {
+        ParseText.CleanBlock(text);
+    }
+
+    // TOOL_POINT, TIP_OFFSET and POINT_RADIUS are valid in a TOOL block or in a block of their own (language 4.4,
+    // D372); a block of their own carries nothing else but SKIP and a COMMENT (D392).
+    [Theory]
+    [InlineData("TOOL=5 TOOL_POINT=2 TIP_OFFSET=2 POINT_RADIUS=8")]
+    [InlineData("TOOL=5 RPM=6000 SPINDLE=CW TOOL_POINT=2")]
+    [InlineData("TOOL:TURRET1=5 TOOL_POINT:TURRET1=2")]
+    [InlineData("TOOL_POINT=2 TIP_OFFSET=2 POINT_RADIUS=8")]
+    [InlineData("TIP_OFFSET={$Q1 * 2}")]
+    [InlineData("SKIP TOOL_POINT=2 COMMENT=\"POINT 2\"")]
+    public void D372_PointWordsInAToolBlockOrABlockOfTheirOwn_AreAccepted(string text)
+    {
+        ParseText.CleanBlock(text);
+    }
+
+    // Beside any other word than TOOL they are an ERROR, the block being neither a TOOL block nor a block of their
+    // own (language 4.4, D372, D392).
+    [Theory]
+    [InlineData("RAPID Z=50 TOOL_POINT=2")]
+    [InlineData("TIP_OFFSET=2 RPM=6000")]
+    [InlineData("PRELOAD=6 POINT_RADIUS=8")]
+    [InlineData("TOOL_POINT=2 OFFSET:LEN=12")]
+    public void D372_PointWordBesideAnotherWordWithoutTool_IsError(string text)
+    {
+        BlockWithError(text, DiagnosticCodes.PointWordOutsideToolBlock);
     }
 
     // Parses one line and asserts that the rule's ERROR is among what the parser reported, once.

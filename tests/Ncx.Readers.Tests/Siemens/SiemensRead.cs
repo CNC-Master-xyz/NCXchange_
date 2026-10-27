@@ -237,8 +237,8 @@ internal static class SiemensRead
         int positions = text.IndexOf("\n[positions]", StringComparison.Ordinal);
         Assert.True(positions >= 0, "The mill of machines/ has no [positions] table behind its axes.");
         var diagnostics = new Diagnostics("five-axis.toml");
-        MachineConfig? machine = MachineConfigLoader.LoadText(text.Insert(positions, RotaryTable) + transform,
-            diagnostics);
+        MachineConfig? machine = MachineConfigLoader.LoadText(
+            MachineText.With(text.Insert(positions, RotaryTable), transform), diagnostics);
         Assert.True(machine is not null && !diagnostics.HasErrors, diagnostics.ToText());
         CycleCatalog? catalog = CycleCatalogLoader.Load(
             Path.Combine(Fixture.RepositoryRoot(), "cycles", "siemens.toml"), Controller.Siemens, diagnostics);

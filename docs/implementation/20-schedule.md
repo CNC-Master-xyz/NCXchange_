@@ -42,7 +42,7 @@ One engineer, one task at a time, in this order. A tick goes in front of a task 
 | 32 | P6-02 Job compiler and channel binding | 16 | closes M9; on `main` (496e752); waits for two answers on `nakamura-ntjx.toml` |
 | 33 | ✓ P7-01 Plugin interfaces and loading | 17 | |
 | 34 | P7-02 Plugin template and `ncx plugin` commands | 17 | on `main` (87b8917); waits for the answer on the block count of the plugin INFO line |
-| 35 | P7-03 Release 1.0 | 17 | closes M10 |
+| 35 | P7-03 Release 1.0 | 17 | closes M10; the `v*` tag stamps the one `Version` of `Directory.Build.props` into `ncx --version`, the package and the binaries (D347) |
 
 `PL-01` (kinematics) and `PL-02` (further controllers) stay in `inbox/` as documented in `phases.md`; nothing in the order above may make them harder (D24, D68).
 
@@ -98,6 +98,7 @@ Asking a batch means: copy the drafts of `02-decisions-proposed.md` into `../dec
 | Task 10 | Decision batch 2 (answered 2026-09-11) | see 4 | answered |
 | Task 19 | The sample corpus (about 480 programs, `controllers/sample-corpus.md`), placed outside the repository at the path in the environment variable `NCX_CORPUS`; the Hermle C22 U and Burkhardt+Weber programs and the 5-axis pair named in it | The robustness runs of phase 3, the Siemens acceptance of phase 5, the 5-axis analytics of phase 4 | The tests skip with a message; the batch report cannot be produced |
 | Task 26 | The measured cycle time of `3D_FRAESEN` on the machine; the two large pairs (5-axis A/C 1.2 MB, point list 5.7 MB) | Calibrate the runtime estimate (P4-02) and the segment analytics (P4-03) | The computed values are committed as unverified references |
+| Task 35 | The release tag (`v1.0.0`, or a pre-release such as `v1.0.0-alpha.1` that the CAM pins) and the copyright holder of the package `Authors` (D165) | The release job stamps the version from the tag (D347); `Authors` is the holder D165 names | The package carries the SDK default author until D165 is answered |
 | Any task | Anything the specification does not answer | `HANDOFF.md`: never decided silently in the code | Drafted as a decision, the task waits or works around with a `TODO(Dnn)` |
 
 These are the three items of `HANDOFF.md` "What to ask the maintainer" plus the remote.

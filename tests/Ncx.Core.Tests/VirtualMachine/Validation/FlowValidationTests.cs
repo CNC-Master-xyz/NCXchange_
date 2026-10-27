@@ -189,4 +189,21 @@ public sealed class FlowValidationTests
 
         Assert.Equal([DiagnosticCodes.ReturnInProgram, DiagnosticCodes.UnreachableBlock], vm.Codes());
     }
+
+    // D195: a subprogram is checked too; the block after a JUMP=END or a RETURN in it is unreachable, and its SUB=END
+    // never is.
+    [Theory]
+    [InlineData("JUMP=END")]
+    [InlineData("RETURN")]
+    [InlineData("JUMP=1")]
+    public void UnreachableBlock_InASubprogram_Warns(string exit)
+    {
+        string text = VmHarness.File(
+            "CALL=10", "PROGRAM=END", "SUB=BEGIN NAME=10", "LABEL=1", exit, "COOLANT=ON", "SUB=END");
+
+        VmHarness vm = VmHarness.Run(text, VmMachines.Default());
+
+        Diagnostic warning = Assert.Single(vm.Diagnostics.Items, d => d.Code == DiagnosticCodes.UnreachableBlock);
+        Assert.Equal(8, warning.Line);
+    }
 }

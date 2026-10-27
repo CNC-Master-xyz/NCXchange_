@@ -1,6 +1,6 @@
 # Source programs of the examples
 
-The two programs behind `examples/2.5D_FRAESEN.ncx`, as a CAM system wrote them for a Fanuc control (`2.5D_FRAESEN.fanuc.nc`, program `O0001`) and for a Heidenhain iTNC 530 (`2.5D_FRAESEN.h`, Klartext with the comma as decimal separator). The first Fanuc reader and the first Heidenhain reader must produce the same canonical NCX text from them, and the two compilers must write both back without loss; that is the acceptance test of milestone M4 (`architecture.md`, section 12).
+The two programs behind `examples/2.5D_FRAESEN.ncx`, as a CAM system wrote them for a Fanuc control (`2.5D_FRAESEN.fanuc.nc`, program `O0001`) and for a Heidenhain iTNC 530 (`2.5D_FRAESEN.h`, Klartext with the comma as decimal separator). The Fanuc reader and the Heidenhain reader must each read them into the blocks of the example, except the reader differences the example's notes list, each tied to its rule, and both readings must format to themselves and check without ERROR (D217); the two compilers must write both back without loss; that is the acceptance test of milestone M4 (`architecture.md`, section 12).
 
 `BOHREN.fanuc.nc` and `BOHREN.h` are the drilling test: the same holes with the drilling, pecking, tapping and reaming cycles of both controllers (`G81`..`G85` with `G98`/`G99` against `CYCL DEF 200`..`207` with `CYCL CALL` and `M99`), the case that shaped the cycle words of the language.
 

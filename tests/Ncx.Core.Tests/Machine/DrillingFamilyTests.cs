@@ -73,11 +73,13 @@ public sealed class DrillingFamilyTests
     }
 
     // Phase 2, P2-03: G81, CYCL DEF 200 and CYCLE81 carry the same NCX words, each with its parameters and the rules
-    // of its family (language 4.7, controller-mapping 5).
+    // of its family (language 4.7, controller-mapping 5), CYCLE_DWELL through G82 on the Fanuc mill (D177).
     [Fact]
     public void Catalog_DrillOfEveryFamily_CarriesTheSameNcxWords()
     {
         List<string> fanuc = SortedWords(Controller.Fanuc, "DRILL");
+        Assert.DoesNotContain("CYCLE_DWELL", fanuc);
+        fanuc = SortedWords(Controller.Fanuc, "DRILL_DWELL");
 
         foreach (string word in s_drillWords)
         {
@@ -173,5 +175,38 @@ public sealed class DrillingFamilyTests
         var words = new List<string>(entry.Words);
         words.Sort(StringComparer.Ordinal);
         return words;
+    }
+
+    // D181: MPIT is the ISO metric thread size, whose ISO 261 coarse pitch the cycle computes; the sign is the hand.
+    [Theory]
+    [InlineData(3, 0.5)]
+    [InlineData(10, 1.5)]
+    [InlineData(-12, 1.75)]
+    [InlineData(48, 5)]
+    public void IsoCoarsePitch_MetricSize_IsTheCoarsePitch(decimal size, decimal pitch)
+    {
+        Assert.Equal(pitch, DrillingFamily.IsoCoarsePitch(size));
+    }
+
+    // D181: a size that is no ISO coarse size between M3 and M48 has no pitch; the reader keeps such a cycle native.
+    [Theory]
+    [InlineData(2)]
+    [InlineData(11)]
+    [InlineData(52)]
+    public void IsoCoarsePitch_OtherSize_IsNull(decimal size)
+    {
+        Assert.Null(DrillingFamily.IsoCoarsePitch(size));
+    }
+
+    // D380: the ones digit of the _AMODE of CYCLE830 is 1 for an absolute _DP, 0 or an omitted _AMODE incremental.
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(10001, true)]
+    [InlineData(0, false)]
+    [InlineData(2, false)]
+    [InlineData(null, false)]
+    public void Cycle830DepthIsAbsolute_OnesDigitOfAmode_IsOneForAbsolute(int? amode, bool absolute)
+    {
+        Assert.Equal(absolute, DrillingFamily.Cycle830DepthIsAbsolute(amode));
     }
 }

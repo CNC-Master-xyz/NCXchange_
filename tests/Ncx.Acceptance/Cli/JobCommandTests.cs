@@ -154,8 +154,8 @@ public sealed class JobCommandTests : IDisposable
     }
 
     // Architecture 10, implementation 16 (P6-02): ncx compile --job writes one NC file per channel of the job into the
-    // folder of --output, on the machine the manifest names, whose start_mark M199 is the first block of both programs
-    // (machine-config 5).
+    // folder of --output, on the machine the manifest names, whose start_mark M198 is the first block of both programs
+    // (machine-config 5, D388 9).
     [Fact]
     public void CompileJob_TwoChannels_WritesOneFilePerChannel()
     {
@@ -165,9 +165,9 @@ public sealed class JobCommandTests : IDisposable
         int exitCode = _cli.Run("compile", "--job", manifest, "--output", folder);
 
         Assert.True(exitCode == 0, _cli.Error);
-        Assert.Equal("%\r\nO1000 (T)\r\nM199\r\nM110\r\nM30\r\n%\r\n",
+        Assert.Equal("%\r\nO1000 (T)\r\nM198\r\nM110\r\nM30\r\n%\r\n",
             File.ReadAllText(Path.Combine(folder, "one.nc")));
-        Assert.Equal("%\r\nO1000 (T)\r\nM199\r\nM110\r\nM30\r\n%\r\n",
+        Assert.Equal("%\r\nO1000 (T)\r\nM198\r\nM110\r\nM30\r\n%\r\n",
             File.ReadAllText(Path.Combine(folder, "two.nc")));
     }
 
@@ -184,9 +184,9 @@ public sealed class JobCommandTests : IDisposable
         int exitCode = _cli.Run("compile", "--job", manifest, "--output", folder);
 
         Assert.True(exitCode == 0, _cli.Error);
-        Assert.Equal("%\r\nO1000 (T)\r\nM199\r\nM110\r\nM111\r\nM30\r\n%\r\n",
+        Assert.Equal("%\r\nO1000 (T)\r\nM198\r\nM110\r\nM111\r\nM30\r\n%\r\n",
             File.ReadAllText(Path.Combine(folder, "one.nc")));
-        Assert.Equal("%\r\nO1000 (T)\r\nM199\r\nM110\r\nM96\r\nM111\r\nM30\r\n%\r\n",
+        Assert.Equal("%\r\nO1000 (T)\r\nM198\r\nM110\r\nM96\r\nM111\r\nM30\r\n%\r\n",
             File.ReadAllText(Path.Combine(folder, "two.nc")));
     }
 
@@ -231,6 +231,8 @@ public sealed class JobCommandTests : IDisposable
             Assert.True(convertExit == 0, _cli.Error);
         }
 
+        // The start values of $SYS_WEAR_Z[99] and $SYS_MPOS_B, which path 2 reads since D250 maps #11099 and #5025.
+        _cli.WriteFile(JobFixture.NakamuraPath2Vars, JobFixture.ReadText(JobFixture.NakamuraPath2Vars));
         return _cli.WriteFile(JobFixture.NakamuraJob, JobFixture.ReadText(JobFixture.NakamuraJob));
     }
 

@@ -231,6 +231,17 @@ public sealed class SiemensFrameTests
             MillTurnBody("DIAMETER=OFF", "RAPID X=20", "DIAMETER=ON", "RAPID X=40"));
     }
 
+    // D125: under DIAMETER=ON the VM stores the X of SHIFT X=20 as the radius 10; the TRANS that MIRROR=OFF rewrites
+    // from the chain entry writes it back as the diameter 20, as the SHIFT block did.
+    [Fact]
+    public void D125_ShiftRewrittenFromTheChainUnderDiamon_KeepsTheDiameter()
+    {
+        string body = MillTurnBody("DIAMETER=ON", "SHIFT X=20 Z=-2", "MIRROR=Z", "MIRROR=OFF");
+
+        Assert.DoesNotContain("X10", body, StringComparison.Ordinal);
+        Assert.Equal(2, body.Split("TRANS X20 Z-2").Length - 1);
+    }
+
     // Controller-mapping 1, TCPM, CYLINDER and POLAR: TRAORI, TRACYL with the working diameter, TRANSMIT and TRAFOOF of
     // [transform] (millturn1.toml; D96).
     [Fact]
@@ -244,16 +255,16 @@ public sealed class SiemensFrameTests
     [Fact]
     public void Tolerance_OnAndOff_IsCycle832()
     {
-        Assert.Equal(Lines("CYCLE832(0.02,3,0.05)", "CYCLE832(0,0,1)"),
+        Assert.Equal(Lines("CYCLE832(0.02,13,0.05)", "CYCLE832(0,0,1)"),
             MillTurnBody("TOLERANCE=0.02 TOLERANCE:ROTARY=0.05 TOLERANCE_MODE=ROUGH", "TOLERANCE=OFF"));
     }
 
-    // D151: the ON template needs {rotary}; without TOLERANCE:ROTARY the template is unusable, the ERROR of the
-    // template (machine-config introduction).
+    // D151: without TOLERANCE:ROTARY the ON template is written, the SINUMERIK Operate form without an orientation
+    // tolerance, whose third parameter is 1.
     [Fact]
-    public void Tolerance_WithoutRotary_IsTheErrorOfTheTemplate()
+    public void Tolerance_WithoutRotary_IsTheOnTemplate()
     {
-        Assert.Equal(["CFG100"], Codes(Run(Program(MillTurnHeader, "TOLERANCE=0.02"), MillTurn())));
+        Assert.Equal(Lines("CYCLE832(0.02,1,1)"), MillTurnBody("TOLERANCE=0.02"));
     }
 
     // Controller-mapping 1, RETRACT: without a template of [retract] only the kinematics module could compute it, an

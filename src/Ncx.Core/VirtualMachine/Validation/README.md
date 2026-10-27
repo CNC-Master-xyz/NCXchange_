@@ -12,6 +12,7 @@ Start with `RunValidation.cs`: what the virtual machine calls during a run. `Che
 | `StockValidation.cs` | the words, the box and the place of STOCK (`StockPlacement.cs`), rules of the frame family |
 | `MotionValidation.cs` | UNITS, feed, IX; F in a RAPID block, `max_feed`, the axis `limits` (D64, D100), and the `limits = "clamp"` rewrite of the expander (D64) |
 | `ArcValidation.cs`, `VectorValidation.cs`, `RetractAndHomeValidation.cs`, `CycleValidation.cs` | the rules of `ArcRules`, `ToolVectorRules`, `RetractRules`, `HomeRules` and `CycleRules`; COMP in an ARC block |
+| `CycleParameterValidation.cs` | the parameters of a catalog cycle checked against the machine's cycle catalog, VM254, and VM003 without a machine file (D114); its row is in `CycleValidation.cs` |
 | `ToolValidation.cs` | the tool change table of 3.5, the offset forms of a program |
 | `SpindleValidation.cs` | spindle rules 4 and 5 of 3.8, spindle OFF before a LINE, `rpm_min` and `rpm_max` |
 | `FlowValidation.cs` | labels, jump targets, calls, JUMP=END from a subprogram, RETURN in a program, unreachable blocks (D89) |

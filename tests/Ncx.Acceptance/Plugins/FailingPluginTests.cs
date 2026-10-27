@@ -118,7 +118,7 @@ public sealed class FailingPluginTests : IDisposable
             StringComparison.Ordinal);
     }
 
-    // Implementation 17, P7-01, and D205 as recommended: compile reports the block writer that throws, and writes no
+    // Implementation 17, P7-01, and D205: compile reports the block writer that throws, and writes no
     // file after the ERROR, because that file goes to a control.
     [Fact]
     public void Compile_BlockWriterThatThrows_IsReportedAndWritesNoFile()
@@ -154,6 +154,26 @@ public sealed class FailingPluginTests : IDisposable
         Assert.Equal([4, 5], [diagnostics.Items[0].Line, diagnostics.Items[1].Line]);
         Assert.All(diagnostics.Items, diagnostic => Assert.Equal("PLG004", diagnostic.Code));
         Assert.StartsWith("plugin FaultyRules: the block \"FOO=1\" ", diagnostics.Items[0].Message,
+            StringComparison.Ordinal);
+    }
+
+    // D167: a pseudo-word stands in a block of its own; a rewriter block that mixes @SAVE with another word is an
+    // ERROR on the plugin, on the line of the block the answer was for, and the expander inserts nothing.
+    [Fact]
+    public void D167_RewriterBlockMixingAPseudoWordWithOtherWords_IsAnErrorOnThePlugin()
+    {
+        var diagnostics = new Diagnostics("part.ncx");
+        PluginSet plugins = TestPlugins.Load(_folder.FullName, diagnostics, TestPlugins.FaultyRules);
+        string program = CliHarness.OneProgram("UNITS=MM", "SECTION=\"ROUGH\"");
+
+        NcxProgram expanded = PluginMachines.Expand(program, PluginMachines.PlainMill, plugins.Rewriters);
+
+        Assert.Equal(program, PluginMachines.WriteWithGenerated(expanded));
+        Diagnostic error = Assert.Single(diagnostics.Items);
+        Assert.Equal(Ncx.Plugins.DiagnosticCodes.PseudoWordNotAlone, error.Code);
+        Assert.Equal(Severity.Error, error.Severity);
+        Assert.Equal(4, error.Line);
+        Assert.StartsWith("plugin FaultyRules: the block \"@SAVE=SPINDLE:MAIN SPINDLE:MAIN=OFF\" ", error.Message,
             StringComparison.Ordinal);
     }
 

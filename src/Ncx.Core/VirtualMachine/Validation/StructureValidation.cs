@@ -51,7 +51,11 @@ internal static class StructureValidation
                 + "address.", "language 5 rule 4; VM 5"),
             ValidationRule.Error(DiagnosticCodes.PartnerWordMissing,
                 "IF, ARG, TIMES, WITH, FRAME, MOVE, ROT, POINT or PHASE without its verb or partner word in the "
-                + "block.", "language 5 rule 5; VM 5"),
+                + "block; NAME, NUMBER or CHANNEL without its program or section block; a cycle parameter without "
+                + "CYCLE.", "language 5 rule 5; VM 5; D116"),
+            ValidationRule.Error(DiagnosticCodes.PointWordOutsideToolBlock,
+                "TOOL_POINT, TIP_OFFSET or POINT_RADIUS in a block that is neither a TOOL block nor a block of their "
+                + "own.", "language 4.4; VM 5; D372, D392"),
             ValidationRule.Error(DiagnosticCodes.FileBeginNotFirstBlock,
                 "Missing or misplaced FILE=BEGIN: it is the first block of the file and stands nowhere else.",
                 "language 4.1; VM 5; D92"),

@@ -20,6 +20,9 @@ internal static class FanucToolWords
     /// </summary>
     public const string PendingLength = "PENDING:H";
 
+    // The tool whose change still waits for the length check of its first tool-axis motion (D389).
+    private const string LengthCheck = "CHECK:H";
+
     // The spindle whose M code the control saw last, which a bare S belongs to (controllers fanuc.md 5).
     private const string LastSpindle = "SPINDLE:LAST";
 
@@ -92,6 +95,39 @@ internal static class FanucToolWords
         {
             write.MakeUnknown(FanucCodes.Motion);
         }
+
+        // D389: the change applies no length offset of its own, so the first tool-axis motion after it is checked,
+        // unless the builder's change macro applies the length (length_offset_by_macro) or the spindle is empty.
+        HolderSnapshot? holder = HolderOf(write);
+        if (write.Machine.ToolChange?.LengthOffsetByMacro != true && holder is not null
+            && holder.SpindleTool != s_emptySpindle)
+        {
+            write.Target.Set(LengthCheck, holder.SpindleTool.ToString());
+        }
+    }
+
+    // D389: the first tool-axis motion after a change without OFFSET:LEN, OFFSET or the register of a named point runs
+    // without a length offset, and the tip one tool length below the programmed point: a WARNING naming the tool,
+    // once per tool change. No G43 H is written by default, since the M-series T has no relation to H (D373 audit).
+    private static void CheckLengthAfterChange(FanucBlock write)
+    {
+        if (write.Target.ActiveOf(LengthCheck) is not string tool)
+        {
+            return;
+        }
+
+        write.Target.Forget(LengthCheck);
+        HolderSnapshot? holder = HolderOf(write);
+        if (holder is null || holder.OffsetLen != 0 || holder.OffsetCombined != 0 || write.PointRegisters?.Length
+            is not null)
+        {
+            return;
+        }
+
+        write.Warning(DiagnosticCodes.FanucToolWithoutLengthOffset,
+            $"The first tool-axis motion after the change to tool {tool} runs without a length offset: the block has "
+            + "no G43 H, since the program gives no OFFSET:LEN, OFFSET or TOOL_POINT with a register; "
+            + "length_offset_by_macro = true says the builder's change macro applies it (D389).");
     }
 
     /// <summary>
@@ -123,7 +159,7 @@ internal static class FanucToolWords
     /// </summary>
     public static void RestoreLength(FanucBlock write)
     {
-        int register = HolderOf(write)?.OffsetLen ?? 0;
+        int register = write.PointRegisters?.Length ?? HolderOf(write)?.OffsetLen ?? 0;
         if (register == 0 || write.Block.Find("OFFSET", "LEN") is not null)
         {
             return;
@@ -154,10 +190,25 @@ internal static class FanucToolWords
 
         write.OffsetsAdded = true;
         HolderSnapshot? holder = HolderOf(write);
-        if (write.Block.Find("OFFSET", "LEN") is Word length)
+        if (movesToolAxis)
         {
-            write.Written(length);
-            int register = holder?.OffsetLen ?? 0;
+            CheckLengthAfterChange(write);
+        }
+
+        // D375: TIP_OFFSET and POINT_RADIUS are never written to the control, no G10 and no macro variable; the point
+        // selects its registers, which the mapping of [tool_points] gives (D373, D393).
+        write.Written("TOOL_POINT");
+        write.Written("TIP_OFFSET");
+        write.Written("POINT_RADIUS");
+        int? pointLength = write.Block.Has("TOOL_POINT") ? write.PointRegisters?.Length : null;
+        if (write.Block.Find("OFFSET", "LEN") is Word || pointLength is not null)
+        {
+            if (write.Block.Find("OFFSET", "LEN") is Word length)
+            {
+                write.Written(length);
+            }
+
+            int register = pointLength ?? holder?.OffsetLen ?? 0;
 
             // The offset of a skipped block stands in its own lines, which run only where the block runs
             // (controller-mapping 1, SKIP).
@@ -194,10 +245,13 @@ internal static class FanucToolWords
         // D stands with G41 or G42 (controller-mapping 2, COMP: G41/G42/G40 with D; controllers fanuc.md 4). A register
         // the block does not state is the one of the state before it, which the control holds where it differs by
         // path (FanucBlock.NeedsValueOfTheWalk); one it states without G41 or G42 stands with the next of them.
-        bool stated = write.Block.Find("OFFSET", "RAD") is not null;
-        if (write.After.Motion.Comp != Compensation.Off && holder is not null && holder.OffsetRad != 0)
+        // The radius register of a named point is the one of the mapping (D373, D393).
+        int radiusRegister = write.PointRegisters?.Radius ?? holder?.OffsetRad ?? 0;
+        bool stated = write.Block.Find("OFFSET", "RAD") is not null
+            || (write.Block.Has("TOOL_POINT") && write.PointRegisters?.Radius is not null);
+        if (write.After.Motion.Comp != Compensation.Off && holder is not null && radiusRegister != 0)
         {
-            string register = holder.OffsetRad.ToString(CultureInfo.InvariantCulture);
+            string register = radiusRegister.ToString(CultureInfo.InvariantCulture);
             if (stated ? write.Target.Changes("D", register) : write.NeedsValueOfTheWalk("D", register, "OFFSET:RAD"))
             {
                 write.Main.Word("D" + register);

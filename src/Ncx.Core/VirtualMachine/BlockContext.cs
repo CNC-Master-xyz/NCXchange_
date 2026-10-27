@@ -49,6 +49,12 @@ internal sealed class BlockContext
     public required Diagnostics CallerRuleDiagnostics { get; init; }
 
     /// <summary>
+    /// The measured point of a tool from the tool table of the run, whose wear the MOTION event adds to the radius it
+    /// reports (D374, D376); null without a tool table.
+    /// </summary>
+    public Func<ToolRef, int, ToolPointData?>? MeasuredPoint { get; init; }
+
+    /// <summary>
     /// The resource id each word addresses after step 2: the spindle of SPINDLE and RPM, the holder of TOOL, PRELOAD
     /// and OFFSET, the holder of WORKPIECE, the function of FUNC, the channel of COOLANT. A word that could not be
     /// resolved is missing and changes nothing (virtual machine 3.8).

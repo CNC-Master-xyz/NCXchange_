@@ -67,46 +67,99 @@ public sealed class MotionValidationTests
         Assert.Equal(4, warning.Line);
     }
 
-    // VM 5, D64: F above an axis max_feed is a WARNING that names the axes: X follows 10000 mm/min, Z 8000.
+    // D192: VM441 compares the path feed at a LINE or ARC with the max_feed of each linear axis the block moves and
+    // names them: X follows 10000 mm/min, Z 8000. An F alone moves nothing and is not compared.
     [Fact]
-    public void Feed_AboveTheMaxFeedOfTwoAxes_WarnsNamingBoth()
+    public void D192_FeedAboveTheMaxFeedOfTwoMovingAxes_WarnsNamingBoth()
     {
-        VmHarness vm = new VmHarness(ValidationMachines.MillTurnWithLimits()).Execute("UNITS=MM F=12000");
+        VmHarness vm = new VmHarness(ValidationMachines.MillTurnWithLimits())
+            .Execute("UNITS=MM F=12000 SPINDLE:TOOL=CW");
+        vm.AssertNoDiagnostics();
+
+        vm.Execute("LINE X=100 Z=5");
 
         Diagnostic warning = RuleAssert.Only(vm, DiagnosticCodes.FeedAboveMaxFeed);
-
         Assert.StartsWith("F=12000 is above the max_feed of X (10000 mm/min), Z (8000 mm/min)", warning.Message,
             StringComparison.Ordinal);
+        Assert.Contains("may clamp", warning.Message, StringComparison.Ordinal);
     }
 
-    // VM 5, D64: a feed that one axis can follow and another cannot names the other only.
+    // D192: no axis is named that does not move: F=9000 is above Z's 8000 only, and a LINE of X alone passes.
     [Fact]
-    public void Feed_AboveTheMaxFeedOfOneAxis_NamesThatAxis()
+    public void D192_FeedAboveTheMaxFeedOfAnAxisThatDoesNotMove_IsNoWarning()
     {
-        VmHarness vm = new VmHarness(ValidationMachines.MillTurnWithLimits()).Execute("UNITS=MM F=9000");
+        VmHarness vm = new VmHarness(ValidationMachines.MillTurnWithLimits())
+            .Execute("UNITS=MM F=9000 SPINDLE:TOOL=CW", "LINE X=100");
+        vm.AssertNoDiagnostics();
+
+        vm.Execute("LINE Z=5");
 
         Diagnostic warning = RuleAssert.Only(vm, DiagnosticCodes.FeedAboveMaxFeed);
-
         Assert.StartsWith("F=9000 is above the max_feed of Z (8000 mm/min),", warning.Message,
             StringComparison.Ordinal);
     }
 
-    // Machine-config 4: max_feed is in mm/min, and F under UNITS=INCH is in inches per minute: 400 in/min is 10160.
+    // D192: an axis the block names and leaves where it stood does not move: Z=5 again is no part of the comparison,
+    // while the full circle of an ARC moves both plane axes although it ends where it started.
     [Fact]
-    public void Feed_InInchesAboveTheMaxFeed_Warns()
+    public void D192_NamedAxisThatDoesNotMove_IsNotCompared()
     {
-        VmHarness vm = new VmHarness(ValidationMachines.MillTurnWithLimits()).Execute("UNITS=INCH F=400");
+        VmHarness vm = new VmHarness(ValidationMachines.MillTurnWithLimits())
+            .Execute("UNITS=MM F=9000 SPINDLE:TOOL=CW WORKPLANE=ZX", "RAPID X=100 Z=5", "LINE X=110 Z=5");
+        vm.AssertNoDiagnostics();
+
+        vm.Execute("ARC=CCW X=110 Z=5 CENTER:X=100 CENTER:Z=5");
+
+        Assert.Equal(1, vm.Count(DiagnosticCodes.FeedAboveMaxFeed));
+    }
+
+    // D192: one WARNING per F word, on its first exceeding block; a new F word may warn again.
+    [Fact]
+    public void D192_FeedAboveTheMaxFeed_WarnsOncePerFWord()
+    {
+        VmHarness vm = new VmHarness(ValidationMachines.MillTurnWithLimits())
+            .Execute("UNITS=MM F=9000 SPINDLE:TOOL=CW", "LINE Z=5", "LINE Z=10", "LINE Z=15");
+
+        Assert.Equal(1, vm.Count(DiagnosticCodes.FeedAboveMaxFeed));
+
+        vm.Execute("LINE Z=20 F=9500");
+
+        Assert.Equal(2, vm.Count(DiagnosticCodes.FeedAboveMaxFeed));
+    }
+
+    // Machine-config 4, D192: max_feed is in mm/min, and F under UNITS=INCH is in inches per minute: 400 in/min is
+    // 10160.
+    [Fact]
+    public void D192_FeedInInchesAboveTheMaxFeed_Warns()
+    {
+        VmHarness vm = new VmHarness(ValidationMachines.MillTurnWithLimits())
+            .Execute("UNITS=INCH F=400 SPINDLE:TOOL=CW", "LINE X=10");
 
         RuleAssert.Only(vm, DiagnosticCodes.FeedAboveMaxFeed);
     }
 
-    // VM 5, D64: a feed per revolution is not compared with a feed per minute (the TODO(question) D192 of
-    // MotionValidation).
-    [Fact]
-    public void Feed_PerRevolution_IsNotCompared()
+    // D192: a feed per revolution is converted with the known rpm, 10 mm/rev at 1000 rpm is 10000 mm/min, above Z's
+    // 8000; while the rpm is unknown it is skipped.
+    [Theory]
+    [InlineData("RPM:TOOL=1000", true)]
+    [InlineData("RPM:TOOL={$Q1}", false)]
+    public void D192_FeedPerRevolution_IsConvertedWithTheKnownRpm(string rpm, bool warns)
     {
-        new VmHarness(ValidationMachines.MillTurnWithLimits()).Execute("UNITS=MM FEED_MODE=PER_REV F=12000")
-            .AssertNoDiagnostics();
+        VmHarness vm = new VmHarness(ValidationMachines.MillTurnWithLimits())
+            .Execute("UNITS=MM FEED_MODE=PER_REV F=10 SPINDLE:TOOL=CW " + rpm, "LINE Z=5");
+
+        Assert.Equal(warns ? 1 : 0, vm.Count(DiagnosticCodes.FeedAboveMaxFeed));
+    }
+
+    // D192: CYCLE_F of a built-in drilling cycle is compared with the drilling axis, Z (8000 mm/min), once.
+    [Fact]
+    public void D192_CycleFeedAboveTheMaxFeedOfTheDrillingAxis_Warns()
+    {
+        VmHarness vm = new VmHarness(ValidationMachines.MillTurnWithLimits()).Execute(
+            "UNITS=MM SPINDLE:TOOL=CW", "RAPID X=10 Y=0 Z=50",
+            "CYCLE=DRILL CLEARANCE=5 DEPTH=-10 CYCLE_F=9000", "CYCLE_CALL X=10 Y=10", "CYCLE_CALL X=20 Y=10");
+
+        Assert.Equal(1, vm.Count(DiagnosticCodes.FeedAboveMaxFeed));
     }
 
     // VM 5, D100: a target beyond the upper limit, compared in the MACHINE frame: X homes to 300 and a machine-frame

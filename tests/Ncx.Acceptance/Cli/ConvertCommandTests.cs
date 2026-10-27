@@ -54,7 +54,7 @@ public sealed partial class ConvertCommandTests : IDisposable
 
         Assert.Equal(2, exitCode);
         Assert.Equal("", _output);
-        Assert.StartsWith("ncx(1): ERROR CLI250: ", _error, StringComparison.Ordinal);
+        Assert.StartsWith("ncx: ERROR CLI250: ", _error, StringComparison.Ordinal);
         Assert.Single(Lines(_error));
     }
 
@@ -104,7 +104,7 @@ public sealed partial class ConvertCommandTests : IDisposable
         Assert.Equal(["CLI002", "CLI200"], Codes(_error));
     }
 
-    // D229, as recommended: a controller program whose bytes are no UTF-8 is read as Windows-1252 with the WARNING
+    // D229: a controller program whose bytes are no UTF-8 is read as Windows-1252 with the WARNING
     // CLI352 on its first line, and the NCX text carries its umlauts as UTF-8 (language 3, Encoding).
     [Fact]
     public void Convert_ProgramThatIsNoUtf8_IsReadAsWindows1252WithAWarning()
@@ -181,7 +181,7 @@ public sealed partial class ConvertCommandTests : IDisposable
         Assert.StartsWith($"{outputFile}(1): ERROR CLI004: ", _error, StringComparison.Ordinal);
     }
 
-    // D5, virtual machine 2.9 (and the TODO(question) D205 of ConvertCommand.Run on an ERROR): an ERROR of the reader
+    // D5, virtual machine 2.9, D205: an ERROR of the reader
     // is reported, the whole program the reader produced is written with the bare TOOL of the M6, and the check does
     // not run, as an ERROR of the parser stops a run before its first block; the exit code is 1 (D97).
     [Fact]

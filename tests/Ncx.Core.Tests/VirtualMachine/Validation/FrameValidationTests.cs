@@ -144,7 +144,7 @@ public sealed class FrameValidationTests
 
     // Language 4.2, D351: the X Y Z of STOCK are the corners of the blank, not machine axes, so a machine without a Y
     // axis checks a STOCK clean.
-    [Fact(Skip = "needs W1-C's STOCK skip in ResolveAxisWords")]
+    [Fact]
     public void Stock_OnAMachineWithoutAYAxis_ChecksClean()
     {
         string text = VmHarness.File("ORIGIN=1", "STOCK=BOX X=0 Y=0 Z=-20 MAX:X=100 MAX:Y=100 MAX:Z=0",

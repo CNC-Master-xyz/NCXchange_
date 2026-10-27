@@ -23,8 +23,9 @@ internal static class WordCatalogTable
         `CENTER:IX`, `TOLERANCE:ROTARY`), the reset form of `SHIFT`, `TILT` and `TILT_AXIS`, the machine axis words
         (D93) and the native cycle parameters (D94). Words of one key with an open address (a role, a channel, a
         variable) sort under their rank by the address text. The eleven verbs share one rank; a block has at most
-        one. The ranks were laid out in steps of ten; a word added later takes a free number between two of them
-        (`MAX:X` 371, `PATH_MODE` 785, `ROUND_LIMIT` 813; D349, D351, D363, D372), and no rank is renumbered.
+        one. The ranks of D90 go in steps of ten; a word added later takes a rank between two steps and nothing is
+        renumbered (`MAX:X` 371, D351; `TOOL_POINT` 435, `TIP_OFFSET` 465, `POINT_RADIUS` 467, D372; `PATH_MODE` 785,
+        D349; `ROUND_LIMIT` 813, D363).
 
         | Rank | Word | Value | Verb | Axis words | Address | Scope | Section | Meaning |
         |---:|---|---|---|---|---|---|---|---|

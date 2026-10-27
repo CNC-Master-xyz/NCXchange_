@@ -204,6 +204,7 @@ public sealed partial class VirtualMachine
             Resources = _resources,
             Diagnostics = Diagnostics,
             CallerRuleDiagnostics = _suppressCallerRules ? _suppressed : Diagnostics,
+            MeasuredPoint = Options.MeasuredPoint,
         };
 
         string? toolHolder = null;
@@ -241,8 +242,45 @@ public sealed partial class VirtualMachine
                 + "(virtual machine 3.8 rule 2).");
         }
 
+        ResolvePointWords(context, toolHolder);
         ResolveAxisWords(context);
         return context;
+    }
+
+    // The point words are modal per holder (D372). D391: TOOL_POINT with a role addresses the holder of the role as
+    // TOOL does; without one, and TIP_OFFSET and POINT_RADIUS always, they address the holder of the TOOL_POINT or
+    // TOOL of their block, else the holder of the last TOOL, as OFFSET does (virtual machine 3.8 rule 2; decisions.md
+    // D391): a point change belongs to the tool that is cutting.
+    private void ResolvePointWords(BlockContext context, string? toolHolder)
+    {
+        Block block = context.Block;
+        string? blockHolder = toolHolder;
+        if (block.Find("TOOL_POINT") is Word { Addr: string role } addressedPoint)
+        {
+            blockHolder = _resources.ResolveHolder(role, block, _state, Diagnostics);
+            if (blockHolder is not null)
+            {
+                context.ResourceOf[addressedPoint] = blockHolder;
+            }
+        }
+
+        foreach (Word word in block.Words)
+        {
+            if (word.Key is not ("TOOL_POINT" or "TIP_OFFSET" or "POINT_RADIUS") || word.Addr is not null)
+            {
+                continue;
+            }
+
+            if ((blockHolder ?? _state.LastHolder) is string holder)
+            {
+                context.ResourceOf[word] = holder;
+                continue;
+            }
+
+            Diagnostics.Error(block, DiagnosticCodes.NoDefaultResource,
+                $"{word.ToCanonical()} addresses the holder of the last TOOL, and the machine has no tool holder "
+                + "(virtual machine 3.8 rule 2, D391).");
+        }
     }
 
     // The resource of a word that addresses one (rules 1 and 2): a spindle, a holder, the workpiece holder, a named
@@ -314,11 +352,13 @@ public sealed partial class VirtualMachine
     }
 
     // The axis words of a verb that carries axis words resolve against the machine (rule 3). TILT carries the spatial
-    // angles A, B, C about the axes of the active frame, which are no machine axes (language 4.2).
+    // angles A, B, C about the axes of the active frame, which are no machine axes (language 4.2); STOCK carries the
+    // dimensions of the raw part in X, Y and Z, which are no machine axes either (D351).
     private void ResolveAxisWords(BlockContext context)
     {
         Block block = context.Block;
-        if (block.Verb is not Word verb || verb.Definition is not { TakesAxisWords: true } || verb.Key == "TILT")
+        if (block.Verb is not Word verb || verb.Definition is not { TakesAxisWords: true }
+            || verb.Key is "TILT" or "STOCK")
         {
             return;
         }
@@ -392,10 +432,8 @@ public sealed partial class VirtualMachine
     }
 
     // SHIFT X=60 Y=40 Z=-5: a datum shift in the frame active where the word stands, appended to the chain and folded
-    // into the position; omitted axes are 0 (language 4.2, virtual machine 3.4, D31).
-    // TODO(question): D60 halves "X" under DIAMETER=ON and keeps "other radial distances" radius values; whether the X
-    // of a SHIFT, a distance of the frame, is a diameter is not said. It is kept as written, like CENTER:IX, until D125
-    // is answered.
+    // into the position; omitted axes are 0 (language 4.2, virtual machine 3.4, D31). Every word with the key X is a
+    // diameter under DIAMETER=ON, whatever the verb: SHIFT X=20 shifts by radius 10 (D60, D125).
     private void ApplyShift(BlockContext context)
     {
         var shift = new Dictionary<string, decimal?>(StringComparer.Ordinal);
@@ -409,7 +447,9 @@ public sealed partial class VirtualMachine
             // A shift from an expression is not evaluated in STATIC mode: the entry holds it as UNKNOWN, and its axis
             // is unknown outside the MACHINE frame (virtual machine 1, the answer of wave-1 question #100;
             // FrameRules.AppendShift).
-            shift[axis] = NumberOf(word);
+            shift[axis] = NumberOf(word) is decimal value
+                ? DiameterRules.ToRadius(word, value, _state.Frame.Diameter, cycleAxis: null)
+                : null;
         }
 
         FrameRules.AppendShift(_state, shift);
@@ -483,9 +523,9 @@ public sealed partial class VirtualMachine
             return;
         }
 
-        // TODO(question): virtual machine 3.4 says the rotary axis positions are known from the TILT_AXIS words
-        // without naming the frame; they are the axis positions of this machine (language 4.2) and are kept in the
-        // MACHINE frame until D126 is answered.
+        // The TILT_AXIS values are machine-axis setpoints, like PLANE AXIAL: the named rotary axes are known in the
+        // MACHINE frame, where the limit check applies (D100), and unknown in the workpiece frame until a motion with
+        // known coordinates (virtual machine 3.4, D35, D126, D230).
         foreach (KeyValuePair<string, decimal?> axisAngle in axisAngles)
         {
             _state.Motion.Position[axisAngle.Key] = axisAngle.Value is decimal known

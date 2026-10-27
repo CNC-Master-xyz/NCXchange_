@@ -53,6 +53,18 @@ public static partial class DiagnosticCodes
     public const string VectorNotUnitLength = "VM213";
 
     /// <summary>
+    /// VM214: vector words TX TY TZ or NX NY NZ in a CYCLE_CALL block; RAPID, LINE and ARC carry them under TCPM=ON,
+    /// a cycle call does not (language 4.3, 5 rule 2; virtual machine 3.1, 5; D185).
+    /// </summary>
+    public const string VectorUnderCycleCall = "VM214";
+
+    /// <summary>
+    /// VM215: CYLINDER=n while the workpiece holder has no rotary axis, about which the cylinder could turn (language
+    /// 4.2, virtual machine 3.4, 3.8, D146).
+    /// </summary>
+    public const string CylinderWithoutRotaryAxis = "VM215";
+
+    /// <summary>
     /// VM220: ARC without CENTER, R or ANGLE (language 4.3, virtual machine 3.2, 5).
     /// </summary>
     public const string ArcWithoutCenterRadiusOrAngle = "VM220";
@@ -156,4 +168,10 @@ public static partial class DiagnosticCodes
     /// 3.3, 5, D189).
     /// </summary>
     public const string CycleCallOnTheDrillingAxis = "VM253";
+
+    /// <summary>
+    /// VM254: a parameter of a catalog cycle that the machine's cycle catalog does not map for that cycle, checked
+    /// with a machine file; without one it is the WARNING VM003 (language 4.7.1, virtual machine 5, D103, D114).
+    /// </summary>
+    public const string CycleParameterUnknown = "VM254";
 }

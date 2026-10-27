@@ -7,9 +7,10 @@ namespace Ncx.Core.Machine;
 public sealed record BlockNumbering
 {
     /// <summary>
-    /// enabled: whether blocks are numbered; false when left out.
+    /// enabled: whether blocks are numbered; null when left out, which is false except on Heidenhain, where Klartext
+    /// always numbers its blocks (<see cref="OutputFormat.WithFamilyDefaults"/>, D263).
     /// </summary>
-    public bool Enabled { get; init; }
+    public bool? Enabled { get; init; }
 
     /// <summary>
     /// start: the first block number, 10 (Heidenhain: 0); null when left out.

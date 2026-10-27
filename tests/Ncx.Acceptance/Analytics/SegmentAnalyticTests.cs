@@ -32,8 +32,8 @@ public sealed class SegmentAnalyticTests
     private static MachineConfig Mill => AnalyticMachines.Mill(dynamics: null);
 
     // P4-03 test first, three blocks with known lengths and one arc: LINE X=30 Y=40 from X=0 Y=0 is 50 mm, LINE Z=-5 is
-    // 5 mm, the half circle ARC=CCW X=10 Y=40 about X=20 Y=40 is pi 10 mm, which the MOTION gives as 31.416 mm (D62);
-    // minimum 5, maximum 50, mean 86.416 / 3. The RAPID from the unknown start has no length and is skipped.
+    // 5 mm, the half circle ARC=CCW X=10 Y=40 about X=20 Y=40 is pi 10 mm, which the MOTION gives as 31.415927 mm
+    // (D121); minimum 5, maximum 50, mean 86.415927 / 3. The RAPID from the unknown start has no length and is skipped.
     [Fact]
     public void SegmentLength_ThreeBlocksAndAnArc_AreTheLengthsComputedByHand()
     {
@@ -43,8 +43,8 @@ public sealed class SegmentAnalyticTests
         Assert.Equal(3, all.Count);
         Assert.Equal(5, all.Minimum, Precision);
         Assert.Equal(50, all.Maximum, Precision);
-        Assert.Equal(86.416 / 3, all.Mean, Precision);
-        Assert.Equal(31.416, segments.Statistics.Of(Verb.Arc)!.Maximum, Precision);
+        Assert.Equal(86.415927 / 3, all.Mean, Precision);
+        Assert.Equal(31.415927, segments.Statistics.Of(Verb.Arc)!.Maximum, Precision);
         Assert.Equal(2, segments.Statistics.Of(Verb.Line)!.Count);
         Assert.Equal(4, segments.Motions);
         Assert.Equal(1, segments.FromUnknown);
@@ -107,7 +107,7 @@ public sealed class SegmentAnalyticTests
 
         Assert.Equal(2, segments.Statistics.All.Count);
         Assert.Equal(5, segments.Statistics.All.Minimum, Precision);
-        Assert.Equal(31.416, segments.Statistics.All.Maximum, Precision);
+        Assert.Equal(31.415927, segments.Statistics.All.Maximum, Precision);
         Assert.Equal(2, segments.Motions);
         Assert.Equal(0, segments.FromUnknown);
     }

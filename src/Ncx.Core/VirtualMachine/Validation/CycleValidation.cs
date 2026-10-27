@@ -27,6 +27,9 @@ internal static class CycleValidation
             ValidationRule.Error(DiagnosticCodes.CycleCallOnTheDrillingAxis,
                 "CYCLE_CALL of a built-in drilling cycle with a word on its drilling axis; the cycle's own planes move "
                 + "that axis, and a pre-positioning is a RAPID of its own.", "language 4.7; VM 3.3, 5; D189"),
+            ValidationRule.Error(DiagnosticCodes.CycleParameterUnknown,
+                "A parameter of a catalog cycle that the machine's cycle catalog does not map for that cycle; without "
+                + "a machine file it is the WARNING VM003.", "language 4.7.1; VM 5; D114"),
         ],
     };
 }

@@ -118,7 +118,7 @@ internal sealed record RunMachine
         {
             subject = "The machine file that the job manifest " + job + " names";
         }
-        string? machineText = InputFile.Read(machineFile.FullPath, machineFile.Name,
+        string? machineText = machineFile.Text ?? InputFile.Read(machineFile.FullPath, machineFile.Name,
             DiagnosticCodes.MachineFileUnreadable, subject, "D97, D103", diagnostics);
         if (machineText is null)
         {
@@ -136,6 +136,11 @@ internal sealed record RunMachine
         }
 
         RunMachine withCatalog = WithCatalog(machine, machineFile, folders, diagnostics);
+        if (withCatalog.Machine is MachineConfig merged && !CheckHeldDistances(merged, machineFile, diagnostics))
+        {
+            withCatalog = Stopped;
+        }
+
         return withCatalog with { FileName = machineFile.Name, MachineFile = machineFile, Project = project };
     }
 
@@ -161,21 +166,18 @@ internal sealed record RunMachine
             Code = DiagnosticCodes.MachineNotFound,
             Message = $"{named} names no file at that path and no machine file "
                 + $"{ProjectFolders.WithExtension(value)} in the machine folders "
-                + $"{folders.Names(folders.MachineFolders)} (architecture 10, machine-config 10; D97).",
+                + $"{folders.Names(folders.MachineFolders)} and no built-in machine file of that name "
+                + "(architecture 10, machine-config 10; D97, D371).",
         });
     }
 
     // The catalog file that [cycles] catalog names goes beneath the [[cycle]] entries of the machine file
     // (machine-config 6). It is looked for in the cycle folders alone, and read and loaded like the machine file: one
-    // that cannot be found or read decides exit code 2, one with an ERROR stops the run (machine-config 10, D97).
-    // TODO(question): machine-config 6 and 10 name the catalog file of a machine and the cycle folder of the project,
-    // and architecture 10 lets ncx.toml name the cycle folder, but no document says where else ncx looks for the
-    // catalog, nor what a catalog that cannot be found means. It is looked for in the cycle folder of ncx.toml, then in
-    // cycles/ of the working directory, then in cycles/ of the tool's own folder, the order of the machine folders, and
-    // nowhere else: the path rules of --machine do not apply, so a file of that name in the working directory is never
-    // the catalog, a value with a folder in it is a path from each cycle folder in turn, and a full path or a value
-    // that climbs out with ".." names no file of them. One that is in none of them is an input that cannot be read
-    // (D97). This holds until D207 is answered.
+    // that cannot be found or read decides exit code 2, one with an ERROR stops the run (machine-config 10, D97). The
+    // cycle folders are the one ncx.toml names, cycles/ of the working directory, cycles/ of the tool's own folder, and
+    // last the built-in catalogs: the path rules of --machine do not apply, so a file of that name in the working
+    // directory is never the catalog, a value with a folder in it is a path from each cycle folder in turn, and a full
+    // path or a value that climbs out with ".." names no file of them (D207, D371).
     private static RunMachine WithCatalog(
         MachineConfig machine, FoundFile machineFile, ProjectFolders folders, Diagnostics diagnostics)
     {
@@ -196,12 +198,13 @@ internal sealed record RunMachine
                 Code = DiagnosticCodes.CycleCatalogUnreadable,
                 Message = $"The cycle catalog {ProjectFolders.WithExtension(catalogValue)} that [cycles] catalog of "
                     + $"{machineFile.Name} names is in none of the cycle folders "
-                    + $"{folders.Names(folders.CycleFolders)} (machine-config 6, 10; D97).",
+                    + $"{folders.Names(folders.CycleFolders)} and no built-in catalog of that name "
+                    + "(machine-config 6, 10; D97, D371).",
             });
             return NotRead;
         }
 
-        string? catalogText = InputFile.Read(catalogFile.FullPath, catalogFile.Name,
+        string? catalogText = catalogFile.Text ?? InputFile.Read(catalogFile.FullPath, catalogFile.Name,
             DiagnosticCodes.CycleCatalogUnreadable, "The cycle catalog of " + machineFile.Name,
             "machine-config 6, D97", diagnostics);
         if (catalogText is null)
@@ -219,6 +222,19 @@ internal sealed record RunMachine
         }
 
         return new RunMachine { Machine = CycleCatalogLoader.WithCatalog(machine, catalog), InputsRead = true };
+    }
+
+    // D358: once the catalog file is under the machine, or the built-in drilling family where [cycles] names no
+    // catalog, the [cycles] keys the machine sets are checked against it: CFG156 where a key and the defaults of an
+    // entry give the same native parameter, CFG158 where a Heidenhain catalog writes Q256 and the machine sets no
+    // chip_break_lift. They stand on the line of [cycles], in the machine file. False when an ERROR stops the run.
+    private static bool CheckHeldDistances(MachineConfig machine, FoundFile machineFile, Diagnostics diagnostics)
+    {
+        CyclesConfig cycles = machine.Cycles ?? new CyclesConfig();
+        var heldDiagnostics = new Diagnostics(machineFile.Name);
+        CycleCatalogLoader.CheckHeldDistances(machine.CycleCatalog, cycles.SetKeys(), cycles.Line, heldDiagnostics);
+        AddAll(diagnostics, heldDiagnostics);
+        return !heldDiagnostics.HasErrors;
     }
 
     // The diagnostics of one file after those reported before it (D98).

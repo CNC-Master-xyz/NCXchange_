@@ -138,10 +138,9 @@ internal static class JobPipeline
 
     // The machine file that the manifest names: a file next to the manifest, where the files of its channels stand
     // (language 4.8), else the value as --machine takes it, a path from the working directory or a name in the machine
-    // folders (P2-04).
-    // TODO(question): machine-config 8 names the machine of a job ("nakamura-ntjx.toml") without saying where ncx looks
-    // for its file, next to the manifest like the files of the channels or where --machine looks; a file next to the
-    // manifest is taken first, then the value as --machine takes it, until that is answered.
+    // folders and last the built-in copy (P2-04; D206, D371). The folder of the manifest comes first, so that a
+    // manifest and its machine file travel together, and the three lookups read alike (D303). ncx compile --job takes
+    // the machine the same way (CompileJob).
     internal static string MachineOf(JobManifest job, string folder, string workingDirectory)
     {
         string nextToManifest = Path.Combine(folder, job.Machine);

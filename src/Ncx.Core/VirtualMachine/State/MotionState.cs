@@ -24,10 +24,11 @@ internal sealed class MotionState
 
         // An axis whose [[axis]] entry has home starts known in the MACHINE frame at that reference point and unknown
         // in the workpiece frame; an axis without home starts unknown in every frame, its position frame UNKNOWN
-        // (virtual machine 2.2, 3.4, D35, D100). home is reference point 1; home2 is only for HOME with POINT=2.
+        // (virtual machine 2.2, 3.4, D35, D100). home is reference point 1; home2 is only for HOME with POINT=2. The
+        // home of an axis programmed in diameters is a diameter and is halved into the radius the VM stores (D137).
         foreach (AxisDef axis in machine.Axes)
         {
-            if (axis.Home is decimal home)
+            if (axis.AsStoredRadius(axis.Home) is decimal home)
             {
                 Position[axis.NcxName] = new AxisPosition(home, PositionFrame.Machine, Known: true);
             }

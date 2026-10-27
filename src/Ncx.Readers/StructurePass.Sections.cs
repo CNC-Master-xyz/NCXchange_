@@ -217,19 +217,30 @@ internal sealed partial class StructurePass
         }
     }
 
-    // The end that a section gets after its last block stands after the trivia that follow it, in front of the next
-    // section or of FILE=END; written there, the trivia keep their place under the line numbers of the builder
-    // (wave-1 question #77).
+    // The end that a section gets after its last block stands in front of the next section or of FILE=END, and in
+    // front of the comment-only and blank lines that separate the two, which the builder places where they are read
+    // (D142; wave-1 question #77).
     private void WriteAtBoundary(int line, IReadOnlyList<Word> words, int? nextBegin)
     {
         Boundary(nextBegin).Add(Write(_blocks[nextBegin ?? _last], line, words));
     }
 
-    // The steps behind the last block of a section: in front of the next section, or of FILE=END.
+    // The steps behind the last block of a section: in front of the trivia before the next section, or before
+    // FILE=END (D142).
     private List<ReadStep> Boundary(int? nextBegin)
     {
         int host = nextBegin ?? _last;
-        return nextBegin is not null || IsFileEnd(_last) ? Before(host) : After(host);
+        if (nextBegin is null && !IsFileEnd(_last))
+        {
+            return After(host);
+        }
+
+        while (host > 0 && _blocks[host - 1].IsTrivia)
+        {
+            host--;
+        }
+
+        return Before(host);
     }
 
     private int? FindRole(SourceSection section, StructureRole role, bool unskippedOnly)

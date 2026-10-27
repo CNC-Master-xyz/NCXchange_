@@ -93,11 +93,9 @@ internal sealed class BlockEvents
         _events.AddRange(StateChanges.Between(_block, _before, _after));
 
         // The block counts under the tool of the holder called last and under the program, with the lengths of its
-        // motions (P1-05: the distance under a tool is summed from MOTION lengths per holder).
-        // TODO(question): virtual machine 7 gives the distance and block count under the tool without saying, on a
-        // machine with several holders, under whose tool a block and its motions are; they count under the tool of the
-        // holder of the last TOOL (lastHolder, 2.3), which OFFSET addresses as well (3.8 rule 2), until D236 is
-        // answered.
+        // motions (P1-05: the distance under a tool is summed from MOTION lengths per holder). D236: a block and its
+        // motion count under the tool of lastHolder (2.3), which OFFSET addresses as well (3.8 rule 2); a
+        // tool-changing block counts under the new tool, and no motion counts under two tools.
         if (_after.LastHolder is string holder
             && _after.Holders.TryGetValue(holder, out HolderSnapshot? lastHolder)
             && lastHolder.SpindleTool != s_emptySpindle
@@ -117,21 +115,44 @@ internal sealed class BlockEvents
             _events.Add(SubEvent(EventPhase.End));
         }
 
+        // D233: the PROGRAM=END that ends a channel's program (JUMP=END included) raises TOOL_END for every tool the
+        // channel brought into a spindle that is still there, directly before PROGRAM_END; the spindle state stays
+        // unchanged. An uncalled SUB walk closes its tools at its SUB=END. The PROGRAM=END of a program a CALL runs
+        // from another file does not execute (virtual machine 3.6, D214), and a run an ERROR stops closes nothing.
+        if (_block.Has("SUB", null, "END") && _after.Flow.Calls.Count == 0)
+        {
+            CloseTools(underTool);
+        }
+
         if (_block.Has("PROGRAM", null, "END"))
         {
+            CloseTools(underTool);
             _events.Add(ProgramEvent(EventPhase.End, underProgram));
         }
 
         return _events;
     }
 
+    // D233: TOOL_END for every tool still in a spindle that the channel brought in, with its figures, at the end of a
+    // channel's program or of an uncalled SUB walk; the tools stay in their spindles.
+    private void CloseTools(Dictionary<string, RunStatistics> underTool)
+    {
+        foreach (KeyValuePair<string, RunStatistics> used in new List<KeyValuePair<string, RunStatistics>>(underTool))
+        {
+            if (!_after.Holders.TryGetValue(used.Key, out HolderSnapshot? holder)
+                || holder.SpindleTool == s_emptySpindle)
+            {
+                continue;
+            }
+
+            _events.Add(ToolEvent(EventPhase.End, holder.SpindleTool, used.Key, RpmOf(_before, used.Key), used.Value));
+            underTool.Remove(used.Key);
+        }
+    }
+
     // A tool that leaves the spindle raises TOOL_END with the distance and the blocks under it, then the tool that
     // enters raises TOOL_BEGIN (virtual machine 3.5, 7); only a change to another tool is one (architecture 5.2), and
     // tool 0 is the empty spindle, no tool.
-    // TODO(question): virtual machine 7 raises TOOL_END when a tool leaves the spindle, and PROGRAM=END keeps the tool
-    // in the spindle (virtual machine 4), so the last tool of a program gets no TOOL_END and its distance and block
-    // count reach no listener, while the tool list needs them (virtual machine 8); no TOOL_END is raised at
-    // PROGRAM_END until D233 is answered.
     private void AddToolChanges(Dictionary<string, RunStatistics> underTool)
     {
         foreach (KeyValuePair<string, HolderSnapshot> holder in _after.Holders)
@@ -246,10 +267,8 @@ internal sealed class BlockEvents
     }
 
     // CYCLE_CALL at every call, with the cycle name and parameters and the call point (virtual machine 3.3, 7); under
-    // ExpandCycles its MOTION events follow it.
-    // TODO(question): virtual machine 7 raises CYCLE_CALL at "every call", while 3.3 raises the call "as the individual
-    // MOTION events" under ExpandCycles and architecture 5.1 raises "CYCLE_CALL or expanded MOTION events"; CYCLE_CALL
-    // is raised at every call and the MOTION events follow it under ExpandCycles, until D234 is answered.
+    // ExpandCycles the MOTION events of the sequence follow it in the same block and carry the CYCLE_CALL block as
+    // their Block (D234).
     private void AddCycleCall()
     {
         if (_block.Verb?.Key != "CYCLE_CALL" || _after.Cycle.Name is not string name)
@@ -374,10 +393,9 @@ internal sealed class BlockEvents
         };
     }
 
-    // The name and the number of the program (virtual machine 2.1), with the run statistics at PROGRAM_END.
-    // TODO(question): virtual machine 7 gives PROGRAM_END "run statistics" and 3.6 raises them without saying what they
-    // are; they are the blocks executed from PROGRAM=BEGIN to PROGRAM=END and the distance summed from the MOTION
-    // lengths, the figures TOOL_END carries for a tool, until D235 is answered.
+    // The name and the number of the program (virtual machine 2.1), with the run statistics at PROGRAM_END: the figures
+    // TOOL_END carries for a tool, the blocks executed, the feed and the rapid distance and the motions of unknown
+    // length (D235).
     private ProgramEvent ProgramEvent(EventPhase phase, RunStatistics underProgram)
     {
         bool end = phase == EventPhase.End;
@@ -391,7 +409,9 @@ internal sealed class BlockEvents
             Name = _after.Program.Name,
             Number = _after.Program.Number,
             Blocks = end ? underProgram.Blocks : 0,
-            Distance = end ? underProgram.Distance : 0m,
+            FeedDistance = end ? underProgram.FeedDistance : 0m,
+            RapidDistance = end ? underProgram.RapidDistance : 0m,
+            UnknownLengthMotions = end ? underProgram.UnknownLengthMotions : 0,
         };
     }
 
@@ -433,7 +453,9 @@ internal sealed class BlockEvents
             Tool = tool,
             Holder = holder,
             Rpm = rpm,
-            Distance = used?.Distance ?? 0m,
+            FeedDistance = used?.FeedDistance ?? 0m,
+            RapidDistance = used?.RapidDistance ?? 0m,
+            UnknownLengthMotions = used?.UnknownLengthMotions ?? 0,
             Blocks = used?.Blocks ?? 0,
         };
     }

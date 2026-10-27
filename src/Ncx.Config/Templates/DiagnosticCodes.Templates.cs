@@ -6,7 +6,8 @@ namespace Ncx.Config;
 // A template that cannot be used is reported (machine-config introduction), and a mistake is a WARNING only where the
 // specification allows it (code-guidelines 6): a template text that cannot be read as placeholders at all (a brace
 // that is never closed or never opened, braces around no name, a format suffix other than a width padded with zeros)
-// is an ERROR like the missing placeholder value (wave-1 question #41).
+// is an ERROR like the missing placeholder value (wave-1 question #41). A well-formed name outside the list of the
+// introduction is the WARNING CFG104, which the introduction states (D152).
 public static partial class DiagnosticCodes
 {
     /// <summary>
@@ -32,4 +33,10 @@ public static partial class DiagnosticCodes
     /// read back as other numbers (machine-config introduction, D153).
     /// </summary>
     public const string TemplateNumberWiderThanItsField = "CFG103";
+
+    /// <summary>
+    /// A template has a well-formed placeholder name that the complete list of the machine-config introduction does
+    /// not hold; it is a WARNING and the placeholder is read as a number (D152).
+    /// </summary>
+    public const string TemplatePlaceholderNotListed = "CFG104";
 }

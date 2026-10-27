@@ -1,3 +1,6 @@
+using System.Globalization;
+using Ncx.Tests.Fixtures;
+
 namespace Ncx.Acceptance.Cli;
 
 /// <summary>
@@ -165,6 +168,35 @@ public sealed class RunMachineTests : IDisposable
         Assert.StartsWith("nowhere.toml(1): ERROR CLI202: The cycle catalog nowhere.toml that [cycles] catalog of "
             + Path.Combine("machines", "mill.toml") + " names is in none of the cycle folders cycles, ",
             _project.Error, StringComparison.Ordinal);
+        Assert.Contains(" and no built-in catalog of that name (", _project.Error, StringComparison.Ordinal);
+    }
+
+    // D207, D371: a shipped catalog that none of the cycle folders holds is the copy built into ncx, the fourth and
+    // last place of the lookup.
+    [Fact]
+    public void CycleCatalog_ShippedCatalogInNoCycleFolder_IsTheBuiltInCopy()
+    {
+        _project.WriteInWorkingDirectory("machines/mill.toml", MillWithCatalog("fanuc.toml"));
+        string program = _project.WriteInWorkingDirectory("part.ncx", CliHarness.OneProgram("UNITS=MM"));
+
+        int exitCode = _project.Check(program, "mill");
+
+        Assert.True(exitCode == 0, _project.Error);
+    }
+
+    // D207, D371: a shop's own catalog of a shipped name wins over the built-in copy.
+    [Fact]
+    public void CycleCatalog_ShopFileOfAShippedName_WinsOverTheBuiltInCopy()
+    {
+        _project.WriteInWorkingDirectory("machines/mill.toml", MillWithCatalog("fanuc.toml"));
+        _project.WriteInWorkingDirectory("cycles/fanuc.toml", "[[cycle]\n");
+        string program = _project.WriteInWorkingDirectory("part.ncx", CliHarness.OneProgram("UNITS=MM"));
+
+        int exitCode = _project.Check(program, "mill");
+
+        Assert.Equal(1, exitCode);
+        Assert.StartsWith(Path.Combine("cycles", "fanuc.toml") + "(1): ERROR CFG001: ", _project.Error,
+            StringComparison.Ordinal);
     }
 
     // Machine-config 6, 10: the catalog is a file of a cycle folder and never a file of the working directory itself,
@@ -251,5 +283,86 @@ public sealed class RunMachineTests : IDisposable
     private static string Catalog(string mark)
     {
         return MarkedCatalog.Replace("{0}", mark, StringComparison.Ordinal) + "\n";
+    }
+
+    // D358: a Heidenhain machine whose catalog writes Q256 and that sets no [cycles] chip_break_lift is the ERROR
+    // CFG158 on the line of [cycles], with the shipped catalog and with the built-in drilling family alike.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void HeidenhainMachine_WithoutChipBreakLift_IsCfg158(bool withCatalog)
+    {
+        string machine = ShippedMachine("heidenhain-itnc530.toml").Replace("chip_break_lift = 0.6", "#",
+            StringComparison.Ordinal);
+        if (!withCatalog)
+        {
+            machine = machine.Replace("catalog = \"heidenhain.toml\"", "#", StringComparison.Ordinal);
+        }
+
+        _project.WriteInWorkingDirectory("machines/tnc.toml", machine);
+        string program = _project.WriteInWorkingDirectory("part.ncx", CliHarness.OneProgram("UNITS=MM"));
+
+        int exitCode = _project.Check(program, "tnc");
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("tnc.toml(" + LineOf(machine, "[cycles]") + "): ERROR CFG158: ", _project.Error,
+            StringComparison.Ordinal);
+    }
+
+    // D358: the shipped Heidenhain machine sets chip_break_lift and loads clean.
+    [Fact]
+    public void ShippedHeidenhainMachine_LoadsClean()
+    {
+        _project.WriteInWorkingDirectory("machines/tnc.toml", ShippedMachine("heidenhain-itnc530.toml"));
+        string program = _project.WriteInWorkingDirectory("part.ncx", CliHarness.OneProgram("UNITS=MM"));
+
+        int exitCode = _project.Check(program, "tnc");
+
+        Assert.True(exitCode == 0, _project.Error);
+        Assert.DoesNotContain("CFG15", _project.Error, StringComparison.Ordinal);
+    }
+
+    // D358: on Siemens chip_break_lift is _VRT and peck_clearance _DIS1 of CYCLE83; a [[cycle]] entry whose defaults
+    // give the same parameter beside the key is the WARNING CFG156.
+    [Theory]
+    [InlineData("chip_break_lift = 1.0", "CHIP_BREAK", "_VRT")]
+    [InlineData("peck_clearance = 1.0", "PECK", "_DIS1")]
+    public void SiemensMachine_KeyBesideADefaultOfItsParameter_IsCfg156(string key, string entry, string native)
+    {
+        string machine = ShippedMachine("siemens-840dsl-mill.toml").Replace(
+            "chip_break_lift = 1.0", key, StringComparison.Ordinal);
+        machine += $$"""
+
+            [[cycle]]
+            name = "{{entry}}"
+            native = "CYCLE83"
+            signature = [
+                "RTP", "RFP", "SDIS", "DP", "DPR", "FDEP", "FDPR", "_DAM", "DTB", "DTS", "FRF", "VARI", "_AXN", "_MDEP",
+                "_VRT", "_DTD", "_DIS1",
+            ]
+            params = { SAFE = "RTP", SURFACE = "RFP", CLEARANCE = "SDIS", DEPTH = "DP", PECK = "FDPR" }
+            defaults = { {{native}} = 2 }
+            """;
+        _project.WriteInWorkingDirectory("machines/sinumerik.toml", machine);
+        string program = _project.WriteInWorkingDirectory("part.ncx", CliHarness.OneProgram("UNITS=MM"));
+
+        _project.Check(program, "sinumerik");
+
+        Assert.Contains("WARNING CFG156: ", _project.Error, StringComparison.Ordinal);
+        Assert.Contains(native, _project.Error, StringComparison.Ordinal);
+    }
+
+    // A machine file of machines/ of the repository, as shipped.
+    private static string ShippedMachine(string name)
+    {
+        return File.ReadAllText(Path.Combine(Fixture.RepositoryRoot(), "machines", name));
+    }
+
+    // The 1-based line of the first line of a text that starts with a prefix.
+    private static string LineOf(string text, string prefix)
+    {
+        string[] lines = text.ReplaceLineEndings("\n").Split('\n');
+        int index = Array.FindIndex(lines, line => line.StartsWith(prefix, StringComparison.Ordinal));
+        return (index + 1).ToString(CultureInfo.InvariantCulture);
     }
 }

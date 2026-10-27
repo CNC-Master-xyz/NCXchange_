@@ -261,6 +261,23 @@ public sealed class WordCatalogTests
         Assert.False(WordCatalog.IsNativeParameterAllowed(block));
     }
 
+    // D114: a block whose CYCLE value is not a built-in name or OFF is a catalog cycle block, whose unknown keys are
+    // cycle parameters; the native form and the built-in names are not.
+    [Theory]
+    [InlineData("CYCLE=RECT_POCKET LENGTH=60", true)]
+    [InlineData("CYCLE=CIRC_POCKET", true)]
+    [InlineData("CYCLE=DRILL SURFACE=0 CLEARANCE=5 DEPTH=-2", false)]
+    [InlineData("CYCLE=CHIP_BREAK SURFACE=0 CLEARANCE=5 DEPTH=-2 PECK=1", false)]
+    [InlineData("CYCLE=OFF", false)]
+    [InlineData("CYCLE:HEIDENHAIN=251 Q215=0", false)]
+    [InlineData("CYCLE_CALL X=10 Y=10", false)]
+    public void D114_IsCatalogCycleBlock(string text, bool expected)
+    {
+        Block block = Assert.Single(ExampleBlocks.Read(text));
+
+        Assert.Equal(expected, WordCatalog.IsCatalogCycleBlock(block));
+    }
+
     // @SAVE and @RESTORE are internal, of the group Pseudo, with a state key KEY[:ADDR] as their value (D95).
     [Theory]
     [InlineData("@SAVE")]
@@ -299,6 +316,26 @@ public sealed class WordCatalogTests
         Assert.NotNull(cylinder);
         Assert.Equal(ValueKinds.NumberOrExpr | ValueKinds.Ident, cylinder.ValueKinds);
         Assert.Equal(["OFF"], cylinder.AllowedIdents);
+    }
+
+    // TOOL_POINT=k is an integer with the holder role as an optional address, TIP_OFFSET=a and POINT_RADIUS=r are
+    // numbers or expressions without an address; all three are modal per holder (language 4.4, D372, D391).
+    [Theory]
+    [InlineData("TOOL_POINT", ValueKinds.Integer, AddrKind.Role, CanonicalRanks.ToolPoint)]
+    [InlineData("TIP_OFFSET", ValueKinds.NumberOrExpr, AddrKind.None, CanonicalRanks.TipOffset)]
+    [InlineData("POINT_RADIUS", ValueKinds.NumberOrExpr, AddrKind.None, CanonicalRanks.PointRadius)]
+    public void D372_PointWord_IsAModalToolWordOfLanguage44(string key, ValueKinds valueKinds, AddrKind addrKind,
+        int rank)
+    {
+        WordDefinition? definition = WordCatalog.Lookup(key);
+
+        Assert.NotNull(definition);
+        Assert.Equal(WordKind.Tool, definition.Group);
+        Assert.Equal(valueKinds, definition.ValueKinds);
+        Assert.Equal(addrKind, definition.AddrKind);
+        Assert.Equal(Scope.Modal, definition.Scope);
+        Assert.Equal(rank, definition.CanonicalRank);
+        Assert.Equal("4.4", definition.Section);
     }
 
     // NAME="..." is a string: the program name with PROGRAM=BEGIN and the program selector with START_CHANNEL; with

@@ -9,7 +9,7 @@ An ERROR stops the run, a WARNING is reported and the run continues (D98); a dia
 stage named, and without a code where the code belongs to that stage's own project. The codes of the other
 projects (`CFG`, `RDR`, `CMP`, `ANA`, `PLG`, `CLI`) are not listed here.
 
-Suppressed inside a subprogram that no program of the file calls, because the state they check belongs to a caller that does not exist (virtual machine 3.9, D99): `VM040`, `VM041`, `VM042`, `VM043`, `VM044`, `VM200`, `VM201`, `VM202`, `VM227`, `VM250`, `VM251`, `VM480`, `VM500`.
+Suppressed inside a subprogram that no program of the file calls, because the state they check belongs to a caller that does not exist (virtual machine 3.9, D99): `VM040`, `VM041`, `VM042`, `VM043`, `VM044`, `VM200`, `VM201`, `VM202`, `VM227`, `VM250`, `VM251`, `VM480`, `VM481`, `VM500`.
 
 ## Structure
 
@@ -31,7 +31,8 @@ The file frame, the programs and subprograms, and the words of a block (language
 | `PAR013` | ERROR | A word in a HOME block that is not a bare axis name. | language 4.3, 5 rule 2 |
 | `PAR014` | ERROR | An axis word without a value outside a HOME block. | language 4.3, 5 rule 2; D93 |
 | `PAR015` | ERROR | Duplicate key: a key twice in one block with one address. | language 5 rule 4; VM 5 |
-| `PAR016` | ERROR | IF, ARG, TIMES, WITH, FRAME, MOVE, ROT, POINT or PHASE without its verb or partner word in the block. | language 5 rule 5; VM 5 |
+| `PAR016` | ERROR | IF, ARG, TIMES, WITH, FRAME, MOVE, ROT, POINT or PHASE without its verb or partner word in the block; NAME, NUMBER or CHANNEL without its program or section block; a cycle parameter without CYCLE. | language 5 rule 5; VM 5; D116 |
+| `PAR017` | ERROR | TOOL_POINT, TIP_OFFSET or POINT_RADIUS in a block that is neither a TOOL block nor a block of their own. | language 4.4; VM 5; D372, D392 |
 | `PAR020` | ERROR | Missing or misplaced FILE=BEGIN: it is the first block of the file and stands nowhere else. | language 4.1; VM 5; D92 |
 | `PAR021` | ERROR | FILE=BEGIN without NCX, the format version. | language 4.1; VM 5 |
 | `PAR022` | ERROR | NCX names a format version other than 1. | language 4.1 |
@@ -83,6 +84,7 @@ SETPOS, the path tolerance, the tilted plane and the blank (language 4.1, 4.2; V
 | `VM424` | ERROR | STOCK with a side of zero or negative extent, or STOCK=CYLINDER whose two sides across the tool axis of the WORKPLANE differ, so that its footprint is not a circle. | language 4.2; VM 5; D351 |
 | `VM425` | ERROR | A second STOCK in one program, a STOCK before the first ORIGIN or one after the first motion verb. | language 4.2; VM 5; D351 |
 | `VM426` | WARNING | ROT written with TILT_AXIS, on any target and without a machine file too: the control ignores the transformation type there. | language 4.2; VM 5; D191 |
+| `VM215` | ERROR | CYLINDER=n while the workpiece holder has no rotary axis. | language 4.2; VM 3.4, 3.8, 5; D146 |
 
 ## Motion
 
@@ -95,7 +97,7 @@ Linear motion and the machine limits of a motion (language 4.3; VM 3.1, 5; machi
 | `VM202` | ERROR | IX from an unknown position. In a subprogram nothing calls the position becomes unknown instead. Suppressed inside a subprogram that no program of the file calls (D99). | VM 3.1, 5; D99 |
 | `VM203` | ERROR | Two forms of one axis in one block (X=10 IX=5). | language 4.3 |
 | `VM440` | WARNING | F in a RAPID block. | VM 5 |
-| `VM441` | WARNING | F above an axis max_feed. | VM 5; machine-config 4; D64 |
+| `VM441` | WARNING | F above the max_feed of an axis the LINE or ARC moves (rotary axes only in a rotary-only block under ROTARY_FEED=DEG_MIN), PER_REV with the known rpm, INCH times 25.4, CYCLE_F against the drilling axis; once per F or CYCLE_F word (MaxFeedCheck). | VM 5; machine-config 4; D64, D192 |
 | `VM442` | WARNING | A target beyond the axis limits, compared in the MACHINE frame and not checked while the machine position is unknown. | VM 5; machine-config 4; D64, D100 |
 | `VM670` | WARNING | With limits = "clamp" in the configuration: RPM, F or a target beyond a machine limit is rewritten to the limit, and the WARNING says so. Raised by the expander. | VM 5; machine-config 1; D64 |
 
@@ -131,6 +133,7 @@ The tool vector and the surface normal under TCPM (language 4.3; VM 3.1, 5; D81)
 | `VM211` | ERROR | Vector words mixed with rotary words. | language 4.3; VM 3.1, 5; D81 |
 | `VM212` | ERROR | Incomplete vector words: TX TY TZ all three, NX NY NZ all three and only with TX TY TZ. | language 4.3; VM 5; D81 |
 | `VM213` | ERROR | Vector words not of unit length within the arc tolerance. | VM 3.1, 5; D36, D81 |
+| `VM214` | ERROR | Vector words in a CYCLE_CALL block. | language 4.3, 5 rule 2; VM 3.1, 5; D185 |
 
 ## Retract and home
 
@@ -154,6 +157,10 @@ The tool change of the two-word model and the offsets (language 4.4; VM 2.3, 3.5
 | `VM043` | WARNING | TOOL while a cycle is active; the change ends the cycle. Suppressed inside a subprogram that no program of the file calls (D99). | VM 3.5, 4, 5 |
 | `VM044` | WARNING | TOOL while compensation is on. Suppressed inside a subprogram that no program of the file calls (D99). | VM 3.5, 5 |
 | `VM480` | ERROR | OFFSET mixed with OFFSET:LEN or OFFSET:RAD in one program. Suppressed inside a subprogram that no program of the file calls (D99). | language 4.4; VM 5 |
+| `VM481` | ERROR | TOOL_POINT, TIP_OFFSET or POINT_RADIUS on a holder that holds no tool. Suppressed inside a subprogram that no program of the file calls (D99). | language 4.4; VM 5; D372 |
+| `VM482` | ERROR | A negative TIP_OFFSET or POINT_RADIUS. | language 4.4; VM 5; D372 |
+| `VM483` | ERROR | TOOL_POINT of 0 or less. | language 4.4; VM 5; D372 |
+| `VM484` | WARNING | A motion with a TIP_OFFSET under TILT, TILT_AXIS or TCPM=ON: no tip is derived; once per program. | VM 5, 9; D374 |
 
 ## Spindle
 
@@ -166,7 +173,7 @@ The spindles, their mode and synchronization, and their speed limits (language 4
 | `VM012` | ERROR | SPINDLE_SYNC with a spindle that is not in SPINDLE mode. | VM 3.8 rule 5 |
 | `VM013` | WARNING | RPM or SPINDLE of the following spindle while it runs synchronized. | VM 3.8 rule 5 |
 | `VM014` | ERROR | SPINDLE_SYNC with more or fewer than two spindle roles. | language 4.5; VM 3.8 rule 5 |
-| `VM500` | WARNING | Spindle OFF before a LINE, an ARC or a CYCLE_CALL of the built-in drilling family other than TAP: the spindle of the current tool holder, the default spindle when the holder has none. Suppressed inside a subprogram that no program of the file calls (D99). | VM 2.3, 5; D194 |
+| `VM500` | WARNING | Spindle OFF before a LINE, an ARC or a CYCLE_CALL of the built-in drilling family other than TAP: the spindle of the current tool holder, the default spindle when the holder has none, while the spindle of the workpiece holder does not run either. Suppressed inside a subprogram that no program of the file calls (D99). | VM 2.3, 5; D129, D194 |
 | `VM501` | WARNING | RPM above the spindle's rpm_max. | VM 5; machine-config 5; D64 |
 | `VM502` | WARNING | RPM below the spindle's rpm_min. | VM 5; machine-config 5; D64 |
 
@@ -180,6 +187,7 @@ The cycle call (language 4.7; VM 3.3, 5; D59, D94).
 | `VM251` | ERROR | CYCLE_CALL of a built-in drilling cycle without DEPTH or CLEARANCE; a catalog or CYCLE:controller=n cycle carries its own parameters. Suppressed inside a subprogram that no program of the file calls (D99). | VM 3.3, 5; D94 |
 | `VM252` | ERROR | AXIS naming an axis that is not a linear axis of the machine. | language 4.7; VM 3.3, 5; D59 |
 | `VM253` | ERROR | CYCLE_CALL of a built-in drilling cycle with a word on its drilling axis; the cycle's own planes move that axis, and a pre-positioning is a RAPID of its own. | language 4.7; VM 3.3, 5; D189 |
+| `VM254` | ERROR | A parameter of a catalog cycle that the machine's cycle catalog does not map for that cycle; without a machine file it is the WARNING VM003. | language 4.7.1; VM 5; D114 |
 
 ## Flow
 
@@ -194,7 +202,7 @@ Labels, jumps, calls and the reach of the blocks of a program (language 4.9, 4.1
 | `VM520` | ERROR | Duplicate LABEL in one program or subprogram. | language 4.9; VM 3.6, 5 |
 | `VM521` | ERROR | Missing jump target: a JUMP or REPEAT to a label its program or subprogram does not hold. | language 4.9; VM 3.6, 5 |
 | `VM522` | WARNING | JUMP=END from inside a subprogram: it ends the program from a call. | VM 3.6, 5 |
-| `VM523` | WARNING | Unreachable block of a program after an unconditional JUMP that no LABEL makes reachable. | language 4.13; VM 3.9, 5; D89 |
+| `VM523` | WARNING | Unreachable block of a program or subprogram after an unconditional JUMP that no LABEL makes reachable. | language 4.13; VM 3.9, 5; D89, D195 |
 | `VM524` | WARNING | RETURN in the main program; it is treated as JUMP=END. | language 4.9, 4.13; VM 3.6, 5 |
 | `VM750` | ERROR | Block cap exceeded: possible endless loop. INTERPRETED mode. | VM 3.6, 5; machine-config 7 |
 | `VM751` | ERROR | A REPEAT nested deeper than the configured depth, which calls and repeats share. INTERPRETED mode. | VM 3.6, 5; machine-config 7 |
@@ -220,6 +228,8 @@ Expressions and variables (language 4.9, 4.12; VM 1, 2.7, 3.6, 5; D38, D51). The
 | `PAR109` | ERROR | A part after a complete expression. | language 4.12 |
 | `PAR110` | ERROR | A second comparison behind a comparison. | language 4.12 |
 | `PAR111` | ERROR | A function with a number of arguments it does not take. | language 4.12; D118 |
+| `PAR112` | ERROR | An index on a variable that is not a SYS_ name. | language 4.12; D145 |
+| `PAR113` | ERROR | A literal index that is no whole number of 0 or more. | language 4.12; D145 |
 | `VM080` | ERROR | Assignment to a SYS_ variable. | VM 2.7, 5 |
 | `VM540` | WARNING | Unresolved expression in STATIC mode, counted and reported once per run. | VM 1, 5 |
 | `VM900` | ERROR | Division by zero. | language 4.12; VM 5 |
@@ -228,8 +238,8 @@ Expressions and variables (language 4.9, 4.12; VM 1, 2.7, 3.6, 5; D38, D51). The
 | `VM903` | ERROR | A SYS_ name the configuration does not map, or an unknown state, read in INTERPRETED mode. | VM 2.7, 3.6; D51 |
 | `VM905` | ERROR | An operation without a real result. | language 4.12 |
 | `VM906` | ERROR | A number beyond the range of the decimal arithmetic. | language 4.12 |
-| `VM907` | ERROR | An index on a variable that is not a SYS_ name. | language 4.12; D51 |
-| `VM908` | ERROR | An index that selects no register. | language 4.12; D51 |
+| `VM907` | ERROR | Retired (D145): an index on a variable that is not a SYS_ name is PAR112. | language 4.12; D145 |
+| `VM908` | ERROR | A computed index that selects no register: negative after rounding half away from zero. | language 4.12; D51, D145 |
 | `VM754` | ERROR | An expression gives a number with decimals where its word takes an integer. | language 3, 4; VM 5 |
 
 ## Resource

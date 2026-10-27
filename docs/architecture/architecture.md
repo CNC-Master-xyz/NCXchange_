@@ -112,12 +112,14 @@ flowchart BT
 
 ## 4. Core model (Ncx.Core)
 
-The parsed program is a list of blocks, a block a list of words, a word a key with an optional address and an optional typed value, exactly as the lexical rules of the language define it. The word catalog is the schema: it says for every key which value type it takes, whether it is a verb, whether it accepts an address, its scope, and its rank in the canonical order. The parser validates against the catalog so that the VM never sees a wrong value type and no unknown key other than the two provisional forms of 4.1: a machine axis word (D93) and a native parameter of a `CYCLE:<controller>=n` block (D94).
+The parsed program is a list of blocks, a block a list of words, a word a key with an optional address and an optional typed value, exactly as the lexical rules of the language define it. The word catalog is the schema: it says for every key which value type it takes, whether it is a verb, whether it accepts an address, its scope, and its rank in the canonical order. The parser validates against the catalog so that the VM never sees a wrong value type and no unknown key other than the three provisional forms of 4.1: a machine axis word (D93), a native parameter of a `CYCLE:<controller>=n` block (D94) and a parameter of a catalog cycle (`CYCLE=RECT_POCKET LENGTH=60`, D114).
 
 ```mermaid
 classDiagram
     class NcxProgram {
         +string FileName
+        +LineEnding LineEnding
+        +bool HasByteOrderMark
         +List~Block~ Blocks
         +List~Section~ Programs
         +List~Section~ Subs
@@ -129,6 +131,7 @@ classDiagram
     class Trivia {
         +int Line
         +string Text
+        +int BlockIndex
     }
     NcxProgram "1" *-- "*" Trivia
     class Section {
@@ -211,12 +214,13 @@ classDiagram
         +void Error(int line, string code, string message)
         +void Warning(int line, string code, string message)
         +void Info(int line, string code, string message)
+        +void CommandLineError(string code, string message)
         +string ToText()
     }
     class Diagnostic {
         +Severity Severity
-        +int Line
-        +int OriginLine
+        +int? Line
+        +int? OriginLine
         +string Code
         +string Message
         +string File
@@ -237,7 +241,7 @@ classDiagram
     Diagnostics "1" *-- "*" Diagnostic
 ```
 
-Enumerations: `WordKind` (Program, Frame, Motion, Tool, Spindle, Function, Cycle, Channel, Flow, Lathe, Resource, Pseudo), `ValueKind` (None, Integer, Decimal, Number, Ident, List, String, Expr, NumberOrExpr, StateKey), `Scope` (None, File, Program, Header, Block, Modal, WithPartner), `AddrKind` (None, Axis, OffsetKind, ToleranceKind, Channel, Role, Function, Variable, Argument, Controller), `Severity` (ERROR, WARNING, INFO, where INFO carries notes that are neither). A diagnostic code is an area prefix and three digits (`PAR`, `VM`, `CFG`, `RDR`, `CMP`, `ANA`, `PLG`, `CLI`), rendered as `file(line): ERROR VM042: message`, with `OriginLine` rendered as `file(line, from 12)` for a diagnostic on a generated block (D98). Comment-only lines and blank lines are not blocks but `Trivia` (line number, text) kept in place; a block keeps its trailing comment text in `Comment` (D92). `StateKeyValue` is the internal value of the pseudo-words `@SAVE` and `@RESTORE`: a state key `KEY[:ADDR]` naming a state variable of the channel, produced only when the parser runs with the option the expander uses for generated text (D95). The catalog entries of `@SAVE` and `@RESTORE` have `WordKind.Pseudo` and `IsInternal = true`; the parser accepts an internal entry only under `ParserOptions.AllowPseudoWords` (D95).
+Enumerations: `WordKind` (Program, Frame, Motion, Tool, Spindle, Function, Cycle, Channel, Flow, Lathe, Resource, Pseudo), `ValueKind` (None, Integer, Decimal, Number, Ident, List, String, Expr, NumberOrExpr, StateKey), `Scope` (None, File, Program, Header, Block, Modal, WithPartner), `AddrKind` (None, Axis, OffsetKind, ToleranceKind, Channel, Role, Function, Variable, Argument, Controller), `Severity` (ERROR, WARNING, INFO, where INFO carries notes that are neither). A diagnostic code is an area prefix and three digits (`PAR`, `VM`, `CFG`, `RDR`, `CMP`, `ANA`, `PLG`, `CLI`), rendered as `file(line): ERROR VM042: message`, with `OriginLine` rendered as `file(line, from 12)` for a diagnostic on a generated block (D98). A diagnostic about the command line has the tool as its origin and no line (`Line` null) and renders as `ncx: ERROR CLI001: message`, the MSBuild canonical form for a tool; a diagnostic about a whole file (CLI002, the loaders of `Ncx.Config`) keeps line 1 of that file (D110). Comment-only lines and blank lines are not blocks but `Trivia` (line number, text) kept in place; a block keeps its trailing comment text in `Comment` (D92). `StateKeyValue` is the internal value of the pseudo-words `@SAVE` and `@RESTORE`: a state key `KEY[:ADDR]` naming a state variable of the channel, produced only when the parser runs with the option the expander uses for generated text (D95). The catalog entries of `@SAVE` and `@RESTORE` have `WordKind.Pseudo` and `IsInternal = true`; the parser accepts an internal entry only under `ParserOptions.AllowPseudoWords` (D95).
 
 ### 4.1 Parsing
 
@@ -245,8 +249,9 @@ The lexer splits a line into the comment and the words, honouring quoted strings
 
 ```mermaid
 flowchart TD
+    S[skip a UTF-8 byte order mark at file start, record it] --> A
     A[read line] --> B{empty or whitespace?}
-    B -- yes --> T[record trivia: line number and text]
+    B -- yes --> T[record trivia: line number, text and the index of the next block]
     T --> A
     B -- no --> C[split comment at first ; outside strings]
     C --> C2{any word left?}
@@ -257,7 +262,7 @@ flowchart TD
     E2 -- yes, pseudo-words allowed --> F
     E2 -- yes, user file --> G2[ERROR pseudo-word in a user file]
     E2 -- no --> F{key in catalog?}
-    F -- no --> F2{"machine axis form in a block whose verb takes axis words, or a block with CYCLE:controller=n?"}
+    F -- no --> F2{"machine axis form in a block whose verb takes axis words, a block with CYCLE:controller=n, or a catalog cycle block?"}
     F2 -- yes --> F3[provisional word: number or expression value, bare only under HOME]
     F3 --> I
     F2 -- no --> G[ERROR unknown key, keep block as RAW text]
@@ -272,13 +277,13 @@ flowchart TD
     M --> A
 ```
 
-A key the catalog does not know is accepted as a provisional word when it has the form of a machine axis (`[XYZABCUVW][0-9]{0,2}`, or `I` followed by that) in a block whose verb takes axis words, with a number or expression value (bare only under `HOME`), or when it stands in a block with `CYCLE:<controller>=n` as a native cycle parameter; the VM resolves the first against `[[axis]]`, the second stays unresolved (D93, D94). The parser decides the two forms after it has read every token of the block, because the condition is a property of the block, not of the token; in a block with `CYCLE:<controller>=n` an unknown key is a native parameter even when it has the machine-axis form (D94). A key starting with `@` is a pseudo-word (`@SAVE`, `@RESTORE`, section 5.5); the parser accepts it, with a state key `KEY[:ADDR]` as its value, only when it runs with `ParserOptions.AllowPseudoWords`, which the expander sets for generated text; in a user file it is the ERROR "pseudo-word in a user file" (D95).
+A key the catalog does not know is accepted as a provisional word when it has the form of a machine axis (`[XYZABCUVW][0-9]{0,2}`, or `I` followed by that) in a block whose verb takes axis words, with a number or expression value (bare only under `HOME`), or when it stands in a block with `CYCLE:<controller>=n` as a native cycle parameter; the VM resolves the first against `[[axis]]`, the second stays unresolved (D93, D94). The parser decides the two forms after it has read every token of the block, because the condition is a property of the block, not of the token; in a block with `CYCLE:<controller>=n` an unknown key is a native parameter even when it has the machine-axis form (D94). The third form: in a block whose `CYCLE` value is not a built-in name or `OFF`, every other unknown key is a cycle parameter with a number or expression value, kept in source order at the rank of the native parameters; a key of the machine-axis form stays a machine axis word there. The VM checks the parameter names against the machine's cycle catalog (VM254; without a machine file the D103 WARNING), in `Validation/CycleParameterValidation` (D114). A key starting with `@` is a pseudo-word (`@SAVE`, `@RESTORE`, section 5.5); the parser accepts it, with a state key `KEY[:ADDR]` as its value, only when it runs with `ParserOptions.AllowPseudoWords`, which the expander sets for generated text; in a user file it is the ERROR "pseudo-word in a user file" (D95).
 
-`NcxWriter` is the inverse: it writes a program in canonical form (word order by `CanonicalRank`, numbers as stored, comments kept; comment-only lines and blank lines are trivia kept in place, the comment column is canonical, D92) and is what `format` and every reader use for output. Generated blocks (section 5.5) are skipped by the writer unless asked for.
+`NcxWriter` is the inverse: it writes a program in canonical form (word order by `CanonicalRank`, numbers as stored, comments kept; comment-only lines and blank lines are trivia kept in place, the comment column is canonical, D92; each trivia line records the index of the block it stands before, set by the parser and by `NcxBuilder.Trivia` at the call, and the writer places it there, the lines after `FILE=END` after the last block; its line stays as data, D142) and is what `format` and every reader use for output. Generated blocks (section 5.5) are skipped by the writer unless asked for. A byte order mark the file began with is no part of the text: the parser skips it, `NcxProgram.HasByteOrderMark` records it next to the line ending, and the writer writes it back; a program a reader built has none (D111). The comment column counts Unicode code points, as the columns of the lexer's PAR messages do (`string.EnumerateRunes`, D166).
 
 ### 4.2 Numbers and geometry (D62)
 
-Stored numbers are `decimal` with the original text, so that a program is reproduced digit for digit. Geometry (arc centres from `R`, arc length, the angle between tool vectors, distances) is computed in `double` in a small `Ncx.Core.Geometry` namespace: `Vec3`, `Arc`, `Plane`, an `Angle` helper. That is all levels 0 and 1 of the VM need, so `Ncx.Core` takes no math package. `System.Numerics.Vector3` is single precision and is not used. When the kinematics module needs rotation matrices, frames and an inverse for 5-axis poses, it takes MathNet.Numerics (MIT) in `Ncx.Kinematics` only; nothing of it leaks into the model or the NCX text.
+Stored numbers are `decimal` with the original text, so that a program is reproduced digit for digit. Geometry (arc centres from `R`, arc length, the angle between tool vectors, distances) is computed in `double` in a small `Ncx.Core.Geometry` namespace: `Vec3`, `Arc`, `Plane`, an `Angle` helper. That is all levels 0 and 1 of the VM need, so `Ncx.Core` takes no math package. `System.Numerics.Vector3` is single precision and is not used. When the kinematics module needs rotation matrices, frames and an inverse for 5-axis poses, it takes MathNet.Numerics (MIT) in `Ncx.Kinematics` only; nothing of it leaks into the model or the NCX text. A `double` goes back into a stored number only through `Vec3.RoundToDecimal`, at the one VM precision of 6 decimals, half away from zero, whatever the units (virtual machine 3.2, D121).
 
 ## 5. Virtual machine (Ncx.Core)
 
@@ -442,7 +447,7 @@ flowchart TD
     D -- SHIFT / TILT / TILT_AXIS / SETPOS --> E[update frame]
     D -- RAPID / LINE / ARC / RETRACT / HOME --> F[resolve target: absolute, incremental, diameter, arc center or radius, tool axis]
     F --> G[execute motion, raise MOTION]
-    D -- CYCLE_CALL --> H[cycle sequence along AXIS, raise CYCLE_CALL or expanded MOTION events]
+    D -- CYCLE_CALL --> H[cycle sequence along AXIS: raise CYCLE_CALL, then under ExpandCycles its MOTION events, D234]
     D -- none --> I[state-only block]
     E --> J
     G --> J
@@ -466,7 +471,7 @@ stateDiagram-v2
     Loaded --> Empty : TOOL=0
 ```
 
-Not drawn: `TOOL=k` in `Loaded` changes the tool without a preload and stays in `Loaded`; `PRELOAD=m2` in `Pending` replaces the pending preload. Leaving `Pending`: `TOOL=m` and the bare `TOOL` change to the preloaded tool and consume the preload; `TOOL=k` with another tool changes too but is a WARNING (the magazine cycles twice); `PRELOAD=0` only drops the preload and returns to the state the spindle was in (`Pending` remembers whether it held a tool, so the return may also be to `Empty`). A bare `TOOL` in `Empty` or `Loaded` is an ERROR (nothing preloaded); `PRELOAD=n` of the tool already in the spindle is a WARNING and changes nothing. Every transition into `Loaded` with a new tool raises `TOOL_END` for the old tool and `TOOL_BEGIN` for the new one.
+Not drawn: `TOOL=k` in `Loaded` changes the tool without a preload and stays in `Loaded`; `PRELOAD=m2` in `Pending` replaces the pending preload. Leaving `Pending`: `TOOL=m` and the bare `TOOL` change to the preloaded tool and consume the preload; `TOOL=k` with another tool changes too and consumes the preload as well, with a WARNING (the magazine cycles twice, D132); `PRELOAD=0` only drops the preload and returns to the state the spindle was in (`Pending` remembers whether it held a tool, so the return may also be to `Empty`). A bare `TOOL` in `Empty` or `Loaded` is an ERROR (nothing preloaded); `PRELOAD=n` of the tool already in the spindle is a WARNING and changes nothing. Every transition into `Loaded` with a new tool raises `TOOL_END` for the old tool and `TOOL_BEGIN` for the new one. The `PROGRAM=END` that ends a channel's program raises `TOOL_END` for every tool still in `Loaded` that the channel brought in, directly before `PROGRAM_END`, without leaving `Loaded` (D233).
 
 ### 5.3 Events
 
@@ -497,6 +502,9 @@ classDiagram
         +string Name
         +int Number
         +int Blocks
+        +decimal FeedDistance
+        +decimal RapidDistance
+        +int UnknownLengthMotions
         +decimal Distance
     }
     class SubEvent {
@@ -512,8 +520,11 @@ classDiagram
         +ToolRef Tool
         +string Holder
         +decimal Rpm
-        +decimal Distance
         +int Blocks
+        +decimal FeedDistance
+        +decimal RapidDistance
+        +int UnknownLengthMotions
+        +decimal Distance
     }
     class PreloadEvent {
         +ToolRef Tool
@@ -641,6 +652,10 @@ flowchart TD
     J --> K[virtual machine executes all of them; @SAVE pushes, @RESTORE re-applies the saved words]
 ```
 
+When several rules and rewriters act on one block, their blocks nest: the rules in canonical order of their triggering words (each table's rule once), the outermost first; the plugin rewriters in load order, each inside the previous; `limits = "clamp"` clamps last, over every block the VM executes for the block. Generated blocks are not expanded again (D199).
+
+A block-inserting step keeps every trivia anchor valid by shifting the block indices: the expander maps the index a comment-only or blank line records to the first block it emits for that block (after the post blocks of a cycle that ends there), so the line stands before the blocks generated for the block it stood before; a rewriter's blocks go through the same mapping (D142).
+
 What this gives the shop-floor example: the program says `COOLANT:THROUGH=ON` while the spindle runs at 1500; the rule on that machine says `requires = { SPINDLE = "OFF" }, restore = ["SPINDLE"]`; the expander emits `@SAVE=SPINDLE:MAIN`, `SPINDLE:MAIN=OFF`, the coolant block, `@RESTORE=SPINDLE:MAIN`; the VM turns the restore into `SPINDLE:MAIN=CW RPM:MAIN=1500` and the compiler writes `M5`, `M51`, `M3 S1500`. The runtime estimate charges the stop and the start with the spindle's `accel_time`.
 
 ## 6. Machine configuration (Ncx.Config)
@@ -666,11 +681,14 @@ classDiagram
         +Dictionary~string,FunctionTable~ SpindleTables
         +Dictionary~string,FunctionTable~ SpindleModeTables
         +FunctionTable SpindleSync
+        +List~string~ SpindleSyncPair
         +WorkpieceConfig Workpiece
         +SyncConfig Sync
         +Dictionary~string,FunctionTable~ Coolant
         +Dictionary~string,FunctionTable~ Functions
-        +Dictionary~string,string~ Transform
+        +TransformTable Transform
+        +ToleranceTable Tolerance
+        +StockTable Stock
         +RawTable Raw
         +CycleCatalog Cycles
         +VariablesConfig Variables
@@ -679,6 +697,7 @@ classDiagram
         +ResourceDef ResolveRole(string role)
         +AxisDef ResolveAxis(string ncxName)
         +string FindFunction(string name, string state)
+        +List~string~ SpindleSyncRoles()
     }
     class MachineIdentity {
         +string Name
@@ -723,6 +742,7 @@ classDiagram
         +decimal BlockTime
         +PathMode PathMode
         +decimal CornerSpeed
+        +bool? RapidExactStop
     }
     class ResourceDef {
         +string Id
@@ -751,8 +771,10 @@ classDiagram
     }
     class ToolChangeConfig {
         +string Change
+        +string ChangeNamed
         +string ChangePreloaded
         +string Preload
+        +string PreloadNamed
         +string Unload
         +ExpansionRule Rule
         +bool AutoPreload
@@ -791,6 +813,14 @@ classDiagram
     class TemplateSet {
         +Template For(string text)
         +string FindFunctionByCode(string nativeCode)
+        +List~FunctionMatch~ FindFunctionsByCode(string nativeCode)
+    }
+    class FunctionMatch {
+        +string Word
+        +string State
+        +FunctionTable Table
+        +TemplateValues Values
+        +string Key
     }
     class MachineConfigLoader {
         +MachineConfig Load(string path)
@@ -810,6 +840,7 @@ classDiagram
     CycleCatalog "1" *-- "*" CycleEntry
     TemplateSet ..> MachineConfig : parses the template text of
     TemplateSet "1" *-- "*" Template
+    TemplateSet ..> FunctionMatch : answers
     Template "1" *-- "*" Placeholder
     MachineConfigLoader ..> MachineConfig
     MachineConfigLoader ..> JobManifest
@@ -919,8 +950,8 @@ sequenceDiagram
     T-->>R: SourceBlocks
     loop every source block
         R->>S: Apply(block) modal groups, G90/G91, cycle, T code, last spindle
-        R->>M: FindFunctionByCode("M88"), cycle catalog, templates
-        M-->>R: FUNC or SPINDLE:TOOL=CW, cycle entry
+        R->>M: FindFunctionsByCode("M88"), cycle catalog, templates
+        M-->>R: every state of FUNC or SPINDLE:TOOL=CW, cycle entry; the reader keeps those its source state allows (D155)
         R->>B: Begin(line).Verb("LINE").Word("X", null, 10.5)...End()
     end
     R-->>CLI: NcxProgram with diagnostics
@@ -1062,7 +1093,7 @@ The API is shaped for NC programmers with little C# (code-guidelines.md, section
 
 | Command | Input | Pipeline | Output |
 |---|---|---|---|
-| `ncx convert <file> --machine <toml>` | controller file | reader, NcxWriter, STATIC check | `.ncx` in the working directory, diagnostics |
+| `ncx convert <file> [--machine <name or toml>] [--output <file>] [--strict]` | controller file, read as UTF-8 when its bytes are valid UTF-8, else as Windows-1252 with a WARNING (D229) | reader, NcxWriter, STATIC check | NCX text to stdout or `--output`, nothing written that the command line does not name (D209; a converted program that a `CALL="name"` is to find is written as `<name>.ncx`, D215); diagnostics |
 | `ncx convert --batch <folder> --machine <toml> --report <file> [--strict]` | every file of a folder and of its folders | per file as `convert`, never stopping on an error | the report of `--report`: per file and in total the blocks, the `RAW` blocks per word and the diagnostics per code; the diagnostics of every file |
 | `ncx compile <file.ncx> --machine <toml> [--output <folder>]` | NCX | parser, VM STATIC, compiler | NC file under `out/<machine>/` or in the folder of `--output`, diagnostics |
 | `ncx compile --job <name.ncxjob.toml>` | job manifest | parser per channel, job compiler | one NC file per channel |
@@ -1071,13 +1102,15 @@ The API is shaped for NC programmers with little C# (code-guidelines.md, section
 | `ncx check --job <name.ncxjob.toml>` with the options of `check` | job manifest (machine-config 8) | parser and expander per channel file, one VM STATIC per channel program in rounds (VM 3.7) | diagnostics only |
 | `ncx analyze --job <name.ncxjob.toml>` with the options of `analyze` but `--vars` | job manifest (machine-config 8) | parser and expander per channel file, one VM INTERPRETED (STATIC under `--static`) per channel program in rounds (VM 3.7), analytics per channel | the reports of every channel, in the order of the manifest |
 | `ncx analyze <file.ncx> [--machine <toml>] [--vars <toml>] [--from <line>] [--to <line>] [--analytic tools,runtime] [--static] [--format text\|csv] [--skip-blocks none\|all\|0,3]` | NCX | parser, expander, VM INTERPRETED (STATIC under `--static`) with `ExpandCycles`, analytics over the block range | the reports of the analytics `--analytic` names, all without it, in aligned text or CSV (VM 8) |
-| `ncx trace <file.ncx> [--format text\|csv]` with the options of `check` | NCX | parser, expander, VM STATIC | one row per changed state variable per executed block: channel, block, variable, old, new (VM 6), in aligned text or CSV |
-| `ncx annotate <file.ncx>` with the options of `check` | NCX | parser, expander, VM STATIC | the program with the previous values appended to each block's comment (VM 6) |
+| `ncx trace <file.ncx> [--format text\|csv]` with the options of `check` | NCX | parser, expander, VM STATIC | one row per changed state variable per executed block: channel, block, variable, old, new (VM 6), in aligned text or CSV: a header row first, aligned text the default, CSV per RFC 4180 with LF line ends, a generated block's block column `<line> generated by …` or `rewritten by …` (D237) |
+| `ncx annotate <file.ncx>` with the options of `check` | NCX | parser, expander, VM STATIC | the program with the previous values appended to each block's comment (VM 6): several variables joined by `, `, an unknown value `?`, a generated block as a comment line (D237) |
+| `ncx --version` | none | none | the version of `ncx`: the `Version` of `Directory.Build.props`, stamped from the release tag, with the commit after `+` (D347) |
+| `ncx --help`, `ncx <command> --help` | none | none | the commands, or the options of one command |
 | `ncx plugin new <name>`, `build [<folder>]`, `check <dll>`, `test [<folder>]` | template | copies the plugin template, builds it into `plugins/`, registers it in `ncx.toml`, loads and lists a DLL's interfaces, runs its tests | a runnable plugin without knowing `dotnet new` |
 
-Every command accepts `--strict`, under which a WARNING sets the exit code 1 (D97). `check`, `trace` and `annotate` share `--machine` (a machine file by path; without it the built-in default machine of D103), `--skip-blocks` (the run option `skip_blocks`: every `SKIP` block runs by default, `all` skips them all, `0,3` skips those of the switches that are on, the bare `SKIP` being switch 0, which is where a Fanuc operator's switch 1 lands, D53, D133) and `--expand-cycles` (the VM option `ExpandCycles`, D37). `--job <name.ncxjob.toml>` takes the place of the file on `check`, `analyze` and `compile`: the channel programs of the job manifest (machine-config 8) run on the machine the manifest names unless `--machine` names another. This table is the one list of the commands and options of `ncx`: a task that adds a command or an option adds it here in the same commit (F28).
+Every command accepts `--strict`, under which a WARNING sets the exit code 1 (D97). `check`, `trace` and `annotate` share `--machine` (a machine file by name in the machine folders or by path; without it the built-in default machine of D103), `--skip-blocks` (the run option `skip_blocks`: every `SKIP` block runs by default, `all` skips them all, `0,3` skips those of the switches that are on, the bare `SKIP` being switch 0, which is where a Fanuc operator's switch 1 lands, D53, D133) and `--expand-cycles` (the VM option `ExpandCycles`, D37). `--job <name.ncxjob.toml>` takes the place of the file on `check`, `analyze` and `compile`: the channel programs of the job manifest (machine-config 8) run on the machine the manifest names unless `--machine` names another; that machine is looked for first in the folder of the manifest, then as `--machine` takes it (D303). This table is the one list of the commands and options of `ncx`: a task that adds a command or an option adds it here in the same commit (F28).
 
-`ncx.toml` in the working directory names the machine file that `--machine` defaults to, the machine and cycle folders, the output folder and the plugin assemblies. Without `--machine` and without a machine named in `ncx.toml`, `check`, `analyze`, `trace` and `annotate` run against the built-in default machine of D103; `compile` and `convert` keep requiring a machine file from one of the two (D77, D103). Exit code 0 when the run produced no ERROR; 1 on at least one ERROR, on a WARNING under `--strict`, or when `format --check` finds a difference; 2 for a usage error, an unreadable input or a missing machine file where one is required (D97). Code 2 is decided before the run starts and takes precedence; a run that has started ends with 0 or 1.
+`ncx.toml` in the working directory names the machine file that `--machine` defaults to, the machine and cycle folders, the output folder and the plugin assemblies. A value of `--machine` or of the machine key of `ncx.toml` that names an existing file, counted from the working directory, is that file, and any value with a folder in it is a path; any other value is a name, looked up with `.toml` added in the machine folders: the folder `ncx.toml` names, `machines/` of the working directory, `machines/` of the tool's own folder, and as the fourth and last place the machine files built into `ncx` (D206, D371). The `[cycles] catalog` of a machine file is looked up in the cycle folders alone, in the same order with the built-in catalogs last; a value with a folder in it counts from each of them, and a full path or one that climbs out with `..` names no file (D207). A shop's own file of a shipped name wins over the built-in copy, which a diagnostic names `built-in machines/<name>.toml`; the built-in place is for machine files and catalogs alone, not for plugin DLLs (D317, D371). Without `--machine` and without a machine named in `ncx.toml`, `check`, `analyze`, `trace` and `annotate` run against the built-in default machine of D103; `compile` and `convert` keep requiring a machine file from one of the two (D77, D103). Exit code 0 when the run produced no ERROR; 1 on at least one ERROR, on a WARNING under `--strict`, or when `format --check` finds a difference; 2 for a usage error, an unreadable input or a missing machine file where one is required (D97). Code 2 is decided before the run starts and takes precedence; a run that has started ends with 0 or 1. `--version` and `--help` print, run nothing and exit 0 without a diagnostic (D347). After an ERROR, `trace` writes the rows of the blocks executed before it, `annotate` the whole copy (the blocks not executed without values), and `convert` the whole text, each exiting 1; `format` writes nothing after a parser ERROR, and `compile` writes no NC file after any ERROR. Nothing is written when the run does not start: exit code 2, a configuration file that loads with an ERROR, a controller without a reader, and for `trace` and `annotate` a parser or expander ERROR (D205).
 
 ```mermaid
 flowchart LR
@@ -1102,7 +1135,7 @@ flowchart LR
 - Reader tests: a source snippet (`G81 G99 Z-21.732 R5. F565` then `X30.`) and the expected NCX lines.
 - Compiler tests: NCX lines and the expected controller lines, per machine file.
 - VM tests: a program and the expected state after a given block, plus expected diagnostics (the validation list of the VM specification is the checklist).
-- Acceptance: the example files of the specification. `2.5D_FRAESEN.ncx` must be produced from both of its source programs, which are kept next to it (`convert` from the Fanuc and from the Heidenhain file gives the same canonical text), and compiled back to both controllers without loss; the five example machine files must load (D104); every `.ncx` example must pass `check`.
+- Acceptance: the example files of the specification. `2.5D_FRAESEN.ncx` must be produced from both of its source programs, which are kept next to it (`convert` from the Fanuc and from the Heidenhain file gives the blocks of the example, except the reader differences its notes list, each tied to its rule, and both readings format to themselves and check without ERROR, D217), and compiled back to both controllers without loss; the five example machine files must load (D104); every `.ncx` example must pass `check`.
 - The sample corpus (customer and manual programs for the three controller families, kept outside the repository by the maintainer; described in `../spec/controller-mapping.md`, section 11) is the growing test bed for reader robustness: `convert` must at least never crash and must report every unread block as RAW.
 
 ## 12. Build order
@@ -1114,9 +1147,9 @@ Each milestone ends with tests and a runnable `ncx` command, so that the project
 | M1 Parser and canonical writer | word catalog, lexer, parser, expressions, `NcxWriter`, `ncx format` | the five spec examples parse and format to themselves |
 | M2 Virtual machine STATIC | state classes, block execution, validation, events, expander with `@SAVE`/`@RESTORE`, `ncx check` | the five examples check with no ERROR without a machine file (D103, against the `DefaultMachine` of `Ncx.Config`, whose loader and templates are built before this milestone); the validation list has a test each; the coolant clutch rule expands and restores |
 | M3 Machine configuration | roles, cycle catalog, five example machines (with `millturn1.toml`, D104); the TOML loader with `DefaultMachine` and the templates both ways (P2-01, P2-02) are built before M2, see `../plan/phases.md` | machine files load; templates render and match; the five examples check with no ERROR with their machine files (D103, D104) |
-| M4 Fanuc reader | tokenizer, source state, mapping, `ncx convert` | 2.5D_FRAESEN from the Fanuc sample equals the spec example |
+| M4 Fanuc reader | tokenizer, source state, mapping, `ncx convert` | 2.5D_FRAESEN from the Fanuc sample equals the spec example, except the Fanuc reader differences its notes list (D217) |
 | M5 Heidenhain compiler | `ncx compile` for the iTNC 530 | the example compiles to a program equivalent to the Heidenhain sample |
-| M6 Heidenhain reader and Fanuc compiler | the other direction | round trip without loss on 2.5D_FRAESEN, BOHREN, 3D Fraesen |
+| M6 Heidenhain reader and Fanuc compiler | the other direction | round trip without loss on 2.5D_FRAESEN, BOHREN, 3D Fraesen; the Fanuc output of 2.5D_FRAESEN is checked by its Fanuc round trip (D217) |
 | M7 VM INTERPRETED and analytics | expressions, flow, block cap, the analytics of section 9, `ncx analyze` | segment length and tool vector change run on the 5-axis sample programs and their results are recorded as the reference for later versions |
 | M8 Siemens reader and compiler | generic Sinumerik 840D sl per the programming manual (frames with `TRANS`/`ATRANS` semantics, `T=`/`M6`/`D`, `SETMS` and `S<n>=`, `MCALL` cycles with the 840D sl signatures, `PROC`/`RET`, `WAITM`); GILDEMEISTER structure programming stays documentation only (D68); the builder posts of the corpus (Monforts, STAMA, INDEX) run through `RAW:BUILDER` and reader rules | MILLTURN_TRANSFER compiles for a plain 840D machine file; the Hermle C22 U and a Burkhardt+Weber program of the corpus read without loss |
 | M9 Jobs and channels | scheduler, job manifest, job compiler with channel binding | the two Nakamura WY250L programs (`../spec/examples/sources/NAKAMURA_WY250L_O1000.path1.nc` and `.path2.nc`) read as a job and analyze without deadlock |

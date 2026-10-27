@@ -193,12 +193,13 @@ public sealed class SiemensCycleTests
                 "CYCLE=OFF")));
     }
 
-    // D181: PECK has no position of CYCLE83 in the catalog, an ERROR.
+    // D181: the constant PECK is FDPR, position 7 of CYCLE83, the first depth relative to RFP (cycles/siemens.toml).
     [Fact]
-    public void Peck_WithPeckDepth_IsAnError()
+    public void Peck_WithPeckDepth_WritesFdpr()
     {
-        Assert.Equal(["CMP571"], CompilerCodes(Run(Program(MillHeader,
-            "CYCLE=PECK SURFACE=0 CLEARANCE=5 DEPTH=-40 PECK=5 CYCLE_F=100", "CYCLE_CALL X=10"), Mill())));
+        Assert.Equal(Lines("F100", "MCALL CYCLE83(5,0,5,-40,,,5,,,,,1)", "G0 X10"),
+            Before("MCALL", MillBody("CYCLE=PECK SURFACE=0 CLEARANCE=5 DEPTH=-40 PECK=5 CYCLE_F=100",
+                "CYCLE_CALL X=10", "CYCLE=OFF")));
     }
 
     // Controller-mapping 5, AXIS: _AXN 1, 2, 3 is the first, second and third geometry axis of the plane; the tool axis

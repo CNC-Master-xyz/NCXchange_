@@ -110,13 +110,44 @@ public sealed class EvaluatorVariableTests
         Assert.Equal(ExprResult.Of("TEXT"), result);
     }
 
-    // Virtual machine 5: a string where a number is required is an ERROR: an operand, a comparison (the reading of the
-    // open question in Evaluator.EvaluateBinary), a function argument, an index.
+    // D169: == and != compare two strings by exact, case-sensitive text and yield 1 or 0.
+    [Theory]
+    [InlineData("$QS1 == $QS2", "TEXT", "TEXT", "1")]
+    [InlineData("$QS1 == $QS2", "TEXT", "Text", "0")]
+    [InlineData("$QS1 != $QS2", "TEXT", "Text", "1")]
+    [InlineData("$QS1 != $QS2", "A B", "A B", "0")]
+    public void D169_TwoStrings_CompareByExactText(string expression, string first, string second, string expected)
+    {
+        var channel = new EvaluationChannel();
+        channel.Set("QS1", first);
+        channel.Set("QS2", second);
+
+        Assert.Equal(EvaluationChannel.DecimalOf(expected), channel.NumberOf(expression));
+    }
+
+    // D169: a string compared with UNKNOWN is UNKNOWN (virtual machine 1).
+    [Fact]
+    public void D169_StringAgainstUnknown_IsUnknown()
+    {
+        var channel = new EvaluationChannel();
+        channel.Set("QS1", "TEXT");
+        channel.State.Vars.Set("Q1", VariableValue.Unknown);
+
+        ExprResult? result = channel.Evaluate("$QS1 == $Q1");
+
+        Assert.Empty(channel.Diagnostics.Items);
+        Assert.True(result?.IsUnknown);
+    }
+
+    // Virtual machine 5: a string where a number is required is an ERROR: an operand, a comparison other than == and
+    // != of two strings, a string against a number (D169), a function argument, an index.
     [Theory]
     [InlineData("$QS1 + 1")]
     [InlineData("-$QS1")]
     [InlineData("NOT $QS1")]
     [InlineData("$QS1 == 1")]
+    [InlineData("1 != $QS1")]
+    [InlineData("$QS1 < $QS1")]
     [InlineData("SIN($QS1)")]
     [InlineData("$SYS_TOOL[$QS1]")]
     public void Variable_StringWhereANumberIsRequired_IsAnError(string expression)
@@ -184,25 +215,31 @@ public sealed class EvaluatorVariableTests
         Assert.Equal(code, new EvaluationChannel().ErrorOf(expression).Code);
     }
 
-    // Language 4.12: the index selects a register or table row, a whole number (the reading of the open question in
-    // Evaluator.RegisterOf).
-    [Theory]
-    [InlineData("$SYS_TOOL[99.5]")]
-    [InlineData("$SYS_TOOL[10000000000]")]
-    public void SystemVariable_IndexNotAWholeRegisterNumber_SelectsNoRegister(string expression)
-    {
-        Assert.Equal(DiagnosticCodes.IndexSelectsNoRegister, new EvaluationChannel().ErrorOf(expression).Code);
-    }
-
-    // Language 4.12, D51: the index selects a register or table row of a SYS_ name; on another variable it is an ERROR
-    // (the reading of the open question in Evaluator.EvaluateVariable).
+    // D145: a computed index is rounded half away from zero, like ROUND, as Fanuc does: 99.5 selects register 100.
     [Fact]
-    public void Variable_IndexOnAVariableThatIsNotASystemName_IsAnError()
+    public void D145_ComputedIndex_IsRoundedHalfAwayFromZero()
     {
         var channel = new EvaluationChannel();
-        channel.Set("Q1", 10m);
+        channel.Set("Q1", 99.5m);
 
-        Assert.Equal(DiagnosticCodes.IndexNeedsSystemVariable, channel.ErrorOf("$Q1[2]").Code);
+        Diagnostic error = channel.ErrorOf("$SYS_WEAR_Z[$Q1]");
+
+        Assert.Equal(DiagnosticCodes.SystemVariableUnknown, error.Code);
+        Assert.Contains("\"SYS_WEAR_Z[100]\"", error.Message, StringComparison.Ordinal);
+    }
+
+    // D145: a computed index that is negative after rounding, or selects no register at all, is VM908; -0.4 rounds to
+    // register 0.
+    [Theory]
+    [InlineData("-0.6", DiagnosticCodes.IndexSelectsNoRegister)]
+    [InlineData("10000000000", DiagnosticCodes.IndexSelectsNoRegister)]
+    [InlineData("-0.4", DiagnosticCodes.SystemVariableUnknown)]
+    public void D145_ComputedIndex_NegativeAfterRoundingOrWithoutARegister_IsVm908(string index, string code)
+    {
+        var channel = new EvaluationChannel();
+        channel.Set("Q1", EvaluationChannel.DecimalOf(index));
+
+        Assert.Equal(code, channel.ErrorOf("$SYS_WEAR_Z[$Q1]").Code);
     }
 
     // D98: an ERROR on a generated block carries the line of the block it was generated for.

@@ -25,17 +25,22 @@ internal static class BlockRules
     private const string VerbsWithAxisNames =
         "RAPID, LINE, ARC, HOME, CYCLE_CALL, SHIFT, TILT, TILT_AXIS, SETPOS or STOCK";
 
+    // The partner of the header words NAME, NUMBER and CHANNEL (language 4.1, D116).
+    private const string ProgramBegin = "PROGRAM=BEGIN";
+
+    // The partner of the cycle parameters, in any form: CYCLE=DRILL, CYCLE:HEIDENHAIN=200 (language 4.7, D116).
+    private const string CycleKey = "CYCLE";
+
     // The verbs of the frame table, which carry their own axis words, the axis names of their rows, and no arc or
     // vector word (language 5 rule 2; 4.2).
     private static readonly string[] s_frameVerbs = ["SHIFT", "TILT", "TILT_AXIS", "SETPOS", StockKey];
 
     // Rule 5: the block words and the verbs or partner words of which one must stand in the same block; FRAME needs a
-    // motion verb, the verbs of language 2 rule 2 and RETRACT (language 5 rule 5; 4.2, 4.3, 4.5, 4.8, 4.9; D83).
-    // TODO(question): the Scope column of language 4 names a partner for more words than rule 5 lists: NAME with
-    // PROGRAM=BEGIN, SUB=BEGIN or START_CHANNEL, NUMBER with PROGRAM=BEGIN, CHANNEL as a header word, the cycle
-    // parameters with CYCLE, TOLERANCE:ROTARY only with TOLERANCE (language 4.1, 4.7). Neither rule 5 nor the
-    // validation list of virtual machine 5 makes their absence an ERROR of the parser, so only the words of rule 5 are
-    // checked here until D116 is answered; the header words are read from the PROGRAM=BEGIN block only.
+    // motion verb, the verbs of language 2 rule 2 and RETRACT (language 5 rule 5; 4.2, 4.3, 4.5, 4.8, 4.9; D83). D116
+    // adds the header words and the cycle parameters: NAME needs PROGRAM=BEGIN, SUB=BEGIN or START_CHANNEL, NUMBER
+    // and CHANNEL need PROGRAM=BEGIN, the cycle parameters need CYCLE. A partner written KEY=VALUE counts only with
+    // that value, so PROGRAM=END is no partner of NAME. TOLERANCE:ROTARY has no partner here; its rule is the modal
+    // ERROR of virtual machine 5 (P1-04).
     private static readonly Dictionary<string, string[]> s_partners = new()
     {
         ["IF"] = ["JUMP", "CALL"],
@@ -51,7 +56,27 @@ internal static class BlockRules
         ["ROT"] = ["TILT", "TILT_AXIS"],
         ["POINT"] = [HomeKey],
         ["PHASE"] = ["SPINDLE_SYNC"],
+        ["NAME"] = [ProgramBegin, "SUB=BEGIN", "START_CHANNEL"],
+        ["NUMBER"] = [ProgramBegin],
+        ["CHANNEL"] = [ProgramBegin],
+        ["AXIS"] = [CycleKey],
+        ["SURFACE"] = [CycleKey],
+        ["CLEARANCE"] = [CycleKey],
+        ["DEPTH"] = [CycleKey],
+        ["SAFE"] = [CycleKey],
+        ["CYCLE_RETRACT"] = [CycleKey],
+        ["PECK"] = [CycleKey],
+        ["CYCLE_F"] = [CycleKey],
+        ["CYCLE_DWELL"] = [CycleKey],
+        ["PITCH"] = [CycleKey],
+        ["CONTOUR"] = [CycleKey],
     };
+
+    // The words of the measurement point, valid in a TOOL block or in a block of their own (language 4.4, D372).
+    private static readonly string[] s_pointWords = ["TOOL_POINT", "TIP_OFFSET", "POINT_RADIUS"];
+
+    // What a block of the point words may carry beside them: the block skip and a comment, which run nothing (D392).
+    private static readonly string[] s_besidePointWords = ["SKIP", "COMMENT"];
 
     /// <summary>
     /// The verb of the words of a block. A block has at most one verb; a second is an ERROR, and the first stays the
@@ -94,6 +119,7 @@ internal static class BlockRules
         CheckAxisWords(block, diagnostics);
         CheckKeysOnce(block, diagnostics);
         CheckPartners(block, diagnostics);
+        CheckPointWords(block, diagnostics);
     }
 
     // Axis words require a verb that carries them: a motion verb carries every axis word, RETRACT none. SHIFT, TILT,
@@ -284,11 +310,46 @@ internal static class BlockRules
         }
     }
 
+    // TOOL_POINT, TIP_OFFSET and POINT_RADIUS are valid in a TOOL block or in a block of their own (language 4.4,
+    // D372). A block of their own carries nothing but the point words, SKIP and a COMMENT (decisions.md D392), because
+    // a point change takes effect with the next tool-axis motion and a block that moves or switches something else
+    // would hide where it starts.
+    private static void CheckPointWords(Block block, Diagnostics diagnostics)
+    {
+        Word? pointWord = null;
+        Word? otherWord = null;
+        foreach (Word word in block.Words)
+        {
+            if (s_pointWords.Contains(word.Key))
+            {
+                pointWord ??= word;
+            }
+            else if (!s_besidePointWords.Contains(word.Key))
+            {
+                otherWord ??= word;
+            }
+        }
+
+        if (pointWord is null || otherWord is null || block.Has("TOOL"))
+        {
+            return;
+        }
+
+        diagnostics.Error(block, DiagnosticCodes.PointWordOutsideToolBlock,
+            $"{pointWord.ToCanonical()} stands beside {otherWord.ToCanonical()}; the point words are valid in a TOOL "
+            + "block or in a block of their own (language 4.4, D372).");
+    }
+
     private static bool HasAny(Block block, string[] keys)
     {
+        // A partner KEY counts with any value and address, a partner KEY=VALUE with that value only (D116).
         foreach (string key in keys)
         {
-            if (block.Has(key))
+            int equals = key.IndexOf('=', StringComparison.Ordinal);
+            bool present = equals < 0
+                ? block.Has(key)
+                : block.Has(key.Substring(0, equals), null, key.Substring(equals + 1));
+            if (present)
             {
                 return true;
             }

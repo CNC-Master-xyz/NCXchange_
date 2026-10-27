@@ -16,6 +16,10 @@ internal sealed class ResourceResolver
     // can write as an axis word (language 3, KEY; D93), so it never meets a machine axis of the file (D103).
     private const string CreatedAxisPrefix = "C_";
 
+    // The id of a resource created on the spot is ROLE_ and its role, ROLE_SUB, never the id of a resource of the
+    // default machine such as S2, so that a guessed resource never aliases real state (D170).
+    private const string CreatedIdPrefix = "ROLE_";
+
     // The name that resolves to the rotary axis of a work spindle created on the spot while it holds the workpiece
     // (virtual machine 3.8 rule 3, D103).
     private const string SpindleAxisName = "C";
@@ -55,8 +59,8 @@ internal sealed class ResourceResolver
     /// </summary>
     public string? ResolveSpindle(string? role, Block block, ChannelState state, Diagnostics diagnostics)
     {
-        // TODO(question): D103 creates a resource on the spot for a role the default machine lacks without saying of
-        // which kind for a spindle word; it is a work spindle, which D103 gives a rotary axis of its own (D170).
+        // A spindle word on a role the default machine lacks creates a work spindle on the spot, which gets a rotary
+        // axis of its own (D103, D170).
         return Resolve(role, _machine.ResolveDefaultSpindle(), static resource => resource.IsSpindle, "spindle",
             ResourceType.WorkSpindle, block, state, diagnostics);
     }
@@ -117,6 +121,13 @@ internal sealed class ResourceResolver
             return createdHolderAxis;
         }
 
+        // Under CYLINDER the rotary word stays one C word, the rotary axis of the workpiece holder whatever its letter
+        // (D102, D146).
+        if (CylinderRotaryAxis(name, state) is AxisDef cylinderAxis)
+        {
+            return cylinderAxis.NcxName;
+        }
+
         // A, B, C resolve to the rotary axis of the current workpiece holder when it has one, otherwise to the machine
         // axis with that NCX name; explicit machine axis names resolve through the [[axis]] list (rule 3, D93).
         AxisDef? axis = holder is null ? _machine.ResolveAxis(name) : _machine.ResolveAxis(name, holder);
@@ -163,6 +174,11 @@ internal sealed class ResourceResolver
             && createdHolder.Axis is string createdHolderAxis)
         {
             return createdHolderAxis;
+        }
+
+        if (CylinderRotaryAxis(name, state) is AxisDef cylinderAxis)
+        {
+            return cylinderAxis.NcxName;
         }
 
         AxisDef? axis = holder is null ? _machine.ResolveAxis(name) : _machine.ResolveAxis(name, holder);
@@ -248,8 +264,9 @@ internal sealed class ResourceResolver
     }
 
     /// <summary>
-    /// The reference point of an axis in machine coordinates: home for point 1, home2 for POINT=2; null when the
-    /// configuration has none (machine-config 4, virtual machine 3 step 5, D100).
+    /// The reference point of an axis in machine coordinates: home for point 1, home2 for POINT=2, halved into a radius
+    /// on an axis programmed in diameters (D137); null when the configuration has none (machine-config 4, virtual
+    /// machine 3 step 5, D100).
     /// </summary>
     /// <param name="axis">The key of the position store, the NCX name of the axis.</param>
     /// <param name="point">1, or the POINT of the HOME block.</param>
@@ -258,10 +275,67 @@ internal sealed class ResourceResolver
         AxisDef? definition = _machine.ResolveAxis(axis);
         return point switch
         {
-            1 => definition?.Home,
-            2 => definition?.Home2,
+            1 => definition?.AsStoredRadius(definition.Home),
+            2 => definition?.AsStoredRadius(definition.Home2),
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// The cylinder axis of CYLINDER=n: the linear axis parallel to the rotary axis of the current workpiece holder, Z
+    /// for a work spindle and for a spindle created on the spot, the [[axis]] parallel of a table's rotary axis
+    /// otherwise (default Z); null when the holder has no rotary axis, which makes CYLINDER an ERROR (language 4.2,
+    /// machine-config 4, D146).
+    /// </summary>
+    public string? CylinderAxisOf(ChannelState state)
+    {
+        if (state.Frame.WorkpieceHolder is not string holder)
+        {
+            return null;
+        }
+
+        if (_createdResources.TryGetValue(holder, out ResourceDef? created))
+        {
+            return created.Axis is null ? null : "Z";
+        }
+
+        if (WorkpieceRotaryAxis(holder) is not AxisDef rotary)
+        {
+            return null;
+        }
+
+        return _machine.FindResource(holder)?.Type == ResourceType.WorkSpindle ? "Z" : rotary.Parallel ?? "Z";
+    }
+
+    // The rotary axis of a workpiece holder: the axis its [[resource]] names, or a rotary axis whose owner is the
+    // holder, a table among them (machine-config 4, D146).
+    private AxisDef? WorkpieceRotaryAxis(string holder)
+    {
+        if (_machine.FindResource(holder)?.Axis is string axisId
+            && _machine.FindAxis(axisId) is AxisDef named
+            && named.Kind == AxisKind.Rotary)
+        {
+            return named;
+        }
+
+        foreach (AxisDef axis in _machine.Axes)
+        {
+            if (axis.Kind == AxisKind.Rotary && axis.Owner == holder)
+            {
+                return axis;
+            }
+        }
+
+        return null;
+    }
+
+    // The C word under CYLINDER=n names the rotary axis of the workpiece holder (D102, D146); null otherwise.
+    private AxisDef? CylinderRotaryAxis(string name, ChannelState state)
+    {
+        return state.Frame.Cylinder is not null && name == SpindleAxisName
+            && state.Frame.WorkpieceHolder is string holder
+            ? WorkpieceRotaryAxis(holder)
+            : null;
     }
 
     /// <summary>
@@ -449,19 +523,19 @@ internal sealed class ResourceResolver
 
     private ResourceDef? FindCreated(string role)
     {
-        return _createdResources.TryGetValue(role, out ResourceDef? created) ? created : null;
+        return _createdResources.TryGetValue(CreatedIdPrefix + role, out ResourceDef? created) ? created : null;
     }
 
-    // A work spindle created on the spot gets a rotary axis of its own, so that C resolves to it while it is the
-    // workpiece holder (D103); a holder created on the spot has no spindle. The resource is named by its role.
+    // Every spindle word and WORKPIECE create a work spindle with a rotary axis of its own, so that C resolves to it
+    // while it is the workpiece holder; TOOL and PRELOAD create a holder without a spindle (D103). The id is ROLE_ and
+    // the role, the axis C_ and the role (D170).
     private ResourceDef CreateOnTheSpot(string role, ResourceType type)
     {
-        // TODO(question): D103 names neither the id of a resource created on the spot nor the name of the rotary axis
-        // of a work spindle created so; the resource takes the role as its id and the axis is C_ and the role (D170).
+        string id = CreatedIdPrefix + role;
         ResourceDef created = type == ResourceType.WorkSpindle
-            ? new ResourceDef { Id = role, Type = type, Axis = CreatedAxisPrefix + role }
-            : new ResourceDef { Id = role, Type = type };
-        _createdResources[role] = created;
+            ? new ResourceDef { Id = id, Type = type, Axis = CreatedAxisPrefix + role }
+            : new ResourceDef { Id = id, Type = type };
+        _createdResources[id] = created;
         if (created.Axis is string axis)
         {
             _createdAxes[axis] = AxisKind.Rotary;
@@ -495,6 +569,16 @@ internal sealed class ResourceResolver
     {
         state.Motion.Position.TryAdd(axis, AxisPosition.Unknown);
         state.Frame.SetposShift.TryAdd(axis, 0m);
+    }
+
+    /// <summary>
+    /// True the first time a run asks about this name, so that "not checked: no machine file" comes once per name
+    /// (D103); the cycle parameters of D114 ask with their own names.
+    /// </summary>
+    /// <param name="name">The kind and the name: "cycle parameter RECT_POCKET LENGTH".</param>
+    public bool IsFirstNotChecked(string name)
+    {
+        return _warned.Add(name);
     }
 
     // "not checked: no machine file", once per name (D103).

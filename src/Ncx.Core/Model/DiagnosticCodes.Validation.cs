@@ -82,6 +82,28 @@ public static partial class DiagnosticCodes
     public const string OffsetFormsMixed = "VM480";
 
     /// <summary>
+    /// VM481: TOOL_POINT, TIP_OFFSET or POINT_RADIUS on a holder that holds no tool (D372). Suppressed inside a
+    /// subprogram that no program of the file calls (3.9, D99).
+    /// </summary>
+    public const string PointWordWithoutTool = "VM481";
+
+    /// <summary>
+    /// VM482: a negative TIP_OFFSET or POINT_RADIUS (D372).
+    /// </summary>
+    public const string NegativePointValue = "VM482";
+
+    /// <summary>
+    /// VM483: TOOL_POINT of 0 or less (D372).
+    /// </summary>
+    public const string ToolPointNotPositive = "VM483";
+
+    /// <summary>
+    /// VM484, a WARNING: a motion with a TIP_OFFSET under TILT, TILT_AXIS or TCPM=ON, where the tool axis is no machine
+    /// axis and the virtual machine derives no tip; once per program (D374).
+    /// </summary>
+    public const string TipOffsetUnderTilt = "VM484";
+
+    /// <summary>
     /// VM500, a WARNING: the spindle is OFF before a LINE, the spindle of the current tool holder or the default
     /// spindle when the holder has none (virtual machine 5). Suppressed inside a subprogram that no program of the file
     /// calls (3.9, D99).
@@ -115,8 +137,8 @@ public static partial class DiagnosticCodes
     public const string JumpEndInSub = "VM522";
 
     /// <summary>
-    /// VM523, a WARNING: a block of a program after an unconditional JUMP that no LABEL makes reachable (language 4.13,
-    /// virtual machine 3.9, 5, D89).
+    /// VM523, a WARNING: a block of a program or subprogram after an unconditional JUMP that no LABEL makes reachable
+    /// (language 4.13, virtual machine 3.9, 5, D89, D195).
     /// </summary>
     public const string UnreachableBlock = "VM523";
 
