@@ -36,9 +36,9 @@ internal static class HeidenhainToolCall
     // CALL programs a new one, and which F AUTO takes; the reader writes it as F in the TOOL block and keeps the value
     // (decisions.md; controllers heidenhain.md 4). The delta offsets DL, DR and DR2 have no NCX word (language 4.4)
     // and keep the block RAW with a WARNING (D5).
-    // TODO(question): OFFSET:LEN and OFFSET:RAD take a register number (language 4.4) that a tool called by name has
-    // not, so no NCX form available today states the offsets such a call loads; a TOOL CALL by name is kept RAW until
-    // D239 is answered.
+    // D239: OFFSET:LEN and OFFSET:RAD take a register number (language 4.4) that a tool called by name has not, so a
+    // TOOL CALL "NAME" stays RAW:HEIDENHAIN with its WARNING in 1.0, to be revisited with D172; the row of the tool
+    // table is the name-to-number mapping (decisions.md; machine-config 3; controllers heidenhain.md 4).
     private static void ReadCall(HeidenhainBlock block)
     {
         SourceWord? number = NumberWord(block);

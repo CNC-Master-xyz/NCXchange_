@@ -32,14 +32,16 @@ public static partial class DiagnosticCodes
     public const string HeidenhainCycleWithoutSignature = "CMP103";
 
     /// <summary>
-    /// CMP104: a Q parameter of the signature of a cycle has no value, neither from a word of the cycle block nor from
-    /// a rule of the compiler (controllers heidenhain.md 8 rule 7, D164).
+    /// CMP104: a Q parameter of the signature of a cycle has no value, neither from a word of the cycle block, nor from
+    /// a rule of the compiler, nor from the `defaults` of the catalog entry; Q204 under CYCLE_RETRACT=SAFE without SAFE
+    /// among them (controllers heidenhain.md 8 rule 7, D164, D188).
     /// </summary>
     public const string HeidenhainCycleParameterWithoutValue = "CMP104";
 
     /// <summary>
     /// CMP105, a WARNING: a word of a cycle block that the catalog entry of the cycle maps to no Q parameter is not
-    /// written (machine-config 6; language 2 rule 8).
+    /// written, because the native cycle reaches the same value from another word of the block, the tapping feed of
+    /// cycle 207 from the pitch Q239 (D362; machine-config 6; language 2 rule 8).
     /// </summary>
     public const string HeidenhainCycleWordNotWritten = "CMP105";
 
@@ -152,10 +154,30 @@ public static partial class DiagnosticCodes
     public const string HeidenhainPathModeNotWritten = "CMP120";
 
     /// <summary>
+    /// CMP121, a WARNING: the [cycles] chip_break_lift of the machine, the one source of Q256 (D358), lies outside the
+    /// input range of Q256, 0.1 to 99999.9999 on the iTNC 530; the compiler writes the nearest value of the range and
+    /// names both.
+    /// </summary>
+    public const string HeidenhainChipBreakLiftOutOfRange = "CMP121";
+
+    /// <summary>
+    /// CMP122, an ERROR: a word of a cycle block that the catalog entry maps to no Q parameter and no rule word
+    /// carries, and whose value the native cycle neither reaches from another word nor has anyway, would be lost; the
+    /// cycle is not written (D362; machine-config 6, controller-mapping 5).
+    /// </summary>
+    public const string HeidenhainCycleWordLost = "CMP122";
+
+    /// <summary>
     /// CMP123: a measurement point beyond the nine indices of a Klartext tool, k above 10, an ERROR; and, as a
     /// WARNING, a point change of the tool in the spindle by an indexed TOOL CALL, which runs the change macro on the
     /// TNC 640 and on the iTNC 530 depending on MP7480.0 and the builder's macro, unless point_change = "call"
     /// (machine-config 3, D373).
     /// </summary>
     public const string HeidenhainToolPoint = "CMP123";
+
+    /// <summary>
+    /// CMP140, a WARNING: CYCLE_RETRACT=SAFE with a SAFE at or below CLEARANCE; the control uses the second set-up
+    /// clearance Q204 only above Q200, so the tool retracts to CLEARANCE only (D157, D226; controller-mapping 5).
+    /// </summary>
+    public const string HeidenhainSafeNotAboveClearance = "CMP140";
 }

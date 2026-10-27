@@ -89,9 +89,10 @@ internal static class HeidenhainFrameCycles
 
     // CYCL DEF 247 INIT. REF.PKT Q339=1 activates preset 1 of the preset table, ORIGIN=1, which empties the chain
     // (controllers heidenhain.md 3; controller-mapping 1, ORIGIN; language 4.2).
-    // TODO(question): heidenhain 3 does not say whether cycle 247 ends an active cycle 7, 8, 10 or tilted plane on the
-    // control, while ORIGIN empties the chain of NCX (language 4.2, D31); the reader writes ORIGIN and does not write
-    // them again, as the Fanuc reader does for G54 over G52, until D253 is answered.
+    // D253 (d): cycle 247 reads as ORIGIN only while the active chain holds nothing but SHIFT entries and, optionally,
+    // a tilt; an active tilt (PLANE or cycle 19) is written again after ORIGIN with MOVE=STAY, since the control keeps
+    // it. While MIRROR, ROTATE or scaling is active, or the chain is not known, the block stays RAW with its WARNING:
+    // the TNC 640 resets them and the iTNC 530 manual names only the datum shift (decisions.md).
     private static void ReadOrigin(HeidenhainBlock block)
     {
         SourceWord? preset = block.Source.Find("Q339");
@@ -101,11 +102,58 @@ internal static class HeidenhainFrameCycles
             return;
         }
 
+        HeidenhainChain chain = block.Heidenhain.Chain;
+        HeidenhainChainEntry? tilt = null;
+        foreach (HeidenhainChainEntry entry in chain.Entries)
+        {
+            if (entry.Kind is "TILT" or "TILT_AXIS")
+            {
+                tilt = entry;
+            }
+            else if (entry.Kind != "SHIFT")
+            {
+                block.Draft.KeepAsRaw($"cycle 247 while {entry.Kind} is active: the TNC 640 resets it and the iTNC 530 "
+                    + "names only the datum shift, so ORIGIN cannot say what remains (D253)");
+                return;
+            }
+        }
+
+        if (!chain.Known)
+        {
+            block.Draft.KeepAsRaw("cycle 247 where the reader does not know the active transforms, which it may or may "
+                + "not end on the control (D253)");
+            return;
+        }
+
         int datum = decimal.ToInt32(number);
         block.Draft.AddState("ORIGIN", null, new IntegerValue(datum, datum.ToString(CultureInfo.InvariantCulture)));
-        block.Heidenhain.Chain.Clear();
+        chain.Clear();
         block.Heidenhain.DatumShift.Clear();
         block.Heidenhain.ForgetFrame();
+        if (tilt is not null)
+        {
+            chain.TryReplace(tilt.Kind, new HeidenhainChainEntry(tilt.Kind, Staying(tilt.Block)), block.Draft.After);
+        }
+    }
+
+    // The tilt block again, with MOVE=STAY: the plane is already tilted, so nothing moves (language 4.2, MOVE).
+    private static HeidenhainDraftBlock Staying(HeidenhainDraftBlock tilt)
+    {
+        var again = new HeidenhainDraftBlock();
+        if (tilt.Verb is string verb)
+        {
+            again.WithVerb(verb, tilt.VerbValue);
+        }
+
+        foreach (Word word in tilt.Words)
+        {
+            if (word.Key != "MOVE")
+            {
+                again.Add(word.Key, word.Addr, word.Value);
+            }
+        }
+
+        return again.Add("MOVE", new IdentValue("STAY"));
     }
 
     // CYCL DEF 7.1 X+60, 7.2 Y+40, 7.3 Z-5: the datum shift, axes in any order, an omitted axis unchanged; a new cycle

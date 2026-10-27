@@ -52,8 +52,8 @@ internal static class HeidenhainMotion
 
         // LN carries the surface normal and the tool vector as the unit vectors of the program (D81; language 6 writes
         // them without a sign).
-        // TODO(question): D185: the vector form under RAPID is open; its recommendation gives RAPID and LINE the
-        // vector form, so a RAPID with a tool vector is written LN with FMAX.
+        // D185: RAPID and LINE carry the tool vector with one meaning, the tool direction at the end point, so a RAPID
+        // with a tool vector is written LN with FMAX (decisions.md; language 4.3).
         if (vector && !AddVector(writing, words))
         {
             return;
