@@ -75,6 +75,13 @@ public static partial class DiagnosticCodes
     public const string ToleranceValueNotWritten = "CMP015";
 
     /// <summary>
+    /// CMP017: an ARC with a tool vector TX TY TZ compiled for a controller without a vector arc, Heidenhain (LN has no
+    /// arc form) and, until a Siemens vector arc is checked, Siemens; an ERROR at compile time like RAW of another
+    /// controller (D185).
+    /// </summary>
+    public const string VectorArcNotWritable = "CMP017";
+
+    /// <summary>
     /// CMP016, an INFO: the program names a measurement point other than 1 and the machine file has no [tool_points],
     /// so nothing selects it; once per program (machine-config 3, D373).
     /// </summary>

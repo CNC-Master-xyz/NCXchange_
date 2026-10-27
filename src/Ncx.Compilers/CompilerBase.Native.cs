@@ -95,4 +95,24 @@ public abstract partial class CompilerBase
             $"{what} compiles only to {named}, the {kind} it names, and the machine \"{machine.Machine.Name}\" is "
             + $"{target}: an ERROR at compile time (language 4.1, 4.7.1; controller-mapping 9; D5, D94).");
     }
+
+    // An ARC with a tool vector compiles like RAW of another controller where the controller has no vector arc: an
+    // ERROR at compile time, every one reported before anything is written (D185; language 4.3, TX).
+    private void CheckVectorArcs(NcxProgram program, MachineConfig machine, Diagnostics diagnostics)
+    {
+        if (WritesVectorArcs)
+        {
+            return;
+        }
+
+        foreach (Block block in program.Blocks)
+        {
+            if (block.Verb?.Key == "ARC" && (block.Has("TX") || block.Has("TY") || block.Has("TZ")))
+            {
+                diagnostics.Error(block, DiagnosticCodes.VectorArcNotWritable,
+                    $"An ARC with a tool vector has no form on a {Controller} machine (\"{machine.Machine.Name}\"): "
+                    + "write the arc as LINE blocks with their vectors, or as RAW of the controller (D185).");
+            }
+        }
+    }
 }

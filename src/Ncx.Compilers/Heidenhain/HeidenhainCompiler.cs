@@ -32,6 +32,12 @@ public sealed class HeidenhainCompiler : CompilerBase
     protected override string FileExtension => ".h";
 
     /// <summary>
+    /// An ARC with a tool vector is the ERROR CMP017: LN, the only Klartext block with a tool vector, has no arc form
+    /// (D185).
+    /// </summary>
+    protected override bool WritesVectorArcs => false;
+
+    /// <summary>
     /// Klartext numbers its blocks without a letter in front, 0 BEGIN PGM (controllers heidenhain.md 1, 8 rule 1).
     /// </summary>
     protected override string BlockNumberPrefix => "";

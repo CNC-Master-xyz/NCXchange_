@@ -55,6 +55,13 @@ public abstract partial class CompilerBase : ICompiler
     protected virtual bool DecimalPointOnWholeNumbers => false;
 
     /// <summary>
+    /// True for a controller that writes an ARC with a tool vector TX TY TZ: Fanuc G43.5 documents arcs with a tool
+    /// vector; Heidenhain LN has no arc form, and a Siemens vector arc is not checked, so there it is the ERROR CMP017
+    /// (D185). True by default.
+    /// </summary>
+    protected virtual bool WritesVectorArcs => true;
+
+    /// <summary>
     /// The machine of the compile.
     /// </summary>
     protected MachineConfig Machine => _machine ?? throw NotCompiling();
@@ -120,6 +127,7 @@ public abstract partial class CompilerBase : ICompiler
         // compile time, every one reported before anything is written (language 4.1, 4.7.1; controller-mapping 9;
         // D5, D94).
         CheckNativeText(expanded, machine, diagnostics);
+        CheckVectorArcs(expanded, machine, diagnostics);
 
         // A word of a table that the machine accepts only from another channel, or needs in every channel program, is
         // an ERROR of a single-channel compile; in a channel program of a job the job compiler has moved or duplicated
