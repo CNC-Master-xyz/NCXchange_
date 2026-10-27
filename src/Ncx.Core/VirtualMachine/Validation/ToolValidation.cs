@@ -14,6 +14,9 @@ internal static class ToolValidation
     private const string CombinedForm = "OFFSET";
     private const string SeparateForm = "OFFSET:LEN and OFFSET:RAD";
 
+    // Tool 0 is the empty spindle (language 4.4).
+    private static readonly ToolRef s_emptySpindle = new(0);
+
     /// <summary>
     /// The rules of the family.
     /// </summary>
@@ -39,8 +42,56 @@ internal static class ToolValidation
             ValidationRule.Error(DiagnosticCodes.OffsetFormsMixed,
                 "OFFSET mixed with OFFSET:LEN or OFFSET:RAD in one program.", "language 4.4; VM 5")
                 with { SuppressedInUncalledSub = true },
+            ValidationRule.Error(DiagnosticCodes.PointWordWithoutTool,
+                "TOOL_POINT, TIP_OFFSET or POINT_RADIUS on a holder that holds no tool.", "language 4.4; VM 5; D372")
+                with { SuppressedInUncalledSub = true },
+            ValidationRule.Error(DiagnosticCodes.NegativePointValue, "A negative TIP_OFFSET or POINT_RADIUS.",
+                "language 4.4; VM 5; D372"),
+            ValidationRule.Error(DiagnosticCodes.ToolPointNotPositive, "TOOL_POINT of 0 or less.",
+                "language 4.4; VM 5; D372"),
         ],
     };
+
+    /// <summary>
+    /// The point words of D372 after the block: a point word on a holder that holds no tool is VM481, a negative
+    /// TIP_OFFSET or POINT_RADIUS VM482, a TOOL_POINT of 0 or less VM483. Only VM481 depends on the caller's state and
+    /// is suppressed inside a subprogram that no program of the file calls (3.9, D99); a value from an expression is
+    /// checked when INTERPRETED mode has resolved it.
+    /// </summary>
+    public static void CheckPointWords(BlockContext context)
+    {
+        foreach (Word word in context.Block.Words)
+        {
+            if (word.Key is not ("TOOL_POINT" or "TIP_OFFSET" or "POINT_RADIUS"))
+            {
+                continue;
+            }
+
+            if (context.ResourceOf.TryGetValue(word, out string? holderId)
+                && context.State.Holders[holderId].SpindleTool == s_emptySpindle)
+            {
+                context.CallerRuleDiagnostics.Error(context.Block, DiagnosticCodes.PointWordWithoutTool,
+                    $"{word.ToCanonical()} names a point of the tool on {holderId}, which holds no tool (D372).");
+            }
+
+            decimal? value = word.Value switch
+            {
+                IntegerValue integer => integer.Number,
+                DecimalValue number => number.Number,
+                _ => null,
+            };
+            if (word.Key == "TOOL_POINT" && value <= 0)
+            {
+                context.Diagnostics.Error(context.Block, DiagnosticCodes.ToolPointNotPositive,
+                    $"{word.ToCanonical()}: the points of a tool count from 1 (D372).");
+            }
+            else if (word.Key != "TOOL_POINT" && value < 0)
+            {
+                context.Diagnostics.Error(context.Block, DiagnosticCodes.NegativePointValue,
+                    $"{word.ToCanonical()} is negative; the tip offset and the register radius are not (D372).");
+            }
+        }
+    }
 
     /// <summary>
     /// A program gives its offsets combined, OFFSET, or as length and radius, OFFSET:LEN and OFFSET:RAD (language 4.4);

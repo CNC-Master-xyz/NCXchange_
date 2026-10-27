@@ -127,6 +127,7 @@ internal sealed class RunValidation
 
         ArcValidation.CheckCompensationChange(context, _compensationBefore);
         ToolValidation.CheckOffsetForms(context, _offsetForms);
+        ToolValidation.CheckPointWords(context);
         SpindleValidation.CheckSpindleBeforeLine(context);
         SpindleValidation.CheckRpmLimits(context);
         ResourceValidation.CheckWorkpieceChange(context, _workpieceHolderBefore);

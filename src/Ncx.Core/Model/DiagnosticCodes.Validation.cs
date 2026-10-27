@@ -57,6 +57,22 @@ public static partial class DiagnosticCodes
     public const string OffsetFormsMixed = "VM480";
 
     /// <summary>
+    /// VM481: TOOL_POINT, TIP_OFFSET or POINT_RADIUS on a holder that holds no tool (D372). Suppressed inside a
+    /// subprogram that no program of the file calls (3.9, D99).
+    /// </summary>
+    public const string PointWordWithoutTool = "VM481";
+
+    /// <summary>
+    /// VM482: a negative TIP_OFFSET or POINT_RADIUS (D372).
+    /// </summary>
+    public const string NegativePointValue = "VM482";
+
+    /// <summary>
+    /// VM483: TOOL_POINT of 0 or less (D372).
+    /// </summary>
+    public const string ToolPointNotPositive = "VM483";
+
+    /// <summary>
     /// VM500, a WARNING: the spindle is OFF before a LINE, the spindle of the current tool holder or the default
     /// spindle when the holder has none (virtual machine 5). Suppressed inside a subprogram that no program of the file
     /// calls (3.9, D99).
