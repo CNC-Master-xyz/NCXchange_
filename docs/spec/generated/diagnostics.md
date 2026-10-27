@@ -92,7 +92,7 @@ Linear motion and the machine limits of a motion (language 4.3; VM 3.1, 5; machi
 | `VM202` | ERROR | IX from an unknown position. In a subprogram nothing calls the position becomes unknown instead. Suppressed inside a subprogram that no program of the file calls (D99). | VM 3.1, 5; D99 |
 | `VM203` | ERROR | Two forms of one axis in one block (X=10 IX=5). | language 4.3 |
 | `VM440` | WARNING | F in a RAPID block. | VM 5 |
-| `VM441` | WARNING | F above an axis max_feed. | VM 5; machine-config 4; D64 |
+| `VM441` | WARNING | F above the max_feed of an axis the LINE or ARC moves (rotary axes only in a rotary-only block under ROTARY_FEED=DEG_MIN), PER_REV with the known rpm, INCH times 25.4, CYCLE_F against the drilling axis; once per F or CYCLE_F word (MaxFeedCheck). | VM 5; machine-config 4; D64, D192 |
 | `VM442` | WARNING | A target beyond the axis limits, compared in the MACHINE frame and not checked while the machine position is unknown. | VM 5; machine-config 4; D64, D100 |
 | `VM670` | WARNING | With limits = "clamp" in the configuration: RPM, F or a target beyond a machine limit is rewritten to the limit, and the WARNING says so. Raised by the expander. | VM 5; machine-config 1; D64 |
 

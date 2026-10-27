@@ -428,4 +428,51 @@ public sealed class SetposTests
         Assert.Equal(220m, FrameRules.WorkpiecePosition(known.State, "X", 20m).Value);
         Assert.Equal(20m, FrameRules.WorkpiecePosition(unknown.State, "C", 20m).Value);
     }
+
+    // D319: the setpos shift keeps its displacement in space. SETPOS X=0 Y=0 at X=10 Y=0 under ROTATE=90 records the
+    // shift (10, 0) in the rotated frame; the RESET turns it into the frame that remains, R·s = (0, 10).
+    [Fact]
+    public void D319_RotateResetAfterSetpos_TurnsTheShiftIntoTheRemainingFrame()
+    {
+        VmHarness vm = new VmHarness(VmMachines.Default())
+            .Execute("UNITS=MM", "ROTATE=90", "RAPID X=10 Y=0", "SETPOS X=0 Y=0", "ROTATE=RESET");
+
+        Assert.Equal(0m, vm.State.Frame.SetposShift["X"]);
+        Assert.Equal(10m, vm.State.Frame.SetposShift["Y"]);
+        Assert.DoesNotContain("SETPOS:X", vm.State.Unknown);
+    }
+
+    // D319: a removed MIRROR negates the shift of the axis it mirrors; a removed SHIFT only folds back and leaves the
+    // setpos shift as it is.
+    [Fact]
+    public void D319_MirrorAndShiftRemovedAfterSetpos_NegateAndKeepTheShift()
+    {
+        VmHarness vm = new VmHarness(VmMachines.Default())
+            .Execute("UNITS=MM", "SHIFT Y=3", "MIRROR=X", "RAPID X=10 Y=4", "SETPOS X=0 Y=0", "MIRROR=OFF");
+
+        Assert.Equal(-10m, vm.State.Frame.SetposShift["X"]);
+        Assert.Equal(4m, vm.State.Frame.SetposShift["Y"]);
+
+        vm.Execute("SHIFT=RESET");
+
+        Assert.Equal(-10m, vm.State.Frame.SetposShift["X"]);
+        Assert.Equal(4m, vm.State.Frame.SetposShift["Y"]);
+    }
+
+    // D319: after a removed TILT the setpos shift declared under it is unknown. The tilted vector may fall on every
+    // linear axis, so the shift of Y, declared before the tilt, takes an unknown part as well; the rotary axis C,
+    // which a tilt does not turn (D230), keeps its shift.
+    [Fact]
+    public void D319_TiltResetAfterSetpos_LeavesTheShiftUnknown()
+    {
+        VmHarness vm = new VmHarness(VmMachines.Default())
+            .Execute("UNITS=MM SPINDLE_MODE:MAIN=AXIS", "RAPID Y=7", "SETPOS Y=0", "TILT B=45", "RAPID X=10 Z=0 C=5",
+                "SETPOS X=0 C=0", "TILT=RESET");
+
+        Assert.Contains("SETPOS:X", vm.State.Unknown);
+        Assert.Contains("SETPOS:Y", vm.State.Unknown);
+        Assert.Contains("SETPOS:Z", vm.State.Unknown);
+        Assert.DoesNotContain("SETPOS:C", vm.State.Unknown);
+        Assert.Equal(5m, vm.State.Frame.SetposShift["C"]);
+    }
 }

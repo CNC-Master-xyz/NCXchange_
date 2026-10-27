@@ -121,6 +121,32 @@ public sealed class LimitClampTests
         Assert.Single(expanded.Diagnostics.Items);
     }
 
+    // D192: the literal clamp compares F with the smallest max_feed of the linear axes its block names; the swivel B
+    // (max_feed 3600 deg/min) does not count, so F=5000 with X and B stays as written.
+    [Fact]
+    public void D192_FeedWithARotaryAxisWord_IsComparedWithTheLinearAxesOnly()
+    {
+        string text = ExpanderHarness.File("UNITS=MM", "LINE X=10 B=30 F=5000");
+
+        NcxProgram expanded = ExpanderHarness.Expand(text, ExpanderMachines.ClampWithSwivel());
+
+        Assert.Equal(text, ExpanderHarness.WriteWithGenerated(expanded));
+        Assert.Empty(expanded.Diagnostics.Items);
+    }
+
+    // D203: under "clamp" only absolute axis words of RAPID and LINE under FRAME=MACHINE are rewritten; an ARC is no
+    // clamped verb, and the virtual machine reports its target instead.
+    [Fact]
+    public void D203_MachineFrameArcBeyondTheLimits_IsNotRewritten()
+    {
+        string text = ExpanderHarness.File("UNITS=MM", "ARC=CW X=700 Z=-5 R=400 F=100 FRAME=MACHINE");
+
+        NcxProgram expanded = ExpanderHarness.Expand(text, ExpanderMachines.Clamp());
+
+        Assert.Equal(text, ExpanderHarness.WriteWithGenerated(expanded));
+        Assert.Empty(expanded.Diagnostics.Items);
+    }
+
     // The clamp applies to every block the VM executes for a block, a generated one as well, which keeps its place and
     // names both sources.
     [Fact]

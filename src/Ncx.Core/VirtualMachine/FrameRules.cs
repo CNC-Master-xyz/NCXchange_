@@ -90,6 +90,7 @@ internal static class FrameRules
         // The next ORIGIN clears the setpos shift, as G54 cancels a G50 or G92 setting (virtual machine 3.4). The
         // chain is folded back above, shifts that stood before a SETPOS included; the record of the SETPOS takes those
         // out again (ReturnToMachineFrame), and it goes with the shift it belongs to.
+        state.Frame.SetposChain.Clear();
         foreach (string axis in new List<string>(state.Frame.SetposShift.Keys))
         {
             state.Frame.SetposShift[axis] = 0m;
@@ -161,7 +162,10 @@ internal static class FrameRules
         // position the axis reads as (virtual machine 1). SETPOS moves nothing: an axis known in the MACHINE frame
         // keeps its machine position, and one whose setpos shift was recorded against the machine position returns to
         // it; the record goes with the shift it belongs to (virtual machine 3.4, D35, D101).
+        // The shift is declared in the frame of the chain as it stands; a RESET of a turning entry of it turns the
+        // shift with it (D319).
         string key = SetposKey(axis);
+        state.Frame.SetposChain[axis] = [.. state.Frame.Chain];
         if (declared is not decimal value)
         {
             state.Unknown.Add(key);
@@ -538,12 +542,7 @@ internal static class FrameRules
     // The keys of the two axes of a working plane in the position store (language 4.2, virtual machine 3.8 rule 3).
     private static string[] PlaneAxes(BlockContext context, Workplane workplane)
     {
-        Plane plane = workplane switch
-        {
-            Workplane.ZX => Plane.ZX,
-            Workplane.YZ => Plane.YZ,
-            _ => Plane.XY,
-        };
+        Plane plane = PlaneOf(workplane);
         return [KeyOf(context, plane.FirstAxis), KeyOf(context, plane.SecondAxis)];
     }
 
@@ -614,6 +613,9 @@ internal static class FrameRules
         List<TransformEntry> removed = chain.GetRange(index, chain.Count - index);
         chain.RemoveRange(index, chain.Count - index);
 
+        // The setpos shifts keep their displacement in space (D319).
+        List<string> setposUnknown = TurnSetposShifts(state, removed);
+
         bool frameTurned = false;
         var unknownAxes = new List<string>();
         foreach (TransformEntry entry in removed)
@@ -632,13 +634,170 @@ internal static class FrameRules
         if (frameTurned)
         {
             MarkUnknownOutsideMachineFrame(state);
+        }
+        else
+        {
+            foreach (string axis in unknownAxes)
+            {
+                MarkUnknownOutsideMachineFrame(state, axis);
+            }
+        }
+
+        // A setpos shift that became unknown no longer relates the store to the machine position; the change of the
+        // frame above has returned its axis to the MACHINE frame first where the record allowed it (D101, D319).
+        foreach (string axis in setposUnknown)
+        {
+            state.Unknown.Add(SetposKey(axis));
+            state.Frame.SetposAgainstMachine.Remove(axis);
+        }
+    }
+
+    // D319: the setpos shift keeps its displacement in space. For each removed entry, the last first, the shifts
+    // declared after it are turned into the frame that remains: a ROTATE with a known angle turns the vector of the
+    // two axes of its plane (R·s), a MIRROR negates the shift of the axes it mirrors, and a TILT, a TILT_AXIS or a
+    // ROTATE by an angle from an expression leaves the shift unknown, because only the kinematics module converts it
+    // (virtual machine 3.4, 10). A removed SHIFT only folds back. Returns the axes whose setpos shift became unknown;
+    // the shifts of the others are written back at once, and every record keeps only the entries that remain.
+    private static List<string> TurnSetposShifts(ChannelState state, List<TransformEntry> removed)
+    {
+        FrameState frame = state.Frame;
+        var unknown = new List<string>();
+        for (int index = removed.Count - 1; index >= 0; index--)
+        {
+            TransformEntry entry = removed[index];
+            List<string> declaredAfter = DeclaredAfter(frame, entry);
+            if (entry.Kind == TransformKind.Shift || declaredAfter.Count == 0)
+            {
+                continue;
+            }
+
+            switch (entry.Kind)
+            {
+                case TransformKind.Rotate when entry.Angle is decimal angle:
+                    TurnInPlane(state, entry.Workplane, angle, declaredAfter, unknown);
+                    break;
+                case TransformKind.Mirror:
+                    foreach (string axis in declaredAfter)
+                    {
+                        if (entry.Mirrored.Contains(axis))
+                        {
+                            frame.SetposShift[axis] = -frame.SetposShift[axis];
+                        }
+                    }
+
+                    break;
+                case TransformKind.Rotate:
+                    Plane plane = PlaneOf(entry.Workplane);
+                    AddUnknown(state, unknown, [plane.FirstAxis, plane.SecondAxis], declaredAfter);
+                    break;
+                default:
+                    AddUnknown(state, unknown, [Plane.XY.FirstAxis, Plane.XY.SecondAxis, Plane.XY.ToolAxis],
+                        declaredAfter);
+                    break;
+            }
+        }
+
+        foreach (string axis in new List<string>(frame.SetposChain.Keys))
+        {
+            frame.SetposChain[axis] = frame.SetposChain[axis]
+                .Where(entry => !removed.Contains(entry, ReferenceEqualityComparer.Instance))
+                .ToList();
+        }
+
+        return unknown;
+    }
+
+    // The axes whose SETPOS stood after the entry: their setpos shift was declared in a frame the entry turned.
+    private static List<string> DeclaredAfter(FrameState frame, TransformEntry entry)
+    {
+        var axes = new List<string>();
+        foreach (KeyValuePair<string, IReadOnlyList<TransformEntry>> declared in frame.SetposChain)
+        {
+            if (declared.Value.Contains(entry, ReferenceEqualityComparer.Instance))
+            {
+                axes.Add(declared.Key);
+            }
+        }
+
+        return axes;
+    }
+
+    // A ROTATE by a known angle about the tool axis of its plane: the shift vector s of the two plane axes in the
+    // rotated frame is R·s in the frame that remains (D319). An axis of the plane whose SETPOS stood before the ROTATE
+    // keeps its own shift and takes the turned component on top; an unknown component leaves both unknown.
+    private static void TurnInPlane(ChannelState state, Workplane workplane, decimal angle, List<string> declaredAfter,
+        List<string> unknown)
+    {
+        FrameState frame = state.Frame;
+        Plane plane = PlaneOf(workplane);
+        string first = plane.FirstAxis;
+        string second = plane.SecondAxis;
+        bool firstTurns = declaredAfter.Contains(first);
+        bool secondTurns = declaredAfter.Contains(second);
+        if ((firstTurns && state.Unknown.Contains(SetposKey(first)))
+            || (secondTurns && state.Unknown.Contains(SetposKey(second))))
+        {
+            AddUnknown(state, unknown, [first, second], declaredAfter);
             return;
         }
 
-        foreach (string axis in unknownAxes)
+        double sFirst = firstTurns && frame.SetposShift.TryGetValue(first, out decimal a) ? (double)a : 0d;
+        double sSecond = secondTurns && frame.SetposShift.TryGetValue(second, out decimal b) ? (double)b : 0d;
+        double radians = (double)angle * Math.PI / 180d;
+        double turnedFirst = (sFirst * Math.Cos(radians)) - (sSecond * Math.Sin(radians));
+        double turnedSecond = (sFirst * Math.Sin(radians)) + (sSecond * Math.Cos(radians));
+        SetTurned(frame, first, firstTurns, turnedFirst);
+        SetTurned(frame, second, secondTurns, turnedSecond);
+    }
+
+    private static void SetTurned(FrameState frame, string axis, bool declaredAfter, double turned)
+    {
+        if (!frame.SetposShift.TryGetValue(axis, out decimal own))
         {
-            MarkUnknownOutsideMachineFrame(state, axis);
+            return;
         }
+
+        frame.SetposShift[axis] = Vec3.RoundToDecimal(turned) + (declaredAfter ? 0m : own);
+    }
+
+    // The setpos shifts that a removed tilt or expression angle leaves unknown: those declared after it on the axes
+    // it turned, and, when one of them was not 0, the other axes it turned as well, which take a part of the vector.
+    private static void AddUnknown(ChannelState state, List<string> unknown, string[] turned,
+        List<string> declaredAfter)
+    {
+        FrameState frame = state.Frame;
+        bool displaced = false;
+        foreach (string axis in declaredAfter)
+        {
+            bool shifted = state.Unknown.Contains(SetposKey(axis))
+                || (frame.SetposShift.TryGetValue(axis, out decimal shift) && shift != 0m);
+            if (turned.Contains(axis))
+            {
+                displaced |= shifted;
+                if (!unknown.Contains(axis))
+                {
+                    unknown.Add(axis);
+                }
+            }
+        }
+
+        foreach (string axis in turned)
+        {
+            if (displaced && frame.SetposShift.ContainsKey(axis) && !unknown.Contains(axis))
+            {
+                unknown.Add(axis);
+            }
+        }
+    }
+
+    private static Plane PlaneOf(Workplane workplane)
+    {
+        return workplane switch
+        {
+            Workplane.ZX => Plane.ZX,
+            Workplane.YZ => Plane.YZ,
+            _ => Plane.XY,
+        };
     }
 
     // The sum of the known SHIFT entries of the chain on an axis: what Fold has taken out of a store that was known
