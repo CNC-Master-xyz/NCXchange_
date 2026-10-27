@@ -70,6 +70,39 @@ public sealed class FanucRepeatTests
         Assert.Contains("IF [#1 GT 2] THEN #149 = 0\nIF [#1 GT 2] GOTO 2\n", text, StringComparison.Ordinal);
     }
 
+    // D213, D280: a RETURN inside the range of a repeat ends it, so the counter is 0 again before M99 and the next
+    // call of the subprogram runs every pass.
+    [Fact]
+    public void Return_InsideTheRange_ClearsTheCounterBeforeM99()
+    {
+        string program = FanucCompile.Lines("FILE=BEGIN NCX=1", "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+            "FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF", "VAR:V100=0", "CALL=100", "CALL=100",
+            "PROGRAM=END", "SUB=BEGIN NAME=\"100\"", "LABEL=5", "RAPID X=1 Y=1", "VAR:V100={$V100 + 1}",
+            "IF={$V100 < 2} JUMP=6", "RETURN", "LABEL=6", "REPEAT=5 TIMES=4", "SUB=END", "FILE=END");
+
+        string text = FanucCompile.TextOf(FanucCompile.Run(program, FanucCompile.MillWithCounters()));
+
+        Assert.Contains("\n#149 = 0\nM99\nN6\n", text, StringComparison.Ordinal);
+    }
+
+    // D213: a conditional JUMP=END in a subprogram is the ERROR CMP302 and writes nothing, no clearing either.
+    [Fact]
+    public void ConditionalEndInASubprogram_WritesNoClearing()
+    {
+        string program = FanucCompile.Lines("FILE=BEGIN NCX=1", "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+            "FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF", "VAR:V100=0", "CALL=100", "PROGRAM=END",
+            "SUB=BEGIN NAME=\"100\"", "LABEL=5", "RAPID X=1 Y=1", "IF={$V100 > 2} JUMP=END", "REPEAT=5 TIMES=4",
+            "SUB=END", "FILE=END");
+
+        CompileResult result = FanucCompile.Run(program, FanucCompile.MillWithCounters());
+
+        Assert.Equal(DiagnosticCodes.FanucConditionalEndInSub, FanucCompile.ErrorOf(result).Code);
+        foreach (var file in result.Files)
+        {
+            Assert.DoesNotContain("THEN", file.Text, StringComparison.Ordinal);
+        }
+    }
+
     // D213: a JUMP inside the range leaves the counter as it is.
     [Fact]
     public void Jump_InsideTheRange_KeepsTheCounter()

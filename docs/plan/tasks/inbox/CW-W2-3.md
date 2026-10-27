@@ -32,4 +32,12 @@ Gaps closed 2026-10-27 (delegated):
 - D280: the counters are cleared at the start of each program as well, since common variables survive a reset that stops a run inside a repeat.
 - D257: the numbers a CALL of the file names count as used.
 
-Found: machines/mori-ntx1000-mapps.toml has `TAILSTOCK = { FORWARD = "M13", BACK = "M14" }`, while NTX1000SZM p.253 note 2 names M13 and M14 as spindle (tool-spindle) rotation codes and p.252 gives the tailstock as M25/M26. The writer takes its spindle codes from the spindle tables, so on that file M13/M14 are not treated as spindle codes.
+Review fixes, 2026-10-27:
+- D213, D280: a RETURN inside a REPEAT range clears its counter before sub_end (`FanucFlow.ClearLeftRepeats`, now public), so the next call runs every pass. A conditional JUMP=END in a subprogram is always CMP302 and writes no clearing: before, the subprogram took an end label and wrote `IF [..] GOTO n` to an N that no line carried.
+- D339: the functions of a block are collected first (`FanucBlock.Functions`) and placed by `FanucFunctions.Place`: from the first function that does not fit, it and every later one stand on lines of their own in order; where the block moves, all of them stand on lines before it (`FanucBlock.LinesBefore`, language 5 rule 3). Spindle stops and coolant OFF come before the named functions, spindle starts after them. Fanuc 10 rule 5.
+- Mori data, both copies: TAILSTOCK M25/M26 (NTX1000SZM p.252, p.261-262); [spindle.TOOL] M13/M14 with M5 (p.258, p.324); M25/M26 out of m_codes_combinable (p.262 note 1).
+- Code guidelines 10.2: `FanucRepeats.Of` takes the machine and its templates instead of a Func; the variables the program uses moved to `FanucRepeatVariables.cs`; no AsSpan (an M code and a variable index are read digit by digit). V0 is #0, never "#".
+- The Fanuc README names FanucUnits, FanucProgramNumbers, FanucRepeats, FanucRepeatRange and FanucRepeatVariables.
+- Subprograms write no G20/G21: they run inside their caller and inherit its units (D283 names the start of each program).
+
+Found: machines/mori-ntx1000-mapps.toml has `TAILSTOCK = { FORWARD = "M13", BACK = "M14" }`, while NTX1000SZM p.253 note 2 names M13 and M14 as spindle (tool-spindle) rotation codes and p.252 gives the tailstock as M25/M26. Fixed in the review round above. Still open: p.257 note 2 asks M10, M210, M11 and M211 to stand in a block without other commands, while p.252 lists them as multiple M code function codes; the list keeps them.

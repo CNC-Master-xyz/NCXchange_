@@ -197,9 +197,22 @@ internal sealed class FanucBlock
     }
 
     /// <summary>
-    /// The lines that follow the main line: the further turns of an arc beyond 360 degrees (language 4.3, ANGLE).
+    /// The lines that follow the main line: the further turns of an arc beyond 360 degrees (language 4.3, ANGLE), and
+    /// the function lines that do not fit in a main line without a motion (D339).
     /// </summary>
     public List<string> Following { get; } = [];
+
+    /// <summary>
+    /// The function words of the block in the order they are written, which FanucFunctions.Place puts on the lines
+    /// (D339).
+    /// </summary>
+    public List<string> Functions { get; } = [];
+
+    /// <summary>
+    /// The function lines that stand before a main line with a motion, where the functions do not all fit in it, so
+    /// that the state is set before the motion (language 5 rule 3; D339).
+    /// </summary>
+    public List<string> LinesBefore { get; } = [];
 
     /// <summary>
     /// True once the offsets of the block are written, so that they stand once.
@@ -213,10 +226,16 @@ internal sealed class FanucBlock
     public HashSet<string> SpindleCodesWritten { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Writes the main line when anything stands in it, then the lines that follow it.
+    /// Writes the function lines that stand before the main line, the main line when anything stands in it, then the
+    /// lines that follow it.
     /// </summary>
     public void WriteMain()
     {
+        foreach (string line in LinesBefore)
+        {
+            Write(line);
+        }
+
         if (!Main.IsEmpty)
         {
             Write(Main.Text());

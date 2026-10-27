@@ -222,6 +222,8 @@ internal static class FanucProgramFrame
             return;
         }
 
+        // D213, D280: a RETURN inside a repeat ends it, and the counter is 0 again for the next call.
+        FanucFlow.ClearLeftRepeats(write, "END", null);
         string? end = write.Render(write.Machine.Format?.SubEnd, "[format] sub_end (machine-config 2)",
             new TemplateValues());
         if (end is not null)

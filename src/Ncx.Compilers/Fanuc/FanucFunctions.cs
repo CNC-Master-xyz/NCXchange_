@@ -20,12 +20,16 @@ internal static class FanucFunctions
     private static readonly int[] s_spindleCodes = [3, 4, 5];
 
     /// <summary>
-    /// The functions of the block, in the order the sources write them: the named functions, the spindles with their
-    /// S, the coolant, MFUNC, STOP and the workpiece (the TODO(question) of FanucLine).
+    /// The functions of the block (the TODO(question) of FanucLine): first what stops, the spindles that stop and the
+    /// coolant OFF, then the named functions, then the spindles that start or turn with their S, the other coolant
+    /// states, MFUNC, STOP and the workpiece, so that a chuck never opens before its spindle stops. Then they are
+    /// put on the lines of the block (Place, D339).
     /// </summary>
     public static void Write(FanucBlock write)
     {
         Block block = write.Block;
+        FanucToolWords.AddSpindleFunctions(write, stopping: true);
+        AddCoolant(write, off: true);
         foreach (Word word in block.Words)
         {
             if (word.Key == "FUNC" && word.Addr is string name)
@@ -37,51 +41,93 @@ internal static class FanucFunctions
             }
         }
 
-        FanucToolWords.AddSpindleFunctions(write);
-        foreach (Word word in block.Words)
+        FanucToolWords.AddSpindleFunctions(write, stopping: false);
+        AddCoolant(write, off: false);
+        AddMFunc(write);
+        AddStop(write);
+        AddWorkpiece(write);
+        Place(write);
+    }
+
+    /// <summary>
+    /// Adds the words of a function to the functions of the block, which Place puts on its lines.
+    /// </summary>
+    public static void Add(FanucBlock write, string words)
+    {
+        write.Functions.Add(words);
+    }
+
+    // The functions on the lines of the block, in their order (D339; machine-config 2). They stand in the main line
+    // while its M codes allow: at most m_codes_per_block (1 where the file leaves it out), no code that stands alone,
+    // a second or later code only where m_codes_combinable, where set, lists it, and no spindle code next to another
+    // M code. D339 lets a spindle code share a block with a code m_codes_combinable lists; the Mori NTX1000SZM
+    // forbids exactly that (programming manual 2011 p.253, note 2: M03, M04, M13 and M14 never with a multiple M code
+    // function code), and no other list of the documents allows it, so a spindle code never shares a block. From the
+    // first function that does not fit, it and every later one stand on lines of their own, filled by the same rule,
+    // so the order stays. Where the main line carries a motion, all functions stand on those lines before it instead,
+    // so that the state is set before the motion (language 5 rule 3).
+    private static void Place(FanucBlock write)
+    {
+        var codes = new List<int>();
+        int firstOut = write.Functions.Count;
+        for (int index = 0; index < write.Functions.Count; index++)
         {
-            if (word.Key == "COOLANT")
+            List<int> added = MCodes(write.Functions[index]);
+            if (codes.Count > 0 && added.Count > 0 && !Combine(write, codes, added))
+            {
+                firstOut = index;
+                break;
+            }
+
+            codes.AddRange(added);
+        }
+
+        int first = firstOut < write.Functions.Count && write.Step.IsMotion ? 0 : firstOut;
+        for (int index = 0; index < first; index++)
+        {
+            write.Main.Function(write.Functions[index]);
+        }
+
+        List<string> lines = write.Step.IsMotion ? write.LinesBefore : write.Following;
+        string line = "";
+        var lineCodes = new List<int>();
+        for (int index = first; index < write.Functions.Count; index++)
+        {
+            string words = write.Functions[index];
+            List<int> added = MCodes(words);
+            if (line.Length > 0 && lineCodes.Count > 0 && added.Count > 0 && !Combine(write, lineCodes, added))
+            {
+                lines.Add(line);
+                line = "";
+                lineCodes.Clear();
+            }
+
+            line = line.Length == 0 ? words : line + " " + words;
+            lineCodes.AddRange(added);
+        }
+
+        if (line.Length > 0)
+        {
+            lines.Add(line);
+        }
+    }
+
+    // The COOLANT words of the block, those that switch off or the others (machine-config 5, [coolant]).
+    private static void AddCoolant(FanucBlock write, bool off)
+    {
+        foreach (Word word in write.Block.Words)
+        {
+            string state = word.Value.ToCanonical();
+            if (word.Key == "COOLANT" && (state == "OFF") == off)
             {
                 write.Written(word);
                 string channel = word.Addr ?? "STANDARD";
-                string state = word.Value.ToCanonical();
                 string? template = write.Machine.Coolant.TryGetValue(channel, out FunctionTable? table)
                     ? table.States.GetValueOrDefault(state)
                     : null;
                 AddRendered(write, template, $"[coolant] {channel} {state} (machine-config 5)");
             }
         }
-
-        AddMFunc(write);
-        AddStop(write);
-        AddWorkpiece(write);
-    }
-
-    /// <summary>
-    /// Adds the words of a function to the main line, or to a line after it where the main line cannot take its M
-    /// codes (D339; machine-config 2): more than m_codes_per_block (1 where the file leaves it out), a code that
-    /// stands alone, a second or later code that m_codes_combinable, where set, does not list, or a spindle code next
-    /// to another M code. D339 lets a spindle code share a block with a code m_codes_combinable lists; the Mori
-    /// NTX1000SZM forbids exactly that (programming manual 2011 p.253, note 2: M03, M04, M13 and M14 never with a
-    /// multiple M code function code), and no other list of the documents allows it, so a spindle code never shares
-    /// a block with another M code.
-    /// </summary>
-    public static void Add(FanucBlock write, string words)
-    {
-        var codes = new List<int>();
-        foreach (string written in write.Main.Functions)
-        {
-            codes.AddRange(MCodes(written));
-        }
-
-        List<int> added = MCodes(words);
-        if (codes.Count > 0 && added.Count > 0 && !Combine(write, codes, added))
-        {
-            write.Following.Add(words);
-            return;
-        }
-
-        write.Main.Function(words);
     }
 
     // True where the M codes of a line and those of a function stand in one block (D339).
@@ -232,8 +278,21 @@ internal static class FanucFunctions
         var codes = new List<int>();
         foreach (string word in words.Split(' ', StringSplitOptions.RemoveEmptyEntries))
         {
-            if (word.Length > 1 && word[0] == 'M' && word.Skip(1).All(char.IsAsciiDigit)
-                && int.TryParse(word.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out int code))
+            if (word.Length < 2 || word.Length > 6 || word[0] != 'M')
+            {
+                continue;
+            }
+
+            // M followed by digits only, read digit by digit: M3, M010.
+            int code = 0;
+            bool digits = true;
+            for (int index = 1; index < word.Length; index++)
+            {
+                digits &= char.IsAsciiDigit(word[index]);
+                code = (code * 10) + (word[index] - '0');
+            }
+
+            if (digits)
             {
                 codes.Add(code);
             }

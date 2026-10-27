@@ -113,8 +113,7 @@ public sealed class FanucCompiler : CompilerBase
         }
 
         _programNumbers ??= FanucProgramNumbers.Of(LookAhead.Steps);
-        _repeats ??= FanucRepeats.Of(LookAhead.Steps,
-            name => FanucRepeats.QuietVariable(Machine.Variables.Map, Templates, name));
+        _repeats ??= FanucRepeats.Of(LookAhead.Steps, Machine, Templates);
         var write = new FanucBlock
         {
             Step = Step,

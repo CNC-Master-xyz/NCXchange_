@@ -214,9 +214,15 @@ internal static class FanucFlow
         return counter;
     }
 
-    // D213: a JUMP that leaves a repeat ends it, so it clears the counter of every range it leaves, under the
-    // condition of the jump where it has one, before it jumps.
-    private static void ClearLeftRepeats(FanucBlock write, string target, string? condition)
+    /// <summary>
+    /// D213: a JUMP that leaves a repeat ends it, so it clears the counter of every range it leaves, under the
+    /// condition of the jump where it has one, before it jumps; a RETURN leaves every range around it, as JUMP=END
+    /// does, so that the next call of the subprogram counts its passes afresh.
+    /// </summary>
+    /// <param name="write">The JUMP or RETURN block.</param>
+    /// <param name="target">The label of the JUMP; "END" for JUMP=END and RETURN.</param>
+    /// <param name="condition">The Fanuc condition of the jump; null for an unconditional one.</param>
+    public static void ClearLeftRepeats(FanucBlock write, string target, string? condition)
     {
         int? line = target == "END" ? null : LineOf(write, target);
         IReadOnlyList<string> counters = write.Machine.Variables.RepeatCounters;
@@ -283,7 +289,13 @@ internal static class FanucFlow
             return;
         }
 
-        ClearLeftRepeats(write, target, condition);
+        // A conditional JUMP=END in a subprogram ends the whole program, which no GOTO of the subprogram reaches: it is
+        // CMP302 below and writes nothing, the clearing included.
+        bool endInSub = target == "END" && conditional && write.Step.Section?.Kind != SectionKind.Program;
+        if (!endInSub)
+        {
+            ClearLeftRepeats(write, target, condition);
+        }
 
         if (target == "END")
         {
@@ -291,7 +303,7 @@ internal static class FanucFlow
             {
                 FanucProgramFrame.WriteEnd(write, "");
             }
-            else if (write.Labels.EndLabel is int end)
+            else if (!endInSub && write.Labels.EndLabel is int end)
             {
                 write.Write("IF " + condition + " GOTO " + end.ToString(CultureInfo.InvariantCulture));
             }

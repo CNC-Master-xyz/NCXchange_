@@ -1,6 +1,5 @@
-using System.Globalization;
 using Ncx.Config.Templates;
-using Ncx.Core.Expressions;
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 
 namespace Ncx.Compilers.Fanuc;
@@ -16,7 +15,7 @@ internal sealed class FanucRepeats
     private readonly List<FanucRepeatRange> _ranges = [];
 
     // The Fanuc variables the program uses itself, which no counter may be (D280).
-    private readonly HashSet<string> _used = new(StringComparer.Ordinal);
+    private FanucRepeatVariables? _variables;
 
     /// <summary>
     /// The ranges of a file without REPEAT.
@@ -42,7 +41,7 @@ internal sealed class FanucRepeats
     /// <param name="variable">The variable as the machine file writes it, "#149".</param>
     public bool Uses(string variable)
     {
-        return _used.Contains(variable.Trim());
+        return _variables?.Uses(variable) == true;
     }
 
     /// <summary>
@@ -70,11 +69,11 @@ internal sealed class FanucRepeats
     /// The ranges of a file from the blocks of its walks, with the variables it uses.
     /// </summary>
     /// <param name="steps">Every step of the run.</param>
-    /// <param name="variable">The Fanuc variable of an NCX variable name without an ERROR; null where none
-    /// maps.</param>
-    public static FanucRepeats Of(IReadOnlyList<BlockStep> steps, Func<string, string?> variable)
+    /// <param name="machine">The machine, whose [variables] map names the variables of the other families.</param>
+    /// <param name="templates">The templates of the machine.</param>
+    public static FanucRepeats Of(IReadOnlyList<BlockStep> steps, MachineConfig machine, TemplateSet templates)
     {
-        var repeats = new FanucRepeats();
+        var repeats = new FanucRepeats { _variables = new FanucRepeatVariables(machine, templates) };
         var blocks = new Dictionary<Section, List<Block>>();
         foreach (BlockStep step in steps)
         {
@@ -92,7 +91,7 @@ internal sealed class FanucRepeats
             if (!list.Contains(step.Block))
             {
                 list.Add(step.Block);
-                repeats.AddUsed(step.Block, variable);
+                repeats._variables.Add(step.Block);
             }
         }
 
@@ -192,81 +191,5 @@ internal sealed class FanucRepeats
         }
 
         return bases;
-    }
-
-    // The variables of a block: the VAR words and every variable of an expression.
-    private void AddUsed(Block block, Func<string, string?> variable)
-    {
-        foreach (Word word in block.Words)
-        {
-            if (word.Key == "VAR" && word.Addr is string name && variable(name) is string assigned)
-            {
-                _used.Add(assigned);
-            }
-
-            if (word.Value is ExprValue { Tree: ExprNode tree })
-            {
-                AddUsed(tree, variable);
-            }
-        }
-    }
-
-    private void AddUsed(ExprNode node, Func<string, string?> variable)
-    {
-        switch (node)
-        {
-            case VariableNode { Index: null } named when variable(named.Name) is string used:
-                _used.Add(used);
-                break;
-            case UnaryNode unary:
-                AddUsed(unary.Operand, variable);
-                break;
-            case ParenthesesNode parentheses:
-                AddUsed(parentheses.Inner, variable);
-                break;
-            case BinaryNode binary:
-                AddUsed(binary.Left, variable);
-                AddUsed(binary.Right, variable);
-                break;
-            case CallNode call:
-                foreach (ExprNode argument in call.Arguments)
-                {
-                    AddUsed(argument, variable);
-                }
-
-                break;
-        }
-    }
-
-    /// <summary>
-    /// The Fanuc variable of a V name or a name of [variables] map without a diagnostic, for the check of D280; null
-    /// for any other name (FanucExpressions.Variable writes them).
-    /// </summary>
-    /// <param name="map">[variables] map of the machine.</param>
-    /// <param name="templates">The templates of the machine.</param>
-    /// <param name="name">The NCX variable name, "V149", "Q49".</param>
-    public static string? QuietVariable(IReadOnlyDictionary<string, string> map, TemplateSet templates, string name)
-    {
-        if (name.Length > 1 && name[0] == 'V' && name.Substring(1).All(char.IsAsciiDigit))
-        {
-            return "#" + name.Substring(1).TrimStart('0');
-        }
-
-        int digits = name.Length;
-        while (digits > 0 && char.IsAsciiDigit(name[digits - 1]))
-        {
-            digits--;
-        }
-
-        if (digits == name.Length || !map.TryGetValue(name.Substring(0, digits), out string? native))
-        {
-            return null;
-        }
-
-        var quiet = new Diagnostics("repeat counters");
-        Template template = templates.For(native) ?? new Template(native, 1, quiet);
-        var values = new TemplateValues();
-        values.Set("index", decimal.Parse(name.AsSpan(digits), NumberStyles.None, CultureInfo.InvariantCulture));
-        return template.Render(values, new Block { Line = 0, Words = [] }, quiet);
     }
 }

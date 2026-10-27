@@ -134,14 +134,16 @@ public sealed class ExampleMachinesTests
     }
 
     // D339: the Mori NTX1000 takes three M codes in a block, the second and third from the list of its manual
-    // (NTX1000SZM p.252-253); D299: millturn1.toml writes the verb on every motion block.
+    // (NTX1000SZM p.252-253) without the tailstock codes M25 and M26, which stand alone (p.262 note 1); D299:
+    // millturn1.toml writes the verb on every motion block.
     [Fact]
     public void ExampleMachines_FormatData_IsTheDecidedOne()
     {
         OutputFormat? mori = Shipped("mori-ntx1000-mapps.toml").Format;
         Assert.Equal(3, mori?.MCodesPerBlock);
-        Assert.Equal(47, mori?.MCodesCombinable?.Count);
+        Assert.Equal(45, mori?.MCodesCombinable?.Count);
         Assert.Contains("M210", mori?.MCodesCombinable ?? []);
+        Assert.DoesNotContain("M25", mori?.MCodesCombinable ?? []);
         Assert.DoesNotContain("M3", mori?.MCodesCombinable ?? []);
         Assert.Equal(MotionCode.EveryBlock, Shipped("millturn1.toml").Format?.MotionCode);
     }

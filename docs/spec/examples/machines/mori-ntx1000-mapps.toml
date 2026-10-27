@@ -29,9 +29,10 @@ sub_end = "M99"
 external_call = "M198"             # the M code list has M198 (option) as the subprogram call in the external I/O device (D322)
 m_codes_per_block = 3              # the multiple M code function: at most three M codes in a block (D339; NTX1000SZM programming manual p.252)
 # The multiple M code function codes: only they may be the second and third M code of a block, and a spindle code (M3, M4, M13, M14) never shares a block
-# with them (D339; NTX1000SZM programming manual p.252-253, notes 1 and 2)
+# with them (D339; NTX1000SZM programming manual p.252-253, notes 1 and 2). M25 and M26 of that list are left out: the tailstock codes stand in a block
+# without other commands (p.262 note 1)
 m_codes_combinable = [
-    "M10", "M11", "M210", "M211", "M19", "M219", "M25", "M26", "M85", "M86", "M37", "M38",
+    "M10", "M11", "M210", "M211", "M19", "M219", "M85", "M86", "M37", "M38",
     "M340", "M341", "M342", "M343", "M344", "M345", "M2000", "M2001", "M2002", "M2003", "M2004", "M2005",
     "M2006", "M2007", "M2008", "M2009", "M2010", "M2011", "M2012", "M2013", "M2014", "M2015", "M2016", "M2017",
     "M2018", "M2019", "M2020", "M2040", "M2041", "M2042", "M2043", "M2044", "M2045", "M2046", "M2047",
@@ -210,9 +211,9 @@ rpm_max = 6000
 accel_time = 2.5
 
 [spindle.TOOL]
-CW = "M3"                          # under M90 (spindle 1 / tool spindle simultaneous mode) the tool spindle takes the M3/M4/M5 words; verify on the machine
-CCW = "M4"
-OFF = "M5"
+CW = "M13"                         # tool-spindle start normal; NTX1000SZM programming manual p.258 (1-8) and p.324 (G97 S_ M13(M14))
+CCW = "M14"                        # tool-spindle start reverse (p.258)
+OFF = "M5"                         # M05 stops the tool-spindle as well as spindles 1 and 2 (p.258, note 3)
 ORIENT = "M319"
 rpm_min = 50
 rpm_max = 12000
@@ -251,7 +252,7 @@ THROUGH_SPINDLE = { ON = "M478", OFF = "M479" }
 [func]
 MAIN_CHUCK = { CLOSE = "M10", OPEN = "M11" }
 SUB_CHUCK = { CLOSE = "M210", OPEN = "M211" }
-TAILSTOCK = { FORWARD = "M13", BACK = "M14" }
+TAILSTOCK = { FORWARD = "M25", BACK = "M26" }    # NTX1000SZM programming manual p.252 and p.261-262 (1-11 M25 Tailstock Forward, M26 Tailstock Backward)
 THREAD_CHAMFER = { ON = "M23", OFF = "M24" }
 RADIUS_MODE = { ON = "M582", OFF = "M583" }
 B_CONTOUR = { ON = "M594", OFF = "M595" }

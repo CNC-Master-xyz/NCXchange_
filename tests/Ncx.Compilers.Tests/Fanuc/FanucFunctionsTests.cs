@@ -8,8 +8,8 @@ namespace Ncx.Compilers.Tests.Fanuc;
 /// </summary>
 public sealed class FanucFunctionsTests
 {
-    // A named function M10 beside the coolant M8 (machine-config 5).
-    private const string Clamp = "[func]\nCLAMP = { ON = \"M10\" }";
+    // The named functions M10 and M11 of a clamp and M85 of a door beside the coolant M8 and M9 (machine-config 5).
+    private const string Clamp = "[func]\nCLAMP = { ON = \"M10\", OFF = \"M11\" }\nDOOR = { OPEN = \"M85\" }";
 
     // D339: without m_codes_per_block a block carries one M code, which every control accepts; the others move to
     // the following lines.
@@ -52,6 +52,34 @@ public sealed class FanucFunctionsTests
     public void D339_OptionalStop_StandsAlone()
     {
         Assert.Equal("M8\nM1\n", BodyWith("m_codes_per_block = 3", "COOLANT=ON STOP=OPTIONAL"));
+    }
+
+    // D339: from the first function that does not fit in the main line, it and every later one stand on the lines
+    // after it, so M10, which would fit beside M9, still follows M85.
+    [Fact]
+    public void D339_FunctionThatDoesNotFit_KeepsTheOrderOfTheLaterOnes()
+    {
+        Assert.Equal("M9\nM85 M10\n", BodyWith("m_codes_per_block = 3\nm_codes_combinable = [\"M10\"]",
+            "COOLANT=OFF FUNC:DOOR=OPEN FUNC:CLAMP=ON"));
+    }
+
+    // D339, language 5 rule 3: where the functions do not all fit in a block with a motion, they stand on lines
+    // before it, so the spindle and the coolant run before the tool moves.
+    [Fact]
+    public void D339_MotionWithFunctionsThatDoNotFit_WritesThemBeforeTheMotion()
+    {
+        Assert.Equal("S1000 M3\nM8\nG1 G17 X5. F100.\n",
+            BodyWith("", "LINE X=5 F=100 SPINDLE=CW RPM=1000 COOLANT=ON"));
+    }
+
+    // D339: the spindle stop and the coolant OFF stand before the named functions, and a spindle start after them,
+    // so a clamp never opens while its spindle turns.
+    [Fact]
+    public void D339_StopsBeforeTheNamedFunctions_StartsAfterThem()
+    {
+        Assert.Equal("S1000 M3\nM5\nM9\nM11\nM10\nS2000 M3\n",
+            BodyWith("", "SPINDLE=CW RPM=1000", "FUNC:CLAMP=OFF SPINDLE=OFF COOLANT=OFF",
+                "SPINDLE=CW RPM=2000 FUNC:CLAMP=ON"));
     }
 
     // D258: where the role's table lacks the key, VC is G96 S, CSS_OFF G97 and RPM_MAX G92 S on a mill.
@@ -117,9 +145,9 @@ public sealed class FanucFunctionsTests
     }
 
     // The body of a program on the mill with further [format] keys and the CLAMP function.
-    private static string BodyWith(string options, string block)
+    private static string BodyWith(string options, params string[] blocks)
     {
-        string text = FanucCompile.TextOf(FanucCompile.Run(FanucCompile.Program(block),
+        string text = FanucCompile.TextOf(FanucCompile.Run(FanucCompile.Program(blocks),
             FanucCompile.Mill(FanucCompile.SourceHabits + "\n" + options, Clamp)));
         const string Start = "G80 G90 G94 G98\n";
         int start = text.IndexOf(Start, StringComparison.Ordinal) + Start.Length;

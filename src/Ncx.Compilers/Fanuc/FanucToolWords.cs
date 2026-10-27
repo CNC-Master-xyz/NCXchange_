@@ -315,13 +315,18 @@ internal static class FanucToolWords
     /// M3, M4, M5 with S in one block, the S of the spindle whose M code stands with it (controllers fanuc.md 5, 10
     /// rule 2): a speed written while the spindle stands waits for its start, a speed of a running spindle is written
     /// with the M code of that spindle where another spindle was selected last; ORIENT from the machine's table.
+    /// The spindles that stop and those that start or turn are added in two calls, so that a stop stands before the
+    /// named functions and a start after them (FanucFunctions.Write).
     /// </summary>
-    public static void AddSpindleFunctions(FanucBlock write)
+    /// <param name="write">The block.</param>
+    /// <param name="stopping">True for the spindles whose SPINDLE word is OFF, false for every other spindle.</param>
+    public static void AddSpindleFunctions(FanucBlock write, bool stopping)
     {
         var roles = new List<string?>();
         foreach (Word word in write.Block.Words)
         {
-            if (word.Key is "SPINDLE" or "RPM" or "ORIENT" && !roles.Contains(word.Addr))
+            bool stops = write.Block.Find("SPINDLE", word.Addr)?.Value.ToCanonical() == "OFF";
+            if (word.Key is "SPINDLE" or "RPM" or "ORIENT" && stops == stopping && !roles.Contains(word.Addr))
             {
                 roles.Add(word.Addr);
             }
