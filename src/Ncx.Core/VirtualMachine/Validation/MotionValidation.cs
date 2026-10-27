@@ -113,9 +113,9 @@ internal static class MotionValidation
     /// <param name="context">The motion block, after its verb moved the axes.</param>
     /// <param name="before">The position store before the block.</param>
     // D193: the limits of a rotary axis are travel limits like a linear axis's and are compared, unless its [[axis]]
-    // carries modulo = true, which makes them its display range (decisions.md; machine-config 4). Whether the machine
-    // coordinates of an X axis programmed in diameters are diameters is D137: the stored radius is compared with the
-    // limits as written.
+    // carries modulo = true, which makes them its display range (decisions.md; machine-config 4). The limits of an
+    // axis programmed in diameters are diameters, halved into radii before the stored radius is compared with them
+    // (D137); the message names the radii.
     public static void CheckLimits(BlockContext context, IReadOnlyDictionary<string, AxisPosition> before)
     {
         ChannelState state = context.State;
@@ -133,13 +133,13 @@ internal static class MotionValidation
                 continue;
             }
 
-            if (axis.Max is decimal max && machine > max)
+            if (axis.AsStoredRadius(axis.Max) is decimal max && machine > max)
             {
                 context.Diagnostics.Warning(context.Block, DiagnosticCodes.TargetBeyondLimits,
                     $"{axis.NcxName} ends at {Text(machine)} in the MACHINE frame, beyond its upper limit {Text(max)} "
                     + "(virtual machine 5, D100).");
             }
-            else if (axis.Min is decimal min && machine < min)
+            else if (axis.AsStoredRadius(axis.Min) is decimal min && machine < min)
             {
                 context.Diagnostics.Warning(context.Block, DiagnosticCodes.TargetBeyondLimits,
                     $"{axis.NcxName} ends at {Text(machine)} in the MACHINE frame, beyond its lower limit {Text(min)} "

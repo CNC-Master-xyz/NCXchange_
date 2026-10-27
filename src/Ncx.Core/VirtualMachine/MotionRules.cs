@@ -221,8 +221,7 @@ internal static class MotionRules
             return PositionFrame.Polar;
         }
 
-        if (frame.Cylinder is not null
-            && (axisName == Plane.Cylinder.FirstAxis || axisName == Plane.Cylinder.SecondAxis))
+        if (frame.Cylinder is not null && (axisName == frame.CylinderAxis || axisName == Plane.Cylinder.SecondAxis))
         {
             return PositionFrame.Cylinder;
         }

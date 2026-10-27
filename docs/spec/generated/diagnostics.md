@@ -79,6 +79,7 @@ SETPOS, the path tolerance and the tilted plane (language 4.1, 4.2; VM 2.1, 3.4,
 | `VM420` | ERROR | TOLERANCE:ROTARY or TOLERANCE_MODE without an active TOLERANCE. | language 4.1; VM 5; D85 |
 | `VM421` | ERROR | SETPOS without an axis word. | language 4.2; VM 5 |
 | `VM422` | WARNING | ROT on a target without table kinematics: the machine file has no rotary axis on a table. Not checked without a machine file. | language 4.2; VM 5; D82 |
+| `VM215` | ERROR | CYLINDER=n while the workpiece holder has no rotary axis. | language 4.2; VM 3.4, 3.8, 5; D146 |
 
 ## Motion
 
@@ -127,6 +128,7 @@ The tool vector and the surface normal under TCPM (language 4.3; VM 3.1, 5; D81)
 | `VM211` | ERROR | Vector words mixed with rotary words. | language 4.3; VM 3.1, 5; D81 |
 | `VM212` | ERROR | Incomplete vector words: TX TY TZ all three, NX NY NZ all three and only with TX TY TZ. | language 4.3; VM 5; D81 |
 | `VM213` | ERROR | Vector words not of unit length within the arc tolerance. | VM 3.1, 5; D36, D81 |
+| `VM214` | ERROR | Vector words in a CYCLE_CALL block. | language 4.3, 5 rule 2; VM 3.1, 5; D185 |
 
 ## Retract and home
 

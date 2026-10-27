@@ -13,14 +13,16 @@ internal static class DiameterRules
     private static readonly string[] s_drillingAxisCoordinates = ["SURFACE", "CLEARANCE", "DEPTH", "SAFE"];
 
     /// <summary>
-    /// Tells whether DIAMETER=ON makes a word a diameter: X and IX, the absolute CENTER:X, and the X words of a cycle
-    /// with AXIS=X; CENTER:IX, R, PECK and every other radial distance stay radius values (D60).
+    /// Tells whether DIAMETER=ON makes a word a diameter: X and IX under every verb (SHIFT included, D125), the
+    /// absolute CENTER:X, and the X words of a cycle with AXIS=X; CENTER:IX, R, PECK and every other radial distance
+    /// stay radius values (D60).
     /// </summary>
     /// <param name="word">The word as written.</param>
     /// <param name="cycleAxis">The drilling axis of the cycle the word belongs to; null for a word of no cycle.</param>
     public static bool IsDiameterWord(Word word, string? cycleAxis)
     {
-        // The absolute and incremental X words of the workpiece (language 4.2, D60).
+        // The absolute and incremental X words of the workpiece, whatever the verb: the X of a SETPOS and of a SHIFT is
+        // a diameter too (language 4.2, D60, D125).
         if (word.Addr is null && word.Key is "X" or "IX")
         {
             return true;

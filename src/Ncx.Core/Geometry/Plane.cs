@@ -34,8 +34,15 @@ internal sealed record Plane(string Name, string FirstAxis, string SecondAxis, s
     // circumference, X staying a workpiece coordinate. The direction is seen looking onto the developed surface with
     // the cylinder axis first and C second (G7.1, TRACYL), independent of WORKPLANE; the tool axis is the radial one,
     // X (virtual machine 3.1, 3.2, 3.4, D102).
-    // TODO(question): the documents name the cylinder axis for a lathe only (Z); for a machine whose cylinder turns
-    // about another axis (an A axis on a mill) neither the cylinder axis nor the rotary word is said, so this is the
-    // lathe's plane (D146).
-    public static Plane Cylinder { get; } = new("CYLINDER", "Z", "C", "X");
+    public static Plane Cylinder { get; } = CylinderAbout("Z");
+
+    // The cylinder axis is the linear axis parallel to the rotary axis of the workpiece holder: Z for a work spindle,
+    // the [[axis]] parallel of a table's rotary axis otherwise. The rotary word stays one C word, a length on the
+    // circumference (D102, D146). The radial tool axis is X about Z, as on a lathe, and Z about X or Y, the tool of a
+    // mill standing over a cylinder clamped along the table; the VM does not check that the spindle is perpendicular to
+    // the table axis, which is the kinematics module's job (D146).
+    public static Plane CylinderAbout(string cylinderAxis)
+    {
+        return new Plane("CYLINDER", cylinderAxis, "C", cylinderAxis == "Z" ? "X" : "Z");
+    }
 }

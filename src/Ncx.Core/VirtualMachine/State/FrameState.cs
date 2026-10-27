@@ -76,6 +76,12 @@ internal sealed class FrameState
     /// </summary>
     public decimal? Cylinder { get; set; }
 
+    /// <summary>
+    /// The cylinder axis of CYLINDER=n, X, Y or Z: the linear axis parallel to the rotary axis of the workpiece holder
+    /// where the word stood (D146); Z while the transformation is off.
+    /// </summary>
+    public string CylinderAxis { get; set; } = "Z";
+
     public bool Polar { get; set; }
 
     public bool Tcpm { get; set; }

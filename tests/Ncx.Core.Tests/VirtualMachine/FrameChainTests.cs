@@ -125,6 +125,21 @@ public sealed class FrameChainTests
         Assert.Equal(new AxisPosition(15m, PositionFrame.Workpiece, Known: true), vm.Position("X"));
     }
 
+    // D125: every word with the key X is a diameter under DIAMETER=ON, whatever the verb: SHIFT X=20 shifts by radius
+    // 10, and the position at radius 20 reads as radius 10 afterwards; Z stays as written (D60).
+    [Fact]
+    public void D125_ShiftXUnderDiameterOn_ShiftsByTheRadius()
+    {
+        VmHarness vm = new VmHarness(VmMachines.MillTurn())
+            .Execute("UNITS=MM DIAMETER=ON", "RAPID X=40 Z=5", "SHIFT X=20 Z=2");
+
+        TransformEntry shift = Assert.Single(vm.State.Frame.Chain);
+        Assert.Equal(10m, shift.Shift["X"]);
+        Assert.Equal(2m, shift.Shift["Z"]);
+        Assert.Equal(new AxisPosition(10m, PositionFrame.Workpiece, Known: true), vm.Position("X"));
+        Assert.Equal(new AxisPosition(3m, PositionFrame.Workpiece, Known: true), vm.Position("Z"));
+    }
+
     // Language 4.2, VM 2.1: SHIFT=RESET after a tilt removes the shift and the tilt appended after it.
     [Fact]
     public void ShiftReset_AfterATilt_RemovesTheShiftAndTheTiltAfterIt()

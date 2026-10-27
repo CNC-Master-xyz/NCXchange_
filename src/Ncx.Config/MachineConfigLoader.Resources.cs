@@ -13,11 +13,12 @@ public static partial class MachineConfigLoader
     private static readonly string[] s_axisKeys =
     [
         "id", "ncx", "letter", "incremental_letter", "kind", "owner", "limits", "rapid", "max_feed", "acceleration",
-        "programming", "home", "home2", "clamp", "modulo",
+        "programming", "home", "home2", "clamp", "modulo", "parallel", "frames_in_diameter",
     ];
 
     private static readonly string[] s_axisKinds = ["linear", "rotary"];
     private static readonly string[] s_programmings = ["diameter", "radius", "switchable"];
+    private static readonly string[] s_linearAxes = ["X", "Y", "Z"];
     private static readonly string[] s_dynamicsKeys = ["block_time", "path_mode", "corner_speed"];
     private static readonly string[] s_pathModes = ["continuous", "exact_stop"];
     private static readonly string[] s_onOff = ["ON", "OFF"];
@@ -106,6 +107,11 @@ public static partial class MachineConfigLoader
             };
             decimal? home = table.Number("home");
             decimal? home2 = table.Number("home2");
+
+            // parallel: the linear axis a rotary axis turns about, the cylinder axis of CYLINDER=n (D146);
+            // frames_in_diameter: whether frame offsets of a diameter axis are diameters (MD20360, D125, D388).
+            string? parallel = table.Choice("parallel", s_linearAxes);
+            bool framesInDiameter = table.Flag("frames_in_diameter");
             IReadOnlyDictionary<string, string> clamp =
                 table.Table("clamp")?.Templates(s_onOff) ?? new Dictionary<string, string>();
             if (id is null || ncxName is null || kind is not AxisKind axisKind)
@@ -130,6 +136,8 @@ public static partial class MachineConfigLoader
                 Programming = programming,
                 Home = home,
                 Home2 = home2,
+                Parallel = parallel,
+                FramesInDiameter = framesInDiameter,
                 Clamp = clamp,
             });
         }

@@ -392,10 +392,8 @@ public sealed partial class VirtualMachine
     }
 
     // SHIFT X=60 Y=40 Z=-5: a datum shift in the frame active where the word stands, appended to the chain and folded
-    // into the position; omitted axes are 0 (language 4.2, virtual machine 3.4, D31).
-    // TODO(question): D60 halves "X" under DIAMETER=ON and keeps "other radial distances" radius values; whether the X
-    // of a SHIFT, a distance of the frame, is a diameter is not said. It is kept as written, like CENTER:IX, until D125
-    // is answered.
+    // into the position; omitted axes are 0 (language 4.2, virtual machine 3.4, D31). Every word with the key X is a
+    // diameter under DIAMETER=ON, whatever the verb: SHIFT X=20 shifts by radius 10 (D60, D125).
     private void ApplyShift(BlockContext context)
     {
         var shift = new Dictionary<string, decimal?>(StringComparer.Ordinal);
@@ -409,7 +407,9 @@ public sealed partial class VirtualMachine
             // A shift from an expression is not evaluated in STATIC mode: the entry holds it as UNKNOWN, and its axis
             // is unknown outside the MACHINE frame (virtual machine 1, the answer of wave-1 question #100;
             // FrameRules.AppendShift).
-            shift[axis] = NumberOf(word);
+            shift[axis] = NumberOf(word) is decimal value
+                ? DiameterRules.ToRadius(word, value, _state.Frame.Diameter, cycleAxis: null)
+                : null;
         }
 
         FrameRules.AppendShift(_state, shift);
@@ -483,9 +483,9 @@ public sealed partial class VirtualMachine
             return;
         }
 
-        // TODO(question): virtual machine 3.4 says the rotary axis positions are known from the TILT_AXIS words
-        // without naming the frame; they are the axis positions of this machine (language 4.2) and are kept in the
-        // MACHINE frame until D126 is answered.
+        // The TILT_AXIS values are machine-axis setpoints, like PLANE AXIAL: the named rotary axes are known in the
+        // MACHINE frame, where the limit check applies (D100), and unknown in the workpiece frame until a motion with
+        // known coordinates (virtual machine 3.4, D35, D126, D230).
         foreach (KeyValuePair<string, decimal?> axisAngle in axisAngles)
         {
             _state.Motion.Position[axisAngle.Key] = axisAngle.Value is decimal known

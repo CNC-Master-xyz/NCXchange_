@@ -42,7 +42,7 @@ internal static class ArcRules
 
         if (frame.Cylinder is not null)
         {
-            return Plane.Cylinder;
+            return Plane.CylinderAbout(frame.CylinderAxis);
         }
 
         return frame.Workplane switch
