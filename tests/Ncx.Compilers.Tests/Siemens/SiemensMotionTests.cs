@@ -107,6 +107,18 @@ public sealed class SiemensMotionTests
             MillBody("RAPID X=50.534 Y=69.993", "ARC=CCW X=70 Y=50 " + centre + " F=100"));
     }
 
+    // D365: AR=10 of ANGLE=10.0004 turns the start 1000 from the centre to a point 0.007 from the rounded end, more
+    // than half an output step, so the compiler writes the end-point form with the centre, Siemens's lever, the centre
+    // on the grid (D364); ANGLE=10 reaches the rounded end and stays AR=.
+    [Theory]
+    [InlineData("10.0004", "G3 X984.807 Y173.655 I=AC(-0.001) J=AC(0.001) F100")]
+    [InlineData("10", "G3 I=AC(0) J=AC(0) AR=10 F100")]
+    public void SweepWithTheCentre_MissingTheRoundedEnd_IsWrittenWithTheEndPoint(string sweep, string written)
+    {
+        Assert.Equal(Lines("G0 X1000 Y0", written),
+            MillBody("RAPID X=1000 Y=0", "ARC=CCW CENTER:X=0 CENTER:Y=0 ANGLE=" + sweep + " F=100"));
+    }
+
     // Siemens 12 rule 2: on an older 840D the sweep is split into turns, each back to its start with the tool axis
     // advanced by its share, then the rest.
     [Fact]

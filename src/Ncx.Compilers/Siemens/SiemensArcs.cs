@@ -1,4 +1,5 @@
 using System.Globalization;
+using Ncx.Core.Geometry;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.Events;
 using Ncx.Core.VirtualMachine.State;
@@ -94,6 +95,21 @@ internal static class SiemensArcs
         }
 
         decimal sweep = decimal.Parse(angle.Value.ToCanonical(), CultureInfo.InvariantCulture);
+        if (sweep < FullTurn && ArcOf(write.Step) is MotionEvent swept && SweptEndBeyond(write, swept, sweep))
+        {
+            // D365: AR= with the centre leaves the end to the control, which would miss the rounded end point by
+            // more than ROUND_LIMIT or half an output step; the lever of Siemens is the end-point form with the centre.
+            foreach (SiemensAxisWord axis in axes)
+            {
+                write.Written(axis.Word);
+            }
+
+            AddPoint(write, swept.To, swept, withToolAxis: true);
+            AddAbsoluteCenter(write, swept);
+            write.Written("CENTER");
+            return;
+        }
+
         if (sweep < FullTurn)
         {
             SiemensMotion.WriteAxes(write, axes);
@@ -333,6 +349,52 @@ internal static class SiemensArcs
     {
         return points.TryGetValue(first, out AxisPosition one) && one.Known
             && points.TryGetValue(second, out AxisPosition two) && two.Known;
+    }
+
+    // D365: true where AR= with the centre of the block, as written, turns the written start to a point that lies
+    // farther from the rounded end point than ROUND_LIMIT allows, or than half an output step without it. False where
+    // the check has nothing to compute: a centre from an expression, the cylinder plane, or a start, end or centre the
+    // virtual machine does not know.
+    private static bool SweptEndBeyond(SiemensBlock write, MotionEvent arc, decimal sweep)
+    {
+        (string First, string Second, string Tool) plane = Plane(write);
+        if (write.After.Frame.Cylinder is not null || arc.Center is null || !KnownIn(arc.Center, plane.First,
+            plane.Second) || !KnownIn(arc.From, plane.First, plane.Second) || !KnownIn(arc.To, plane.First,
+            plane.Second))
+        {
+            return false;
+        }
+
+        var centre = new Dictionary<string, decimal>(StringComparer.Ordinal);
+        var start = new Dictionary<string, decimal>(StringComparer.Ordinal);
+        var end = new Dictionary<string, decimal>(StringComparer.Ordinal);
+        decimal step = 0m;
+        foreach (string axis in new[] { plane.First, plane.Second })
+        {
+            bool incremental = write.Block.Find("CENTER", "I" + axis) is not null;
+            Word? word = write.Block.Find("CENTER", incremental ? "I" + axis : axis);
+            if (word?.Value is not (IntegerValue or DecimalValue))
+            {
+                return false;
+            }
+
+            decimal pointStep = ArcOnTheGrid.StepOf(write.Numbers.WrittenDecimalsOf(
+                SiemensAxes.DecimalsAddress(write, SiemensAxes.LetterOf(write, axis))));
+            decimal factor = Math.Abs(SiemensAxes.StateFactor(write, axis));
+            step = Math.Max(step, pointStep / factor);
+            start[axis] = ArcOnTheGrid.Written(arc.From[axis].Value, pointStep / factor);
+            end[axis] = ArcOnTheGrid.Written(arc.To[axis].Value, pointStep / factor);
+            centre[axis] = incremental
+                ? start[axis] + ArcOnTheGrid.Written(arc.Center[axis].Value - start[axis], pointStep)
+                : ArcOnTheGrid.Written(arc.Center[axis].Value, pointStep / factor);
+        }
+
+        decimal written = Math.Round(sweep, write.Numbers.WrittenDecimalsOf("ANGLE"), MidpointRounding.AwayFromZero);
+        decimal signed = arc.Direction == ArcDirection.Counterclockwise ? written : -written;
+        PlanePoint reached = ArcOnTheGrid.SweptEnd(new PlanePoint(start[plane.First], start[plane.Second]),
+            new PlanePoint(centre[plane.First], centre[plane.Second]), signed);
+        return ArcOnTheGrid.EndBeyond(reached, new PlanePoint(end[plane.First], end[plane.Second]), step,
+            write.After.Frame.RoundLimit.Value) is not null;
     }
 
     // The value of a center word with its factor.

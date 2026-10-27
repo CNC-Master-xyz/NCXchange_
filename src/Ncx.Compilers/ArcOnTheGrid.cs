@@ -102,6 +102,52 @@ internal static class ArcOnTheGrid
     }
 
     /// <summary>
+    /// D365: the end the control computes for a form that writes the sweep and not the end point, Heidenhain CP IPA and
+    /// Siemens AR= with the centre: the written start turned about the written centre by the written sweep,
+    /// counterclockwise for a positive sweep (from the first plane axis toward the second, virtual machine 3.2).
+    /// </summary>
+    /// <param name="start">The written start.</param>
+    /// <param name="centre">The written centre.</param>
+    /// <param name="sweep">The written sweep in degrees, negative for a clockwise arc.</param>
+    public static PlanePoint SweptEnd(PlanePoint start, PlanePoint centre, decimal sweep)
+    {
+        double angle = (double)sweep * Math.PI / 180d;
+        double first = (double)(start.First - centre.First);
+        double second = (double)(start.Second - centre.Second);
+        double cos = Math.Cos(angle);
+        double sin = Math.Sin(angle);
+        return new PlanePoint(centre.First + (decimal)((first * cos) - (second * sin)),
+            centre.Second + (decimal)((first * sin) + (second * cos)));
+    }
+
+    /// <summary>
+    /// D365: how far the end the control reaches lies from the rounded end point of the block, where that is more than
+    /// ROUND_LIMIT allows, or, without ROUND_LIMIT, more than half an output step on one of the plane axes, so that it
+    /// would not be written as the same point; null where it lies within.
+    /// </summary>
+    /// <param name="reached">The end the control computes.</param>
+    /// <param name="written">The rounded end point of the block.</param>
+    /// <param name="step">The output step of the plane addresses.</param>
+    /// <param name="roundLimit">ROUND_LIMIT of the program; null for OFF.</param>
+    public static decimal? EndBeyond(PlanePoint reached, PlanePoint written, decimal step, decimal? roundLimit)
+    {
+        decimal first = Math.Abs(reached.First - written.First);
+        decimal second = Math.Abs(reached.Second - written.Second);
+        decimal distance = (decimal)Distance(first, second);
+        bool beyond = roundLimit is decimal limit ? distance > limit : Math.Max(first, second) > step / 2m;
+        return beyond ? distance : null;
+    }
+
+    /// <summary>
+    /// A value of the virtual machine as the written file has it, rounded half away from zero to a multiple of the
+    /// step.
+    /// </summary>
+    public static decimal Written(decimal value, decimal step)
+    {
+        return OnGrid(value, step);
+    }
+
+    /// <summary>
     /// The output step of a number of decimals, 0.001 for three.
     /// </summary>
     public static decimal StepOf(int decimals)

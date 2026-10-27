@@ -1,3 +1,4 @@
+using System.Globalization;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.Events;
 using Ncx.Core.VirtualMachine.State;
@@ -99,6 +100,7 @@ internal static class HeidenhainArcs
 
         string sign = counterclockwise ? "+" : "-";
         string polarAngle = "IPA" + sign + writing.Numbers.Format("ANGLE", Math.Abs(sweep), writing.Block);
+        CheckSweptEnd(writing, Math.Abs(sweep), counterclockwise, polarAngle);
         WriteArc(writing, ["CP", polarAngle, height, direction]);
     }
 
@@ -378,7 +380,70 @@ internal static class HeidenhainArcs
 
         string sign = counterclockwise ? "+" : "-";
         string polarAngle = "IPA" + sign + writing.Numbers.Format("ANGLE", sweep, writing.Block);
+        CheckSweptEnd(writing, sweep, counterclockwise, polarAngle);
         WriteArc(writing, ["CP", polarAngle, travel, direction]);
+    }
+
+    // D365: CP IPA leaves the end to the control, which turns the written start about the written pole by the written
+    // angle. Where that end lies farther from the rounded end point of the block than ROUND_LIMIT allows, or than half
+    // an output step without it, the compiler has used its one lever, the decimals of ANGLE (D268, D366), and reports
+    // the WARNING CMP031 with the point the control reaches, the deviation and the words. Nothing is computed for a
+    // pole from an expression or a start, end or centre the virtual machine does not know in the workpiece frame.
+    private static void CheckSweptEnd(HeidenhainBlock writing, decimal sweep, bool counterclockwise, string polarAngle)
+    {
+        string[] plane = HeidenhainAxes.PlaneAxes(writing.After.Frame.Workplane);
+        MotionEvent? arc = null;
+        foreach (VmEvent step in writing.Step.Events)
+        {
+            arc = step is MotionEvent { Center: not null } motion ? motion : arc;
+        }
+
+        if (arc is null || writing.After.Frame.Polar || writing.After.Frame.Cylinder is not null)
+        {
+            return;
+        }
+
+        var start = new decimal[2];
+        var end = new decimal[2];
+        var centre = new decimal[2];
+        decimal outputStep = 0m;
+        for (int index = 0; index < 2; index++)
+        {
+            string axis = plane[index];
+            Word? incremental = writing.Block.Find("CENTER", "I" + axis);
+            Word? word = incremental ?? writing.Block.Find("CENTER", axis);
+            if ((word is not null && HeidenhainNumbers.NumberOf(word.Value) is null)
+                || GridAxisOf(writing, arc, axis, incremental is not null) is not GridAxis known)
+            {
+                return;
+            }
+
+            outputStep = Math.Max(outputStep, known.PointStep);
+            start[index] = ArcOnTheGrid.Written(known.Start, known.PointStep);
+            end[index] = ArcOnTheGrid.Written(known.End, known.PointStep);
+            centre[index] = incremental is not null
+                ? start[index] + ArcOnTheGrid.Written(known.Centre - start[index], known.CentreStep)
+                : ArcOnTheGrid.Written(known.Centre, known.CentreStep);
+        }
+
+        decimal written = Math.Round(sweep, writing.Numbers.WrittenDecimalsOf("ANGLE"),
+            MidpointRounding.AwayFromZero);
+        PlanePoint reached = ArcOnTheGrid.SweptEnd(new PlanePoint(start[0], start[1]),
+            new PlanePoint(centre[0], centre[1]), counterclockwise ? written : -written);
+        if (ArcOnTheGrid.EndBeyond(reached, new PlanePoint(end[0], end[1]), outputStep,
+            writing.After.Frame.RoundLimit.Value) is decimal deviation)
+        {
+            writing.Warning(DiagnosticCodes.ArcEndPointOffTheGrid,
+                $"CP {polarAngle} turns the written start about the pole to {plane[0]}{Text(reached.First)} "
+                + $"{plane[1]}{Text(reached.Second)}, {Text(deviation)} from the rounded end point "
+                + $"{plane[0]}{Text(end[0])} {plane[1]}{Text(end[1])}; the four decimals of IPA are the one lever of "
+                + "Klartext for a helix and a sweep (D365, D268, D366).");
+        }
+    }
+
+    private static string Text(decimal value)
+    {
+        return Math.Round(value, 6, MidpointRounding.AwayFromZero).ToString(CultureInfo.InvariantCulture);
     }
 
     // The arc with the feed where it changed (heidenhain 8 rule 2); the compensation is the one the L blocks before it
