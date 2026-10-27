@@ -175,7 +175,7 @@ internal static class FanucCycles
     private static CycleEntry? DwellEntry(FanucBlock write, CycleEntry entry)
     {
         return entry.Name == "DRILL" && CatalogOf(write).Find("DRILL_DWELL", write.After.Cycle.Axis) is
-            { CycleDwell: not null } dwell
+        { CycleDwell: not null } dwell
             ? dwell
             : null;
     }
