@@ -505,7 +505,7 @@ internal static partial class HeidenhainCycles
     private static HeidenhainDefinition Define(HeidenhainBlock block, CycleEntry entry, string native,
         List<SourceWord> parameters)
     {
-        bool family = entry.RuleWords.Contains("CYCLE_RETRACT");
+        bool family = DrillingFamily.Names.Contains(entry.Name);
         var unmapped = new List<string>();
         foreach (SourceWord parameter in parameters)
         {
@@ -611,13 +611,11 @@ internal static partial class HeidenhainCycles
     }
 
     // CYCLE:HEIDENHAIN=n with every Q parameter as written, in source order (language 4.7.1, D94).
-    // TODO(question): D115, which asks what a catalog parameter that is no word of language 4.7 may carry, and D164,
-    // which writes Q208=MAX back. A native parameter takes a number or an expression (language 4.7.1, D94), so a Q
-    // parameter whose value is a control literal has no NCX value and the whole definition is kept as RAW (heidenhain
-    // 7 rule 9); the mixed cycle 203 that D163 sends here then does not reach CYCLE:HEIDENHAIN=203. The one such block
-    // the repository owns is the Q208=MAX of docs/spec/examples/sources/BOHREN.h, whose definition and five calls stay
-    // RAW. Until D115 widens "a number or an expression" to the literals of the family, RAW is the reading that
-    // commits to nothing (03-open-questions, wave 2 question 94).
+    // D115: a native parameter takes a number or an expression (language 4.7.1, D94), and the control literals
+    // (FMAX, FAUTO, FU, FZ, PREDEF, MAX) are allowed only in a catalog's native `defaults` text (D164), so a Q
+    // parameter whose value is such a literal has no NCX value and the whole definition is kept as RAW (D5;
+    // heidenhain 7 rule 9); no number is invented for it. The mixed cycle 203 that D163 sends here then does not reach CYCLE:HEIDENHAIN=203:
+    // the Q208=MAX of docs/spec/examples/sources/BOHREN.h keeps its definition and five calls RAW.
     private static HeidenhainDefinition Native(HeidenhainBlock block, string native, List<SourceWord> parameters)
     {
         var words = new List<Word>

@@ -244,6 +244,8 @@ public sealed class ShippedCatalogsTests
             Assert.Equal(inCode.Modal, inFile.Modal);
             Assert.Equal(inCode.Signature, inFile.Signature);
             Assert.Equal(Pairs(inCode.Fixed), Pairs(inFile.Fixed));
+            Assert.Equal(Pairs(inCode.Defaults), Pairs(inFile.Defaults));
+            Assert.Equal(inCode.Title, inFile.Title);
             Assert.Equal(inCode.RuleWords, inFile.RuleWords);
         }
     }
@@ -301,6 +303,23 @@ public sealed class ShippedCatalogsTests
         CycleEntry entry = NativeEntry("heidenhain.toml", Controller.Heidenhain, native);
 
         Assert.Equal(order.Split(' '), entry.Signature);
+    }
+
+    // D164, D358: the Heidenhain defaults are Q210=0, Q212=0 and Q208=MAX on 203; Q256 is no default, the machine key
+    // chip_break_lift being its one source. D270: the four BOHREN.h titles.
+    [Fact]
+    public void HeidenhainCycle203_Defaults_AreQ210Q212AndQ208WithoutQ256()
+    {
+        CycleCatalog catalog = Load("heidenhain.toml", Controller.Heidenhain);
+        CycleEntry peck = catalog.Find("PECK")!;
+
+        Assert.Equal(["Q208=MAX", "Q210=0", "Q212=0"], Pairs(peck.Defaults));
+        Assert.False(catalog.Find("CHIP_BREAK")!.Defaults.ContainsKey("Q256"));
+        Assert.Equal("UNIVERSALBOHREN", peck.Title);
+        Assert.Equal("BOHREN", catalog.Find("DRILL")!.Title);
+        Assert.Equal("REIBEN", catalog.Find("REAM")!.Title);
+        Assert.Equal("GEW.-BOHREN GS NEU", catalog.Find("TAP")!.Title);
+        Assert.Null(catalog.Find("BORE")!.Title);
     }
 
     // D178: Q206 is the plunge feed, which cycle 206 takes too, and Q239 the pitch of cycles 207 and 209; Q207 is the

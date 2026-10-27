@@ -128,9 +128,9 @@ internal static class FanucCycles
     // is CMP385, never dropped (language 2 rule 8): PITCH of THREAD, whose G92 has no address for it in the catalog,
     // and DEPTH and CLEARANCE of TURN_OD, whose Z and R are no planes of G90. A cycle that the catalog does not name
     // is CMP380 at its call.
-    // TODO(question): D157: which words a rule carries is the recommendation of D157, which the built-in drilling
-    // family follows (CycleEntry.RuleWords); a word of an entry of another name is written only through its params
-    // until D157 is answered. D175: the lead of G92 and G76 is the word PITCH, written through the address the entry
+    // D157: the words a rule carries follow from the params of every entry (CycleEntry.RuleWords), an entry of a name
+    // of its own included.
+    // TODO(question): D175: the lead of G92 and G76 is the word PITCH, written through the address the entry
     // maps; the taper R of G90, G92 and G94 is the catalog word TAPER, which no program can carry until D114 lets the
     // parser take a parameter name of a catalog entry.
     private static void CheckCarried(FanucBlock write, CycleEntry? entry)

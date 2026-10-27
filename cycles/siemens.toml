@@ -3,7 +3,7 @@
 # Written from controllers/siemens.md 7, 11 and 12, controller-mapping.md 5, and language 4.7 and 4.7.1. Not verified on a machine.
 # The drilling family (DRILL, DRILL_DWELL, PECK, CHIP_BREAK, TAP, REAM, BORE) is defined in code; its entries here say which cycle and which positional
 # parameters carry it. The other entries are catalog cycles (language 4.7.1). A machine file overrides an entry in its own [cycles] table (machine-config 6).
-# TODO(question): machine-config 6 has no key for the kind of a parameter ("Params with their kinds", phase 2 P2-03); every parameter of this file is a number or an expression (D115).
+# D115: no kind key in 1.0; every parameter of this file that is not a word of language 4.7 takes a number or an expression, and the words of 4.7 keep their kinds.
 #
 # The parameters (siemens 7, controller-mapping 5): RTP retract plane (absolute) is SAFE; RFP reference plane is SURFACE; SDIS safety distance, unsigned and
 # moving RFP forward towards RTP, gives CLEARANCE = RFP + SDIS where RTP lies above RFP and RFP - SDIS where it lies below, so CLEARANCE is

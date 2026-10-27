@@ -1,8 +1,8 @@
 namespace Ncx.Core.Machine;
 
-// TODO(question): machine-config 6 has no key for the kind of a parameter ("Params with their kinds", phase 2 P2-03).
-// Every parameter is taken as a number or an expression, as a native parameter of D94 is, and AXIS as the axis name of
-// language 4.7; the entry records no kind until the documents give one (D115).
+// D115: there is no kind key in 1.0. A catalog parameter that is not a word of language 4.7 takes a number or an
+// expression, as a native parameter of D94 does, and the words of 4.7 keep their 4.7 kinds (AXIS the axis name). A
+// per-entry `kinds` table (R/I/C/S, after Siemens uc.com) is reserved for later string parameters (machine-config 6).
 
 /// <summary>
 /// One entry of a cycle catalog: the NCX cycle name, the native cycle it maps to, the NCX words of its parameters with
@@ -80,20 +80,41 @@ public sealed record CycleEntry
     public IReadOnlyDictionary<string, decimal> Fixed { get; init; } = new Dictionary<string, decimal>();
 
     /// <summary>
+    /// defaults: the value the compiler writes at a position of the signature that no NCX word and no fixed value
+    /// fills, by native name, a number or the control's literal as text, Q208 = "MAX" (D164). On Siemens it records the
+    /// control's own default of a position, which the reader assumes for an empty position while the compiler leaves
+    /// that position empty (VARI of CYCLE83, D181). A distance the machine holds in a [cycles] key is no default
+    /// (D358).
+    /// </summary>
+    public IReadOnlyDictionary<string, string> Defaults { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>
+    /// title: the text the Heidenhain compiler writes after CYCL DEF n, "BOHREN"; null where the entry has none and
+    /// the compiler writes the number alone, the control adding the name in its dialog language (D270).
+    /// </summary>
+    public string? Title { get; init; }
+
+    /// <summary>
     /// pre, post, requires and restore of the entry, from which the expander makes generated blocks around the cycle
     /// block (machine-config 5a); null when the entry has none of the four keys.
     /// </summary>
     public ExpansionRule? Rule { get; init; }
 
-    // TODO(question): machine-config 6 has no key for the words a rule carries, so only the built-in drilling family
-    // names them; a catalog file cannot name them for a cycle of its own (D157).
+    /// <summary>
+    /// The controller family whose reader and compiler rules apply to the entry, the family of the catalog it belongs
+    /// to; null for an entry of a machine file that names no controller. RuleWords follows from it (D157).
+    /// </summary>
+    public Controller? Family { get; init; }
 
     /// <summary>
     /// The NCX words that a rule of the reader and the compiler of the controller family carries instead of a native
-    /// parameter: SURFACE and SAFE of a Fanuc drilling cycle, CYCLE_RETRACT on every family (controller-mapping 5).
-    /// Set by the built-in drilling family; empty for the other entries.
+    /// parameter. D157: they follow from the params of the entry, with no key of their own, for every entry, the
+    /// built-in family included (controller-mapping 5): on Fanuc an entry that maps CLEARANCE = "R" carries SURFACE,
+    /// SAFE and CYCLE_RETRACT, and one whose native is the tapping code (G84, the lathe G88; D359) PITCH as well; on
+    /// Heidenhain an entry that maps SAFE = "Q204" carries CYCLE_RETRACT, on Siemens one that maps SAFE = "RTP". AXIS
+    /// is a rule word of every entry that maps DEPTH, the depth along the drilling axis, and not AXIS itself.
     /// </summary>
-    public IReadOnlyList<string> RuleWords { get; init; } = [];
+    public IReadOnlyList<string> RuleWords => RuleWordsOf(Family, Params, Native);
 
     /// <summary>
     /// The keys of machine-config 6 and 5a that the file of the entry wrote, in file order; a later entry of the same
@@ -235,10 +256,10 @@ public sealed record CycleEntry
     /// <param name="entry">The later entry, from the catalog file or the machine file.</param>
     public CycleEntry OverriddenBy(CycleEntry entry)
     {
-        // TODO(question): machine-config 6 says an entry "can be overridden per machine" without saying whether an
-        // override replaces the whole entry or the keys it writes. Key by key is taken, because the entries of
-        // machine-config 5a and doosan-puma-2600sy.toml write name, native and pre alone and would otherwise lose the
-        // address words of G83 (D140).
+        // D140: key by key. A key the later entry writes replaces the earlier value (a table key such as params as a
+        // whole), keys it leaves out stay, each of pre, post, requires and restore is its own key, and native stays
+        // required on every entry (machine-config 6), so the Doosan PECK of name, native and pre keeps the address
+        // words of G83.
         var writtenKeys = new List<string>(WrittenKeys);
         foreach (string key in entry.WrittenKeys)
         {
@@ -261,11 +282,59 @@ public sealed record CycleEntry
             Contour = entry.Writes("contour") ? entry.Contour : Contour,
             Signature = entry.Writes("signature") ? entry.Signature : Signature,
             Fixed = entry.Writes("fixed") ? entry.Fixed : Fixed,
+            Defaults = entry.Writes("defaults") ? entry.Defaults : Defaults,
+            Title = entry.Writes("title") ? entry.Title : Title,
             Before = entry.Writes("before") ? entry.Before : Before,
             Rule = OverriddenRule(entry),
-            RuleWords = entry.RuleWords.Count > 0 ? entry.RuleWords : RuleWords,
+            Family = Family ?? entry.Family,
             WrittenKeys = writtenKeys,
         };
+    }
+
+    // D157: the rule words of the family from the params of the entry, in the order SURFACE, SAFE, CYCLE_RETRACT,
+    // AXIS, PITCH (controller-mapping 5).
+    private static List<string> RuleWordsOf(
+        Controller? family, IReadOnlyDictionary<string, string> parameters, string native)
+    {
+        var words = new List<string>();
+        bool Maps(string word, string name) => parameters.TryGetValue(word, out string? mapped) && mapped == name;
+        if (family == Controller.Fanuc && Maps("CLEARANCE", "R"))
+        {
+            // R is the CLEARANCE plane; SURFACE is R minus the clearance or 0, SAFE the initial level of G98, and
+            // CYCLE_RETRACT the G98 or G99 of the cycle block (controller-mapping 5).
+            AddUnmapped(words, parameters, "SURFACE");
+            AddUnmapped(words, parameters, "SAFE");
+            words.Add("CYCLE_RETRACT");
+        }
+        else if ((family == Controller.Heidenhain && Maps("SAFE", "Q204"))
+            || (family == Controller.Siemens && Maps("SAFE", "RTP")))
+        {
+            // Heidenhain: CYCLE_RETRACT = SAFE when Q204 > Q200, else CLEARANCE (D226, D388); Siemens: the cycle
+            // always returns to RTP (controller-mapping 5).
+            words.Add("CYCLE_RETRACT");
+        }
+
+        if (family is not null && parameters.ContainsKey("DEPTH"))
+        {
+            AddUnmapped(words, parameters, "AXIS");
+        }
+
+        // The tapping pitch of a Fanuc G84 (G88 on the lathe) is F / S under G94 and F under G95 (controller-mapping
+        // 5, D157, D359).
+        if (family == Controller.Fanuc && native is "G84" or "G88")
+        {
+            AddUnmapped(words, parameters, "PITCH");
+        }
+
+        return words;
+    }
+
+    private static void AddUnmapped(List<string> words, IReadOnlyDictionary<string, string> parameters, string word)
+    {
+        if (!parameters.ContainsKey(word))
+        {
+            words.Add(word);
+        }
     }
 
     // Whether the file of the entry wrote a key of machine-config 6 or 5a.

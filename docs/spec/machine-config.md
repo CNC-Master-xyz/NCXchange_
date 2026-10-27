@@ -321,7 +321,7 @@ A named function is written as `FUNC:SUB_CHUCK=OPEN` in NCX and compiles to the 
 
 ```toml
 [cycles]
-catalog = "heidenhain-cycles.toml"  # controller family catalog, shipped with NCXchange, user-extendable
+catalog = "heidenhain.toml"         # controller family catalog <family>.toml, shipped with NCXchange, user-extendable (D156)
 
 # excerpt of a catalog file
 [[cycle]]
@@ -347,6 +347,14 @@ Besides `name`, `native`, `params`, `absolute_from_surface` and the expansion ru
 - `before`: one native line that belongs to the cycle itself and stands directly before the cycle block. The compiler writes it there, the reader folds it into the cycle when it finds it there, and it is a template like the function tables, so it may carry `{rpm}`: the Fanuc `TAP` entry has `before = "M29 S{rpm}"`, the rigid tapping line, which a machine file overrides with its builder's code (Mori Seiki `M329 S{rpm}`) and sets to `""` where a parameter makes the cycle rigid without one. A cycle written without the line is the other machining, tapping with a compensating chuck (D256).
 - `fixed`: native parameters the entry always writes with this value, which tell two entries of one native cycle apart: Siemens `CYCLE83` with `VARI = 1` is `PECK`, with `VARI = 0` `CHIP_BREAK` (controller-mapping 5); the reader takes the entry whose fixed values the source block carries. Of two entries on one native cycle the reader takes the first in catalog order whose fixed values the block carries and whose `params` cover its words, so that a Fanuc lathe `G83` with a peck depth `Q` is `PECK` and one without it `DRILL`, the `DRILL` entry standing first (D160).
 - `for_axis`: the drilling axis the entry maps its cycle under. The entry without the key maps the default axis, so a Fanuc lathe gives `DRILL` twice, `G83` along Z and `G87` under `for_axis = "X"`; the reader sets `AXIS` from the entry it matched and the compiler looks an entry up by its name together with `AXIS`. An entry is found, overridden and checked for duplicates by its name and its `for_axis` together (D160).
+
+A parameter of an entry that is not a word of language 4.7 takes a number or an expression, and the words of 4.7 keep their 4.7 kinds; a native control literal (Heidenhain `FMAX`, `FAUTO`, `FU`, `FZ`, `PREDEF`, `MAX`) stands only on the native side, in the `defaults` of an entry, and a Heidenhain definition that carries one at a position mapped to an NCX word is kept `RAW` (D5). 1.0 has no key for the kind of a parameter; a per-entry `kinds` table (R/I/C/S, after Siemens `uc.com`) is reserved for later string parameters (D115).
+
+An entry of a later file overrides the entry of the same name key by key: a key it writes replaces the earlier value (a table key such as `params` as a whole), a key it leaves out stays, each of `pre`, `post`, `requires` and `restore` is a key of its own, an entry of a new name is appended, and `native` is required on every entry (D140).
+
+The words a rule of the reader and the compiler carries instead of a native parameter follow from the `params` of the entry, with no key of their own, for every entry, the built-in family included (D157, controller-mapping 5): on Fanuc an entry that maps `CLEARANCE = "R"` carries `SURFACE`, `SAFE` and `CYCLE_RETRACT`, and an entry whose native is the tapping code (`G84`, the lathe `G88`) carries `PITCH` (D359); on Heidenhain an entry that maps `SAFE = "Q204"` carries `CYCLE_RETRACT`; on Siemens an entry that maps `SAFE = "RTP"` carries `CYCLE_RETRACT`; and an entry that maps `DEPTH`, the depth along the drilling axis, carries `AXIS` unless it maps `AXIS` itself.
+
+The loader checks every entry of a catalog file and of a machine file (D141): ERROR CFG150 for a name written twice in one file (by name and `for_axis`), CFG151 for a name or a `params` word that is no NCX identifier, CFG154 for a `contour` of more than two words; WARNING CFG152 for a word of `absolute_from_surface` that `params` does not map, CFG153 for `absolute_from_surface` without a mapped `SURFACE`, and CFG155 for a key the entries of the family leave out (`modal` on Heidenhain and Siemens, `signature` on Fanuc).
 
 ## 7. Variables
 
@@ -447,7 +455,7 @@ my-shop/
     fanuc-vmc.toml
     millturn1.toml
   cycles/
-    heidenhain-cycles.toml   # the shipped files are fanuc.toml, fanuc-lathe.toml (D160), heidenhain.toml and siemens.toml
+    heidenhain.toml          # the shipped files are fanuc.toml, fanuc-lathe.toml (D160), heidenhain.toml and siemens.toml; a shop catalog may have any name (D156)
   programs/
     part-123.ncx
     part-123.vars.toml

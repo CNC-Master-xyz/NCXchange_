@@ -135,15 +135,9 @@ public sealed record CycleCatalog
             int index = IndexOfName(overridden, entry.Name, entry.ForAxis);
             if (index < 0)
             {
-                // D160: the entries of one name differ only by the drilling axis, so an entry added under a for_axis
-                // carries the same words of a reader or compiler rule as the entry of that name already in the
-                // catalog, which only the built-in family can name (D157).
-                // TODO(question): neither D160 nor D157 says where the rule words of a for_axis entry come from, and a
-                // catalog file cannot name them; the entry of the same name without a for_axis lends them, so that
-                // SURFACE, SAFE, CYCLE_RETRACT and AXIS stand on the X entry of a lathe as on its Z entry.
-                overridden.Add(entry.RuleWords.Count > 0 || Find(entry.Name) is not CycleEntry sibling
-                    ? entry
-                    : entry with { RuleWords = sibling.RuleWords });
+                // D157: the rule words of an added entry, the X entry of a lathe (D160) among them, follow from its
+                // own params like those of every other entry; nothing is lent from an entry of the same name.
+                overridden.Add(entry with { Family = entry.Family ?? Controller });
             }
             else
             {

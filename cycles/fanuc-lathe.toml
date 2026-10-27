@@ -3,8 +3,8 @@
 # translate the numbers to the system of the machine through gcode_system (controllers fanuc.md 3, D174).
 # Written from controllers/fanuc.md 3 and 6, controller-mapping.md 5, language 4.7 and 4.7.1 and the Fanuc lathe manual (B-64484GE-1/02, tables 4.3 (a) and
 # 4.3 (b), sections 4.1 and 4.2), the pages the evidence of D160, D161 and D174 names. Not verified on a machine.
-# TODO(question): machine-config 6 has no key for the kind of a parameter ("Params with their kinds", phase 2 P2-03); every parameter of this file is a number
-# or an expression (D115).
+# D115: no kind key in 1.0; every parameter of this file that is not a word of language 4.7 takes a number or an expression, and the words of 4.7 keep
+# their kinds.
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------
 # Drilling cycles of a lathe (fanuc 6, controller-mapping 5, AXIS; D59, D160)

@@ -9,9 +9,7 @@ public static partial class DrillingFamily
     private static readonly string[] s_siemensAbsolute = ["CLEARANCE"];
 
     // The cycle always returns to RTP, so CYCLE_RETRACT is a rule (controller-mapping 5); so is AXIS, the plane of
-    // G17..G19, where no _AXN carries it.
-    private static readonly string[] s_siemensRuleWords = ["CYCLE_RETRACT", "AXIS"];
-    private static readonly string[] s_siemensAxnRuleWords = ["CYCLE_RETRACT"];
+    // G17..G19, where no _AXN carries it. Both follow from the params (CycleEntry.RuleWords, D157).
 
     // The leading parameters of the 840D sl signatures as siemens 7 writes them; the tails after "..." are not in the
     // documents (cycles/siemens.toml).
@@ -47,13 +45,13 @@ public static partial class DrillingFamily
             Controller = Controller.Siemens,
             Entries =
             [
-                SiemensEntry("DRILL", "CYCLE81", s_cycle81, SiemensModalFeedParams(), s_siemensRuleWords, null),
-                SiemensEntry("DRILL_DWELL", "CYCLE82", s_cycle82, SiemensModalFeedParams(), s_siemensRuleWords, null),
-                SiemensEntry("PECK", "CYCLE83", s_cycle83, SiemensPeckParams(), s_siemensAxnRuleWords, 1m),
-                SiemensEntry("CHIP_BREAK", "CYCLE83", s_cycle83, SiemensPeckParams(), s_siemensAxnRuleWords, 0m),
-                SiemensEntry("TAP", "CYCLE84", s_cycle84, SiemensTapParams(), s_siemensAxnRuleWords, null),
-                SiemensEntry("REAM", "CYCLE85", s_cycle85, SiemensReamParams(), s_siemensRuleWords, null),
-                SiemensEntry("BORE", "CYCLE86", s_cycle86, SiemensModalFeedParams(), s_siemensRuleWords, null),
+                SiemensEntry("DRILL", "CYCLE81", s_cycle81, SiemensModalFeedParams(), null),
+                SiemensEntry("DRILL_DWELL", "CYCLE82", s_cycle82, SiemensModalFeedParams(), null),
+                SiemensEntry("PECK", "CYCLE83", s_cycle83, SiemensPeckParams(), 1m),
+                SiemensEntry("CHIP_BREAK", "CYCLE83", s_cycle83, SiemensPeckParams(), 0m),
+                SiemensEntry("TAP", "CYCLE84", s_cycle84, SiemensTapParams(), null),
+                SiemensEntry("REAM", "CYCLE85", s_cycle85, SiemensReamParams(), null),
+                SiemensEntry("BORE", "CYCLE86", s_cycle86, SiemensModalFeedParams(), null),
             ],
         };
     }
@@ -64,7 +62,6 @@ public static partial class DrillingFamily
         string native,
         string[] signature,
         Dictionary<string, string> parameters,
-        string[] ruleWords,
         decimal? vari)
     {
         var fixedValues = new Dictionary<string, decimal>();
@@ -81,7 +78,7 @@ public static partial class DrillingFamily
             Params = parameters,
             AbsoluteFromSurface = s_siemensAbsolute,
             Fixed = fixedValues,
-            RuleWords = ruleWords,
+            Family = Controller.Siemens,
         };
     }
 

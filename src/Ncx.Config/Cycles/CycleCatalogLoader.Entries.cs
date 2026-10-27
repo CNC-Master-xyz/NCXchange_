@@ -1,4 +1,6 @@
+using Ncx.Core.Catalog;
 using Ncx.Core.Machine;
+using Ncx.Core.Model;
 
 namespace Ncx.Config.Cycles;
 
@@ -9,7 +11,7 @@ public static partial class CycleCatalogLoader
     private static readonly string[] s_entryKeys =
     [
         "name", "native", "for_axis", "params", "absolute_from_surface", "modal", "contour", "signature",
-        "fixed", "before",
+        "fixed", "before", "defaults", "title",
         "pre", "post", "requires", "restore",
     ];
 
@@ -77,6 +79,7 @@ public static partial class CycleCatalogLoader
         IReadOnlyList<string> signature = table.TextList("signature");
         IReadOnlyDictionary<string, decimal> fixedValues =
             table.Table("fixed")?.Numbers() ?? new Dictionary<string, decimal>();
+        IReadOnlyDictionary<string, string> defaults = ReadDefaults(table);
         ExpansionRule? rule = MachineConfigLoader.ReadRule(table);
         CheckFamilyKeys(table, controller, modal, signature);
         if (name is null || native is null)
@@ -95,8 +98,11 @@ public static partial class CycleCatalogLoader
             Contour = contour,
             Signature = signature,
             Fixed = fixedValues,
+            Defaults = defaults,
+            Title = table.Text("title"),
             Before = table.Has("before") ? table.Template("before") ?? "" : null,
             Rule = rule,
+            Family = controller,
             WrittenKeys = WrittenKeys(table),
         };
     }
@@ -161,9 +167,43 @@ public static partial class CycleCatalogLoader
                     $"The parameter word {word} in {table.Name} is not an NCX key, a capital followed by capitals, "
                     + "digits and underscores; no cycle block can carry it (language 3, machine-config 6).");
             }
+            else if (WordCatalog.Lookup(word) is null && WordCatalog.TryMachineAxis(word, out _))
+            {
+                // D114: a key of the machine-axis form stays a machine axis word of D93 in every block, so a catalog
+                // parameter of that form would read differently with and without a machine file.
+                table.Diagnostics.Error(parameters.LineOf(word), DiagnosticCodes.CycleParameterAxisForm,
+                    $"The parameter word {word} in {table.Name} has the form of a machine axis name, which a program "
+                    + "reads as a machine axis word (D93); a catalog parameter cannot take that form (D114).");
+            }
         }
 
         return parameters.Strings(null);
+    }
+
+    // defaults: a native name and the value the compiler writes for it, a number or the control's literal such as
+    // MAX, kept as its text (D164); a literal stands only on the native side (D115).
+    private static Dictionary<string, string> ReadDefaults(ConfigTable table)
+    {
+        var defaults = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (table.Table("defaults") is not ConfigTable values)
+        {
+            return defaults;
+        }
+
+        foreach (string native in values.Keys)
+        {
+            switch (values.NumberOrString(native))
+            {
+                case StringValue text:
+                    defaults[native] = text.Content;
+                    break;
+                case Value number:
+                    defaults[native] = number.ToCanonical();
+                    break;
+            }
+        }
+
+        return defaults;
     }
 
     // contour: two words are the first and the last block of the contour range, one names the contour subprogram

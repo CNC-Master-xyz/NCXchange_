@@ -5,14 +5,9 @@ namespace Ncx.Core.Machine;
 // these entries in its machine file (controller-mapping 5, D59).
 public static partial class DrillingFamily
 {
-    // The words that rules of the Fanuc reader and compiler carry, not an address (controller-mapping 5): SURFACE is R
-    // minus the clearance of the machine file or 0, SAFE the initial level of G98, CYCLE_RETRACT the G98 or G99 of the
-    // cycle block, AXIS the tool axis of G17..G19.
-    private static readonly string[] s_fanucRuleWords = ["SURFACE", "SAFE", "CYCLE_RETRACT", "AXIS"];
-
-    // G84 has no address for the pitch either: it is F / S in the per-minute mode and F in the per-revolution mode
-    // (controller-mapping 5).
-    private static readonly string[] s_fanucTapRuleWords = ["SURFACE", "SAFE", "CYCLE_RETRACT", "AXIS", "PITCH"];
+    // The words that rules of the Fanuc reader and compiler carry, not an address, follow from the params of each
+    // entry (CycleEntry.RuleWords, D157): SURFACE, SAFE, CYCLE_RETRACT and AXIS, and PITCH on G84 (controller-mapping
+    // 5).
 
     // The rigid tapping line of G84 stands directly before the cycle block and belongs to the cycle; a machine file
     // overrides it with its builder's code and sets it to "" where a parameter makes G84 rigid without one
@@ -28,13 +23,13 @@ public static partial class DrillingFamily
             Controller = Controller.Fanuc,
             Entries =
             [
-                FanucEntry("DRILL", "G81", peck: false, s_fanucRuleWords),        // G81 G99 Z-21.732 R5. F565
-                FanucEntry("DRILL_DWELL", "G82", peck: false, s_fanucRuleWords),  // G82 adds a dwell P
-                FanucEntry("PECK", "G83", peck: true, s_fanucRuleWords),          // G83 pecks with Q, full retract
-                FanucEntry("CHIP_BREAK", "G73", peck: true, s_fanucRuleWords),    // G73 chip-breaks
-                FanucEntry("TAP", "G84", peck: false, s_fanucTapRuleWords, FanucTapBefore),
-                FanucEntry("REAM", "G85", peck: false, s_fanucRuleWords),         // G85 G99 Z-20. R5. F420
-                FanucEntry("BORE", "G86", peck: false, s_fanucRuleWords),         // G86 bores
+                FanucEntry("DRILL", "G81", peck: false),        // G81 G99 Z-21.732 R5. F565
+                FanucEntry("DRILL_DWELL", "G82", peck: false),  // G82 adds a dwell P
+                FanucEntry("PECK", "G83", peck: true),          // G83 pecks with Q, full retract
+                FanucEntry("CHIP_BREAK", "G73", peck: true),    // G73 chip-breaks
+                FanucEntry("TAP", "G84", peck: false, FanucTapBefore),
+                FanucEntry("REAM", "G85", peck: false),         // G85 G99 Z-20. R5. F420
+                FanucEntry("BORE", "G86", peck: false),         // G86 bores
             ],
         };
     }
@@ -43,8 +38,7 @@ public static partial class DrillingFamily
     // own feed and dwell, which never touch the modal F of the program (fanuc 6, controller-mapping 5, D29).
     // TODO(question): fanuc 6 names the dwell P for G82 only; P stands on every entry as controller-mapping 5 writes
     // "F and P on the G8x block", as cycles/fanuc.toml does (D177).
-    private static CycleEntry FanucEntry(string name, string native, bool peck, string[] ruleWords,
-        string? before = null)
+    private static CycleEntry FanucEntry(string name, string native, bool peck, string? before = null)
     {
         var parameters = new Dictionary<string, string>
         {
@@ -65,7 +59,7 @@ public static partial class DrillingFamily
             Modal = true,
             Params = parameters,
             Before = before,
-            RuleWords = ruleWords,
+            Family = Controller.Fanuc,
         };
     }
 }
