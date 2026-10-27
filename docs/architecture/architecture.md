@@ -278,7 +278,7 @@ A key the catalog does not know is accepted as a provisional word when it has th
 
 ### 4.2 Numbers and geometry (D62)
 
-Stored numbers are `decimal` with the original text, so that a program is reproduced digit for digit. Geometry (arc centres from `R`, arc length, the angle between tool vectors, distances) is computed in `double` in a small `Ncx.Core.Geometry` namespace: `Vec3`, `Arc`, `Plane`, an `Angle` helper. That is all levels 0 and 1 of the VM need, so `Ncx.Core` takes no math package. `System.Numerics.Vector3` is single precision and is not used. When the kinematics module needs rotation matrices, frames and an inverse for 5-axis poses, it takes MathNet.Numerics (MIT) in `Ncx.Kinematics` only; nothing of it leaks into the model or the NCX text.
+Stored numbers are `decimal` with the original text, so that a program is reproduced digit for digit. Geometry (arc centres from `R`, arc length, the angle between tool vectors, distances) is computed in `double` in a small `Ncx.Core.Geometry` namespace: `Vec3`, `Arc`, `Plane`, an `Angle` helper. That is all levels 0 and 1 of the VM need, so `Ncx.Core` takes no math package. `System.Numerics.Vector3` is single precision and is not used. When the kinematics module needs rotation matrices, frames and an inverse for 5-axis poses, it takes MathNet.Numerics (MIT) in `Ncx.Kinematics` only; nothing of it leaks into the model or the NCX text. A `double` goes back into a stored number only through `Vec3.RoundToDecimal`, at the one VM precision of 6 decimals, half away from zero, whatever the units (virtual machine 3.2, D121).
 
 ## 5. Virtual machine (Ncx.Core)
 

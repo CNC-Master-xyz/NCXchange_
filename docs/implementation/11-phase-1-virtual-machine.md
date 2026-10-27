@@ -114,7 +114,7 @@ Then `docs/reading-the-code.md` (P0-07 tour) is written from `Program.cs` throug
 
 - The STATIC pass over uncalled subprograms with the D99 default entry state and the suppressed validations is the place where a wrong assumption stays hidden until a compiler needs the state; keep the suppressed list short and name every suppression in the diagnostics table.
 - `Snapshot()` on every block for `Before` and `After` costs allocations on the 834-block `3D_FRAESEN` programs and the megabyte corpus files; measure in P1-05 and, if needed, snapshot lazily per changed part. Correctness first; the code-guidelines forbid `Span<T>` in the parts an NC programmer touches, and the VM core is not such a part.
-- The arc resolver uses `double`; the tolerance comparison must be against the configured `decimal` tolerance converted once. Never let a `double` reach the position store as anything but a rounded `decimal` with the units' decimals (D62).
+- The arc resolver uses `double`; the tolerance comparison must be against the configured `decimal` tolerance converted once. Never let a `double` reach the position store as anything but a `decimal` rounded to the one VM precision of 6 decimals, half away from zero, in `MM` and `INCH` alike (D62, D121).
 - Events and snapshots are the plugin surface (D106); every public property here is an API promise. Keep the records small and name them after the specification.
 
 ## Exit checklist

@@ -1,3 +1,4 @@
+using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.State;
 
 namespace Ncx.Core.Tests.VirtualMachine;
@@ -79,12 +80,49 @@ public sealed class FrameChainTests
     [Fact]
     public void Origin_RemovingAShiftFromAnExpression_LeavesTheShiftedAxisUnknown()
     {
-        VmHarness vm = new VmHarness(VmMachines.Default()).Execute("UNITS=MM", "SHIFT X={$Q1} Y=5", "RAPID X=50 Y=7");
+        VmHarness vm = new VmHarness(VmMachines.Default())
+            .Execute("UNITS=MM", "ORIGIN=1", "SHIFT X={$Q1} Y=5", "RAPID X=50 Y=7");
 
         vm.Execute("ORIGIN=1");
 
         Assert.Equal(AxisPosition.Unknown, vm.Position("X"));
         Assert.Equal(new AxisPosition(12m, PositionFrame.Workpiece, Known: true), vm.Position("Y"));
+    }
+
+    // D123: ORIGIN=n selecting another datum is a frame change of VM 3.4. Without a datum table (D35) X=10 in datum 1
+    // is not known in datum 2, so the incremental word after it is the VM 3.1 ERROR; the axis known in the MACHINE frame
+    // stays known there.
+    [Fact]
+    public void D123_OriginOfAnotherDatum_MarksWorkpieceAxesUnknownAndKeepsTheMachineFrame()
+    {
+        VmHarness vm = new VmHarness(VmMachines.MillTurn())
+            .Execute("UNITS=MM", "ORIGIN=1", "HOME Z", "RAPID X=10 Y=10", "ORIGIN=2");
+
+        Assert.Equal(AxisPosition.Unknown, vm.Position("X"));
+        Assert.Equal(AxisPosition.Unknown, vm.Position("Y"));
+        Assert.True(vm.Position("Z").Known);
+        Assert.Equal(PositionFrame.Machine, vm.Position("Z").Frame);
+
+        vm.Execute("LINE IX=5 F=100");
+
+        Assert.Contains(DiagnosticCodes.IncrementalFromUnknownPosition, vm.Codes());
+    }
+
+    // D123: ORIGIN=n repeating the active datum empties the chain as a RESET does and keeps the rest, so the
+    // incremental word after a repeated G54 passes.
+    [Fact]
+    public void D123_OriginRepeatingTheActiveDatum_KeepsThePosition()
+    {
+        VmHarness vm = new VmHarness(VmMachines.Default())
+            .Execute("UNITS=MM", "ORIGIN=1", "RAPID X=10 Y=10 Z=5", "SHIFT X=2", "ORIGIN=1");
+
+        Assert.Equal(new AxisPosition(10m, PositionFrame.Workpiece, Known: true), vm.Position("X"));
+        Assert.Equal(new AxisPosition(10m, PositionFrame.Workpiece, Known: true), vm.Position("Y"));
+
+        vm.Execute("LINE IX=5 F=100");
+
+        Assert.DoesNotContain(DiagnosticCodes.IncrementalFromUnknownPosition, vm.Codes());
+        Assert.Equal(new AxisPosition(15m, PositionFrame.Workpiece, Known: true), vm.Position("X"));
     }
 
     // Language 4.2, VM 2.1: SHIFT=RESET after a tilt removes the shift and the tilt appended after it.

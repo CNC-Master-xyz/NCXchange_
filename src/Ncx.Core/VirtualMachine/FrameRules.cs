@@ -73,14 +73,14 @@ internal static class FrameRules
     /// ORIGIN selects the workpiece datum: it starts an empty chain and clears the setpos shifts (language 4.2,
     /// virtual machine 2.1, 3.4, 4, D31, D55). An axis whose workpiece coordinate came from a setpos shift loses it:
     /// back to the MACHINE frame at its machine position when the shift was recorded against the machine position and
-    /// that position is known, unknown otherwise (D35, D101).
+    /// that position is known, unknown otherwise (D35, D101). A datum other than the active one is a frame change:
+    /// without a datum table the coordinates in another datum are not known, so every axis known in the workpiece,
+    /// polar or cylinder frame becomes unknown, and one known in the MACHINE frame stays known there. Repeating the
+    /// active datum empties the chain as a RESET does and keeps the rest (virtual machine 3.4, D35, D123).
     /// </summary>
     public static void SelectOrigin(ChannelState state, int origin)
     {
-        // TODO(question): virtual machine 3.4 lists the frame changes that mark the position unknown and does not list
-        // ORIGIN; without a datum table the coordinates in another datum are not known (D35). An axis known in the
-        // workpiece frame of the datum keeps its value here, with the chain removed as by a RESET, until D123 is
-        // answered.
+        bool otherDatum = state.Frame.Origin != origin;
         state.Frame.Origin = origin;
         if (state.Frame.Chain.Count > 0)
         {
@@ -122,6 +122,13 @@ internal static class FrameRules
             {
                 state.Motion.Position[axis] = AxisPosition.Unknown;
             }
+        }
+
+        // Another datum: what was known in the workpiece frame of the old one is unknown in the new one (D123). The
+        // setpos handling above has returned every axis it could to the MACHINE frame first.
+        if (otherDatum)
+        {
+            MarkUnknownOutsideMachineFrame(state);
         }
     }
 
@@ -310,7 +317,7 @@ internal static class FrameRules
     }
 
     /// <summary>
-    /// WORKPIECE changes mark the position unknown in the new holder's frame until the next ORIGIN or motion with known
+    /// WORKPIECE changes mark the position unknown in the new holder's frame until the next motion with known
     /// coordinates; the frame of a holder is its own right-handed frame with +Z out of its chuck (virtual machine 3.4,
     /// D57). Selecting the holder that already holds the part changes nothing.
     /// </summary>
@@ -450,6 +457,33 @@ internal static class FrameRules
         return unknownShiftsOfTheSetpos == record.UnknownShifts.Count;
     }
 
+    /// <summary>
+    /// The workpiece frame differs from the MACHINE frame on the axis by shifts alone: the workpiece holder is the
+    /// machine's default one, no ROTATE of the chain stood in a plane holding the axis, no MIRROR mirrors it, and the
+    /// chain holds no TILT or TILT_AXIS (D183). An increment is then the same distance in both frames, so IX may add
+    /// to the value of the frame the axis is known in (virtual machine 3.1). A tilt counts for every axis here, the
+    /// rotary ones included: after TILT_AXIS with MOVE=TURN the rotary axes are known in the MACHINE frame, and an IC
+    /// right after is the ERROR of virtual machine 3.1 (D126).
+    /// </summary>
+    public static bool DiffersByShiftsAlone(BlockContext context, string axis)
+    {
+        ChannelState state = context.State;
+        if (state.Frame.WorkpieceHolder != context.Machine.Machine.DefaultWorkpiece)
+        {
+            return false;
+        }
+
+        foreach (TransformEntry entry in state.Frame.Chain)
+        {
+            if (entry.Kind is TransformKind.Tilt or TransformKind.TiltAxis || Turns(context, entry, axis))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     // The frame of a SETPOS turns or mirrors the axis when an entry of its chain does (Turns).
     private static bool TurnedAt(BlockContext context, string axis)
     {
@@ -466,18 +500,17 @@ internal static class FrameRules
 
     // The entry turns or mirrors the axis against the frame it stands in: a ROTATE turns the two axes of the working
     // plane where it stood about its tool axis, a MIRROR mirrors the axes it names, and a TILT or TILT_AXIS turns the
-    // frame in space (language 4.2, D31, D82). A SHIFT turns nothing.
+    // linear frame in space (language 4.2, D31, D82). A SHIFT turns nothing. A tilt turns no rotary axis: a rotary axis
+    // word under it moves the machine axis by its workpiece-coordinate difference, as under ROTATE, so its machine
+    // position stays known; it couples no linear axis (virtual machine 3.4, D230). A linear axis other than X, Y and Z
+    // counts as turned under a tilt, as before.
     private static bool Turns(BlockContext context, TransformEntry entry, string axis)
     {
-        // TODO(question): language 4.2 tilts the frame by spatial angles about its axes and says nothing of a rotary
-        // axis, or of a linear axis other than X, Y and Z, under a TILT or TILT_AXIS; whether a word of such an axis
-        // moves it in the machine frame by as much as in the tilted frame is not said, so a tilt turns every axis, as
-        // D230 recommends, until D230 is answered.
         return entry.Kind switch
         {
             TransformKind.Rotate => PlaneAxes(context, entry.Workplane).Contains(axis),
             TransformKind.Mirror => Mirrors(context, entry, axis),
-            TransformKind.Tilt or TransformKind.TiltAxis => true,
+            TransformKind.Tilt or TransformKind.TiltAxis => !context.Resources.IsRotary(axis),
             _ => false,
         };
     }

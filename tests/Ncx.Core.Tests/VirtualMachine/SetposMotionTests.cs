@@ -424,6 +424,19 @@ public sealed class SetposMotionTests
         Assert.Equal(new AxisPosition(300m, PositionFrame.Machine, Known: true), vm.Position("X"));
     }
 
+    // D230: a TILT turns the linear frame only. A rotary axis word under it moves the machine axis by its
+    // workpiece-coordinate difference, so the machine position recorded with the setpos shift of C stays known, and
+    // the reset returns C to it (VM 3.4).
+    [Fact]
+    public void D230_AMotionOfARotaryAxisUnderATilt_KeepsItsMachinePosition()
+    {
+        VmHarness vm = MillTurn()
+            .Execute("SPINDLE_MODE:MAIN=AXIS", "HOME C", "TILT B=45", "SETPOS C=0", "RAPID C=10", "TILT=RESET");
+
+        vm.AssertNoDiagnostics();
+        Assert.Equal(new AxisPosition(100m, PositionFrame.Machine, Known: true), vm.Position("C"));
+    }
+
     // Language 4.2, D31: ROTATE turns the working plane where it stands, the WORKPLANE of its own block included in
     // either order, so under WORKPLANE=ZX its entry keeps the plane of Z and X. A motion of Y does not name X, which
     // keeps its machine position (VM 3.4, D101).
