@@ -70,10 +70,29 @@ internal static class FanucProgramFrame
         {
             if (write.Block.Find(key)?.Value is StringValue text)
             {
-                write.Writer("(" + write.CommentText(text.Content) + ")");
                 write.Written(key);
+                if (WithoutBrackets(write, text.Content))
+                {
+                    write.Writer("(" + write.CommentText(text.Content) + ")");
+                }
             }
         }
+    }
+
+    // D389: the first ) ends a Fanuc comment and the rest of the line runs as code, and no decision says whether a
+    // compiler replaces ( and ) or refuses them (R1-14); the conservative answer until D389 is answered is an ERROR,
+    // never a broken line.
+    private static bool WithoutBrackets(FanucBlock write, string text)
+    {
+        if (!text.Contains('(', StringComparison.Ordinal) && !text.Contains(')', StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        write.Error(DiagnosticCodes.FanucBracketInComment,
+            $"The comment text \"{text}\" holds ( or ), and the first ) would end the Fanuc comment and leave the rest "
+            + "of the line to run as code (controllers fanuc.md 10 rule 5; D389).");
+        return false;
     }
 
     /// <summary>
@@ -112,7 +131,7 @@ internal static class FanucProgramFrame
 
         string? name = write.Step.Section?.Name;
         string o = ProgramNumber(write, programNumber.ToString(CultureInfo.InvariantCulture));
-        write.Write(name is null ? o : o + " (" + write.CommentText(name) + ")");
+        write.Write(name is null || !WithoutBrackets(write, name) ? o : o + " (" + write.CommentText(name) + ")");
         WriteHeader(write);
     }
 

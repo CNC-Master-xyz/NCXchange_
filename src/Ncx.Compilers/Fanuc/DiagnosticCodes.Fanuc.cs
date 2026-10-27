@@ -61,6 +61,12 @@ public static partial class DiagnosticCodes
     /// </summary>
     public const string FanucModalValueNotHeld = "CMP309";
 
+    /// <summary>
+    /// CMP312: a comment text with ( or ), whose first ) would end the Fanuc comment and leave the rest of the line to
+    /// run as code; refused until D389 (R1-14) is answered.
+    /// </summary>
+    public const string FanucBracketInComment = "CMP312";
+
     // CMP310 was the ERROR of a CALL that carries both a pass-through ARG:Vn={$Vn} and an argument value. The
     // documents settle that block: D148's evidence has it that only a macro call can take arguments, and
     // controller-mapping 6 maps a CALL with ARG to G65 Pnnnn A1 B2, so it is the macro call and is written as one.

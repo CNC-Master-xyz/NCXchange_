@@ -146,6 +146,6 @@ A two-path lathe runs one program per path (turret, or head and turret). The pat
 2. Write `M3 S1000` in one block, never `S1000` alone after another spindle's M code (section 5).
 3. Program end from `program_end` (`M30` or `M2`); subprograms after it as `O` programs ending with `M99`, or as separate files when the machine wants that; a `JUMP` to the label after the header is written back as `M99`, the loop of a bar-work program, where every jump to that label is unconditional; `M99` takes no condition, so a conditional one keeps the label's `N` and `IF [ ] GOTO` (D210).
 4. Wait marks from the `[sync]` table with the path form the machine uses (list or bitmask).
-5. Decimal point on every real number per `[format]` (`decimals`, `trailing_zeros`); comments in parentheses, transliterated to ASCII (`comment_charset`).
+5. Decimal point on every real number per `[format]` (`decimals`, `trailing_zeros`); comments in parentheses, transliterated to ASCII (`comment_charset`). A comment text that holds `(` or `)` is an ERROR (CMP312), because its first `)` would end the comment and the rest of the line would run as code; whether the compiler should replace the brackets instead is D389 (R1-14).
 6. Numbers, names and file names per `[format]`; block numbers per `format.block_numbers`.
 7. The `before` line of a catalog entry stands in its own line directly before the cycle block, `M29 S500` before `G84 G99 Z-20. R5. F750`, and once per run of the cycle, since an `M29` inside a running tapping cycle alarms PS0204 (machine-config 6, D256).
