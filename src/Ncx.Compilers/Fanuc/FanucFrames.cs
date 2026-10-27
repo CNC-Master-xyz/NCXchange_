@@ -105,6 +105,7 @@ internal static class FanucFrames
         OnOff(write, "POLAR", transform?.PolarOn ?? "G12.1", transform?.PolarOff ?? "G13.1", "POLAR");
         WriteCylinder(write, transform);
         WriteTolerance(write);
+        WritePathMode(write, transform);
         Option(write, "ROTARY_PATH", "SHORTEST", transform?.RotaryPathShortest, transform?.RotaryPathFull);
         Option(write, "ROTARY_FEED", "MM_MIN", transform?.RotaryFeedMmMin, transform?.RotaryFeedDegMin);
         WriteDiameter(write);
@@ -416,6 +417,27 @@ internal static class FanucFrames
             string? comment = off ? null : ToleranceTemplate.Comment(table, state);
             write.Write(comment is null ? text : text + " (" + write.CommentText(comment) + ")");
         }
+    }
+
+    // PATH_MODE after the tolerance words, G61 or G64 through [transform] (D349; 30i-B B-64484EN-2 p.27-28); an empty
+    // or missing template is the WARNING CMP361.
+    private static void WritePathMode(FanucBlock write, TransformTable? transform)
+    {
+        if (write.Block.Find("PATH_MODE") is not Word word)
+        {
+            return;
+        }
+
+        write.Written(word);
+        string? template = PathModeTemplate.Of(transform, write.After.Frame);
+        if (string.IsNullOrEmpty(template))
+        {
+            write.Warning(DiagnosticCodes.FanucOptionNotWritten,
+                PathModeTemplate.NotWritten(word.ToCanonical(), write.After.Frame));
+            return;
+        }
+
+        write.Write(template);
     }
 
     // ROTARY_PATH and ROTARY_FEED through [transform]; without a template the Fanuc roll-over setting decides, a

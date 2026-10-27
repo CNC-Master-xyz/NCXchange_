@@ -177,6 +177,7 @@ internal static partial class SiemensFrames
         OnOff(write, "POLAR", transform?.PolarOn, transform?.PolarOff);
         WriteCylinder(write, transform);
         WriteTolerance(write);
+        WritePathMode(write, transform);
         WriteRotaryPath(write, transform);
         WriteRotaryFeed(write, transform);
     }
@@ -563,6 +564,27 @@ internal static partial class SiemensFrames
             string? comment = ToleranceTemplate.Comment(table, state);
             write.Write(comment is null ? on : on + " ; " + write.CommentText(comment));
         }
+    }
+
+    // PATH_MODE after the tolerance words, G60 or G64 through [transform] (D349); an empty or missing template is the
+    // WARNING CMP533.
+    private static void WritePathMode(SiemensBlock write, TransformTable? transform)
+    {
+        if (write.Block.Find("PATH_MODE") is not Word word)
+        {
+            return;
+        }
+
+        write.Written(word);
+        string? template = PathModeTemplate.Of(transform, write.After.Frame);
+        if (string.IsNullOrEmpty(template))
+        {
+            write.Warning(DiagnosticCodes.SiemensOptionNotWritten,
+                PathModeTemplate.NotWritten(word.ToCanonical(), write.After.Frame));
+            return;
+        }
+
+        write.Write(template);
     }
 
     private static void SetTolerance(SiemensBlock write, TemplateValues values, string name, Word? word,

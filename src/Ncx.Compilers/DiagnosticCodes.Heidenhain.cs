@@ -146,6 +146,12 @@ public static partial class DiagnosticCodes
     public const string HeidenhainLabelChainsDiffer = "CMP119";
 
     /// <summary>
+    /// CMP120, a WARNING: PATH_MODE with an empty or missing PATH_MODE template is not written; Klartext has no modal
+    /// switch of the path mode, and heidenhain-itnc530.toml leaves both templates empty (machine-config 5, D349).
+    /// </summary>
+    public const string HeidenhainPathModeNotWritten = "CMP120";
+
+    /// <summary>
     /// CMP123: a measurement point beyond the nine indices of a Klartext tool, k above 10, an ERROR; and, as a
     /// WARNING, a point change of the tool in the spindle by an indexed TOOL CALL, which runs the change macro on the
     /// TNC 640 and on the iTNC 530 depending on MP7480.0 and the builder's macro, unless point_change = "call"

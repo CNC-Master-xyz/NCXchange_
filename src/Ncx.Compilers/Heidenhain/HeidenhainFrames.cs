@@ -30,6 +30,27 @@ internal static class HeidenhainFrames
         WriteMode(writing, "ROTARY_FEED", "MM_MIN", transform?.RotaryFeedMmMin, "M116", transform?.RotaryFeedDegMin,
             "M117");
         WriteTolerance(writing);
+        WritePathMode(writing, transform);
+    }
+
+    // PATH_MODE after the tolerance words through [transform] (D349); Klartext has no modal switch, so the shipped
+    // file leaves both templates empty, and an empty or missing one is the WARNING CMP120.
+    private static void WritePathMode(HeidenhainBlock writing, TransformTable? transform)
+    {
+        if (writing.Take("PATH_MODE") is not Word word)
+        {
+            return;
+        }
+
+        string? template = PathModeTemplate.Of(transform, writing.After.Frame);
+        if (string.IsNullOrEmpty(template))
+        {
+            writing.Warning(DiagnosticCodes.HeidenhainPathModeNotWritten,
+                PathModeTemplate.NotWritten(word.ToCanonical(), writing.After.Frame));
+            return;
+        }
+
+        writing.Template(template, "[transform] PATH_MODE (machine-config 5, D349)", new TemplateValues());
     }
 
     /// <summary>
