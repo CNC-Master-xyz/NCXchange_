@@ -259,6 +259,90 @@ public sealed class FanucCycleTests
             program.Diagnostics.ToText(), StringComparison.Ordinal);
     }
 
+    // D384: the reason of a line in a block with a cancel names the facts: the manuals state the group-01 cancel only
+    // after tapping (B-64303EN-1 p.927), and the one builder example of a move in the M29 block has no G code (Mori
+    // NTX1000SZM p.281-282).
+    [Fact]
+    public void RigidTapLine_WithACancelInItsOwnBlock_NamesTheFactsOfD384()
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0\nG0 Z10. M29 S500\nG84 G99 Z-20. R5. F750\nG80\n"
+            + "M30\n%\n");
+        string diagnostics = program.Diagnostics.ToText();
+        Assert.Contains("B-64303EN-1 p.927", diagnostics, StringComparison.Ordinal);
+        Assert.Contains("NTX1000SZM p.281-282", diagnostics, StringComparison.Ordinal);
+    }
+
+    // D385: M3, M4, M5 or M19 between the M29 S line and the G84 is handled by the machine's PMC, so the walk ends
+    // unseen and the cycle stays RAW with a reason that names the spindle code.
+    [Theory]
+    [InlineData("M3")]
+    [InlineData("M4")]
+    [InlineData("M5")]
+    [InlineData("M19")]
+    public void RigidTapLine_WithASpindleCodeBetween_KeepsTheCycleRawNamingTheCode(string spindle)
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\n" + spindle
+            + "\nG84 G99 Z-20. R5. F750\nG80\nM30\n%\n");
+        string text = NcxWriter.Write(program);
+        Assert.DoesNotContain("CYCLE=TAP", text, StringComparison.Ordinal);
+        Assert.Contains("RAW:FANUC=\"G84 G99 Z-20. R5. F750\"", text, StringComparison.Ordinal);
+        Assert.Contains("a spindle command between M29 and G84", program.Diagnostics.ToText(), StringComparison.Ordinal);
+        Assert.Contains(spindle + " stands between", program.Diagnostics.ToText(), StringComparison.Ordinal);
+    }
+
+    // D385: a spindle code before the M29 line, the usual S500 M3 / M29 S500 / G84, is unaffected.
+    [Fact]
+    public void RigidTapLine_WithTheSpindleCodeBeforeIt_IsReadIntoTheTapCycle()
+    {
+        string text = Text("%\nO0001\nG0 X0 Y0 Z10.\nS500 M3\nM29 S500\nG84 G99 Z-20. R5. F750\nG80\nM30\n%\n");
+        Assert.Contains("CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20", text, StringComparison.Ordinal);
+    }
+
+    // D386: a group-01 code in a drilling cycle block cancels the cycle as G80 does and the control moves with the
+    // block's axis words (B-64484EN-2 p.105): the block stays RAW with the WARNING RDR121, the line before it gets no
+    // TAP mark, and the X/Y-only block after it is a plain move.
+    [Fact]
+    public void GroupOneCode_InTheTappingBlock_KeepsItRawWithRdr121AndEndsTheCycle()
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X0 Y0 Z10.\nM29 S500\nG0 G84 G99 X10. Z-20. R5. F750\n"
+            + "X20.\nG80\nM30\n%\n");
+        string text = NcxWriter.Write(program);
+        Assert.DoesNotContain("CYCLE=TAP", text, StringComparison.Ordinal);
+        Assert.Contains("RAW:FANUC=\"G0 G84 G99 X10. Z-20. R5. F750\"", text, StringComparison.Ordinal);
+        Assert.Contains("RAPID X=20", text, StringComparison.Ordinal);
+        Assert.Contains(program.Diagnostics.Items, diagnostic => diagnostic.Code == "RDR121"
+            && diagnostic.Message.Contains("B-64484EN-2 p.105", StringComparison.Ordinal));
+    }
+
+    // D386: where an NCX cycle was active, the RAW block is followed by CYCLE=OFF, R and Z are cleared, and the next
+    // position block moves.
+    [Fact]
+    public void GroupOneCode_InACycleBlockWhileACycleRuns_WritesCycleOffAfterTheRawBlock()
+    {
+        Assert.Equal(
+            Lines(
+                "RAPID X=0 Y=0 Z=10",
+                "CYCLE=DRILL SURFACE=0 CLEARANCE=2 DEPTH=-5 CYCLE_RETRACT=CLEARANCE CYCLE_F=100",
+                "CYCLE_CALL",
+                "RAW:FANUC=\"G1 G81 X10.\"",
+                "CYCLE=OFF",
+                "LINE X=20 F=100"),
+            Body("G0 X0 Y0 Z10.\nG81 G99 Z-5. R2. F100\nG1 G81 X10.\nX20.\nG80"));
+    }
+
+    // D386 holds for every Fanuc drilling cycle code, the lathe's included.
+    [Fact]
+    public void GroupOneCode_InALatheDrillingBlock_KeepsItRawWithRdr121()
+    {
+        NcxProgram program = Program("%\nO0001\nG0 X60. Z-20. C0\nG0 G87 X30. R-3. F0.05\nC120.\nG80\nM30\n%\n",
+            Lathe());
+        string text = NcxWriter.Write(program);
+        Assert.Contains("RAW:FANUC=\"G0 G87 X30. R-3. F0.05\"", text, StringComparison.Ordinal);
+        Assert.Contains("RAPID C=120", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("CYCLE_CALL", text, StringComparison.Ordinal);
+        Assert.Contains(program.Diagnostics.Items, diagnostic => diagnostic.Code == "RDR121");
+    }
+
     // D256: M2 and M30 end the program in the reset state (B-64484EN p.297 and p.1135), and a reset cancels the
     // rigid tapping mode (B-64484EN-2 p.103, Reset; B-64303EN-1 p.927), so the line before them does not reach a
     // G84 after them, which keeps the reading of a G84 without its line.

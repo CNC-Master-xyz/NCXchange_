@@ -505,6 +505,7 @@ public sealed partial class FanucReader : ReaderBase
             reading.Fanuc.ForgetPositions();
             reading.Fanuc.ForgetWritten();
             reading.Fanuc.WrittenFeed = null;
+            WriteCycleOffAfterRaw(reading);
             return;
         }
 
@@ -858,18 +859,24 @@ public sealed partial class FanucReader : ReaderBase
     // block is skipped by the operator's switch, a block calls, returns or branches, or the walk reaches the head of a
     // section a block of the file calls. These are tested on every block of the walk before its S and axis words, so
     // that they cover the line block itself.
-    // TODO(question): a block that may move an axis without an axis word - the tool change M6 or a T word, the tool
-    // length compensation G43, G44, G49 - the manual neither allows nor forbids between M29 and G84; the walk ends
-    // there unseen, so the cycle stays RAW with that reason rather than reading TAP or the other machining (manual
-    // audit 2026-10-26, D256). Row 3 of "Manual audit 2026-10-26" in docs/implementation/03-open-questions.md.
+    // D383: a block that may move an axis without an axis word - the tool change M6 or a T word, the tool length
+    // compensation G43, G44, G49 - the manual neither allows nor forbids between M29 and G84, and whether it works
+    // depends on the machine; the control does not cancel the mode for it on its own. The walk ends there unseen, so
+    // the cycle stays RAW with the "does not see" reason rather than reading TAP or the other machining.
+    // D385: M3, M4, M5 and M19 between the M29 S line and the G84 are handled by the machine's PMC and may raise an
+    // alarm or drop the rigid mode, so the walk ends unseen there too, with a reason that names the spindle code; a
+    // spindle code before the line, S500 M3 / M29 S500 / G84, is unaffected.
     // A block with the entry's own native code, the G84 of an earlier cycle block of the same run, ends the walk with
     // no place of the line and no mark: whether the run was entered with the line is the reading of that cycle block
     // (FanucCycles.WithItsBeforeLine, the previous cycle of the run). It is tested before the cancel codes, of which
     // G84 is one.
-    // TODO(question): whether the line holds where its own block carries a group-01 code, "G0 Z10. M29 S500;" in
-    // front of G84, the manuals do not say; the cancel of 10.13.16.8 is stated for after the tapping. The walk ends
-    // at such a block with a reason of its own (BeforeLineWithACancel), so the cycle stays RAW rather than reading
-    // TAP or the other machining. Row 4 of "Manual audit 2026-10-26" in docs/implementation/03-open-questions.md.
+    // D384: whether the line holds where its own block carries a group-01 code, "G0 Z10. M29 S500;" in front of G84,
+    // the manuals do not say: they state the group-01 cancel only after tapping (B-64303EN-1 p.927), and the one
+    // builder example of a move in the M29 block has no G code (Mori NTX1000SZM p.281-282). The walk ends at such a
+    // block with a reason of its own (BeforeLineWithACancel), so the cycle stays RAW; a modal move in the M29 block
+    // with no G code, "Z10. M29 S500;", stays a valid place for the line.
+    // D386: a cycle block that carries a group-01 code is no cycle (BeforeOf), so the line in front of it gets no
+    // mark.
     private void MarkBeforeLines(FanucState fanuc, int cycleIndex, string entry)
     {
         IReadOnlyList<SourceBlock> blocks = fanuc.Blocks;
@@ -884,6 +891,8 @@ public sealed partial class FanucReader : ReaderBase
 
         CycleEntry? catalogEntry = Machine.CycleCatalog.Find(entry);
         string before = catalogEntry?.Before ?? "";
+        string? spindle = null;
+        bool lineBehindTheSpindle = false;
         for (int index = cycleIndex - 1; index >= 0; index--)
         {
             SourceBlock block = blocks[index];
@@ -927,10 +936,21 @@ public sealed partial class FanucReader : ReaderBase
             }
 
             lines.Add(block.Line);
+            lineBehindTheSpindle |= spindle is not null && CarriesTheCodesOf(block, before);
             if (MovesOrSetsTheSpeed(block))
             {
                 break;
             }
+
+            spindle ??= SpindleCodeOf(block);
+        }
+
+        // D385: a line further back than a spindle code reaches the G84 only past that code.
+        if (lineBehindTheSpindle)
+        {
+            fanuc.BeforeLineUnseen.Add(cycle.Line);
+            fanuc.BeforeLineSpindle[cycle.Line] = spindle!;
+            lines.Clear();
         }
 
         foreach (int line in lines)
@@ -961,6 +981,33 @@ public sealed partial class FanucReader : ReaderBase
         }
 
         return false;
+    }
+
+    // D386: a drilling cycle block with a group-01 code stays RAW, and the cycle it cancels ends with CYCLE=OFF after
+    // it where an NCX cycle was written (FanucCycles.Read).
+    private void WriteCycleOffAfterRaw(FanucBlock reading)
+    {
+        if (!reading.Fanuc.CycleOffAfterRaw.Remove(reading.Line))
+        {
+            return;
+        }
+
+        BeginBlock(reading.Source).Word("CYCLE", null, new IdentValue("OFF")).End();
+        reading.Fanuc.Record("CYCLE", "OFF");
+    }
+
+    // The spindle code of a block, M3, M4, M5 or M19, which D385 names between the M29 S line and the G84.
+    private static string? SpindleCodeOf(SourceBlock block)
+    {
+        foreach (SourceWord word in block.Words)
+        {
+            if (word.Address == "M" && NativeCode.Of(word) is "M3" or "M4" or "M5" or "M19")
+            {
+                return NativeCode.Of(word);
+            }
+        }
+
+        return null;
     }
 
     // Whether a block carries every code of a "before" line, the M29 of "M29 S{rpm}", so that it may be that line.
@@ -1079,6 +1126,12 @@ public sealed partial class FanucReader : ReaderBase
     // every other block (machine-config 6, D256).
     private string? BeforeOf(SourceBlock block)
     {
+        // D386: a cycle block with a group-01 code is no cycle, and the line in front of it is no part of one.
+        if (HasCode(block, "G0") || HasCode(block, "G1") || HasCode(block, "G2") || HasCode(block, "G3"))
+        {
+            return null;
+        }
+
         foreach (CycleEntry entry in Machine.CycleCatalog.Entries)
         {
             if (!string.IsNullOrEmpty(entry.Before) && HasCode(block, entry.Native))

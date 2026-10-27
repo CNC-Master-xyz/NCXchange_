@@ -96,6 +96,19 @@ internal sealed class FanucState
     public HashSet<int> BeforeLineWithACancel { get; } = [];
 
     /// <summary>
+    /// The spindle code, M3, M4, M5 or M19, that stands between the "before" line and the cycle block, by the line of
+    /// that cycle block: the machine's PMC handles it, so the walk ends unseen (D385; FanucReader.MarkBeforeLines).
+    /// Each is in BeforeLineUnseen as well.
+    /// </summary>
+    public Dictionary<int, string> BeforeLineSpindle { get; } = [];
+
+    /// <summary>
+    /// The lines of the drilling cycle blocks with a group-01 code, which the reader keeps RAW and after which it
+    /// writes CYCLE=OFF, since the control cancels the cycle as G80 does (D386; FanucCycles.Read).
+    /// </summary>
+    public HashSet<int> CycleOffAfterRaw { get; } = [];
+
+    /// <summary>
     /// The lines of the blocks that matched the "before" line of a cycle but ended RAW, so that the line reaches the
     /// control as RAW text and does not count for the cycle (D256, D5; FanucReader.ReadBlock).
     /// </summary>

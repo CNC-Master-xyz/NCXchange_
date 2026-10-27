@@ -46,4 +46,16 @@ public static partial class DiagnosticCodes
     /// caller's V1..V33 at the return, so the write does not reach the caller (D148; virtual machine 3.6).
     /// </summary>
     public const string FanucSharedLocalWritten = "RDR106";
+
+    /// <summary>
+    /// RDR120, a WARNING: a drilling cycle of a mill outside G17, whose drilling axis the reader derives from the plane;
+    /// on the control it depends on parameter 5101#0 FXY, 0 always Z, 1 by the plane and the axis address (D157).
+    /// </summary>
+    public const string FanucDrillingAxisByParameter = "RDR120";
+
+    /// <summary>
+    /// RDR121, a WARNING: a block with a group-01 code and a drilling canned-cycle code is not a cycle: the control
+    /// executes the group-01 code and cancels the cycle as G80 does (B-64484EN-2 p.105); the block stays RAW (D386).
+    /// </summary>
+    public const string FanucGroupOneCancelsTheCycle = "RDR121";
 }

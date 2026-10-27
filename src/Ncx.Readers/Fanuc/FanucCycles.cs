@@ -148,6 +148,13 @@ internal static class FanucCycles
             unknownEnds = code is null;
         }
 
+        // D386: a group-01 code in a drilling cycle block cancels the cycle; the block is no cycle.
+        if (code is not null && GroupOneCodeOf(block) is string motion && !IsTurningCode(block, code))
+        {
+            CancelledByGroupOne(block, code, motion);
+            return;
+        }
+
         bool cancels = block.TakeCode("G80");
         if (cancels || unknownEnds || Ends(block, code))
         {
@@ -515,6 +522,57 @@ internal static class FanucCycles
         return active is null || !CodesOf(block).Contains(active);
     }
 
+    // The group-01 code G0 to G3 of a block (controllers fanuc.md 3); null for none.
+    private static string? GroupOneCodeOf(FanucBlock block)
+    {
+        foreach (string motion in s_motion)
+        {
+            if (block.HasCode(motion))
+            {
+                return motion;
+            }
+        }
+
+        return null;
+    }
+
+    // Whether a cycle code is a simple turning cycle of the lathe, G90, G92, G94 of system A, which D386 does not name.
+    private static bool IsTurningCode(FanucBlock block, SourceWord code)
+    {
+        return TurningOf(block.System).Contains(NativeCode.Of(code)!);
+    }
+
+    // D386: a block with a group-01 code (G0..G3) and a drilling canned-cycle code (G73, G74, G76, G81-G89, mill and
+    // lathe) is not a cycle: the control executes the group-01 code and the cycle is cancelled as by G80. The block
+    // stays RAW with the WARNING RDR121, since the control's handling of R, Q, P and K in a G0 block is not
+    // documented, and the reader writes no RAPID guess. Afterwards the motion is the block's group-01 code, no cycle
+    // is active (CYCLE=OFF after the RAW block where one was written), and R and Z are cleared, so the following X/Y
+    // blocks are plain moves.
+    private static void CancelledByGroupOne(FanucBlock block, SourceWord code, string motion)
+    {
+        string native = NativeCode.Of(code)!;
+        block.Draft.KeepAsRaw($"{motion} and {native} in one block: the group-01 code cancels the cycle (D386)");
+        block.Diagnostics.Warning(block.Line, DiagnosticCodes.FanucGroupOneCancelsTheCycle,
+            $"a group-01 code in the {native} block cancels {native}; the control moves with the block's axis words, "
+            + "the hole-bottom Z included (B-64484EN-2 p.105, D386). The block is kept as RAW and no cycle is read.");
+        block.Fanuc.Cycle = null;
+        if (block.Fanuc.TakeChange("CYCLE", "OFF"))
+        {
+            block.Fanuc.CycleOffAfterRaw.Add(block.Line);
+        }
+
+        var groups = new Dictionary<int, string>(block.State.ModalGroups)
+        {
+            [FanucModalGroups.Motion] = motion,
+        };
+        if (!block.IsLathe)
+        {
+            groups[FanucModalGroups.Cycle] = "G80";
+        }
+
+        block.State.SetModalGroups(groups);
+    }
+
     // CYCLE=OFF cancels (controller-mapping 5), written where an NCX cycle is active.
     private static void End(FanucBlock block)
     {
@@ -663,9 +721,20 @@ internal static class FanucCycles
     {
         if (block.Fanuc.BeforeLineWithACancel.Contains(block.Line))
         {
+            // D384: the reason names the facts the manuals give.
             return $"the line \"{entry.Before}\" of the cycle {entry.Name} stands in front of {entry.Native} in a "
                 + "block with a code that cancels the rigid tapping mode, G80, a cycle code or a group-01 code, and "
-                + "the manual does not say whether the line holds there (machine-config 6, D256); its blocks stay RAW";
+                + "the manual does not say whether the line holds there: the manuals state the group-01 cancel only "
+                + "after tapping (B-64303EN-1 p.927), and the one builder example of a move in the M29 block has no G "
+                + "code (Mori NTX1000SZM p.281-282) (machine-config 6, D256, D384); its blocks stay RAW";
+        }
+
+        if (block.Fanuc.BeforeLineSpindle.TryGetValue(block.Line, out string? spindle))
+        {
+            // D385: the spindle code between the line and the cycle block.
+            return $"{spindle} stands between the line \"{entry.Before}\" of the cycle {entry.Name} and "
+                + $"{entry.Native}, and a spindle command between M29 and G84 is handled by the machine's PMC and may "
+                + "raise an alarm or drop the rigid mode (machine-config 6, D256, D385); its blocks stay RAW";
         }
 
         if (block.Fanuc.BeforeLinesOf.TryGetValue(block.Line, out List<int>? lines)
