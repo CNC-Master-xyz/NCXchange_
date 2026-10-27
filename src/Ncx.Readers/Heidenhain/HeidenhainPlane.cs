@@ -161,6 +161,15 @@ internal static class HeidenhainPlane
             entry.Add("MOVE", new IdentValue(move));
         }
 
+        // D269: a PLANE SPATIAL that names neither TABLE ROT nor COORD ROT is ROT=COORD, the control's default
+        // (TNC 640 Klartext 892903-18, connector p. 435-436); the iTNC 530 names no default, and the same reading is
+        // assumed by family continuity. NCX itself defaults to TABLE (language 4.2), so the reading is written. PLANE
+        // AXIAL takes no ROT (VM426).
+        if (entry is { Verb: "TILT" })
+        {
+            rot ??= "COORD";
+        }
+
         if (entry is not null && rot is not null)
         {
             entry.Add("ROT", new IdentValue(rot));

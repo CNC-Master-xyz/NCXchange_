@@ -42,16 +42,19 @@ public sealed partial class HeidenhainCompilerTests : IDisposable
     {
         string compiled = Compile("2.5D_FRAESEN.ncx", Fixture.ReadText("2.5D_FRAESEN.ncx"), "2.5D FRAESEN.h");
 
-        Assert.Equal("", _error);
+        // D266: the name "2.5D FRAESEN" of the source has a dot and a space, outside A-Z a-z 0-9 _ -, so the
+        // compiler warns (CMP127) and writes it all the same.
+        Assert.Equal(["CMP127"], Codes(_error));
         string? difference = new NcComparer(Mill()).Compare(Fixture.ReadText("sources/2.5D_FRAESEN.h"), compiled,
             Differences25DFraesen());
         Assert.True(difference is null, difference);
     }
 
     // P3-04: Expected/BOHREN.ncx, from the Fanuc source (P3-02), compiles to a program equivalent to BOHREN.h, except
-    // the differences listed here with their questions; the two WARNINGs are the feed and the dwell of the tapping,
-    // which cycle 207 has no Q parameter for (CMP105). D256: the Fanuc M29 S500 is the before line of the TAP entry
-    // and part of CYCLE=TAP, so the NCX program holds no function for it and compiles for the iTNC 530 as it stands.
+    // the differences listed here with their questions; the WARNING is the feed of the tapping, which cycle 207 has
+    // no Q parameter for and takes from the pitch (CMP105), while its dwell of 0 is dropped silently (D362). D256:
+    // the Fanuc M29 S500 is the before line of the TAP entry and part of CYCLE=TAP, so the NCX program holds no
+    // function for it and compiles for the iTNC 530 as it stands.
     [Fact]
     public void Compile_Bohren_IsEquivalentToTheHeidenhainSourceExceptTheListedDifferences()
     {
@@ -61,7 +64,7 @@ public sealed partial class HeidenhainCompilerTests : IDisposable
 
         string compiled = Compile("BOHREN.ncx", frozen, "BOHREN.h");
 
-        Assert.Equal(["CMP105", "CMP105"], Codes(_error));
+        Assert.Equal(["CMP105"], Codes(_error));
         string? difference = new NcComparer(Mill()).Compare(Fixture.ReadText("sources/BOHREN.h"), compiled,
             BohrenDifferences(frozen));
         Assert.True(difference is null, difference);

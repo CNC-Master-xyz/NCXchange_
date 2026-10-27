@@ -36,7 +36,7 @@ public sealed class FanucSystemATests
         string text = FanucCompile.TextOf(FanucCompile.Run(s_program, FanucCompile.Lathe()));
 
         Assert.Equal(
-            "%\nO0001 (T)\nG18 G99 G40 G80\nT0101\nG0 X50. Z2.\nG1 U-10. W-5. F0.2\nG28 U0 W0\nG50 Z0.\nM30\n%\n",
+            "%\nO0001 (T)\nG21\nG18 G99 G40 G80\nT0101\nG0 X50. Z2.\nG1 U-10. W-5. F0.2\nG28 U0 W0\nG50 Z0.\nM30\n%\n",
             text);
     }
 
@@ -59,7 +59,7 @@ public sealed class FanucSystemATests
         string text = FanucCompile.TextOf(FanucCompile.Run(program, FanucCompile.Lathe()));
 
         Assert.Equal(
-            "%\nO0001 (T)\nG18 G99 G40 G80\nT0101\nG0 X40. Z0.\nG1 U-10. W-5. F0.2\n"
+            "%\nO0001 (T)\nG21\nG18 G99 G40 G80\nT0101\nG0 X40. Z0.\nG1 U-10. W-5. F0.2\n"
             + "G2 Z-5. X30. K0. I-5. F0.1\nG2 Z-5. X10. K0. I-5.\nM30\n%\n", text);
     }
 
@@ -72,7 +72,7 @@ public sealed class FanucSystemATests
 
         string text = FanucCompile.TextOf(FanucCompile.Run(WorkpieceProgram, lathe));
 
-        Assert.Equal("%\nO0001 (T)\nG18 G99 G40 G80\nG54 M428\nM30\n%\n", text);
+        Assert.Equal("%\nO0001 (T)\nG21\nG18 G99 G40 G80\nG54 M428\nM30\n%\n", text);
     }
 
     // D222: a control without a selection code names no template for the role, and WORKPIECE then writes nothing.
@@ -81,7 +81,7 @@ public sealed class FanucSystemATests
     {
         string text = FanucCompile.TextOf(FanucCompile.Run(WorkpieceProgram, FanucCompile.Lathe()));
 
-        Assert.Equal("%\nO0001 (T)\nG18 G99 G40 G80\nG54\nM30\n%\n", text);
+        Assert.Equal("%\nO0001 (T)\nG21\nG18 G99 G40 G80\nG54\nM30\n%\n", text);
     }
 
     // Fanuc 3, system B: G91 blocks and G95 instead of U W and G99.
@@ -94,6 +94,6 @@ public sealed class FanucSystemATests
         string text = FanucCompile.TextOf(FanucCompile.Run(s_program, lathe));
 
         Assert.Contains("\nG1 G91 X-10. Z-5. F0.2\nG28 X0 Z0\n", text, StringComparison.Ordinal);
-        Assert.StartsWith("%\nO0001 (T)\nG90\nG18 G95 G40 G80\n", text, StringComparison.Ordinal);
+        Assert.StartsWith("%\nO0001 (T)\nG21\nG90\nG18 G95 G40 G80\n", text, StringComparison.Ordinal);
     }
 }

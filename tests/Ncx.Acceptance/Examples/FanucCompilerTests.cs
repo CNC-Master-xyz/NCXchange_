@@ -90,7 +90,7 @@ public sealed class FanucCompilerTests : IDisposable
         Assert.True(exitCode == 0, _cli.Error);
         Assert.Equal("", _cli.Error);
         string written = File.ReadAllText(Path.Combine(folder, "2.5D_FRAESEN.nc"));
-        Assert.StartsWith("%\r\nO0001 (2.5D FRAESEN)\r\nN10 G0 G40\r\n", written, StringComparison.Ordinal);
+        Assert.StartsWith("%\r\nO0001 (2.5D FRAESEN)\r\nN10 G21\r\nN20 G0 G40\r\n", written, StringComparison.Ordinal);
     }
 
     // Implementation 13, Risks: 3D_FRAESEN is the performance gate of the whole chain, reader, writer, parser, virtual

@@ -55,6 +55,13 @@ public abstract partial class CompilerBase : ICompiler
     protected virtual bool DecimalPointOnWholeNumbers => false;
 
     /// <summary>
+    /// True for a controller that writes an ARC with a tool vector TX TY TZ: Fanuc G43.5 documents arcs with a tool
+    /// vector; Heidenhain LN has no arc form, and a Siemens vector arc is not checked, so there it is the ERROR CMP017
+    /// (D185). True by default.
+    /// </summary>
+    protected virtual bool WritesVectorArcs => true;
+
+    /// <summary>
     /// The machine of the compile.
     /// </summary>
     protected MachineConfig Machine => _machine ?? throw NotCompiling();
@@ -104,6 +111,11 @@ public abstract partial class CompilerBase : ICompiler
     /// <param name="options">The plugins and the tool table.</param>
     public CompileResult Compile(NcxProgram program, MachineConfig machine, CompileOptions options)
     {
+        // The [[cycle]] tables of the compiled channel over the channel-less ones (machine-config 6, D361, D377): the
+        // channel of the job, else the first channel of the machine.
+        int channel = options.Job?.Channel ?? (machine.Machine.Channels.Count > 0 ? machine.Machine.Channels[0] : 1);
+        machine = machine with { CycleCatalog = machine.CycleCatalog.ForChannel(channel) };
+
         // 1. Expand: the expansion rules of the machine and the rewriters of the plugins become generated NCX blocks,
         // which the compiler writes like the rest (language 4.15; virtual machine 1; architecture 8). A channel program
         // of a job comes expanded from the job compiler, which binds the words the expansion generates as well as those
@@ -120,6 +132,9 @@ public abstract partial class CompilerBase : ICompiler
         // compile time, every one reported before anything is written (language 4.1, 4.7.1; controller-mapping 9;
         // D5, D94).
         CheckNativeText(expanded, machine, diagnostics);
+        CheckVectorArcs(expanded, machine, diagnostics);
+        CheckCyclesAvailable(expanded, machine, channel, diagnostics);
+        CheckStockBesideRawBlank(expanded, machine, diagnostics);
 
         // A word of a table that the machine accepts only from another channel, or needs in every channel program, is
         // an ERROR of a single-channel compile; in a channel program of a job the job compiler has moved or duplicated
@@ -256,7 +271,9 @@ public abstract partial class CompilerBase : ICompiler
         IReadOnlyList<BlockStep> steps)
     {
         _program = program;
-        _machine = machine;
+        // D263: a [format] key the machine file leaves out takes the value of the compiler's family, so every writer
+        // reads one value per key (OutputFormat.WithFamilyDefaults; machine-config 2).
+        _machine = machine with { Format = (machine.Format ?? new OutputFormat()).WithFamilyDefaults(Controller) };
         _options = options;
         _diagnostics = diagnostics;
         _steps = steps;

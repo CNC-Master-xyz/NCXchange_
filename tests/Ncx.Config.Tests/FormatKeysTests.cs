@@ -41,6 +41,32 @@ public sealed class FormatKeysTests
         Assert.Contains("LATIN1", error.Message, StringComparison.Ordinal);
     }
 
+    // D213, D388 (12): counter_registers names the first and the last Q parameter of the counter range; left out, it
+    // is empty, and the compiler refuses a counter loop.
+    [Fact]
+    public void CounterRegisters_Written_LoadAsTheRange()
+    {
+        OutputFormat format = LoadFormat("heidenhain", "counter_registers = [\"QL90\", \"QL99\"]");
+
+        Assert.Equal(["QL90", "QL99"], format.CounterRegisters);
+        Assert.Equal(new CounterRange { Prefix = "QL", First = 90, Last = 99 }, CounterRange.Of(format));
+        Assert.Empty(LoadFormat("heidenhain", "label_max = 254").CounterRegisters);
+    }
+
+    // D213, D388 (12); gap closed 2026-10-27: two names of one kind of Q parameter, the first not after the last;
+    // anything else is CFG005, as the other [format] values out of range are.
+    [Theory]
+    [InlineData("counter_registers = [\"QL99\", \"QL90\"]")]
+    [InlineData("counter_registers = [\"QL90\", \"Q99\"]")]
+    [InlineData("counter_registers = [\"QS1\", \"QS9\"]")]
+    [InlineData("counter_registers = [\"QL90\"]")]
+    public void CounterRegisters_NotARange_IsValueNotAllowed(string line)
+    {
+        Diagnostic error = SingleError("heidenhain", line);
+
+        Assert.Equal(DiagnosticCodes.ValueNotAllowed, error.Code);
+    }
+
     // D339: m_codes_per_block is 1 to 5; D271: label_max is a label number, at least 1.
     [Theory]
     [InlineData("m_codes_per_block = 6")]

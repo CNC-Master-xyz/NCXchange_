@@ -23,17 +23,6 @@ internal static class HeidenhainCycles
         ["SURFACE", "CLEARANCE", "DEPTH", "SAFE", "CYCLE_RETRACT", "PECK", "CYCLE_F", "CYCLE_DWELL", "PITCH",
             "CONTOUR", "AXIS"];
 
-    // TODO(question): machine-config 6 has no key for the name the control writes after CYCL DEF n, BOHREN of cycle
-    // 200, and heidenhain 8 rule 7 does not say whether the compiler writes it; the names of the documents' examples
-    // are written (controllers heidenhain.md 5, examples/sources/BOHREN.h), the number alone for any other cycle.
-    private static readonly Dictionary<string, string> s_names = new()
-    {
-        ["200"] = "BOHREN",
-        ["201"] = "REIBEN",
-        ["203"] = "UNIVERSALBOHREN",
-        ["207"] = "GEW.-BOHREN GS NEU",
-    };
-
     /// <summary>
     /// Tells whether a line continues a cycle definition, indented under its first line.
     /// </summary>
@@ -100,13 +89,16 @@ internal static class HeidenhainCycles
             return;
         }
 
-        if (!DrillsAlongTheToolAxis(writing) || HeidenhainCycleValues.Of(writing, entry) is not List<string> values)
+        if (!DrillsAlongTheToolAxis(writing) || !CheckUnwritten(writing, entry)
+            || HeidenhainCycleValues.Of(writing, entry) is not List<string> values)
         {
             return;
         }
 
-        WarnUnwritten(writing, entry);
-        writing.Line(Continued(Head(entry.Native), values));
+        // D355: PECK is the infeed counted from SURFACE, and so is Q202 of cycle 203, an infeed below the surface
+        // coordinate Q203 to which the depth Q201 is relative too (iTNC 530 Zyklen 670388-12, cycle 203, connector
+        // p.87, 89-90), so the compiler writes PECK unchanged.
+        writing.Line(Continued(Head(writing, entry.Native, entry.Title), values));
     }
 
     /// <summary>
@@ -172,13 +164,17 @@ internal static class HeidenhainCycles
             values.Add(word.Key + "=" + value);
         }
 
-        writing.Line(Continued(Head(cycle.Value.ToCanonical()), values));
+        string native = cycle.Value.ToCanonical();
+        writing.Line(Continued(Head(writing, native, null), values));
     }
 
-    // CYCL DEF n with the name the control writes after the number, where the documents give it.
-    private static string Head(string native)
+    // D270: CYCL DEF n with the `title` of the catalog entry, CYCL DEF 200 BOHREN, and CYCL DEF n alone where the
+    // entry has none, with no diagnostic: the control adds the name in its dialog language when it reads the program
+    // in (decisions.md; machine-config 6). A native cycle takes the title of the catalog's entry of its number.
+    private static string Head(HeidenhainBlock writing, string native, string? title)
     {
-        return s_names.TryGetValue(native, out string? name) ? "CYCL DEF " + native + " " + name : "CYCL DEF " + native;
+        title ??= writing.Machine.CycleCatalog.FindNative(native)?.Title;
+        return title is null ? "CYCL DEF " + native : "CYCL DEF " + native + " " + title;
     }
 
     // The drilling axis of a Klartext cycle is the tool axis of the TOOL CALL (controller-mapping 5, AXIS).
@@ -201,20 +197,43 @@ internal static class HeidenhainCycles
         return false;
     }
 
-    // A word of the cycle block that the entry maps to no Q parameter and no rule of the compiler carries is not
-    // written, with a WARNING, so that nothing disappears silently (language 2 rule 8; machine-config 6): CYCLE_F and
-    // CYCLE_DWELL of TAP, whose cycle 207 has neither Q206 nor Q211.
-    private static void WarnUnwritten(HeidenhainBlock writing, CycleEntry entry)
+    // D362: a word of the cycle block that the entry maps to no Q parameter and no rule word carries is the WARNING
+    // CMP105 where the native cycle reaches the same value from another word of the block (the CYCLE_F of TAP, whose
+    // cycle 207 takes its feed from the pitch Q239), is dropped silently where the value is the behaviour the control
+    // has anyway (CYCLE_DWELL=0, PECK=0 on a cycle without that motion), and is the ERROR CMP122 where the value would
+    // be lost; each stands once, at the CYCLE block (decisions.md; machine-config 6, controller-mapping 5). False after
+    // an ERROR.
+    private static bool CheckUnwritten(HeidenhainBlock writing, CycleEntry entry)
     {
+        bool written = true;
         foreach (string key in s_cycleWords)
         {
-            if (writing.Block.Find(key) is Word word && !entry.Params.ContainsKey(key)
-                && !entry.RuleWords.Contains(key))
+            if (writing.Block.Find(key) is not Word word || entry.Params.ContainsKey(key)
+                || entry.RuleWords.Contains(key))
+            {
+                continue;
+            }
+
+            if (entry.DerivedFrom(key) is string from && writing.Block.Find(from) is not null)
             {
                 writing.Warning(DiagnosticCodes.HeidenhainCycleWordNotWritten,
                     $"{word.ToCanonical()} is not written: cycle {entry.Native} of the catalog entry {entry.Name} has "
-                    + "no Q parameter for it (machine-config 6; controllers heidenhain.md 5).");
+                    + $"no Q parameter for it and takes the value from {from} (D362; machine-config 6).");
+            }
+            else if (key is "CYCLE_DWELL" or "PECK" && HeidenhainNumbers.NumberOf(word.Value) == 0m)
+            {
+                continue;
+            }
+            else
+            {
+                writing.Error(DiagnosticCodes.HeidenhainCycleWordLost,
+                    $"{word.ToCanonical()}: cycle {entry.Native} of the catalog entry {entry.Name} has no Q parameter "
+                    + "for it and takes its value from no other word, so the value would be lost (D362; "
+                    + "machine-config 6).");
+                written = false;
             }
         }
+
+        return written;
     }
 }

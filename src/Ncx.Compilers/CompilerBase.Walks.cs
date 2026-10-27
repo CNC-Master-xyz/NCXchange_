@@ -34,6 +34,7 @@ public abstract partial class CompilerBase
     {
         _contexts.Clear();
         _programs.Clear();
+        _programFileNames = null;
         _subs.Clear();
         _fileBegin.Clear();
         _fileEnd.Clear();
@@ -108,6 +109,7 @@ public abstract partial class CompilerBase
 
         WritePendingPreload(step);
         CheckPoint(step);
+        CheckTolerance(step);
         WriteBlock(step.Block, step.Before, step.After);
         WritePointComment(step);
         WriteAutoPreload(step);
