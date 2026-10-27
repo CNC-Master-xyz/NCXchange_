@@ -8,6 +8,8 @@ tables of section 4 of `../ncx-language.md` with the section it comes from, the 
 `CENTER:IX`, `TOLERANCE:ROTARY`), the reset form of `SHIFT`, `TILT` and `TILT_AXIS`, the machine axis words
 (D93) and the native cycle parameters (D94). Words of one key with an open address (a role, a channel, a
 variable) sort under their rank by the address text. The ten verbs share one rank; a block has at most one.
+The ranks of D90 go in steps of ten; a word added later takes a rank between two steps and nothing is
+renumbered (D372: `TOOL_POINT` 435, `TIP_OFFSET` 465, `POINT_RADIUS` 467).
 
 | Rank | Word | Value | Verb | Axis words | Address | Scope | Section | Meaning |
 |---:|---|---|---|---|---|---|---|---|
@@ -63,9 +65,12 @@ variable) sort under their rank by the address text. The ten verbs share one ran
 | 410 | `FEED_MODE` | `PER_MIN`, `PER_REV` |  |  |  | modal | 4.3 | Feed per minute (G94) or per spindle revolution (G95); default PER_MIN. |
 | 420 | `PRELOAD` | integer, string |  |  | role, optional | modal | 4.4 | Prepares a tool in the magazine, modal until the change consumes it; PRELOAD=0 clears a pending preload (D47). |
 | 430 | `TOOL` | none, integer, string |  |  | role, optional | modal | 4.4 | The spindle or the addressed holder now carries this tool, TOOL=0 empties it; a bare TOOL changes to the preloaded tool (D47, D91). |
+| 435 | `TOOL_POINT` | integer |  |  | role, optional | modal | 4.4 | The measurement point k of the active tool, from 1; a TOOL without it resets the holder to point 1 (D372). |
 | 440 | `OFFSET` | integer |  |  | offset kind, optional | modal | 4.4 | Combined offset register; OFFSET:LEN the tool length offset register (G43 H), OFFSET:RAD the tool radius offset register (D); 0 cancels. |
 | 450 | `OFFSET:LEN` | integer |  |  | `LEN` | modal | 4.4 | Combined offset register; OFFSET:LEN the tool length offset register (G43 H), OFFSET:RAD the tool radius offset register (D); 0 cancels. |
 | 460 | `OFFSET:RAD` | integer |  |  | `RAD` | modal | 4.4 | Combined offset register; OFFSET:LEN the tool length offset register (G43 H), OFFSET:RAD the tool radius offset register (D); 0 cancels. |
+| 465 | `TIP_OFFSET` | number, expression |  |  |  | modal | 4.4 | The axial offset a of the measurement point from the tool tip, not negative; never written to the control (D372, D375). |
+| 467 | `POINT_RADIUS` | number, expression |  |  |  | modal | 4.4 | The register radius r of the measurement point, not negative, 0 for a point on the axis; never written to the control (D372, D375). |
 | 470 | `COMP` | `LEFT`, `RIGHT`, `OFF` |  |  |  | modal | 4.4 | Cutter radius compensation (G41, G42, G40), from the motion of the same block on. |
 | 480 | `SPINDLE` | `CW`, `CCW`, `OFF` |  |  | role, optional | modal | 4.5 | Spindle on clockwise, counterclockwise, off (M3, M4, M5); without an address the machine's default spindle. |
 | 490 | `RPM` | number, expression |  |  | role, optional | modal | 4.5 | Spindle speed, per spindle role. |

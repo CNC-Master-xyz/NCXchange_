@@ -9,7 +9,7 @@ An ERROR stops the run, a WARNING is reported and the run continues (D98); a dia
 stage named, and without a code where the code belongs to that stage's own project. The codes of the other
 projects (`CFG`, `RDR`, `CMP`, `ANA`, `PLG`, `CLI`) are not listed here.
 
-Suppressed inside a subprogram that no program of the file calls, because the state they check belongs to a caller that does not exist (virtual machine 3.9, D99): `VM040`, `VM041`, `VM042`, `VM043`, `VM044`, `VM200`, `VM201`, `VM202`, `VM227`, `VM250`, `VM251`, `VM480`, `VM500`.
+Suppressed inside a subprogram that no program of the file calls, because the state they check belongs to a caller that does not exist (virtual machine 3.9, D99): `VM040`, `VM041`, `VM042`, `VM043`, `VM044`, `VM200`, `VM201`, `VM202`, `VM227`, `VM250`, `VM251`, `VM480`, `VM481`, `VM500`.
 
 ## Structure
 
@@ -32,6 +32,7 @@ The file frame, the programs and subprograms, and the words of a block (language
 | `PAR014` | ERROR | An axis word without a value outside a HOME block. | language 4.3, 5 rule 2; D93 |
 | `PAR015` | ERROR | Duplicate key: a key twice in one block with one address. | language 5 rule 4; VM 5 |
 | `PAR016` | ERROR | IF, ARG, TIMES, WITH, FRAME, MOVE, ROT, POINT or PHASE without its verb or partner word in the block. | language 5 rule 5; VM 5 |
+| `PAR017` | ERROR | TOOL_POINT, TIP_OFFSET or POINT_RADIUS in a block that is neither a TOOL block nor a block of their own. | language 4.4; VM 5; D372, D392 |
 | `PAR020` | ERROR | Missing or misplaced FILE=BEGIN: it is the first block of the file and stands nowhere else. | language 4.1; VM 5; D92 |
 | `PAR021` | ERROR | FILE=BEGIN without NCX, the format version. | language 4.1; VM 5 |
 | `PAR022` | ERROR | NCX names a format version other than 1. | language 4.1 |
@@ -152,6 +153,10 @@ The tool change of the two-word model and the offsets (language 4.4; VM 2.3, 3.5
 | `VM043` | WARNING | TOOL while a cycle is active; the change ends the cycle. Suppressed inside a subprogram that no program of the file calls (D99). | VM 3.5, 4, 5 |
 | `VM044` | WARNING | TOOL while compensation is on. Suppressed inside a subprogram that no program of the file calls (D99). | VM 3.5, 5 |
 | `VM480` | ERROR | OFFSET mixed with OFFSET:LEN or OFFSET:RAD in one program. Suppressed inside a subprogram that no program of the file calls (D99). | language 4.4; VM 5 |
+| `VM481` | ERROR | TOOL_POINT, TIP_OFFSET or POINT_RADIUS on a holder that holds no tool. Suppressed inside a subprogram that no program of the file calls (D99). | language 4.4; VM 5; D372 |
+| `VM482` | ERROR | A negative TIP_OFFSET or POINT_RADIUS. | language 4.4; VM 5; D372 |
+| `VM483` | ERROR | TOOL_POINT of 0 or less. | language 4.4; VM 5; D372 |
+| `VM484` | WARNING | A motion with a TIP_OFFSET under TILT, TILT_AXIS or TCPM=ON: no tip is derived; once per program. | VM 5, 9; D374 |
 
 ## Spindle
 

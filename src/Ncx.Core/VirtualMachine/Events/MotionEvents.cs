@@ -65,8 +65,29 @@ internal static class MotionEvents
             motion = WithArc(motion, context, arc);
         }
 
-        motions.Add(motion);
+        motions.Add(WithPoint(motion, context, after));
         return motions;
+    }
+
+    // The measurement point of the motion (D374): the point of the active holder, the radius the control applies,
+    // POINT_RADIUS plus the wear of the tool table, beside COMP, and the tip where the motion ends, the programmed
+    // point less TIP_OFFSET along the tool axis; the positions stay as programmed (D369).
+    private static MotionEvent WithPoint(MotionEvent motion, BlockContext context, ChannelSnapshot after)
+    {
+        if (TipRules.ActiveHolder(after) is not HolderSnapshot holder)
+        {
+            return motion with { Tip = TipRules.Tip(after, motion.To) };
+        }
+
+        decimal wear = context.MeasuredPoint?.Invoke(holder.SpindleTool, holder.ToolPoint)?.Wear ?? 0m;
+        bool radiusUnknown = after.LastHolder is string id && after.Unknown.Contains("POINT_RADIUS:" + id);
+        return motion with
+        {
+            ToolPoint = holder.ToolPoint,
+            PointRadius = radiusUnknown ? null : holder.PointRadius + wear,
+            TipOffset = holder.TipOffset,
+            Tip = TipRules.Tip(after, motion.To),
+        };
     }
 
     // An ARC carries its direction, and when it resolved its center, its sweep and its arc length, the travel of a
@@ -120,7 +141,7 @@ internal static class MotionEvents
             }
 
             IReadOnlyDictionary<string, AxisPosition> to = new Dictionary<string, AxisPosition>(position).AsReadOnly();
-            motions.Add(new MotionEvent
+            motions.Add(WithPoint(new MotionEvent
             {
                 Channel = after.ChannelId,
                 Block = context.Block,
@@ -136,7 +157,7 @@ internal static class MotionEvents
                 Comp = after.Motion.Comp,
                 Frame = FrameOf(context.Block),
                 Length = LengthOf(context, from, to, [], 0d),
-            });
+            }, context, after));
         }
     }
 

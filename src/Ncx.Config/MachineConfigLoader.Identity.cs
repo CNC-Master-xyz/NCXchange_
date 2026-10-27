@@ -32,7 +32,7 @@ public static partial class MachineConfigLoader
     private static readonly string[] s_toolChangeKeys =
     [
         "change", "change_preloaded", "preload", "unload", "auto_preload", "preload_position", "offsets_with_change",
-        "tool_name_allowed", "kind_map", "pre", "post", "requires", "restore",
+        "tool_name_allowed", "kind_map", "pre", "post", "requires", "restore", "length_offset_by_macro",
     ];
 
     private static readonly string[] s_preloadPositions = ["after_change", "before_first_motion"];
@@ -182,6 +182,7 @@ public static partial class MachineConfigLoader
                 _ => null,
             },
             OffsetsWithChange = table.Flag("offsets_with_change"),
+            LengthOffsetByMacro = table.Flag("length_offset_by_macro"),
             ToolNameAllowed = table.Flag("tool_name_allowed"),
             KindMap = table.Table("kind_map")?.PlaceholderValues(null) ?? new Dictionary<string, string>(),
             Rule = ReadRule(table),
