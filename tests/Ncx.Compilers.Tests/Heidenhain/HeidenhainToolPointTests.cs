@@ -5,7 +5,8 @@ namespace Ncx.Compilers.Tests.Heidenhain;
 /// <summary>
 /// The measurement points in Klartext (D373 indexed_tool, D375, D393): point k is the index k-1 of the called tool,
 /// TOOL CALL 5.1, never DL, DR or DR2; a point change of the tool in the spindle is an indexed TOOL CALL with the
-/// WARNING CMP123 unless point_change = "call"; a program without point words compiles as before.
+/// WARNING CMP123 unless point_change = "call"; a point beyond the nine indices is the ERROR CMP124 (D388); a program
+/// without point words compiles as before.
 /// </summary>
 public sealed class HeidenhainToolPointTests
 {
@@ -53,14 +54,27 @@ public sealed class HeidenhainToolPointTests
         Assert.DoesNotContain(DiagnosticCodes.HeidenhainToolPoint, HeidenhainCompile.Codes(result));
     }
 
-    // D373 (1), CMP123: point 11 is beyond the nine indices, an ERROR.
+    // D373 (1), D388 (C5): point 11 is beyond the nine indices, the ERROR CMP124; CMP123 stays the WARNING of the
+    // point change.
     [Fact]
-    public void PointEleven_IsAnErrorCmp123()
+    public void PointEleven_IsAnErrorCmp124()
     {
         CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program("TOOL=5 TOOL_POINT=11 RPM=1592"));
 
-        Diagnostic error = HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainToolPoint);
+        Diagnostic error = HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainToolPointBeyondIndices);
         Assert.Equal(Severity.Error, error.Severity);
+        Assert.Contains("Point 11 of tool 5", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(DiagnosticCodes.HeidenhainToolPoint, HeidenhainCompile.Codes(result));
+    }
+
+    // D373 (1): point 10 is the last index, TOOL CALL 5.9, and no ERROR.
+    [Fact]
+    public void PointTen_IsTheLastIndex()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program("TOOL=5 TOOL_POINT=10 RPM=1592"));
+
+        Assert.Equal("TOOL CALL 5.9 Z S1592", HeidenhainCompile.Body(result));
+        Assert.DoesNotContain(DiagnosticCodes.HeidenhainToolPointBeyondIndices, HeidenhainCompile.Codes(result));
     }
 
     // D375: a program without point words compiles as before.

@@ -143,7 +143,7 @@ When `change` contains `{next}`, a `PRELOAD` word that follows the `TOOL` block 
 ```toml
 [tool_points]
 form = "registers"                 # indexed_tool (Klartext) | edge (Siemens) | registers (Fanuc); any other value is an ERROR
-# indexed_tool: point k is the index k-1 of the called tool, TOOL CALL 5.1 for point 2; at most nine indices, so k <= 10 (CMP123 beyond).
+# indexed_tool: point k is the index k-1 of the called tool, TOOL CALL 5.1 for point 2; at most nine indices, so k <= 10 (the ERROR CMP124 beyond, D388).
 #   An indexed call carries a tool number, so the TNC 640 runs its change macro (Klartext 892903-18 p. 123), and on the iTNC 530 it depends on
 #   MP7480.0 and the builder's macro; a point change of the tool in the spindle is the WARNING CMP123 unless:
 point_change = "call"              # indexed_tool: the builder's macro accepts an indexed call of the tool in the spindle
@@ -164,7 +164,7 @@ radius = 12                        # registers: the D of the point
 # edge = 20                        # edge: the D of the point
 ```
 
-A machine file without `[tool_points]` writes nothing for a point other than 1 and reports the INFO CMP016 once per program, because a control that cannot select a point is doing nothing wrong; a point the form cannot map is the ERROR of its family, CMP123 Heidenhain, CMP341 Fanuc, CMP514 Siemens, naming the tool and k, because another point's registers would cut with the wrong offsets (D373). A compiler writes only the register the mapping gives, never `TIP_OFFSET` or `POINT_RADIUS` as a control value, and a tool whose program names no point compiles as before (D375, D393). An `OFFSET` word on a holder whose tool named its point writes its own register in place of the mapped one, with the WARNING CMP033 (D393).
+A machine file without `[tool_points]` writes nothing for a point other than 1 and reports the INFO CMP016 once per program, because a control that cannot select a point is doing nothing wrong; a point the form cannot map is the ERROR of its family, CMP124 Heidenhain (D388), CMP341 Fanuc, CMP514 Siemens, naming the tool and k, because another point's registers would cut with the wrong offsets (D373). A compiler writes only the register the mapping gives, never `TIP_OFFSET` or `POINT_RADIUS` as a control value, and a tool whose program names no point compiles as before (D375, D393). An `OFFSET` word on a holder whose tool named its point writes its own register in place of the mapped one, with the WARNING CMP033 (D393).
 
 ```toml
 [home]
