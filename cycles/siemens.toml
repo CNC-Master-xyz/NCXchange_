@@ -5,6 +5,10 @@
 # parameters carry it. The other entries are catalog cycles (language 4.7.1). A machine file overrides an entry in its own [cycles] table (machine-config 6).
 # D115: no kind key in 1.0; every parameter of this file that is not a word of language 4.7 takes a number or an expression, and the words of 4.7 keep their kinds.
 #
+# The signatures are the full 840D sl signatures of "SINUMERIK 840D sl NC-Programmierung, Programmierhandbuch 06/2019 (CNC-SW 4.92)", section 3.25 "Zyklen
+# extern programmieren", cnc-manuals connector document Siemens_Sinumerik-840Dsl_Programmierhandbuch-NC-Programmierung_SW492_DE_2019, cited below by its
+# page as "SW4.92 p.n" (D181, D379, D380).
+#
 # The parameters (siemens 7, controller-mapping 5): RTP retract plane (absolute) is SAFE; RFP reference plane is SURFACE; SDIS safety distance, unsigned and
 # moving RFP forward towards RTP, gives CLEARANCE = RFP + SDIS where RTP lies above RFP and RFP - SDIS where it lies below, so CLEARANCE is
 # absolute_from_surface and the Siemens reader and compiler carry the sign of RTP - RFP with it (D334); DP depth absolute is DEPTH; DTB is the dwell
@@ -14,103 +18,149 @@
 # - A direct CYCLE8x(...) block calls once at the current position; MCALL CYCLE8x(...) makes the cycle modal, every following block with a position calls it,
 #   MCALL alone ends it (siemens 7, controller-mapping 5). The call form is a word of its own: no entry is modal.
 # - The cycle always returns to RTP: CYCLE_RETRACT=SAFE with SAFE = RTP, and the compiler writes RTP = CLEARANCE for CYCLE_RETRACT=CLEARANCE (controller-mapping 5).
-#   CYCLE_RETRACT has no position of its own: the NCX words of a drilling entry are its params plus this rule, and the words that CYCLE81, G81 and CYCL DEF 200
-#   share (phase 2 P2-03) are compared with the rules of each family included (see cycles/fanuc.toml).
+#   CYCLE_RETRACT has no position of its own: the NCX words of a drilling entry are its params plus this rule (D157), and the words that CYCLE81, G81 and
+#   CYCL DEF 200 share (phase 2 P2-03) are compared with the rules of each family included (see cycles/fanuc.toml).
 # - DEPTH is DP, or RFP less the unsigned DPR when the source gives it, counted away from the retract plane (controller-mapping 5; D334); DPR has no NCX word
 #   of its own.
-# - The cycle feed is the modal F, and CYCLE85 has its own FFR (siemens 7): the reader turns the F before an MCALL into CYCLE_F and restores the feed afterwards
-#   (controller-mapping 5, siemens 11.5). CYCLE_F = "F" in params of CYCLE81..CYCLE83, CYCLE86, CYCLE830 and CYCLE840 (wave-1 question #24); F is no position
-#   of the signature (machine-config 6).
+# - The cycle feed is the modal F of CYCLE81, CYCLE82, CYCLE83 and CYCLE86, whose move to the final depth uses the feed programmed before the call; CYCLE85
+#   has its own FFR, CYCLE830 its own drilling feed S_FB (position 18), and CYCLE84 taps with G331/G332 at SST and SST1 and uses no programmed feed (D181;
+#   840D sl Zyklen 01/2008 p.46, 49, 58-62, 72, 77). The reader turns the F before an MCALL into CYCLE_F and restores the feed afterwards (controller-mapping 5,
+#   siemens 11.5); F is no position of the signature (machine-config 6).
+# - D362: a drilling entry that maps PITCH and no CYCLE_F, TAP and TAP_COMPENSATING, takes the tapping feed from the pitch, so a program's CYCLE_F is the
+#   derivable value: a compiler WARNING (CMP574), not written. CYCLE840 takes the modal F only with ENC=1 (SW4.92 p.1129), which the shipped entry does not
+#   write; a machine whose entry fixes ENC = 1 maps CYCLE_F = "F" itself (D181, gap closed 2026-10-27).
 # - The drilling axis is the plane of G17..G19 (the ones digit of _DMODE sets the plane inside the cycle); CYCLE83, CYCLE84 and CYCLE840 carry _AXN, 1, 2 or 3
 #   for the first, second or third geometry axis of the plane, which is exactly AXIS (controller-mapping 5, D59): the reader and compiler convert between the
 #   axis name and the number.
 # - The trailing _GMODE, _DMODE, _AMODE are the 840D sl additions; omitted, they mean the old behaviour (siemens 7). A position without a value stays empty and
-#   the cycle takes its default (siemens 7), so the older 840D reads the same leading parameters.
-# TODO(question): siemens 7 ends most signatures with "..."; the signatures below stop where siemens 7 stops. The full sl signatures that siemens 12.5 writes
-# "from the catalog" are not in the documents (D181).
+#   the cycle takes its value zero (840D sl Zyklen 01/2008 p.18), so the older 840D reads the same leading parameters. `defaults` records that value where the
+#   reader needs it to tell two entries apart: an omitted VARI of CYCLE83 is 0, chip breaking (D164, D181).
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------
 # Drilling family (controller-mapping 5: DRILL CYCLE81, DRILL_DWELL CYCLE82, PECK and CHIP_BREAK CYCLE83, TAP CYCLE84, REAM CYCLE85, BORE CYCLE86)
 
 [[cycle]]
 name = "DRILL"
-native = "CYCLE81"                                                                     # drilling, centering; CYCLE81(11,6,5,-50,) in the corpus
+native = "CYCLE81"                                                                     # drilling, centering (SW4.92 p.1082); CYCLE81(11,6,5,-50,) in the corpus
 signature = ["RTP", "RFP", "SDIS", "DP", "DPR", "DTB", "_GMODE", "_DMODE", "_AMODE"]
 params = { SAFE = "RTP", SURFACE = "RFP", CLEARANCE = "SDIS", DEPTH = "DP", CYCLE_DWELL = "DTB", CYCLE_F = "F" }
 absolute_from_surface = ["CLEARANCE"]
+# DTB is the sixth position of the sl CYCLE81, "Verweilzeit auf Endbohrtiefe" (SW4.92 p.1083), so DRILL maps CYCLE_DWELL here (D181).
 
 [[cycle]]
 name = "DRILL_DWELL"
-native = "CYCLE82"                                                                     # drilling with dwell, counterboring
-signature = ["RTP", "RFP", "SDIS", "DP", "DPR", "DTB", "_GMODE", "_DMODE", "_AMODE", "_VARI"]
+native = "CYCLE82"                                                                     # drilling with dwell, counterboring (SW4.92 p.1083-1086)
+signature = ["RTP", "RFP", "SDIS", "DP", "DPR", "DTB", "_GMODE", "_DMODE", "_AMODE", "_VARI", "S_ZA", "S_FA", "S_ZD", "S_FD"]
 params = { SAFE = "RTP", SURFACE = "RFP", CLEARANCE = "SDIS", DEPTH = "DP", CYCLE_DWELL = "DTB", CYCLE_F = "F" }
 absolute_from_surface = ["CLEARANCE"]
 # DTB is positive seconds, negative revolutions in the compatibility mode (controller-mapping 5); CYCLE_DWELL is seconds (language 4.7): the reader and the
-# compiler convert a negative DTB with the known rpm.
+# compiler convert a negative DTB with the known rpm. S_ZA, S_FA (spot drilling) and S_ZD, S_FD (drilling through) have no NCX word.
 
 [[cycle]]
 name = "PECK"
-native = "CYCLE83"                                                                     # deep hole drilling 1, VARI=1: retract to the reference plane
-signature = ["RTP", "RFP", "SDIS", "DP", "DPR", "FDEP", "FDPR", "_DAM", "DTB", "DTS", "FRF", "VARI", "_AXN", "_MDEP", "_VRT", "_DTD", "_DIS1"]
-params = { SAFE = "RTP", SURFACE = "RFP", CLEARANCE = "SDIS", DEPTH = "DP", CYCLE_DWELL = "DTB", AXIS = "_AXN", CYCLE_F = "F" }
+native = "CYCLE83"                                                                     # deep hole drilling 1, VARI=1: Entspanen (SW4.92 p.1086-1089)
+signature = ["RTP", "RFP", "SDIS", "DP", "DPR", "FDEP", "FDPR", "_DAM", "DTB", "DTS", "FRF", "VARI", "_AXN", "_MDEP", "_VRT", "_DTD", "_DIS1", "_GMODE", "_DMODE", "_AMODE"]
+params = { SAFE = "RTP", SURFACE = "RFP", CLEARANCE = "SDIS", DEPTH = "DP", PECK = "FDPR", CYCLE_DWELL = "DTB", AXIS = "_AXN", CYCLE_F = "F" }
 absolute_from_surface = ["CLEARANCE"]
 fixed = { VARI = 1 }                                                                   # controller-mapping 5
+defaults = { VARI = 0 }                                                                # an omitted VARI is 0, chip breaking (D181)
 
 [[cycle]]
 name = "CHIP_BREAK"
-native = "CYCLE83"                                                                     # deep hole drilling 1, VARI=0: chip breaking, _VRT the lift amount
-signature = ["RTP", "RFP", "SDIS", "DP", "DPR", "FDEP", "FDPR", "_DAM", "DTB", "DTS", "FRF", "VARI", "_AXN", "_MDEP", "_VRT", "_DTD", "_DIS1"]
-params = { SAFE = "RTP", SURFACE = "RFP", CLEARANCE = "SDIS", DEPTH = "DP", CYCLE_DWELL = "DTB", AXIS = "_AXN", CYCLE_F = "F" }
+native = "CYCLE83"                                                                     # deep hole drilling 1, VARI=0: Spänebrechen, _VRT the lift amount
+signature = ["RTP", "RFP", "SDIS", "DP", "DPR", "FDEP", "FDPR", "_DAM", "DTB", "DTS", "FRF", "VARI", "_AXN", "_MDEP", "_VRT", "_DTD", "_DIS1", "_GMODE", "_DMODE", "_AMODE"]
+params = { SAFE = "RTP", SURFACE = "RFP", CLEARANCE = "SDIS", DEPTH = "DP", PECK = "FDPR", CYCLE_DWELL = "DTB", AXIS = "_AXN", CYCLE_F = "F" }
 absolute_from_surface = ["CLEARANCE"]
 fixed = { VARI = 0 }                                                                   # controller-mapping 5
-# TODO(question): the documents name FDEP the first depth, _DAM the degression and _VRT the retract or lift amount, but not how the constant PECK of NCX is written
-# with them (FDEP or FDPR, which _DAM); PECK is not mapped for PECK and CHIP_BREAK (D181). _VRT, DTS, FRF, _MDEP, _DTD and _DIS1 have no NCX word.
+defaults = { VARI = 0 }
+# D181: the constant PECK of NCX is FDPR, the first depth relative to RFP, with _DAM = 0 (no degression) and FDEP, the absolute alternative of the same value,
+# left empty (840D sl Zyklen 01/2008 p.50-55). D356: for PECK and CHIP_BREAK without PECK, or with PECK = 0, the compiler writes FDPR = the whole depth in one
+# infeed, the distance from DEPTH to SURFACE, or to CLEARANCE where the block gives no SURFACE; FDEP stays empty. D358: the compiler writes _VRT (position 15)
+# from [cycles] chip_break_lift on VARI=0 and _DIS1 (position 17) from [cycles] peck_clearance where that key is set; DTS, FRF, _MDEP and _DTD have no NCX
+# word.
 
 [[cycle]]
 name = "TAP"
-native = "CYCLE84"                                                                     # rigid tapping
-signature = ["RTP", "RFP", "SDIS", "DP", "DPR", "DTB", "SDAC", "MPIT", "PIT", "POSS", "SST", "SST1", "_AXN", "_PITA", "_TECHNO", "_VARI", "_DAM", "_VRT"]
+native = "CYCLE84"                                                                     # rigid tapping (SW4.92 p.1089-1092)
+signature = ["RTP", "RFP", "SDIS", "DP", "DPR", "DTB", "SDAC", "MPIT", "PIT", "POSS", "SST", "SST1", "_AXN", "_PITA", "_TECHNO", "_VARI", "_DAM", "_VRT", "_PITM", "_PTAB", "_PTABA", "_GMODE", "_DMODE", "_AMODE"]
 params = { SAFE = "RTP", SURFACE = "RFP", CLEARANCE = "SDIS", DEPTH = "DP", CYCLE_DWELL = "DTB", PITCH = "PIT", AXIS = "_AXN" }
 absolute_from_surface = ["CLEARANCE"]
 # SDAC (direction after the cycle), POSS (spindle position before tapping), SST (speed) and SST1 (retract speed) have no NCX word (controller-mapping 5).
-# TODO(question): a source that gives the metric thread size MPIT (3..48) instead of the pitch PIT has no rule in the documents that turns it into PITCH (D181).
-# TODO(question): whether CYCLE84, rigid tapping with the feed from PIT and SST, takes the modal F is not in the documents; CYCLE_F is not mapped (D181).
+# D181: MPIT is the ISO metric thread size, 3 for M3 to 48 for M48, whose pitch the cycle computes at run time (SW4.92 p.1089); the reader turns it into the
+# ISO 261 coarse pitch (DrillingFamily.IsoCoarsePitch, M3 0.5 ... M48 5) and the compiler writes PIT. CYCLE84 taps with G331/G332 at SST and SST1 and takes no
+# programmed feed, so CYCLE_F is not mapped: a program's CYCLE_F is derivable from PITCH (D181, D362).
 
 [[cycle]]
 name = "REAM"
-native = "CYCLE85"                                                                     # reaming with its own feed and retract feed
-signature = ["RTP", "RFP", "SDIS", "DP", "DPR", "DTB", "FFR", "RFF"]
+native = "CYCLE85"                                                                     # reaming with its own feed and retract feed (SW4.92 p.1092-1093)
+signature = ["RTP", "RFP", "SDIS", "DP", "DPR", "DTB", "FFR", "RFF", "_GMODE", "_DMODE", "_AMODE"]
 params = { SAFE = "RTP", SURFACE = "RFP", CLEARANCE = "SDIS", DEPTH = "DP", CYCLE_DWELL = "DTB", CYCLE_F = "FFR" }
 absolute_from_surface = ["CLEARANCE"]
 # RFF (retract feed) has no NCX word.
 
 [[cycle]]
 name = "BORE"
-native = "CYCLE86"                                                                     # boring with oriented spindle stop and lift-off
-signature = ["RTP", "RFP", "SDIS", "DP", "DPR", "DTB", "SDIR", "RPA", "RPO", "RPAP", "POSS"]
+native = "CYCLE86"                                                                     # boring with oriented spindle stop and lift-off (SW4.92 p.1093)
+signature = ["RTP", "RFP", "SDIS", "DP", "DPR", "DTB", "SDIR", "RPA", "RPO", "RPAP", "POSS", "_GMODE", "_DMODE", "_AMODE"]
 params = { SAFE = "RTP", SURFACE = "RFP", CLEARANCE = "SDIS", DEPTH = "DP", CYCLE_DWELL = "DTB", CYCLE_F = "F" }
 absolute_from_surface = ["CLEARANCE"]
 # SDIR (spindle direction 3 or 4), RPA/RPO/RPAP (lift-off amounts) and POSS (orientation angle) have no NCX word (controller-mapping 5).
-# CYCLE_F is the modal F: "The cycle feed is the modal F" (siemens 7; wave-1 question #24).
+# CYCLE_F is the modal F: the move to the final depth uses the feed programmed before the call (840D sl Zyklen 01/2008 p.77; D181).
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------
 # Further drilling cycles as catalog cycles (controller-mapping 5: CYCLE830 and CYCLE840 are catalog cycles)
 
 [[cycle]]
 name = "DEEP_HOLE"
-native = "CYCLE830"                                                                    # deep hole drilling 2 with pilot and through-hole options
-signature = ["RTP", "RFP", "SDIS", "_DP", "FDEP", "_DAM", "DTB", "DTS", "FRF", "VARI"]
-params = { SAFE = "RTP", SURFACE = "RFP", CLEARANCE = "SDIS", DEPTH = "_DP", CYCLE_DWELL = "DTB", CYCLE_F = "F" }
+native = "CYCLE830"                                                                    # deep hole drilling 2 with pilot and through-hole options (SW4.92 p.1119)
+signature = ["RTP", "RFP", "SDIS", "_DP", "FDEP", "_DAM", "DTB", "DTS", "FRF", "VARI", "_MDEP", "_VRT", "_DTD", "_DIS1", "S_FP", "S_SDAC2", "S_SV2", "S_FB", "_SDAC", "_SV1", "S_SPOS", "S_ZA", "S_FA", "S_ZP", "S_FS", "S_ZS1", "S_ZS2", "S_N", "S_ZD", "S_FD", "S_FR", "S_SDAC3", "S_SV3", "S_CON", "S_COFF", "_GMODE", "_DMODE", "_AMODE", "S_AMODE2", "S_AMODE3", "S_ZPV"]
+params = { SAFE = "RTP", SURFACE = "RFP", CLEARANCE = "SDIS", DEPTH = "_DP", CYCLE_DWELL = "_DTD", CYCLE_F = "S_FB" }
 absolute_from_surface = ["CLEARANCE"]
-# CYCLE_F is the modal F: "The cycle feed is the modal F" (siemens 7; wave-1 question #24).
-# TODO(question): whether _DP is absolute or incremental depends on the mode parameters (siemens 7), which the documented signature of CYCLE830 does not reach;
-# the meaning of VARI in it is not in the documents either (D181).
+fixed = { _AMODE = 1 }                                                                 # ones digit 1: _DP absolute (D380)
+defaults = { _AMODE = 0 }                                                              # an omitted _AMODE is 0: _DP incremental (D380)
+# D380: the ones digit of _AMODE (position 38) sets _DP as 0 = incremental and 1 = absolute, the reverse of CYCLE81 to CYCLE86 (0 = compatibility, 1 =
+# incremental, 2 = absolute), and its ten-thousands digit codes FDEP the same reversed way (SW4.92 p.1120, 1122-1123). The compiler writes _AMODE with the ones
+# digit 1 and DEPTH absolute, the other digits 0 unless a mapped word sets them; the reader takes DEPTH = _DP for the ones digit 1 and DEPTH = RFP less |_DP|,
+# counted away from the retract plane, for 0 or an omitted _AMODE (the DPR rule of D334; DrillingFamily.Cycle830DepthIsAbsolute).
+# CYCLE_F is S_FB, position 18, "Bohrvorschub", the cycle's own drilling feed (SW4.92 p.1121; D380). CYCLE_DWELL is _DTD, position 13, "Verweilzeit auf
+# Endbohrtiefe", the dwell at the bottom; DTB is the dwell at every drilling depth (SW4.92 p.1120). VARI (one cut, chip breaking, swarf removal, soft entry,
+# drilling through, pilot) and the spindle, pilot and coolant positions have no NCX word.
 
 [[cycle]]
 name = "TAP_COMPENSATING"
-native = "CYCLE840"                                                                    # tapping with a compensating chuck; the name cycle 206 has in cycles/heidenhain.toml
-signature = ["RTP", "RFP", "SDIS", "DP", "DPR", "DTB", "SDR", "SDAC", "ENC", "MPIT", "PIT", "_AXN"]
-params = { SAFE = "RTP", SURFACE = "RFP", CLEARANCE = "SDIS", DEPTH = "DP", CYCLE_DWELL = "DTB", PITCH = "PIT", AXIS = "_AXN", CYCLE_F = "F" }
+native = "CYCLE840"                                                                    # tapping with a compensating chuck (SW4.92 p.1129-1131); 206 in cycles/heidenhain.toml
+signature = ["RTP", "RFP", "SDIS", "DP", "DPR", "DTB", "SDR", "SDAC", "ENC", "MPIT", "PIT", "_AXN", "_PITA", "_TECHNO", "_PITM", "_PTAB", "_PTABA", "_GMODE", "_DMODE", "_AMODE"]
+params = { SAFE = "RTP", SURFACE = "RFP", CLEARANCE = "SDIS", DEPTH = "DP", CYCLE_DWELL = "DTB", PITCH = "PIT", AXIS = "_AXN" }
 absolute_from_surface = ["CLEARANCE"]
-# SDR, SDAC and ENC have no NCX word; siemens 7 does not describe them.
-# CYCLE_F is the modal F: "The cycle feed is the modal F" (siemens 7; wave-1 question #24).
+# SDR (direction for the retract) and SDAC (direction after the cycle) have no NCX word. ENC selects 0 or 20 with encoder and 11 without, the pitch from
+# MPIT/PIT, and 1 without encoder, the pitch from the programmed feed (SW4.92 p.1129): CYCLE_F maps to F only where an entry fixes ENC = 1, so the shipped
+# entry maps no CYCLE_F and a program's CYCLE_F gets a WARNING and is not written (D181, gap closed 2026-10-27; D362). D359: the word set of TAP_COMPENSATING
+# is that of every family, PITCH written where the family has a place for it.
+
+# ---------------------------------------------------------------------------------------------------------------------------------------------------
+# Slots (D379; the natives of cycles/README.md)
+
+[[cycle]]
+name = "SLOT"
+native = "SLOT1"                                                                       # "Längsnut", one straight slot (SW4.92 p.1052-1055)
+signature = ["RTP", "RFP", "SDIS", "_DP", "_DPR", "NUM", "LENG", "WID", "_CPA", "_CPO", "RAD", "STA1", "INDA", "FFD", "FFP1", "_MID", "CDIR", "_FAL", "VARI", "_MIDF", "FFP2", "SSF", "_FALD", "_STA2", "_DP1", "_UMODE", "_FS", "_ZFS", "_GMODE", "_DMODE", "_AMODE"]
+params = { SAFE = "RTP", SURFACE = "RFP", CLEARANCE = "SDIS", DEPTH = "_DP", PECK = "_MID", CYCLE_F = "FFD" }
+absolute_from_surface = ["CLEARANCE"]
+fixed = { NUM = 1, _DMODE = 1000, _AMODE = 2 }
+# D379: on the 840D sl SLOT1 is one straight slot: NUM "Anzahl der Nuten = 1", RAD and INDA reserved, several slots by MCALL and a position pattern (SW4.92
+# p.1053, 1055). The compiler writes NUM = 1, RAD and INDA empty, the _DMODE thousands digit 1 ("Funktionserweiterung SLOT1", p.1054), the _AMODE ones digit 2
+# (Z1 absolute) and _CPA/_CPO, the reference point, at the call position. The reader converts a SLOT1 to SLOT only in that sl form (the _DMODE thousands digit
+# 1, NUM empty, 0 or 1, RAD and INDA empty or 0, _CPA/_CPO the current plane position or given by an MCALL pattern); any other SLOT1, the older pitch-circle
+# pattern of the 840D included, stays native, CYCLE:SIEMENS=SLOT1 (D94). CYCLE_F is FFD, the depth infeed feed, as Q206 of 253 is; PECK is _MID, the maximum
+# depth infeed, as Q202. The geometry positions (LENG, WID, STA1 and the _GMODE thousands digit against 253's Q218, Q219, Q374, Q367) get NCX words in both
+# catalogs together or in neither, and this decision maps none of them.
+
+[[cycle]]
+name = "CIRC_SLOT"
+native = "SLOT2"                                                                       # "Kreisnut", circular slots on a circle (SW4.92 p.1055-1057)
+signature = ["RTP", "RFP", "SDIS", "_DP", "_DPR", "NUM", "AFSL", "WID", "_CPA", "_CPO", "RAD", "STA1", "INDA", "FFD", "FFP1", "_MID", "CDIR", "_FAL", "VARI", "_MIDF", "FFP2", "SSF", "_FFCP", "_UMODE", "_FS", "_ZFS", "_GMODE", "_DMODE", "_AMODE"]
+params = { SAFE = "RTP", SURFACE = "RFP", CLEARANCE = "SDIS", DEPTH = "_DP", PECK = "_MID", CYCLE_F = "FFD" }
+absolute_from_surface = ["CLEARANCE"]
+fixed = { NUM = 1 }
+# D379: SLOT2's NUM counts circular slots on a circle (SW4.92 p.1055), so CIRC_SLOT, cycle 254, is SLOT2 with NUM = 1 only; a SLOT2 with NUM > 1 stays native
+# (D94). The words are those of SLOT and of 254. The geometry positions (AFSL, WID, RAD, STA1, INDA) carry no NCX word, as in 254.

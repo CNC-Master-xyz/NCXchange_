@@ -360,6 +360,8 @@ The words a rule of the reader and the compiler carries instead of a native para
 
 The loader checks every entry of a catalog file and of a machine file (D141): ERROR CFG150 for a name written twice in one file (by name and `for_axis`), CFG151 for a name or a `params` word that is no NCX identifier, CFG154 for a `contour` of more than two words; WARNING CFG152 for a word of `absolute_from_surface` that `params` does not map, CFG153 for `absolute_from_surface` without a mapped `SURFACE`, and CFG155 for a key the entries of the family leave out (`modal` on Heidenhain and Siemens, `signature` on Fanuc). A `params` word of the machine-axis form of D93 (`W2`, `Z2`) is the ERROR CFG159: a program reads such a key as a machine axis word, so a catalog parameter of that form would read differently with and without a machine file (D114).
 
+A cycle word of a block that the entry maps to no native parameter and no rule word carries follows one rule (D362): where the native cycle reaches the same value from another word of the block it is a compiler WARNING (a drilling entry that maps `PITCH` and no `CYCLE_F` takes the tapping feed from the pitch: Heidenhain `TAP`, Siemens `TAP` and `TAP_COMPENSATING`, so `TAP` needs only `PITCH`; `CycleEntry.DerivedFrom`); where the value is the behaviour the control has anyway (`CYCLE_DWELL=0`, `PECK=0` on a cycle without that motion) it is dropped silently; where the value is lost it is an ERROR. Each stands once at the `CYCLE` block, not at each `CYCLE_CALL`, and names the word, the native cycle and where the control takes the value from; a `CYCLE:<controller>=n` block has no `params`, so D279's ERROR stands there.
+
 ## 7. Variables
 
 ```toml

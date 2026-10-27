@@ -208,22 +208,91 @@ public sealed class ShippedCatalogsTests
         Assert.Null(fanuc.Find("TURN_ID"));
     }
 
-    // Siemens 7: "The cycle feed is the modal F", and CYCLE85 has its own FFR. So CYCLE86 (BORE), CYCLE830 (DEEP_HOLE)
-    // and CYCLE840 (TAP_COMPENSATING) take CYCLE_F from the modal F as CYCLE81 to CYCLE83 do (wave-1 question #24);
-    // CYCLE84 waits for D181.
+    // D181, D380: CYCLE81, CYCLE82, CYCLE83 and CYCLE86 take the modal F, CYCLE85 its FFR, CYCLE830 its own drilling
+    // feed S_FB; CYCLE84 taps at SST with no programmed feed and the shipped CYCLE840 writes no ENC=1, so neither maps
+    // CYCLE_F, which is derivable from PITCH there (D362).
     [Theory]
     [InlineData("CYCLE81", "F")]
     [InlineData("CYCLE82", "F")]
     [InlineData("CYCLE83", "F")]
+    [InlineData("CYCLE84", null)]
     [InlineData("CYCLE85", "FFR")]
     [InlineData("CYCLE86", "F")]
-    [InlineData("CYCLE830", "F")]
-    [InlineData("CYCLE840", "F")]
-    public void SiemensCycleFeed_EveryCycleButCycle84_IsTheModalFOrItsOwnFeed(string native, string feed)
+    [InlineData("CYCLE830", "S_FB")]
+    [InlineData("CYCLE840", null)]
+    public void SiemensCycleFeed_EveryCycle_IsTheModalFItsOwnFeedOrNone(string native, string? feed)
     {
         CycleEntry entry = NativeEntry("siemens.toml", Controller.Siemens, native);
 
         Assert.Equal(feed, entry.CycleF);
+        Assert.Equal(feed is null ? "PITCH" : null, entry.DerivedFrom("CYCLE_F"));
+    }
+
+    // D181, D379, D380: the full 840D sl signatures of SW4.92 3.25, their length and their last position.
+    [Theory]
+    [InlineData("CYCLE81", 9, "_AMODE")]
+    [InlineData("CYCLE82", 14, "S_FD")]
+    [InlineData("CYCLE83", 20, "_AMODE")]
+    [InlineData("CYCLE84", 24, "_AMODE")]
+    [InlineData("CYCLE85", 11, "_AMODE")]
+    [InlineData("CYCLE86", 14, "_AMODE")]
+    [InlineData("CYCLE830", 41, "S_ZPV")]
+    [InlineData("CYCLE840", 20, "_AMODE")]
+    [InlineData("SLOT1", 31, "_AMODE")]
+    [InlineData("SLOT2", 29, "_AMODE")]
+    public void SiemensCycle_Signature_IsTheFullSlSignature(string native, int positions, string last)
+    {
+        CycleEntry entry = NativeEntry("siemens.toml", Controller.Siemens, native);
+
+        Assert.Equal(positions, entry.Signature.Count);
+        Assert.Equal(last, entry.Signature[^1]);
+        Assert.Equal(positions, new HashSet<string>(entry.Signature).Count);
+    }
+
+    // D380: CYCLE830 has its drilling feed S_FB at position 18 and _AMODE at position 38; the compiler fixes the ones
+    // digit 1, _DP absolute, and an omitted _AMODE is 0, _DP incremental.
+    [Fact]
+    public void SiemensDeepHole_Cycle830_HasSfbAtEighteenAndAmodeAtThirtyEight()
+    {
+        CycleEntry deepHole = Load("siemens.toml", Controller.Siemens).Find("DEEP_HOLE")!;
+
+        Assert.Equal("S_FB", deepHole.Signature[17]);
+        Assert.Equal("_AMODE", deepHole.Signature[37]);
+        Assert.Equal(1m, deepHole.Fixed["_AMODE"]);
+        Assert.Equal("0", deepHole.Defaults["_AMODE"]);
+        Assert.Equal("_DP", deepHole.NativeOf("DEPTH"));
+    }
+
+    // D379: SLOT is the sl SLOT1 with NUM = 1, the _DMODE thousands digit 1 and the _AMODE ones digit 2, mapping the
+    // six words of 253; CIRC_SLOT is SLOT2 with NUM = 1 only, and the two share the words of their Heidenhain natives.
+    [Fact]
+    public void SiemensSlot_Slot1AndSlot2_MapTheWordsOf253And254()
+    {
+        CycleCatalog siemens = Load("siemens.toml", Controller.Siemens);
+        CycleCatalog heidenhain = Load("heidenhain.toml", Controller.Heidenhain);
+        CycleEntry slot = siemens.Find("SLOT")!;
+        CycleEntry circSlot = siemens.Find("CIRC_SLOT")!;
+
+        Assert.Equal("SLOT1", slot.Native);
+        Assert.Equal(["NUM=1", "_AMODE=2", "_DMODE=1000"], Pairs(slot.Fixed));
+        Assert.Equal("SLOT2", circSlot.Native);
+        Assert.Equal(["NUM=1"], Pairs(circSlot.Fixed));
+        Assert.Equal("_MID", slot.NativeOf("PECK"));
+        Assert.Equal("FFD", slot.NativeOf("CYCLE_F"));
+        Assert.Equal(Sorted(heidenhain.Find("SLOT")!.Words), Sorted(slot.Words));
+        Assert.Equal(Sorted(heidenhain.Find("CIRC_SLOT")!.Words), Sorted(circSlot.Words));
+        Assert.Null(siemens.FindNative("SLOT1", Values("NUM", 3m)));
+    }
+
+    // D181: an omitted VARI of CYCLE83 is 0, chip breaking, which the catalog records in defaults; the constant PECK
+    // is FDPR.
+    [Fact]
+    public void SiemensCycle83_WithoutVari_IsChipBreakAndPeckIsFdpr()
+    {
+        CycleCatalog siemens = Load("siemens.toml", Controller.Siemens);
+
+        Assert.Equal("CHIP_BREAK", siemens.FindNative("CYCLE83", Values("DP", -30m))?.Name);
+        Assert.Equal("FDPR", siemens.Find("PECK")!.NativeOf("PECK"));
     }
 
     // D175: the simple turning cycles carry their taper R as the catalog word TAPER, and the thread cycle G92 its

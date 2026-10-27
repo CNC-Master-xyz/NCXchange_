@@ -222,6 +222,19 @@ public sealed record CycleEntry
     }
 
     /// <summary>
+    /// The word of the block from which the native cycle reaches the value of a word the entry maps to no native
+    /// parameter and no rule word carries: PITCH for the CYCLE_F of a drilling entry that maps PITCH and no CYCLE_F,
+    /// whose tapping feed follows from the pitch (Heidenhain TAP, Siemens TAP and TAP_COMPENSATING). The compiler
+    /// reports such a word as a WARNING rather than the ERROR of a lost value (D362). Null where the value is not
+    /// derivable.
+    /// </summary>
+    /// <param name="word">The NCX word the entry does not map, CYCLE_F.</param>
+    public string? DerivedFrom(string word)
+    {
+        return word == CycleFWord && NativeOf(CycleFWord) is null && NativeOf("PITCH") is not null ? "PITCH" : null;
+    }
+
+    /// <summary>
     /// The native name that carries an NCX word, DEPTH to "Q201"; null for a word the entry does not map.
     /// </summary>
     /// <param name="word">The NCX word, DEPTH.</param>

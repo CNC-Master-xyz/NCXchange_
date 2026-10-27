@@ -1,3 +1,4 @@
+using System.Globalization;
 using Ncx.Core.Model;
 
 namespace Ncx.Core.Machine;
@@ -102,9 +103,9 @@ public sealed record CycleCatalog
         return null;
     }
 
-    // TODO(question): a Siemens position without a value takes the default of the cycle (siemens 7), and that default
-    // is not in the documents (VARI of CYCLE83); a block that leaves out a fixed value fits no entry that fixes it
-    // (D181).
+    // D181, D164: a Siemens position without a value takes the value zero, which the entry records in defaults (VARI
+    // of CYCLE83 = 0, chip breaking); a block that leaves out a fixed value is compared through that default, and
+    // fits no entry that fixes it where the entry has none.
 
     /// <summary>
     /// The entry of a native cycle whose fixed values the source block carries: CYCLE83 with VARI=1 is PECK, with
@@ -297,7 +298,12 @@ public sealed record CycleCatalog
     {
         foreach (KeyValuePair<string, decimal> fixedValue in entry.Fixed)
         {
-            if (!nativeValues.TryGetValue(fixedValue.Key, out decimal value) || value != fixedValue.Value)
+            decimal? value = nativeValues.TryGetValue(fixedValue.Key, out decimal given) ? given
+                : entry.Defaults.TryGetValue(fixedValue.Key, out string? assumed)
+                    && decimal.TryParse(assumed, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal number)
+                    ? number
+                    : null;
+            if (value != fixedValue.Value)
             {
                 return false;
             }
