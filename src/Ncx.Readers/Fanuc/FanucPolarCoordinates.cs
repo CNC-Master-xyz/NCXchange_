@@ -6,9 +6,6 @@ namespace Ncx.Readers.Fanuc;
 /// </summary>
 internal static class FanucPolarCoordinates
 {
-    // Computed points keep the decimals of the source words they come from, at least these (FanucNumbers.Round).
-    private const int LeastDecimals = 3;
-
     /// <summary>
     /// Writes the Cartesian point of the radius and angle words of a motion block under G16; the other axis words stay
     /// for the motion.
@@ -50,19 +47,18 @@ internal static class FanucPolarCoordinates
 
         decimal radiusValue = radius?.Word.Number ?? block.Fanuc.PolarRadius;
         decimal angleValue = angle?.Word.Number ?? block.Fanuc.PolarAngle;
-        int decimals = LeastDecimals;
         foreach (FanucAxisWord? axis in new[] { radius, angle })
         {
             if (axis is not null)
             {
                 block.MarkRead(axis.Word);
-                decimals = Math.Max(decimals, FanucNumbers.DecimalsOf(axis.Word));
             }
         }
 
+        // The Cartesian point keeps 6 decimals, whatever the decimals of the radius and the angle (D403).
         double radians = (double)angleValue * Math.PI / 180.0;
-        decimal firstValue = FanucNumbers.Round((double)radiusValue * Math.Cos(radians), decimals);
-        decimal secondValue = FanucNumbers.Round((double)radiusValue * Math.Sin(radians), decimals);
+        decimal firstValue = ComputedNumbers.Round((double)radiusValue * Math.Cos(radians));
+        decimal secondValue = ComputedNumbers.Round((double)radiusValue * Math.Sin(radians));
         main.Add(first, FanucNumbers.Of(firstValue)).Add(second, FanucNumbers.Of(secondValue));
         block.State.SetPosition(first, firstValue);
         block.State.SetPosition(second, secondValue);

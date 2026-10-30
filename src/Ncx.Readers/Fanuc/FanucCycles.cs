@@ -1170,9 +1170,8 @@ internal static class FanucCycles
         }
         else if (block.Fanuc.Rpm.TryGetValue(block.State.LastSpindle ?? "", out decimal speed) && speed != 0)
         {
-            // TODO(question): no document says how many decimals a quotient the reader computes keeps (wave-1
-            // question #46); the pitch keeps six.
-            definition.Add("PITCH", FanucNumbers.Of(Math.Round(perMinute / speed, 6, MidpointRounding.AwayFromZero)));
+            // The pitch F / S the reader computes keeps 6 decimals (D403).
+            definition.Add("PITCH", FanucNumbers.Of(ComputedNumbers.Round(perMinute / speed)));
         }
     }
 

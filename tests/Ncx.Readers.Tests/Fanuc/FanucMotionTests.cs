@@ -163,6 +163,14 @@ public sealed class FanucMotionTests
         Assert.Equal(Lines("LINE X=0 Y=10 F=100", "LINE X=-10 Y=0"), Body("G16\nG1 X10. Y90. F100\nY180.\nG15"));
     }
 
+    // D403: a point the reader computes keeps 6 decimals, half away from zero, whatever the decimals of the source
+    // words; 10 cos 30 is 8.660254, 10 sin 30 is 5.
+    [Fact]
+    public void G16_ComputedPoint_KeepsSixDecimals()
+    {
+        Assert.Equal(Lines("LINE X=8.660254 Y=5 F=100"), Body("G16\nG1 X10. Y30. F100\nG15"));
+    }
+
     // A block before any G0 to G3 moves at RAPID.
     [Fact]
     public void AxisWords_BeforeAnyMotionCode_AreRapid()
@@ -199,11 +207,12 @@ public sealed class FanucMotionTests
     }
 
     // The same for a chamfer: G91 X10. from the corner (30, 30) ends at X40, IX=9 from the end of the chamfer (D58).
+    // The computed start of the chamfer keeps 6 decimals (D403).
     [Fact]
     public void Chamfer_BeforeAG91Line_WritesItsIncrementalWordFromTheEndOfTheChamfer()
     {
         Assert.Equal(
-            Lines("RAPID X=0 Y=0", "LINE X=29.293 Y=29.293 F=100", "LINE X=31 Y=30", "LINE IX=9", "LINE Y=0"),
+            Lines("RAPID X=0 Y=0", "LINE X=29.292893 Y=29.292893 F=100", "LINE X=31 Y=30", "LINE IX=9", "LINE Y=0"),
             Body("G0 X0 Y0\nG1 X30. Y30. ,C1. F100\nG91 X10.\nG90 Y0"));
     }
 

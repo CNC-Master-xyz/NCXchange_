@@ -11,9 +11,6 @@ namespace Ncx.Readers.Fanuc;
 /// </summary>
 internal static class FanucCorners
 {
-    // Computed points keep the decimals of the source words they come from, at least these (FanucNumbers.Round).
-    private const int LeastDecimals = 3;
-
     /// <summary>
     /// Expands the chamfer or the rounding of a line block, or keeps the block as RAW when the corner cannot be
     /// computed.
@@ -67,7 +64,7 @@ internal static class FanucCorners
         SourceBlock? next = block.Fanuc.NextBlock(block.Source);
         if (!knownStart || !knownCorner || next is null
             || !NextEnd(block, next, first, second, cornerFirst, cornerSecond, out decimal endFirst,
-                out decimal endSecond, out int nextDecimals, out bool nextIncremental))
+                out decimal endSecond, out bool nextIncremental))
         {
             return "the corner, its start or the line after it is not known";
         }
@@ -114,11 +111,11 @@ internal static class FanucCorners
             return "the chamfer or the rounding is longer than a line of the corner";
         }
 
-        int decimals = Math.Max(LeastDecimals, Math.Max(nextDecimals, DecimalsOf(block, corner, first, second)));
-        decimal beginFirst = FanucNumbers.Round((double)cornerFirst - (reach * inFirst), decimals);
-        decimal beginSecond = FanucNumbers.Round((double)cornerSecond - (reach * inSecond), decimals);
-        decimal endOfCornerFirst = FanucNumbers.Round((double)cornerFirst + (reach * outFirst), decimals);
-        decimal endOfCornerSecond = FanucNumbers.Round((double)cornerSecond + (reach * outSecond), decimals);
+        // The computed points keep 6 decimals, whatever the decimals of the source words (D403).
+        decimal beginFirst = ComputedNumbers.Round((double)cornerFirst - (reach * inFirst));
+        decimal beginSecond = ComputedNumbers.Round((double)cornerSecond - (reach * inSecond));
+        decimal endOfCornerFirst = ComputedNumbers.Round((double)cornerFirst + (reach * outFirst));
+        decimal endOfCornerSecond = ComputedNumbers.Round((double)cornerSecond + (reach * outSecond));
 
         // The line of the block ends where the corner begins; the corner goes to where the next line begins, a line for
         // a chamfer and an arc of radius R, turning with the corner, for a rounding.
@@ -185,11 +182,10 @@ internal static class FanucCorners
     // axis unchanged, and whether a word of it is incremental; false when the next block is no line in the plane with
     // numbers.
     private static bool NextEnd(FanucBlock block, SourceBlock next, string first, string second, decimal cornerFirst,
-        decimal cornerSecond, out decimal endFirst, out decimal endSecond, out int decimals, out bool incremental)
+        decimal cornerSecond, out decimal endFirst, out decimal endSecond, out bool incremental)
     {
         endFirst = cornerFirst;
         endSecond = cornerSecond;
-        decimals = 0;
         incremental = false;
         bool? incrementalMode = null;
         foreach (SourceWord word in next.Words)
@@ -220,7 +216,6 @@ internal static class FanucCorners
             bool byAddress = axis.Incremental && !block.Incremental;
             bool relative = byAddress || (incrementalMode ?? axis.Incremental);
             incremental |= relative;
-            decimals = Math.Max(decimals, FanucNumbers.DecimalsOf(word));
             if (axis.Axis == first)
             {
                 endFirst = relative ? cornerFirst + value : value;
@@ -232,20 +227,5 @@ internal static class FanucCorners
         }
 
         return true;
-    }
-
-    // The decimals of the plane words of the block and of the corner word.
-    private static int DecimalsOf(FanucBlock block, SourceWord corner, string first, string second)
-    {
-        int decimals = FanucNumbers.DecimalsOf(corner);
-        foreach (SourceWord word in block.Source.Words)
-        {
-            if (FanucAxes.Of(word, block) is FanucAxisWord axis && (axis.Axis == first || axis.Axis == second))
-            {
-                decimals = Math.Max(decimals, FanucNumbers.DecimalsOf(word));
-            }
-        }
-
-        return decimals;
     }
 }
