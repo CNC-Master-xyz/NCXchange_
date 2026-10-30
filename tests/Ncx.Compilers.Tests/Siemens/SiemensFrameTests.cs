@@ -541,7 +541,7 @@ public sealed class SiemensFrameTests
             MillTurnBody("RAPID X=40 Z=5", "WORKPIECE=SUB", "RAPID X=40 Z=5", "LINE IZ=-2 F=0.1"));
     }
 
-    // The TODO(question) of SiemensArcs: with Z negated, an arc in the ZX plane turns the other way round.
+    // D298 (SiemensArcs.Mirrored): with Z negated, an arc in the ZX plane turns the other way round.
     [Fact]
     public void ArcOnTheSubSpindleSide_WithADatum_TurnsTheOtherWay()
     {

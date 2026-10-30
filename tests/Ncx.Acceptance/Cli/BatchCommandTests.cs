@@ -265,7 +265,7 @@ public sealed partial class BatchCommandTests : IDisposable
     }
 
     // The report holds counts and codes and the names of the files only: every outcome with its columns, the RAW
-    // blocks per word, the totals with the severity of each code and the files it stands in (the TODO(question) of
+    // blocks per word, the totals with the severity of each code and the files it stands in (D285;
     // BatchReport).
     [Fact]
     public void Report_FilesOfEveryOutcome_ListsTheirCountsAndTheTotals()

@@ -52,11 +52,9 @@ public sealed partial class VirtualMachine
             return block with { Words = words };
         }
 
-        // TODO(question): virtual machine 3.10 does not say which value @SAVE pushes when its own block also sets the
-        // variable, nor whether @RESTORE acts before or after a state word of its own block (wave-1 question #33,
-        // D167). The expander writes pseudo-words in blocks of their own; in a block that mixes them, @SAVE takes the
-        // value the block starts with and the words of @RESTORE are applied after the state words of the block, until
-        // that is answered.
+        // D167: pseudo-words stand in blocks of their own, and a rewriter block that mixes one with other words is the
+        // ERROR PLG006 on the plugin, so no mixed block reaches here from the expander. Should one arrive another way,
+        // @SAVE takes the value the block starts with and the words of @RESTORE are applied after its state words.
         var restored = new List<Word>();
         foreach (Word pseudoWord in pseudoWords)
         {

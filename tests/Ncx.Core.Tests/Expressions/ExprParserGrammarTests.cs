@@ -231,7 +231,7 @@ public sealed class ExprParserGrammarTests
     }
 
     // Function names and the words AND, OR, NOT and MOD are read like the rest of the language, lowercase
-    // normalized (see TODO(question) in ExprTokenizer).
+    // normalized (D112, ExprTokenizer).
     [Fact]
     public void Case_LowercaseFunctionsAndOperatorWords_AreNormalizedToUppercase()
     {

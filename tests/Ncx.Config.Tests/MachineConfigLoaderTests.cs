@@ -914,7 +914,7 @@ public sealed class MachineConfigLoaderTests
     }
 
     // Implementation 16, P6-02: [format] channel_files names how the job compiler names the file of each channel
-    // (the TODO(question) of OutputFormat.ChannelFiles).
+    // (D310, OutputFormat.ChannelFiles).
     [Theory]
     [InlineData("path_suffix", ChannelFiles.PathSuffix)]
     [InlineData("channel_suffix", ChannelFiles.ChannelSuffix)]

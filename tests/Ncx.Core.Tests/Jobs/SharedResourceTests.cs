@@ -80,8 +80,7 @@ public sealed class SharedResourceTests
             job.Codes());
     }
 
-    // Machine-config 8, D20 (the TODO(question) of SharedResources): a spindle that [shared] does not name is not
-    // checked.
+    // Machine-config 8, D20: a spindle that [shared] does not name is not checked.
     [Fact]
     public void Spindle_NotInShared_IsNotChecked()
     {

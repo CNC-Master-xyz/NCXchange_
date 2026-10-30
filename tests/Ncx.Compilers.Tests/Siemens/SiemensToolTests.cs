@@ -160,7 +160,7 @@ public sealed class SiemensToolTests
 
     // Siemens 2 and 5: G94, G95, G96 and G961 are one group, so G94 would switch the constant surface speed off; under
     // FEED_MODE=PER_MIN the surface speed is G961, and the feed motion after it writes no G94 (controller-mapping 4,
-    // CSS; the TODO(question) of SiemensSpindles).
+    // CSS; D300).
     [Fact]
     public void SurfaceSpeedUnderFeedPerMinute_IsG961AndTheFeedMotionKeepsIt()
     {

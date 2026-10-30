@@ -202,7 +202,7 @@ public sealed class SiemensMotionTests
             MillBody("LINE X=10 F=100", "DWELL=1.5", "LINE X=20"));
     }
 
-    // Controller-mapping 1, UNITS: G71 for millimetres, G70 for inches (the TODO(question) of SiemensMotion, the pair).
+    // Controller-mapping 1, UNITS: G71 for millimetres, G70 for inches (D292, the pair of SiemensMotion).
     [Fact]
     public void UnitsInch_InTheHeader_IsG70()
     {

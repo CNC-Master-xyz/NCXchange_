@@ -99,7 +99,7 @@ internal static class CompileJob
         AddAll(diagnostics, result.Diagnostics);
 
         // One file per channel into out/<machine>/ or the folder of --output; none after an ERROR (D205, as for one
-        // file; the TODO(question)s of CompileCommand.Run).
+        // file; architecture 10).
         if (!diagnostics.HasErrors)
         {
             CompileCommand.WriteFiles(result.Files, CompileCommand.OutputFolderOf(settings, outputFolder, runMachine),
