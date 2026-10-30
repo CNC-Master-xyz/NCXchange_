@@ -187,10 +187,10 @@ public sealed class FanucFlowTests
         Assert.Empty(FanucCompile.CompilerDiagnostics(result));
     }
 
-    // Hard rule 1: the TODO(question) of the call form is recorded in the open-questions table, with the decision it
-    // waits on (00-method 4).
+    // D406 settles the call form of the Fanuc compiler as coded: its row of the open-questions table is settled with
+    // that decision (00-method 4).
     [Fact]
-    public void CallFormQuestion_OfTheFanucCompiler_IsRecordedInTheOpenQuestions()
+    public void CallFormQuestion_OfTheFanucCompiler_IsSettledInTheOpenQuestions()
     {
         string path = Path.Combine(Ncx.Tests.Fixtures.Fixture.RepositoryRoot(), "docs", "implementation",
             "03-open-questions.md");
@@ -200,6 +200,7 @@ public sealed class FanucFlowTests
 
         Assert.NotNull(row);
         Assert.Contains("D148", row, StringComparison.Ordinal);
+        Assert.Contains("settled 2026-10-30 (D406)", row, StringComparison.Ordinal);
         Assert.DoesNotContain("CMP310", row, StringComparison.Ordinal);
         Assert.Contains("an argument value is the `G65`", row, StringComparison.Ordinal);
     }
