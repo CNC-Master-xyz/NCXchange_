@@ -225,9 +225,9 @@ public sealed class SiemensProgramFrameTests
         Assert.Equal(numbers.Distinct().Count(), numbers.Count);
     }
 
-    // D417: RAW text is never changed, so the N of a RAW line stays and the numbering passes over it; where two lines of
-    // one program carry the same N, a GOTO to it names no one block, which is the WARNING CMP504. The lines are written
-    // as they are.
+    // D417: RAW text is never changed, so the N of a RAW line stays and the numbering passes over it; where two lines
+    // of one program carry the same N, a GOTO to it names no one block, which is the WARNING CMP504. The lines are
+    // written as they are.
     [Fact]
     public void BlockNumbers_TwoRawLinesWithTheSameNumber_AreAWarningAndStayAsWritten()
     {
