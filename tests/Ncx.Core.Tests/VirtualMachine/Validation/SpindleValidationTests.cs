@@ -97,6 +97,21 @@ public sealed class SpindleValidationTests
         Assert.Contains(DiagnosticCodes.SpindleOffBeforeLine, vm.Codes());
     }
 
+    // VM 5: a LINE that moves only linear axes of another resource, the sub spindle slide Z2 of the work spindle SUB
+    // (the B slide of the Nakamura WY-250L, G01 B in its transfer), moves no tool of the current tool holder along the
+    // workpiece and is no cut with that tool, so the rule passes with every spindle OFF; a LINE that also moves X cuts.
+    [Fact]
+    public void SpindleOff_LineOfTheSubSpindleSlideAlone_IsNoWarning()
+    {
+        VmHarness vm = new VmHarness(VmMachines.MillTurn()).Execute("UNITS=MM F=100", "TOOL=5", "LINE Z2=-50");
+
+        Assert.DoesNotContain(DiagnosticCodes.SpindleOffBeforeLine, vm.Codes());
+
+        vm.Execute("LINE X=10 Z2=-60");
+
+        Assert.Contains(DiagnosticCodes.SpindleOffBeforeLine, vm.Codes());
+    }
+
     // D194: an ARC cuts as a LINE does, so the rule covers it too (decisions.md; virtual machine 5).
     [Fact]
     public void SpindleOff_BeforeAnArc_Warns()

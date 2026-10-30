@@ -6,7 +6,7 @@ using Ncx.Tests.Fixtures;
 namespace Ncx.Config.Tests.Templates;
 
 /// <summary>
-/// The templates of the eight machine files, the five examples of machine-config 11 (with millturn1.toml, D104) and
+/// The templates of the nine machine files, the six examples of machine-config 11 (with millturn1.toml, D104) and
 /// the three mills of machines/ (P2-04): every template renders from a sample value for each placeholder and matches
 /// back to the same values, a table over the loaded configurations (phase 2, P2-02; architecture 6).
 /// </summary>
@@ -23,6 +23,7 @@ public sealed class TemplateSetMachinesTests
     private static readonly string[] s_machineFiles =
     [
         Nakamura,
+        "docs/spec/examples/machines/nakamura-wy250l.toml",
         Doosan,
         "docs/spec/examples/machines/mori-ntx1000-mapps.toml",
         "docs/spec/examples/machines/dmg-ctx-840d.toml",
@@ -36,7 +37,7 @@ public sealed class TemplateSetMachinesTests
     private static readonly Dictionary<string, TemplateSet> s_templateSets = TemplateSets();
 
     /// <summary>
-    /// The eight machine files for the theories.
+    /// The nine machine files for the theories.
     /// </summary>
     public static TheoryData<string> MachineFiles => new(s_machineFiles);
 
@@ -60,7 +61,7 @@ public sealed class TemplateSetMachinesTests
         }
     }
 
-    // P2-02 done when: every template in the five example files (with millturn1.toml, D104) renders from a sample
+    // P2-02 done when: every template in the six example files (with millturn1.toml, D104) renders from a sample
     // word set and matches back to it; the three mills of machines/ as well.
     [Theory]
     [MemberData(nameof(TemplatesOfTheMachineFiles))]
@@ -72,7 +73,7 @@ public sealed class TemplateSetMachinesTests
         TemplateSamples.AssertRoundTrip(template);
     }
 
-    // Every template of the eight files can be parsed: none is reported (machine-config introduction).
+    // Every template of the nine files can be parsed: none is reported (machine-config introduction).
     [Theory]
     [MemberData(nameof(MachineFiles))]
     public void Constructor_EveryMachineFile_ParsesItsTemplatesWithoutDiagnostic(string machineFile)

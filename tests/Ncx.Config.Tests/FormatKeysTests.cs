@@ -31,6 +31,17 @@ public sealed class FormatKeysTests
         Assert.Equal(HelixFeed.Path, format.HelixFeed);
     }
 
+    // calculator_input stands for parameter 3401#0 DPI of a Fanuc control, true when the file leaves it out, as
+    // controllers fanuc.md 2 assumes (B-64490EN-05 p.190; gap closed 2026-10-30, delegated).
+    [Theory]
+    [InlineData("", true)]
+    [InlineData("calculator_input = true", true)]
+    [InlineData("calculator_input = false", false)]
+    public void CalculatorInput_WrittenOrLeftOut_LoadsIntoTheFormat(string line, bool expected)
+    {
+        Assert.Equal(expected, LoadFormat("fanuc", line).CalculatorInput);
+    }
+
     // D263: "comment_charset ... takes "ASCII" or "UTF-8"; any other value is a CFG ERROR" (CFG005, D388 15).
     [Fact]
     public void CommentCharset_OtherValue_IsValueNotAllowed()

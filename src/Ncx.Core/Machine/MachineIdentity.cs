@@ -95,6 +95,23 @@ public sealed record MachineIdentity
     public decimal DwellIncrement { get; init; } = 0.001m;
 
     /// <summary>
+    /// input_increment: the least input increment of a Fanuc control in mm, from the increment system "IS-A", "IS-B"
+    /// or "IS-C" of parameter 1013 (B-64490EN-05 p.57-58): 0.01, 0.001 or 0.0001 mm, a tenth of it in inch, the same
+    /// number in degrees on a rotary axis; 0.001, IS-B, when the file leaves it out (controllers fanuc.md 2).
+    /// </summary>
+    public decimal InputIncrement { get; init; } = 0.001m;
+
+    /// <summary>
+    /// The least input increment of a linear address in the given units: <see cref="InputIncrement"/> in mm, a tenth
+    /// of it in inch (B-64484EN p.527-528, NOTE 2).
+    /// </summary>
+    /// <param name="inch">True under inch input.</param>
+    public decimal LinearIncrement(bool inch)
+    {
+        return inch ? InputIncrement / 10m : InputIncrement;
+    }
+
+    /// <summary>
     /// base_units: the basic system of a Siemens control, MD10240 $MN_SCALING_SYSTEM_IS_METRIC, as a value of UNITS,
     /// MM or INCH; null when the file leaves it out, and then units_default stands for it (D292; SINUMERIK
     /// 840D sl/828D function manual basic functions 2012 p.346, cnc-manuals). See <see cref="ResolvedBaseUnits"/>.

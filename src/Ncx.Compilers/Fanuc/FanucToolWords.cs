@@ -32,6 +32,12 @@ internal static class FanucToolWords
     public const string SpeedKey = "S:";
 
     /// <summary>
+    /// The speed the target state holds for a spindle after the G80 that ended a rigid tapping run, which clears the S
+    /// of the rigid tapping (B-64484EN-2 p.104).
+    /// </summary>
+    public const string ClearedSpeed = "S0";
+
+    /// <summary>
     /// The key of G96 or G97, which the control has for a spindle, CSS: with its resource id: under G96 its S is the
     /// cutting speed, under G97 the speed (controllers fanuc.md 4).
     /// </summary>
@@ -408,6 +414,13 @@ internal static class FanucToolWords
         string key = SpeedKey + id;
         bool runs = spindle.Direction != SpindleDirection.Off;
         string? speed = spindle.Css ? null : SpeedOf(write, rpm, spindle, table, what);
+        if (speed is not null && write.SpeedInBeforeLine.Contains(id))
+        {
+            // The before line of the cycle in this block writes the speed, M29 S600 (FanucCycles.WriteBefore).
+            write.Target.Set(key, speed);
+            speed = null;
+        }
+
         string? direction = runs && !write.SpindleCodesWritten.Contains(id)
             ? Code(write, table, spindle.Direction == SpindleDirection.Clockwise ? "CW" : "CCW", what)
             : null;
@@ -486,6 +499,107 @@ internal static class FanucToolWords
                 FanucFunctions.Add(write, text);
             }
         }
+    }
+
+    /// <summary>
+    /// After the G80 that ended a rigid tapping run the control's S is S0 (B-64484EN-2 p.104), so a block that cuts or
+    /// calls a cycle with a running spindle the target state holds at S0 writes the programmed S again in a line before
+    /// it, with the spindle's M code where an S alone would bind to another spindle (controllers fanuc.md 5, 10 rule
+    /// 2); a block that writes the spindle's own words does that itself (AddSpindle).
+    /// </summary>
+    public static void RestoreSpeed(FanucBlock write)
+    {
+        Block block = write.Block;
+        bool cuts = block.Verb?.Key is "LINE" or "ARC" or "CYCLE_CALL";
+        if (!cuts)
+        {
+            return;
+        }
+
+        foreach ((string id, SpindleSnapshot spindle) in write.After.Spindles)
+        {
+            if (write.Target.ActiveOf(SpeedKey + id) != ClearedSpeed || spindle.Css
+                || spindle.Direction == SpindleDirection.Off || spindle.Mode != SpindleMode.Spindle)
+            {
+                continue;
+            }
+
+            string? role = RoleOf(write, id);
+            if (block.Find("SPINDLE", role) is not null || block.Find("RPM", role) is not null)
+            {
+                continue;
+            }
+
+            string? tableRole = TableRoleOf(write, role, id);
+            FunctionTable? table = tableRole is not null
+                && write.Machine.SpindleTables.TryGetValue(tableRole, out FunctionTable? found) ? found : null;
+            string what = $"[spindle.{tableRole}]";
+            if (SpeedOf(write, null, spindle, table, what) is not string speed)
+            {
+                continue;
+            }
+
+            string? direction = SpeedStandsAlone(write, id)
+                ? null
+                : Code(write, table, spindle.Direction == SpindleDirection.Clockwise ? "CW" : "CCW", what);
+            write.Write(direction is null ? speed : speed + " " + direction);
+            write.Target.Set(SpeedKey + id, speed);
+            write.Target.Set(LastSpindle, id);
+        }
+    }
+
+    /// <summary>
+    /// The spindle start of a block whose cycle the "before" line enters, S600 M3 in front of M29 S600: a spindle code
+    /// between M29 and G84 alarms (B-64484EN-2 p.104, p.108; controllers fanuc.md 10 rule 7), so it stands on a line
+    /// of its own before the line, with the speed, and the block's own spindle words write neither again
+    /// (AddSpindle).
+    /// </summary>
+    /// <param name="write">The block being written.</param>
+    /// <param name="id">The spindle that turns the tap.</param>
+    public static void WriteSpindleBeforeLine(FanucBlock write, string id)
+    {
+        string? role = RoleOf(write, id);
+        if (write.Block.Find("SPINDLE", role) is null || !write.After.Spindles.TryGetValue(id, out SpindleSnapshot?
+            spindle) || spindle.Direction == SpindleDirection.Off || spindle.Css)
+        {
+            return;
+        }
+
+        string? tableRole = TableRoleOf(write, role, id);
+        FunctionTable? table = tableRole is not null
+            && write.Machine.SpindleTables.TryGetValue(tableRole, out FunctionTable? found) ? found : null;
+        string what = $"[spindle.{tableRole}]";
+        string? speed = SpeedOf(write, write.Block.Find("RPM", role), spindle, table, what);
+        string? direction = Code(write, table, spindle.Direction == SpindleDirection.Clockwise ? "CW" : "CCW", what);
+        if (speed is null || direction is null)
+        {
+            return;
+        }
+
+        write.Write(speed + " " + direction);
+        write.SpindleCodesWritten.Add(id);
+        write.SpeedInBeforeLine.Add(id);
+        write.Target.Set(SpeedKey + id, speed);
+        write.Target.Set(LastSpindle, id);
+    }
+
+    // The role of a spindle, the key of [roles] that names it; null for the default spindle without one.
+    private static string? RoleOf(FanucBlock write, string id)
+    {
+        if (write.Machine.ResolveDefaultSpindle()?.Id == id)
+        {
+            return null;
+        }
+
+        foreach (KeyValuePair<string, string> role in write.Machine.Roles)
+        {
+            if (role.Value == id)
+            {
+                return role.Key;
+            }
+        }
+
+        return null;
     }
 
     // A start without RPM takes the speed of the state before it: nothing where the control holds the speed of NCX of

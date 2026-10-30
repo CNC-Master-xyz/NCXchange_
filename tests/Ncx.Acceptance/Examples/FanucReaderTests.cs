@@ -167,7 +167,7 @@ public sealed partial class FanucReaderTests
         Assert.False(check.HasErrors, check.ToText());
     }
 
-    // The Nakamura pair with nakamura-ntjx.toml keeps as RAW the builder codes of its [raw] table, G411, G300, G333,
+    // The Nakamura pair with nakamura-wy250l.toml keeps as RAW the builder codes of its [raw] table, G411, G300, G333,
     // G131, as RAW:NAKAMURA, the data setting G10 as RAW:FANUC (the RAW address is the controller or builder dialect,
     // language 4.1; [raw] names the builder codes, machine-config 5; G10 is the control's, controller-mapping 9 and
     // controllers fanuc.md 9 rule 7), and the one block of path 2 that reads #5024, which D250 leaves unmapped as a
@@ -178,7 +178,7 @@ public sealed partial class FanucReaderTests
     [InlineData("NAKAMURA_WY250L_O1000.P-2.nc")]
     public void Convert_NakamuraPath_KeepsOnlyTheNamedCodesAsRaw(string source)
     {
-        NcxProgram read = Read(source, Load("docs/spec/examples/machines/nakamura-ntjx.toml"));
+        NcxProgram read = Read(source, Load("docs/spec/examples/machines/nakamura-wy250l.toml"));
         string text = NcxWriter.Write(read);
 
         int unmapped = 0;
@@ -210,7 +210,7 @@ public sealed partial class FanucReaderTests
     [InlineData("NAKAMURA_WY250L_O1000.P-2.nc")]
     public void Convert_NakamuraPath_KeepsTheLabelOfEveryG411Target(string source)
     {
-        NcxProgram read = Read(source, Load("docs/spec/examples/machines/nakamura-ntjx.toml"));
+        NcxProgram read = Read(source, Load("docs/spec/examples/machines/nakamura-wy250l.toml"));
         List<Block> blocks = [.. read.Blocks];
 
         var labels = new HashSet<string>(StringComparer.Ordinal);

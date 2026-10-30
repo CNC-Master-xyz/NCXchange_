@@ -1,3 +1,4 @@
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.Writing;
 using static Ncx.Readers.Tests.Fanuc.FanucRead;
@@ -133,6 +134,33 @@ public sealed class FanucCycleTests
         Assert.Contains("CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20", text, StringComparison.Ordinal);
         Assert.Contains("CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-25", text, StringComparison.Ordinal);
         Assert.DoesNotContain("RAW:", text, StringComparison.Ordinal);
+    }
+
+    // An M29 inside a running tapping cycle alarms PS0204 (B-64484EN-2 p.104, p.108; B-64484EN-1 p.114), so the block
+    // that carries it, alone, with its S or with a call position, stays RAW with that reason.
+    [Theory]
+    [InlineData("X30.\nM29 S500\nX40.", "M29 S500")]
+    [InlineData("M29\nX40.", "M29")]
+    [InlineData("X30. M29 S500", "X30. M29 S500")]
+    public void RigidTapLine_InsideTheRunningTapCycle_IsAlarmPs0204AndStaysRaw(string run, string line)
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X10. Y10. Z10.\nM29 S500\nG84 G99 Z-20. R5. F750\n" + run
+            + "\nG80\nM30\n%\n");
+
+        Assert.Contains("RAW:FANUC=\"" + line + "\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("PS0204", program.Diagnostics.ToText(), StringComparison.Ordinal);
+    }
+
+    // An M29 inside a tapping cycle alarms PS0204 with a compensating chuck as well (B-64484EN-2 p.104; B-64484EN-1
+    // p.119): a G84 run without the line in front of it, TAP_COMPENSATING, keeps the M29 block RAW too.
+    [Fact]
+    public void RigidTapLine_InsideACompensatingTapRun_IsAlarmPs0204AndStaysRaw()
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X10. Y10. Z10.\nG84 G99 Z-20. R5. F750\nM29 S500\nX30.\n"
+            + "G80\nM30\n%\n", MillWithCycles(""));
+
+        Assert.Contains("RAW:FANUC=\"M29 S500\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("PS0204", program.Diagnostics.ToText(), StringComparison.Ordinal);
     }
 
     // D256 names three ways into the rigid-tapping mode, the second of them "M29 S in the same block as the tapping
@@ -639,11 +667,99 @@ public sealed class FanucCycleTests
     [InlineData("G83 Z-40. R-5. F0.2",
         "CYCLE=DRILL AXIS=Z SURFACE=0 CLEARANCE=0 DEPTH=-40 CYCLE_RETRACT=CLEARANCE CYCLE_F=0.2")]
     [InlineData("G83 Z-40. R-5. Q2000 F0.2",
-        "CYCLE=PECK AXIS=Z SURFACE=0 CLEARANCE=0 DEPTH=-40 CYCLE_RETRACT=CLEARANCE PECK=2000 CYCLE_F=0.2")]
+        "CYCLE=PECK AXIS=Z SURFACE=0 CLEARANCE=0 DEPTH=-40 CYCLE_RETRACT=CLEARANCE PECK=2 CYCLE_F=0.2")]
     public void LatheDrillingEntry_G83WithAndWithoutQ_IsPeckAndDrill(string source, string cycle)
     {
         Assert.Equal(Lines("RAPID Z=5", cycle, "CYCLE_CALL", "CYCLE=OFF"),
             Body("G0 Z5.\n" + source + "\nG80", Lathe()));
+    }
+
+    // A lathe takes no decimal point in Q (B-64484EN p.229, the T list of 8.3), so the peck Q of G83 counts least input
+    // increments whatever parameter 3401#0 says: Q2000 is 2 mm at the 0.001 mm of IS-B, Q20000 is 2 inch at 0.0001 inch
+    // (B-64484EN-1 p.96, G83 Z-40.0 R-5.0 Q5000).
+    [Theory]
+    [InlineData("G21", "G0 Z5.\nG83 Z-40. R-5. Q2000 F0.2", "PECK=2 ")]
+    [InlineData("G21", "G0 Z5.\nG83 Z-40. R-5. Q500 F0.2", "PECK=0.5 ")]
+    [InlineData("G20", "G0 Z0.2\nG83 Z-1. R-0.1 Q20000 F0.01", "PECK=2 ")]
+    public void LathePeckQ_WithoutADecimalPoint_CountsLeastInputIncrements(string units, string source, string peck)
+    {
+        string text = Text("%\nO0001\n" + units + "\n" + source + "\nG80\nM30\n%\n", Lathe());
+
+        Assert.Contains(peck, text, StringComparison.Ordinal);
+        Assert.DoesNotContain("RAW:", text, StringComparison.Ordinal);
+    }
+
+    // The units of a lathe Q are those the header assumes where the program sets none: units_default = "INCH" without
+    // G20 counts 0.0001 inch, and [machine] input_increment (parameter 1013, B-64490EN-05 p.57-58) sets the
+    // increment system: IS-C counts 0.0001 mm.
+    [Theory]
+    [InlineData("units_default = \"INCH\"", "G0 Z0.2\nG83 Z-1. R-0.1 Q20000 F0.01", "PECK=2 ")]
+    [InlineData("units_default = \"MM\"\ninput_increment = \"IS-C\"", "G0 Z5.\nG83 Z-40. R-5. Q20000 F0.2",
+        "PECK=2 ")]
+    [InlineData("units_default = \"MM\"\ninput_increment = \"IS-A\"", "G0 Z5.\nG83 Z-40. R-5. Q200 F0.2",
+        "PECK=2 ")]
+    public void LathePeckQ_CountsTheIncrementOfTheUnitsDefaultAndTheIncrementSystem(string keys, string source,
+        string peck)
+    {
+        MachineConfig machine = FromToml(LatheToml.Replace("units_default = \"MM\"", keys, StringComparison.Ordinal));
+        string text = Text("%\nO0001\n" + source + "\nG80\nM30\n%\n", machine);
+
+        Assert.Contains(peck, text, StringComparison.Ordinal);
+        Assert.DoesNotContain("RAW:", text, StringComparison.Ordinal);
+    }
+
+    // calculator_input = false counts the increment of input_increment: X10 is 0.10 mm under IS-A.
+    [Fact]
+    public void NumbersWithoutAPoint_UnderIsA_CountHundredths()
+    {
+        MachineConfig machine = FromToml(MillToml.Replace("units_default = \"MM\"",
+            "units_default = \"MM\"\ninput_increment = \"IS-A\"", StringComparison.Ordinal)
+            + "\n[format]\ncalculator_input = false\n");
+
+        Assert.Equal(Lines("RAPID X=0.10 Y=0.20"), Body("G0 X10 Y20", machine));
+    }
+
+    // A lathe takes no decimal point in Q (B-64484EN p.229), so a lathe Q2. is no peck the reader can read: RAW.
+    [Fact]
+    public void LathePeckQ_WithADecimalPoint_StaysRaw()
+    {
+        NcxProgram program = Program("%\nO0001\nG0 Z5.\nG83 Z-40. R-5. Q2. F0.2\nG80\nM30\n%\n", Lathe());
+
+        Assert.Contains("RAW:FANUC=\"G83 Z-40. R-5. Q2. F0.2\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("p.229", program.Diagnostics.ToText(), StringComparison.Ordinal);
+    }
+
+    // [format] calculator_input = false, parameter 3401#0 = 0: every address that takes a decimal point counts least
+    // input increments without one, X Y Z R and the mill Q in 0.001 mm, F under G94 in 1 mm/min (B-64484EN p.229,
+    // p.527-528; B-64490EN-05 p.190); the default true reads them as written (controllers fanuc.md 2).
+    [Theory]
+    [InlineData("true", "RAPID X=10 Y=20 Z=50",
+        "CYCLE=PECK SURFACE=0 CLEARANCE=5 DEPTH=-40 CYCLE_RETRACT=CLEARANCE PECK=2000 CYCLE_F=100")]
+    [InlineData("false", "RAPID X=0.010 Y=0.020 Z=0.050",
+        "CYCLE=PECK SURFACE=0 CLEARANCE=0.005 DEPTH=-0.040 CYCLE_RETRACT=CLEARANCE PECK=2.000 CYCLE_F=100")]
+    public void NumbersWithoutAPoint_FollowCalculatorInput(string calculator, string rapid, string cycle)
+    {
+        Assert.Equal(Lines(rapid, cycle, "CYCLE_CALL", "CYCLE=OFF"),
+            Body("G0 X10 Y20 Z50\nG83 G99 Z-40 R5 Q2000 F100\nG80",
+                MillWith("[format]\ncalculator_input = " + calculator)));
+    }
+
+    // calculator_input = false does not touch an address that takes no decimal point: the lathe Q counts increments
+    // either way (B-64484EN p.229).
+    [Fact]
+    public void LathePeckQ_UnderCalculatorInputFalse_StillCountsIncrements()
+    {
+        Assert.Contains("PECK=2 ", Text("%\nO0001\nG0 Z5.\nG83 Z-40. R-5. Q2000 F0.2\nG80\nM30\n%\n",
+            LatheWith("[format]\ncalculator_input = false")), StringComparison.Ordinal);
+    }
+
+    // A mill takes a decimal point in Q (B-64484EN p.229, the M list), so Q without one follows the rule of every such
+    // address, X and R among them: the reader assumes calculator-type input, parameter 3401#0 = 1, and reads Q2000 as
+    // 2000 mm, as it reads X70 as 70 mm (controllers fanuc.md 2).
+    [Fact]
+    public void MillPeckQ_WithoutADecimalPoint_FollowsTheCalculatorTypeAssumption()
+    {
+        Assert.Contains("PECK=2000 ", Body("G0 X0 Y0 Z5.\nG83 Z-40. R-5. Q2000 F100\nG80"), StringComparison.Ordinal);
     }
 
     // D161: THREAD is G76, the one-shot cycle that cuts the whole thread, and the modal G92, which cuts one pass per

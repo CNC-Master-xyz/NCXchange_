@@ -89,6 +89,14 @@ public sealed record OutputFormat
     public string? Header { get; init; }
 
     /// <summary>
+    /// calculator_input: parameter 3401#0 DPI of a Fanuc control. True, the calculator type, takes a number without a
+    /// decimal point in an address that can take one in mm, inch, degrees or seconds (X70 is 70 mm); false counts it in
+    /// least input increments (X70 is 0.070 mm). An address that takes no decimal point always counts increments
+    /// (B-64484EN p.229, B-64490EN-05 p.190; controllers fanuc.md 2). True when the file leaves it out.
+    /// </summary>
+    public bool CalculatorInput { get; init; } = true;
+
+    /// <summary>
     /// plane_with_first_motion: the code of the working plane stands in the first motion block after it changes, G0
     /// G17 X50.4 of the sources, not in a block of its own; false when the file leaves it out.
     /// </summary>

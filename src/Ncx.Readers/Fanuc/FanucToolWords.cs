@@ -87,9 +87,10 @@ internal static class FanucToolWords
     }
 
     // A template that begins with a G code is a builder's macro. D219: [tool_change] describes the change of
-    // default_holder, so on a lathe a plain T template is tried too where the T word belongs to that holder — the
-    // Mori Seiki tool spindle's T9001 matches the preload "T{tool:04}" and is PRELOAD=9001 — while a T word of
-    // another holder is the turret form of fanuc 5. On a mill the plain T and M6 forms stay the Fanuc words below.
+    // default_holder, so on a lathe every template of it, a G macro or a plain T template, is tried where the T word
+    // belongs to that holder alone — the Mori Seiki tool spindle's T9001 matches the preload "T{tool:04}" and is
+    // PRELOAD=9001 — while a T word of another holder is the turret form of fanuc 5, "G0T1212" in the path-2 file of
+    // the WY-250L as well as T1212. On a mill the plain T and M6 forms stay the Fanuc words below.
     private static bool IsBuilderMacro(FanucBlock block, string? template)
     {
         if (template is null || template.Length < 2)
@@ -97,8 +98,12 @@ internal static class FanucToolWords
             return false;
         }
 
-        return (template[0] == 'G' && char.IsAsciiDigit(template[1]))
-            || (block.IsLathe && HolderRoleOfTheChannel(block) is null);
+        if (block.IsLathe)
+        {
+            return HolderRoleOfTheChannel(block) is null;
+        }
+
+        return template[0] == 'G' && char.IsAsciiDigit(template[1]);
     }
 
     /// <summary>

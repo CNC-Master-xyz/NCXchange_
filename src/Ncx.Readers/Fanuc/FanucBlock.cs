@@ -20,13 +20,23 @@ internal sealed class FanucBlock
     public FanucBlock(SourceBlock source, SourceState state, FanucState fanuc, MachineConfig machine,
         TemplateSet templates, Diagnostics diagnostics)
     {
-        Source = source;
+        // Under calculator_input = false a number without a decimal point counts least input increments; the words are
+        // read as the values they stand for (controllers fanuc.md 2; machine-config 2).
+        string? problem = null;
+        Source = machine.Format?.CalculatorInput == false
+            ? FanucDecimalPoint.Scaled(source, state, machine,
+                fanuc.Unknowns.Groups.Contains(FanucModalGroups.FeedMode), out problem)
+            : source;
         State = state;
         Fanuc = fanuc;
         Machine = machine;
         Templates = templates;
         Diagnostics = diagnostics;
         _read = new bool[source.Words.Count];
+        if (problem is not null)
+        {
+            Draft.KeepAsRaw(problem);
+        }
     }
 
     /// <summary>
