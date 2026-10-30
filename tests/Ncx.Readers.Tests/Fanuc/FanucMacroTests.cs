@@ -252,6 +252,28 @@ public sealed class FanucMacroTests
         Assert.Equal(Lines("CALL=\"O8889\""), Body("M98 P8889"));
     }
 
+    // D407: an external program has blocks the reader does not see, so the CALL carries no ARG; where the caller has
+    // assigned one of #1..#33 before it, that program may read or write them, and the reader reports the WARNING
+    // RDR123 on the call.
+    [Fact]
+    public void ExternalCall_AfterTheCallerAssignedALocal_IsRdr123()
+    {
+        NcxProgram program = Program("%\nO0001\n#3=5\nM98 P8889\nM30\n%\n");
+
+        Assert.Contains("CALL=\"O8889\"\n", NcxWriter.Write(program), StringComparison.Ordinal);
+        Diagnostic warning = Assert.Single(program.Diagnostics.Items);
+        Assert.Equal((Severity.Warning, "RDR123", 4), (warning.Severity, warning.Code, warning.Line));
+    }
+
+    // D407: with no local assigned before it, the external call passes nothing that could be lost, and no WARNING.
+    [Fact]
+    public void ExternalCall_WithoutALocalAssignedBefore_HasNoWarning()
+    {
+        NcxProgram program = Program("%\nO0001\n#100=5\nM98 P8889\nM30\n%\n");
+
+        Assert.Empty(program.Diagnostics.Items);
+    }
+
     // M99 in the main program loops to a label after the header (controller-mapping 6).
     [Fact]
     public void M99_InTheMainProgram_LoopsToTheStart()
