@@ -135,6 +135,21 @@ public sealed class FanucCycleTests
         Assert.DoesNotContain("RAW:", text, StringComparison.Ordinal);
     }
 
+    // An M29 inside a running tapping cycle alarms PS0204 (B-64484EN-2 p.104, p.108; B-64484EN-1 p.114), so the block
+    // that carries it, alone, with its S or with a call position, stays RAW with that reason.
+    [Theory]
+    [InlineData("X30.\nM29 S500\nX40.", "M29 S500")]
+    [InlineData("M29\nX40.", "M29")]
+    [InlineData("X30. M29 S500", "X30. M29 S500")]
+    public void RigidTapLine_InsideTheRunningTapCycle_IsAlarmPs0204AndStaysRaw(string run, string line)
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X10. Y10. Z10.\nM29 S500\nG84 G99 Z-20. R5. F750\n" + run
+            + "\nG80\nM30\n%\n");
+
+        Assert.Contains("RAW:FANUC=\"" + line + "\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("PS0204", program.Diagnostics.ToText(), StringComparison.Ordinal);
+    }
+
     // D256 names three ways into the rigid-tapping mode, the second of them "M29 S in the same block as the tapping
     // command", so the before line standing in the cycle block itself is the cycle TAP as well.
     [Fact]

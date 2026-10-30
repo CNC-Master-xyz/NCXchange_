@@ -67,6 +67,18 @@ internal static class FanucCycles
             return;
         }
 
+        // An M29 inside a running tapping cycle alarms PS0204 (B-64484EN-2 p.104 and p.108; B-64484EN-1 p.114,
+        // cnc-manuals pages 104, 108 and 114), so a block that carries the codes of the line while the run that the
+        // line entered goes on, alone, with its S or with a call position, stays RAW with that reason (controllers
+        // fanuc.md 9 rule 9). A block with G80, a code of group 01 or another cycle code ends the run first.
+        if (block.Fanuc.Cycle is { EnteredWithBefore: true, Entry: { Before: { Length: > 0 } before } entry } running
+            && FanucBeforeLineWalk.CarriesTheCodesOf(block.Source, before) && !EndsTheRun(block, running.Code))
+        {
+            block.Draft.KeepAsRaw($"{CodesOf(before)} inside the running tapping cycle {running.Code} of "
+                + $"CYCLE={entry.Name}, which the control rejects with alarm PS0204 (B-64484EN-2 p.104, p.108)");
+            return;
+        }
+
         if (!BeforeLineMatches(block, block.Fanuc.CycleBefore.GetValueOrDefault(block.Line),
                 out TemplateValues values)
             && !BeforeLineMatches(block, EntryOfTheCycleOf(block), out values))
@@ -91,6 +103,30 @@ internal static class FanucCycles
 
         block.Draft.AddState("RPM", FanucFunctions.SpindleAddress(block, role), FanucNumbers.Of(rpm));
         block.Fanuc.Rpm[role ?? ""] = rpm;
+    }
+
+    // Whether a block ends the run of a cycle before its other words count: G80, a code of group 01, or a cycle code
+    // other than the run's own (controllers fanuc.md 6; D247).
+    private static bool EndsTheRun(FanucBlock block, string runningCode)
+    {
+        foreach (SourceWord word in block.Source.Words)
+        {
+            if (word.Address == "G" && NativeCode.Of(word) is string code && code != runningCode
+                && (code == "G80" || s_motion.Contains(code) || s_millCycles.Contains(code)
+                    || s_latheDrilling.Contains(code)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // The G and M codes of a "before" line, "M29" of "M29 S{rpm}", for a message.
+    private static string CodesOf(string before)
+    {
+        return string.Join(" ", before.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(token => !token.Contains('{', StringComparison.Ordinal) && token[0] is 'G' or 'M'));
     }
 
     // Whether the words of the block are the "before" line of the named catalog entry; false for no name and for an
