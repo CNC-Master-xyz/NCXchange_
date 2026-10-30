@@ -254,6 +254,22 @@ public sealed class ExampleMachinesTests
         Assert.Equal(Programming.Switchable, machine.ResolveAxis("X")?.Programming);
     }
 
+    // D415: one rule per table; the chuck opens with M436, the code that is safe in every condition, and M433, open
+    // with the spindle running, is a function of its own that the program asks for explicitly.
+    [Theory]
+    [InlineData("MAIN_CHUCK", "M436", "M437", "M433")]
+    [InlineData("SUB_CHUCK", "M336", "M337", "M333")]
+    public void DmgCtx_ChuckOpenWithTheSpindleRunning_IsAFunctionOfItsOwn(string chuck, string open, string close,
+        string openRunning)
+    {
+        MachineConfig machine = LoadExample("machines/dmg-ctx-840d.toml");
+
+        Assert.Equal(["OPEN", "CLOSE"], machine.Functions[chuck].States.Keys);
+        Assert.Equal(open, machine.FindFunction(chuck, "OPEN"));
+        Assert.Equal(close, machine.FindFunction(chuck, "CLOSE"));
+        Assert.Equal(openRunning, machine.FindFunction(chuck + "_RUNNING", "OPEN"));
+    }
+
     // D104: the machine of MILLTURN_TRANSFER, as the decision describes it.
     [Fact]
     public void Millturn1_MachineOfD104_HasItsRolesAxesAndFunctions()
