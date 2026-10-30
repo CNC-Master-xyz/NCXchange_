@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Globalization;
 using Ncx.Acceptance.Cli;
 using Ncx.Cli;
 using Ncx.Cli.Commands;
@@ -385,6 +387,28 @@ public sealed class SiemensReaderTests : IDisposable
 
     // The 840D sl mill of the hand-written program, loaded by its path as ncx convert --machine siemens-840dsl-mill
     // loads it, with the Siemens cycle catalog its [cycles] names (machine-config 6).
+    // D422: the RAW modal ranges of a unit are found once per unit, so a long program with modal calls reads in
+    // constant time per block; a look-back from every block to its MCALL and a look-ahead over its range would make the
+    // reading cubic in the length of the unit.
+    [Fact]
+    public void Convert_LongProgramWithRawModalRanges_TakesWellUnderASecond()
+    {
+        var text = new System.Text.StringBuilder("%_N_LONG_MPF\nG17 G90 G94 G71\nT1 D1\nM6\nS1000 M3\nG0 X0 Y0 Z5\n");
+        for (int index = 0; index < 4000; index++)
+        {
+            text.Append(index % 400 == 0 ? "MCALL BOHR\n" : index % 400 == 399 ? "MCALL\n" : "G0 X")
+                .Append(index % 400 is 0 or 399 ? "" : (index % 100).ToString(CultureInfo.InvariantCulture) + "\n");
+        }
+
+        text.Append("M30\n");
+        var source = new SourceFile("LONG.mpf", text.ToString());
+        new SiemensReader().Read(source, Mill(), new ReadOptions());
+
+        var watch = Stopwatch.StartNew();
+        new SiemensReader().Read(source, Mill(), new ReadOptions());
+        Assert.True(watch.ElapsedMilliseconds < 1000, $"LONG.mpf took {watch.ElapsedMilliseconds} ms.");
+    }
+
     private static MachineConfig Mill()
     {
         const string relativePath = "machines/siemens-840dsl-mill.toml";
