@@ -84,9 +84,10 @@ public sealed record CycleCatalog
         // A reader turns a native cycle into the entry that maps it; of two entries of one cycle, DRILL and
         // DRILL_DWELL on cycle 200, the first in catalog order (controller-mapping 5). A native no entry writes as its
         // own is the dwell_native of an entry, the Fanuc mill G89 of REAM (D177).
+        // D410: an entry withdrawn with available = false maps no native cycle; the compiler reports its name (CMP004).
         foreach (CycleEntry entry in Entries)
         {
-            if (entry.Native == native)
+            if (entry.Native == native && entry.Available)
             {
                 return entry;
             }
@@ -94,7 +95,7 @@ public sealed record CycleCatalog
 
         foreach (CycleEntry entry in Entries)
         {
-            if (entry.DwellNative == native)
+            if (entry.DwellNative == native && entry.Available)
             {
                 return entry;
             }
@@ -124,7 +125,7 @@ public sealed record CycleCatalog
         // (machine-config 6, D160).
         foreach (CycleEntry entry in Entries)
         {
-            if (entry.Native == native && Fits(entry, nativeValues, forAxis))
+            if (entry.Native == native && entry.Available && Fits(entry, nativeValues, forAxis))
             {
                 return entry;
             }
@@ -133,7 +134,7 @@ public sealed record CycleCatalog
         // D177: the dwell_native of an entry, the Fanuc mill G89 of REAM, where no entry writes it as its own.
         foreach (CycleEntry entry in Entries)
         {
-            if (entry.DwellNative == native && Fits(entry, nativeValues, forAxis))
+            if (entry.DwellNative == native && entry.Available && Fits(entry, nativeValues, forAxis))
             {
                 return entry;
             }
@@ -159,7 +160,7 @@ public sealed record CycleCatalog
         CycleEntry? withoutKey = null;
         foreach (CycleEntry entry in Entries)
         {
-            if (entry.Native != native || (forAxis is not null && entry.ForAxis != forAxis))
+            if (entry.Native != native || !entry.Available || (forAxis is not null && entry.ForAxis != forAxis))
             {
                 continue;
             }

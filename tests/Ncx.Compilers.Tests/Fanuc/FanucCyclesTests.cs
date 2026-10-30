@@ -222,6 +222,30 @@ public sealed class FanucCyclesTests
         Assert.Contains("\nG84 Z-10. R-3. F800.\n", text, StringComparison.Ordinal);
     }
 
+    // D410: cycles/fanuc-lathe.toml withdraws BORE, DRILL_DWELL and CHIP_BREAK, the mill codes no Fanuc lathe has, so
+    // such a cycle on a lathe is the ERROR CMP004 of a cycle the machine cannot run (D377).
+    [Theory]
+    [InlineData("BORE")]
+    [InlineData("DRILL_DWELL")]
+    [InlineData("CHIP_BREAK")]
+    public void MillCycle_OnALathe_IsTheErrorCmp004(string name)
+    {
+        CompileResult result = FanucCompile.Run(FanucCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+            "FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY DIAMETER=ON CYCLE=OFF",
+            "SPINDLE:MAIN=CW RPM:MAIN=500",
+            "RAPID X=0 Z=5",
+            "CYCLE=" + name + " CLEARANCE=2 DEPTH=-10 CYCLE_F=0.1",
+            "CYCLE_CALL",
+            "CYCLE=OFF",
+            "PROGRAM=END",
+            "FILE=END"), FanucCompile.Lathe());
+
+        Assert.Contains(FanucCompile.CompilerDiagnostics(result),
+            item => item.Code == DiagnosticCodes.CycleNotAvailable && item.Severity == Severity.Error);
+    }
+
     // Controller-mapping 5 TAP, language 2 rule 8: the spindle of the current tool holder is off, so PITCH x S has no
     // speed, and G84 would tap with the feed the control has: CMP386.
     [Fact]

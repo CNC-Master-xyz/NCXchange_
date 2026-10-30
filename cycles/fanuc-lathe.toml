@@ -20,9 +20,24 @@ ncx_schema = 1                     # the version of the machine-configuration sc
 # CHIP_BREAK has no lathe code of its own: bit 2 (RTR) of parameter 5101 decides whether G83 pecks at high speed or retracts fully, and a builder selects it
 # with a mode M code (Doosan M292), so a machine file carries it (machine-config 6, D160).
 # G81 and G82 appear in the lathe G-code list only as FS15 format codes and G86 not at all, so DRILL_DWELL and BORE have no lathe entry (D160).
-# TODO(question): a catalog file overrides and adds entries and cannot take one away (machine-config 6), so DRILL_DWELL, CHIP_BREAK and BORE stay in this
-# catalog with the mill codes G82, G73 and G86 of the built-in family, which no Fanuc lathe has. The compiler reports such a cycle on a lathe, because the
-# canned-cycle group of a lathe holds only G83 to G85 and G87 to G89 (D160); whether a catalog file should be able to remove an inherited entry is open.
+# D410: a catalog file withdraws an inherited entry with available = false (machine-config 6), so DRILL_DWELL, CHIP_BREAK and BORE, the mill codes G82, G73
+# and G86 of the built-in family that no Fanuc lathe has, are withdrawn below: the reader reads no G82 or G86 as a cycle, G73 is PATTERN_REPEAT, and the
+# compiler reports such a cycle on a lathe as the ERROR CMP004 (D377).
+
+[[cycle]]
+name = "DRILL_DWELL"
+native = "G82"
+available = false
+
+[[cycle]]
+name = "CHIP_BREAK"
+native = "G73"
+available = false
+
+[[cycle]]
+name = "BORE"
+native = "G86"
+available = false
 
 [[cycle]]
 name = "DRILL"

@@ -16,7 +16,9 @@ public static partial class CycleCatalogLoader
     ];
 
     // The keys only a [[cycle]] table of a machine file takes (D361, D377).
-    private static readonly string[] s_machineOnlyKeys = ["channel", "available"];
+    // D377, D410: channel describes one machine; available is a key of both files, since a catalog file may withdraw
+    // an entry it inherits.
+    private static readonly string[] s_machineOnlyKeys = ["channel"];
 
     // The word that the words of absolute_from_surface are relative to (machine-config 6, language 4.7).
     private const string SurfaceWord = "SURFACE";
@@ -28,8 +30,8 @@ public static partial class CycleCatalogLoader
     /// <param name="tables">The [[cycle]] tables of the file.</param>
     /// <param name="controller">The controller family the entries belong to; null when the machine file names
     /// none.</param>
-    /// <param name="catalogFile">True for the entries of a catalog file, which take no channel and no available key
-    /// (D377).</param>
+    /// <param name="catalogFile">True for the entries of a catalog file, which take no channel key (D377); available
+    /// withdraws an entry there too (D410).</param>
     internal static IReadOnlyList<CycleEntry> ReadEntries(
         IReadOnlyList<ConfigTable> tables, Controller? controller, bool catalogFile = false)
     {
@@ -89,7 +91,7 @@ public static partial class CycleCatalogLoader
         ExpansionRule? rule = MachineConfigLoader.ReadRule(table);
         CheckFamilyKeys(table, controller, modal, signature);
         int? channel = catalogFile ? null : table.Integer("channel");
-        bool available = catalogFile || !table.Has("available") || table.Flag("available");
+        bool available = !table.Has("available") || table.Flag("available");
         if (catalogFile)
         {
             WarnMachineKeys(table);
@@ -257,8 +259,8 @@ public static partial class CycleCatalogLoader
         }
     }
 
-    // D377: channel and available describe one machine, so a catalog file that writes them gets CFG157 and the loader
-    // ignores them.
+    // D377: channel describes one machine, so a catalog file that writes it gets CFG157 and the loader ignores it;
+    // available = false withdraws an entry in a catalog file as in a machine file (D410).
     private static void WarnMachineKeys(ConfigTable table)
     {
         foreach (string key in s_machineOnlyKeys)

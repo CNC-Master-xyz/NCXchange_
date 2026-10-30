@@ -762,6 +762,20 @@ public sealed class FanucCycleTests
         Assert.False(Check(text, Lathe()).HasErrors, Check(text, Lathe()).ToText());
     }
 
+    // D410: the lathe catalog withdraws G82 and G86, which no Fanuc lathe has, so such a block names no cycle of the
+    // catalog and stays RAW.
+    [Theory]
+    [InlineData("G82 Z-5. R-2. P500 F0.1")]
+    [InlineData("G86 Z-5. R-2. F0.1")]
+    public void MillDrillingCode_OnALathe_StaysRaw(string source)
+    {
+        string text = Body("G0 X0 Z5.\n" + source + "\nG80", Lathe());
+
+        Assert.Contains("RAW:FANUC=\"" + source + "\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("CYCLE=DRILL_DWELL", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("CYCLE=BORE", text, StringComparison.Ordinal);
+    }
+
     // D176: P and Q of G74, G75 and G76 are infeed steps and thread data, not a block range, so those entries carry
     // no contour and the block keeps the words its entry does not map: the reader keeps it RAW with its range, and no
     // SUB section is made (decisions.md; fanuc 6; D5).

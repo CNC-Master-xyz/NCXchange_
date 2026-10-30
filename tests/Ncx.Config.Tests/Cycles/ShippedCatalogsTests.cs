@@ -159,6 +159,20 @@ public sealed class ShippedCatalogsTests
         Assert.Equal(modal, entry.Modal);
     }
 
+    // D410: the lathe catalog withdraws the mill entries of the built-in family that no Fanuc lathe has, so G82 and
+    // G86 name no cycle there, and G73 and G74 are the lathe's PATTERN_REPEAT and FACE_GROOVE.
+    [Fact]
+    public void FanucLathe_MillEntriesOfTheBuiltInFamily_AreWithdrawn()
+    {
+        CycleCatalog lathe = Load("fanuc-lathe.toml", Controller.Fanuc);
+
+        Assert.All(["DRILL_DWELL", "CHIP_BREAK", "BORE"], name => Assert.False(lathe.Find(name)?.Available));
+        Assert.Null(lathe.FindNative("G82"));
+        Assert.Null(lathe.FindNative("G86"));
+        Assert.Equal("PATTERN_REPEAT", lathe.FindNative("G73")?.Name);
+        Assert.Equal("FACE_GROOVE", lathe.FindNative("G74")?.Name);
+    }
+
     // D161: THREAD is G76, the one-shot cycle that cuts the whole thread as Siemens CYCLE97 does, and the modal G92,
     // which cuts one pass per block like G90 and G94, is THREAD_PASS; COMPOUND_THREAD is dropped.
     [Fact]
