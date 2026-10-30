@@ -559,6 +559,13 @@ internal static class FanucCycles
             return false;
         }
 
+        // A spindle code between M29 and G84 alarms (B-64484EN-2 p.104, p.108; D385), so the spindle start of the
+        // block stands on a line of its own in front of the line, with its S.
+        if (TapSpindleOf(write) is string spindle)
+        {
+            FanucToolWords.WriteSpindleBeforeLine(write, spindle);
+        }
+
         write.Write(text);
         write.BeforeLineWritten = true;
         return true;

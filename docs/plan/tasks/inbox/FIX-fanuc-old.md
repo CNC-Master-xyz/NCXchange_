@@ -51,3 +51,5 @@ Gate 2026-10-30 after step 5: build -warnaserror 0 warnings, 0 errors; test 5822
 - D159 (corrected): Gap closed 2026-10-30 (delegated): G4 X/U without a decimal point follow `[format] calculator_input` (parameter 3401#0): seconds by default, `dwell_increment` under false; G4 P and the cycle P always count `dwell_increment`.
 
 Gate 2026-10-30 after step 6 (with main merged): build -warnaserror 0 warnings, 0 errors; test 5955 passed, 0 failed, 7 skipped; format --verify-no-changes clean.
+7. A spindle start in the block of a re-armed rigid TAP call (`CYCLE_CALL X=30 SPINDLE=CW RPM=600` inside the run) stands on its own line before the `M29 S` line with its S, `G80 / S600 M3 / M29 S600 / G84 ...`, not in the G84 block: a spindle code between M29 and G84 alarms (B-64484EN-2 p.104, p.108; D385). `FanucToolWords.WriteSpindleBeforeLine`, called from `FanucCycles.WriteBefore`.
+Gate 2026-10-30 after step 7: build -warnaserror 0 warnings, 0 errors; test 5956 passed, 0 failed, 7 skipped; format --verify-no-changes clean.

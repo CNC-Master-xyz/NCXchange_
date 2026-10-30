@@ -586,6 +586,19 @@ public sealed class FanucCyclesTests
             body, StringComparison.Ordinal);
     }
 
+    // A spindle start in the block of a re-armed rigid TAP call stands on its own line before M29 S, with its S: a
+    // spindle code between M29 and G84 alarms (B-64484EN-2 p.104, p.108).
+    [Fact]
+    public void Tap_WithASpindleStartOnACallInsideTheRun_WritesItBeforeTheLine()
+    {
+        string body = FanucCompile.Body("TOOL=1\nSPINDLE=CW RPM=500\nRAPID X=10 Y=10\nRAPID Z=5"
+            + "\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL\nCYCLE_CALL X=30 SPINDLE=CW RPM=600"
+            + "\nCYCLE=OFF");
+
+        Assert.EndsWith("M29 S500\nG84 G99 Z-20. R5. F750.\nG80\nS600 M3\nM29 S600\nG84 G99 X30. Z-20. R5. F750.\n"
+            + "G80\n", body, StringComparison.Ordinal);
+    }
+
     // The G80 that ends a rigid TAP run clears its S to S0 (B-64484EN-2 p.104), so the next cycle that needs the
     // spindle writes the programmed S again before it.
     [Fact]
