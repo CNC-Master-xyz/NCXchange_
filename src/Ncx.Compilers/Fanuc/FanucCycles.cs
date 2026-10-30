@@ -732,7 +732,7 @@ internal static class FanucCycles
         AddDwell(write, entry, cycle);
 
         // The definition calls at its position and drills along the tool axis: H stands before F, as the sources
-        // write G43 Z2. H1 (language 4.4; the TODO(question) of FanucLine).
+        // write G43 Z2. H1 (language 4.4; the word order of FanucLine).
         FanucToolWords.AddOffsets(write, movesToolAxis: true);
         AddFeed(write, entry, cycle);
         return true;

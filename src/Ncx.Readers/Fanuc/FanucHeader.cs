@@ -33,8 +33,8 @@ internal static class FanucHeader
             ? machine.Machine.UnitsDefault.ToUpperInvariant()
             : null;
 
-        // TODO(question): virtual machine 2.1 starts the workplane "from TOML (XY)" and machine-config names no key for
-        // it (wave-1 question #73); a program that sets no plane in its header gets WORKPLANE=XY.
+        // D34: the configuration defaults apply to the readers only, and the workplane of virtual machine 2.1 starts
+        // as XY, so a program that sets no plane in its header gets WORKPLANE=XY.
         string plane = "XY";
         string feedMode = "PER_MIN";
         int index = fanuc.IndexOf(begin) + (begin.Find("O") is null ? 0 : 1);

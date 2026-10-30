@@ -20,7 +20,7 @@ internal static class FanucFunctions
     private static readonly int[] s_spindleCodes = [3, 4, 5];
 
     /// <summary>
-    /// The functions of the block (the TODO(question) of FanucLine): first what stops, the spindles that stop and the
+    /// The functions of the block, in the order of FanucLine: first what stops, the spindles that stop and the
     /// coolant OFF, then the named functions, then the spindles that start or turn with their S, the other coolant
     /// states, MFUNC, STOP and the workpiece, so that a chuck never opens before its spindle stops. Then they are
     /// put on the lines of the block (Place, D339).
