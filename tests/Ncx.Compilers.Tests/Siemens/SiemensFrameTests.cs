@@ -369,20 +369,48 @@ public sealed class SiemensFrameTests
                 "LINE X=10 F=100"));
     }
 
-    // D420: a RAW subprogram or builder-cycle call may change the frame, as it may arm a modal call (D343), so the
-    // frame is unknown after it and the compiler writes the full frame before the next motion: the datum, the
-    // programmable frame again (TRANS alone where the chain holds none) and the end of the swivel where the machine has
-    // TILT_OFF.
+    // D430, revising D420: after a RAW subprogram or builder-cycle call the control keeps whatever frame the call
+    // left (NC Programming p.500-502), so the compiler writes no frame of its own before the next motion.
     [Theory]
     [InlineData("DREH(1,2)")]
     [InlineData("NEWCOORD")]
     [InlineData("L100")]
     [InlineData("CALL \\\"MYSUB\\\"")]
-    public void Motion_AfterARawCall_WritesTheFullFrameAgain(string call)
+    public void Motion_AfterARawCall_WritesNoFrame(string call)
     {
         string written = call.Replace("\\", "", StringComparison.Ordinal);
-        Assert.Equal(Lines("G54", "TRANS X5", written, "CYCLE800()", "TRANS X5", "MCALL", "G1 G54 G90 G95 X1 F100"),
+        Assert.Equal(Lines("G54", "TRANS X5", written, "MCALL", "G1 G90 G95 X1 F100"),
             MillTurnBody("ORIGIN=1", "SHIFT X=10", $"RAW:SIEMENS=\"{call}\"", "LINE X=1 F=100"));
+    }
+
+    // D430: the frame is unknown after a RAW call, or after a RAW line that names a programmable frame instruction, so
+    // the next frame word of the program goes out in its replacing form, the chain from its first entry with TRANS;
+    // a line that is no call and names no programmable frame instruction (a label, TCOFR, TOFRAME, which names the
+    // swivel only) leaves the programmable frame known, and the SHIFT appends with ATRANS.
+    [Theory]
+    [InlineData("DREH(1,2)", true)]
+    [InlineData("AROT RPL=30", true)]
+    [InlineData("SCALE X2 Y2", true)]
+    [InlineData("TOFRAME", false)]
+    [InlineData("TCOFR", false)]
+    [InlineData("LABEL:", false)]
+    public void Shift_AfterARawLine_IsWrittenInItsReplacingFormWhereTheFrameIsUnknown(string raw, bool unknown)
+    {
+        string[] shift = unknown ? ["TRANS X5", "ATRANS Y5"] : ["ATRANS Y5"];
+        Assert.Equal(Lines(["G54", "TRANS X5", raw, .. shift]),
+            MillTurnBody("ORIGIN=1", "SHIFT X=10", $"RAW:SIEMENS=\"{raw}\"", "SHIFT Y=5"));
+    }
+
+    // D430: an entry of the chain that the compiler cannot write again after a RAW call, a shift from an expression,
+    // is the WARNING CMP538 and not the ERROR CMP531: the control keeps the frame the call left.
+    [Fact]
+    public void Shift_AfterARawCallOverAShiftOfUnknownValue_IsAWarning()
+    {
+        CompileResult result = Run(Program(MillTurnHeader, "ORIGIN=1", "SHIFT X={$R43}", "LINE X=0 F=100",
+            "RAW:SIEMENS=\"TI_ON(1)\"", "LINE X=1 F=100", "SHIFT Y=5"), MillTurn());
+
+        Assert.False(result.Diagnostics.HasErrors, result.Diagnostics.ToText());
+        Assert.Contains(DiagnosticCodes.SiemensChainNotRestated, CompilerCodes(result));
     }
 
     // D420: a RAW line that is MSG, STOPRE, a comment, G4 or another frame-neutral instruction leaves the frame known,

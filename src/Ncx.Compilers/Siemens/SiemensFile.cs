@@ -131,23 +131,6 @@ internal sealed partial class SiemensFile
     }
 
     /// <summary>
-    /// True where a step of the walk before this one, in its program or subprogram, sets a datum with ORIGIN (D420).
-    /// </summary>
-    /// <param name="step">A step of the walk.</param>
-    public bool HasOriginBefore(BlockStep step)
-    {
-        for (int index = step.Index - 1; index >= 0 && _steps[index].Section == step.Section; index--)
-        {
-            if (_steps[index].Block.Has("ORIGIN"))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
     /// The steps of the walk after a step, as long as they stand in its program or subprogram.
     /// </summary>
     /// <param name="step">A step of the walk.</param>

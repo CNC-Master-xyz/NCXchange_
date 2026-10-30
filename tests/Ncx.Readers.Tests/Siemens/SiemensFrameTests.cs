@@ -45,6 +45,18 @@ public sealed class SiemensFrameTests
             CheckedBody("CYCLE800(0,\"TABLE\",0,27,0,7,0,0,45,0,0,0,0,-1,100,1)\nG55"));
     }
 
+    // D430: a RAW subprogram or builder-cycle call may leave a frame on the control, which the reader does not know, so
+    // the chain is unknown after it, and a TRANS that cuts it stays RAW, as after a RAW CYCLE800 (D333, D5); MSG
+    // leaves the chain known.
+    [Fact]
+    public void Trans_AfterARawBuilderCall_StaysRaw()
+    {
+        Assert.Equal(Lines("SHIFT X=10", Raw("DREH(1,2)"), Raw("TRANS X5")),
+            Body("TRANS X10\nDREH(1,2)\nTRANS X5", Mill()));
+        Assert.Equal(Lines("SHIFT X=10", "MESSAGE=\"A\"", "SHIFT=RESET", "SHIFT X=5"),
+            Body("TRANS X10\nMSG(\"A\")\nTRANS X5", Mill()));
+    }
+
     // G54 to G57 are the datums 1 to 4, G505 to G599 5 and up, G500 cancels them (controller-mapping 1, ORIGIN).
     [Fact]
     public void G54G505AndG500_AreOrigins()

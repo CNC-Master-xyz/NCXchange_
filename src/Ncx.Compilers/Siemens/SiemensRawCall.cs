@@ -49,9 +49,17 @@ internal static partial class SiemensRawCall
     /// <param name="raw">The text of the RAW block.</param>
     public static bool IsCall(string raw)
     {
-        // The head of the line: the first word after the skip mark, the block number and a label.
+        // D430: a line that names a frame instruction or a frame variable is no call; KeysNamedBy makes the frame it
+        // names unknown.
+        if (SiemensFrames.NamesFrame(raw))
+        {
+            return false;
+        }
+
+        // The head of the line: the first word after the skip mark, the block number and a label. A line that is a
+        // label alone, NAME:, calls nothing.
         Match head = Head().Match(raw);
-        if (!head.Success)
+        if (!head.Success || head.Groups["after"].Value == ":")
         {
             return false;
         }
@@ -68,12 +76,12 @@ internal static partial class SiemensRawCall
         // pattern and pocket cycles, which leave the frame as they found it.
         bool assignment = after is "=" or "[";
         return !assignment && TwoLetters().IsMatch(name) && !s_neutral.Contains(name)
-            && !StandardCycle().IsMatch(name);
+            && !StandardCycle().IsMatch(name) && !ToolOrientation().IsMatch(name);
     }
 
     // The head of a line: an optional skip mark, block number and label, then a name and the character after it.
     [GeneratedRegex(
-        @"^\s*(/[0-9]?\s*)?(N[0-9]+\s+)?([A-Za-z_]\w*:\s*)?(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*(?<after>[=\[]?)",
+        @"^\s*(/[0-9]?\s*)?(N[0-9]+\s+)?([A-Za-z_]\w*:\s*)?(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*(?<after>[=\[:]?)",
         RegexOptions.CultureInvariant)]
     private static partial Regex Head();
 
@@ -84,6 +92,12 @@ internal static partial class SiemensRawCall
     // A name of the form a subprogram takes: two letters, or an underscore and a letter, first (siemens 8).
     [GeneratedRegex("^([A-Za-z]{2}|_[A-Za-z])", RegexOptions.CultureInvariant)]
     private static partial Regex TwoLetters();
+
+    // The frames of the tool orientation, TCOABS, TCOFR and its variants, and TOROT and its variants (controllers
+    // siemens.md 2, group 53; 6), which set a system frame and call nothing (D430).
+    [GeneratedRegex("^(TCO[A-Z]*|TOROT[A-Z]*|TOFRAME[A-Z]*|PAROT[A-Z]*)$",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex ToolOrientation();
 
     // The standard machining cycles of siemens 7, which work in the frame they find and leave it as it was.
     [GeneratedRegex("^(CYCLE[0-9]+|POCKET[0-9]+|SLOT[0-9]+|LONGHOLE|HOLES[0-9]+)$",

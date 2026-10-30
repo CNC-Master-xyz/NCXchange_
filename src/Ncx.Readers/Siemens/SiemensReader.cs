@@ -459,7 +459,9 @@ public sealed class SiemensReader : ReaderBase
                 // A CYCLE800 of the RAW block swivels a system frame the chain does not hold, so the reader no longer
                 // knows the chain, and a later frame block that depends on it stays RAW rather than being written
                 // without that swivel (D5, D333).
-                if (reading.Source.Words.Any(word => word.Address == "CYCLE800"))
+                // D430: a subprogram or builder cycle the RAW block calls may leave a frame of its own as well.
+                if (reading.Source.Words.Any(word => word.Address == "CYCLE800")
+                    || SiemensCalls.CallsAProgram(reading.Source))
                 {
                     facts.MakeUnknown(SiemensFacts.Frames);
                 }

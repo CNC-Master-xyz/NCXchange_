@@ -126,6 +126,13 @@ public static partial class DiagnosticCodes
     public const string SiemensTiltShiftUnderDiameter = "CMP537";
 
     /// <summary>
+    /// CMP538, a WARNING: an entry of the chain whose value is not known, which the compiler would write again because
+    /// the frame is unknown after a RAW line; the control keeps the frame the RAW line left, so the entry is not
+    /// written (D430).
+    /// </summary>
+    public const string SiemensChainNotRestated = "CMP538";
+
+    /// <summary>
     /// CMP550: an ARC with ANGLE whose start, center or end the virtual machine does not know, so that neither AR nor
     /// TURN can be written (language 4.3, ANGLE; controllers siemens.md 12 rule 2; D84).
     /// </summary>
