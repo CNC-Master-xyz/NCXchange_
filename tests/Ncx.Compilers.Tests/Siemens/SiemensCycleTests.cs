@@ -1,4 +1,5 @@
 using Ncx.Core.Machine;
+using Ncx.Core.Model;
 using static Ncx.Compilers.Tests.Siemens.SiemensCompile;
 
 namespace Ncx.Compilers.Tests.Siemens;
@@ -105,20 +106,36 @@ public sealed class SiemensCycleTests
     }
 
     // D259: a bare F or S block between two RAW lines fires the modal subprogram that the first RAW line armed, since
-    // S or F with G0 or G1 active calls it without any path motion, so the compiler writes neither there and says so;
-    // the feed and the speed stand again at the next block that needs them.
+    // S or F with G0 or G1 active calls it without any path motion, so the compiler writes neither there. D418: a RAW
+    // line before the next block that writes them may take them, the pattern of the range its drilling feed, so the
+    // drop is the ERROR CMP596, and no file is written.
     [Fact]
-    public void ModalRange_AFeedOrSpeedBlockUnderARawMcall_IsNotWritten()
+    public void ModalRange_AFeedOrSpeedBlockUnderARawMcallBeforeARawLine_IsAnError()
     {
         CompileResult result = Run(Program(MillHeader, "RAPID X=0 Y=0 Z=10",
             "RAW:SIEMENS=\"MCALL CYCLE81(10,0,2,-5,)\"", "F=200", "RPM:TOOL=1200",
             "RAW:SIEMENS=\"CYCLE801(0,0,0,10,10,3,3,0,0,0,0)\"", "RAW:SIEMENS=\"MCALL\""), Mill());
 
-        Assert.Equal(Lines("G0 X0 Y0 Z10", "MCALL CYCLE81(10,0,2,-5,)", "CYCLE801(0,0,0,10,10,3,3,0,0,0,0)", "MCALL"),
-            Body(result));
+        Assert.Empty(result.Files);
         Assert.Equal(
             [DiagnosticCodes.SiemensWordUnderARawModalCall, DiagnosticCodes.SiemensWordUnderARawModalCall],
             CompilerCodes(result));
+        Assert.All(result.Diagnostics.Items.Where(item => item.Code == DiagnosticCodes.SiemensWordUnderARawModalCall),
+            item => Assert.Equal(Severity.Error, item.Severity));
+    }
+
+    // D418: where no RAW line stands between the dropped word and the next block that writes it, the drop stays the
+    // WARNING CMP596 of D259, and the F stands again at that block.
+    [Fact]
+    public void ModalRange_AFeedBlockUnderARawMcallBeforeAMotion_IsAWarningAndTheMotionWritesIt()
+    {
+        CompileResult result = Run(Program(MillHeader, "RAPID X=0 Y=0 Z=10",
+            "RAW:SIEMENS=\"MCALL CYCLE81(10,0,2,-5,)\"", "F=200", "LINE X=10"), Mill());
+
+        Diagnostic warning = Assert.Single(result.Diagnostics.Items,
+            item => item.Code == DiagnosticCodes.SiemensWordUnderARawModalCall);
+        Assert.Equal(Severity.Warning, warning.Severity);
+        Assert.Contains("X10 F200", Body(result), StringComparison.Ordinal);
     }
 
     // Siemens 7 and virtual machine 1: the STATIC walk does not follow the jump back, which arrives at the label

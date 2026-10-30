@@ -286,13 +286,11 @@ internal static partial class SiemensSpindles
         foreach (SpindleText text in texts)
         {
             // D259: a bare S block under a modal call that a RAW line armed fires the modal subprogram, as a bare F
-            // does, so the compiler does not write it; the speed stands again at the next block that needs it.
+            // does, so the compiler does not write it; the speed stands again at the next block that needs it, and
+            // where a RAW line before that block could take it, the drop is an ERROR (D418).
             if (IsBareSpeed(text.Text) && SiemensCycles.RawModalCallStands(write))
             {
-                write.Warning(DiagnosticCodes.SiemensWordUnderARawModalCall,
-                    $"The block programs {text.Text} alone under a modal call that a RAW line armed, where S with G0 "
-                    + "or G1 active calls the modal subprogram: it is not written here, and stands again at the next "
-                    + "block that needs it (controllers siemens.md 7; D259).");
+                SiemensCycles.ReportWordUnderRawModalCall(write, text.Text, "S");
                 continue;
             }
 

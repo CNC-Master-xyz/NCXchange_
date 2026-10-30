@@ -221,7 +221,8 @@ public static partial class DiagnosticCodes
     /// <summary>
     /// CMP596: a bare F or S block under a modal call that a RAW line armed, which the compiler does not write,
     /// because S or F with G0 or G1 active calls the modal subprogram and the pattern of the RAW range would drill one
-    /// hole more (controllers siemens.md 7; controller-mapping 5, CYCLE_F; D259).
+    /// hole more (controllers siemens.md 7; controller-mapping 5, CYCLE_F; D259): an ERROR where a RAW line before the
+    /// next block that writes the word may use it, a WARNING otherwise (D418).
     /// </summary>
     public const string SiemensWordUnderARawModalCall = "CMP596";
 

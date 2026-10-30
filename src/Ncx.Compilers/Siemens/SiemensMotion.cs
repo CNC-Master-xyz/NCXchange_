@@ -211,14 +211,11 @@ internal static class SiemensMotion
 
             // D259: a bare F block under a modal call that a RAW line armed fires the modal subprogram, so the
             // compiler does not write it; the F stands again at the next block that needs it, and where a RAW line
-            // before the next one takes the modal feed, it takes the feed the control had before this block.
+            // before that block could take the modal feed, the drop is an ERROR (D418).
             if (SiemensCycles.RawModalCallStands(write))
             {
                 write.Written("F");
-                write.Warning(DiagnosticCodes.SiemensWordUnderARawModalCall,
-                    "The block programs F alone under a modal call that a RAW line armed, where F with G0 or G1 "
-                    + "active calls the modal subprogram: the F is not written here, and stands again at the next "
-                    + "block that needs it (controllers siemens.md 7; D259).");
+                SiemensCycles.ReportWordUnderRawModalCall(write, "F", "F");
                 return;
             }
 

@@ -107,6 +107,18 @@ internal sealed partial class SiemensFile
     }
 
     /// <summary>
+    /// The steps of the walk after a step, as long as they stand in its program or subprogram.
+    /// </summary>
+    /// <param name="step">A step of the walk.</param>
+    public IEnumerable<BlockStep> StepsAfter(BlockStep step)
+    {
+        for (int index = step.Index + 1; index < _steps.Count && _steps[index].Section == step.Section; index++)
+        {
+            yield return _steps[index];
+        }
+    }
+
+    /// <summary>
     /// Records the block number a RAW line of a unit carries; false where another block of the unit carries it
     /// already, which leaves a GOTO to it no one block (controllers siemens.md 1, 8; D417).
     /// </summary>
