@@ -108,8 +108,11 @@ internal static class SiemensTilt
             return;
         }
 
-        SiemensDraftBlock? before = ReferenceShift(arguments, BeforeRotation);
-        SiemensDraftBlock? after = ReferenceShift(arguments, AfterRotation);
+        // D125, D388: _X0 and _X1 are frame values of X, which the compiler writes with the frame factor of the axis,
+        // so the reader takes them with its inverse.
+        decimal xFactor = SiemensFrames.XFactor(block);
+        SiemensDraftBlock? before = ReferenceShift(arguments, BeforeRotation, xFactor);
+        SiemensDraftBlock? after = ReferenceShift(arguments, AfterRotation, xFactor);
         if (before is null || after is null || (st / 100) % 10 != 0)
         {
             block.Draft.KeepAsRaw("CYCLE800 with a reference point that is no number, or with the tool aligned instead "
@@ -467,7 +470,7 @@ internal static class SiemensTilt
 
     // The SHIFT of a reference point of CYCLE800, _X0 _Y0 _Z0 before the rotation or _X1 _Y1 _Z1 after it (D333): the
     // axes whose value is not 0, no words where all are 0 or empty; null where a value is no number.
-    private static SiemensDraftBlock? ReferenceShift(List<string> arguments, int first)
+    private static SiemensDraftBlock? ReferenceShift(List<string> arguments, int first, decimal xFactor)
     {
         var shift = new SiemensDraftBlock().WithVerb("SHIFT");
         string[] axes = ["X", "Y", "Z"];
@@ -486,7 +489,7 @@ internal static class SiemensTilt
 
             if (value != 0)
             {
-                shift.Add(axes[index], SiemensNumbers.Of(value));
+                shift.Add(axes[index], SiemensNumbers.Of(index == 0 ? value * xFactor : value));
             }
         }
 

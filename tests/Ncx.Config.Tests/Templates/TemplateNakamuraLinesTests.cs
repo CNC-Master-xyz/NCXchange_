@@ -14,8 +14,8 @@ public sealed class TemplateNakamuraLinesTests
     private const string NakamuraProgram = "sources/NAKAMURA_WY250L_O1000.nc";
 
     // Each line is read from the program, so that it is the machine's own text, trailing blank and all. The templates
-    // are those of nakamura-ntjx.toml where the file has one: M{mark} (the wait), G50 S{value} (RPM_MAX), G96 S{value}
-    // (VC) with M3 (CW) in the same block; the turret change T{tool:02}{offset:02} that the file names in a comment,
+    // are those of nakamura-wy250l.toml where the file has one: M{mark} (the wait), G50 S{value} (RPM_MAX),
+    // G96 S{value} (VC) with M3 (CW) in the same block; the turret change T{tool:02}{offset:02} of its [tool_change],
     // after the G0 of the block; G411 is a builder macro that stays RAW, matched here for its spacing only.
     [Theory]
     [InlineData(4, "G411F12. ", "G411 F{value}", "value", 12)]
@@ -75,7 +75,7 @@ public sealed class TemplateNakamuraLinesTests
     // A template of the machine file that parses without a diagnostic.
     private static Template Parse(string text)
     {
-        var diagnostics = new Diagnostics("nakamura-ntjx.toml");
+        var diagnostics = new Diagnostics("nakamura-wy250l.toml");
         var template = new Template(text, 1, diagnostics);
         Assert.Empty(diagnostics.Items);
         return template;

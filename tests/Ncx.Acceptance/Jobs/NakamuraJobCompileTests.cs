@@ -16,14 +16,14 @@ namespace Ncx.Acceptance.Jobs;
 
 /// <summary>
 /// The Nakamura WY-250L pair compiled back as one job (implementation 16, P6-02; milestone M9): both paths read by the
-/// Fanuc reader with nakamura-ntjx.toml, written as NCX and parsed again, compiled by the job compiler with the Fanuc
+/// Fanuc reader with nakamura-wy250l.toml, written as NCX and parsed again, compiled by the job compiler with the Fanuc
 /// compiler and the manifest of Fixtures/, and compared with their sources under the comparison rules of phase 3: the
 /// wait codes in the same order, the spindle synchronization in the program of path 2, which [spindle_sync] channel = 2
 /// binds it to, and the builder lines kept as RAW verbatim.
 /// </summary>
-// The Fanuc compiler writes G97 of the sub spindle from the family code, since [spindle.SUB] of nakamura-ntjx.toml
+// The Fanuc compiler writes G97 of the sub spindle from the family code, since [spindle.SUB] of nakamura-wy250l.toml
 // has no CSS_OFF (D258).
-// TODO(question): the Fanuc compiler writes G28 B0 only with an incremental letter of B, which nakamura-ntjx.toml
+// TODO(question): the Fanuc compiler writes G28 B0 only with an incremental letter of B, which nakamura-wy250l.toml
 // does not give. D243 settles the reader, where B of system A has no incremental twin and is the absolute
 // intermediate point; how the compiler writes HOME of such an axis it does not say. The job is compiled for the
 // machine with B as the incremental letter of B, until that is answered.
@@ -36,8 +36,9 @@ public sealed partial class NakamuraJobCompileTests
     private static readonly string[] s_spindleSync = ["M96", "M97", "M92"];
 
     // M9, P6-02 done when: the Nakamura pair compiles back with its wait codes in the same order. The start_mark of
-    // nakamura-ntjx.toml is the NTJX mark M198, which the WY sources do not pass, so the job compiler writes it after
-    // the header and the codes of the source follow in their order (D314, D388 9).
+    // nakamura-wy250l.toml is M199, the program start of the WY template (WY-Anleitung 2008 p.21, Handbuch 2019 p.15),
+    // which both sources pass as their first mark, so the job compiler writes no start mark after the header and the
+    // codes of the source stand alone in their order (D314, D388 9).
     [Theory]
     [InlineData(0, "NAKAMURA_WY250L_O1000.nc")]
     [InlineData(1, "NAKAMURA_WY250L_O1000.P-2.nc")]
@@ -49,9 +50,8 @@ public sealed partial class NakamuraJobCompileTests
         List<string> compiled = WaitCodes(Blocks(result.Files[channel].Text, machine));
 
         List<string> fromSource = WaitCodes(Blocks(Fixture.ReadText("sources/" + source), machine));
-        Assert.Equal(["M198", .. fromSource], compiled);
-        Assert.Equal(
-            ["M198", "M199", "M110", "M112", "M106", "M190", "M191", "M192", "M193", "M194", "M195"], compiled);
+        Assert.Equal(fromSource, compiled);
+        Assert.Equal(["M199", "M110", "M112", "M106", "M190", "M191", "M192", "M193", "M194", "M195"], compiled);
     }
 
     // M9, P6-02 done when: the spindle synchronization words stand in the path that owns them, path 2 (virtual machine
@@ -123,14 +123,14 @@ public sealed partial class NakamuraJobCompileTests
         return program;
     }
 
-    // nakamura-ntjx.toml with the incremental letter of the TODO(question) above.
+    // nakamura-wy250l.toml with the incremental letter of the TODO(question) above.
     private static MachineConfig Machine()
     {
-        string text = Fixture.ReadText("machines/nakamura-ntjx.toml");
+        string text = Fixture.ReadText("machines/nakamura-wy250l.toml");
         string filled = text
             .Replace("letter = \"B\"\n", "letter = \"B\"\nincremental_letter = \"B\"\n", StringComparison.Ordinal);
         Assert.Equal(text.Length + "incremental_letter = \"B\"\n".Length, filled.Length);
-        var diagnostics = new Diagnostics("nakamura-ntjx.toml");
+        var diagnostics = new Diagnostics("nakamura-wy250l.toml");
         MachineConfig? machine = MachineConfigLoader.LoadText(filled, diagnostics);
         Assert.True(machine is not null && !diagnostics.HasErrors, diagnostics.ToText());
         return machine;

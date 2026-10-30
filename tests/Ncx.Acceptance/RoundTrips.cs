@@ -33,7 +33,7 @@ public sealed class RoundTrips : IDisposable
 {
     private const string FanucMill = "fanuc-mill-30i";
     private const string HeidenhainMill = "heidenhain-itnc530";
-    private const string Nakamura = "nakamura-ntjx";
+    private const string NakamuraWy = "nakamura-wy250l";
 
     // The blocks of Expected/3D_FRAESEN.ncx, the Fanuc reading, that the Heidenhain reading of 3D_FRAESEN.h writes
     // otherwise, in their order: the readings the notes of 2.5D_FRAESEN list for the same header and the same ends
@@ -223,9 +223,9 @@ public sealed class RoundTrips : IDisposable
     [InlineData("NAKAMURA_WY250L_O1000.P-2.nc")]
     public void ConvertAndCheck_NakamuraPathAsASingleFile_RaisesNoError(string source)
     {
-        Convert(source, Nakamura);
+        Convert(source, NakamuraWy);
 
-        int exitCode = _cli.Run("check", _cli.PathOf(NcxFileOf(source)), "--machine", Nakamura);
+        int exitCode = _cli.Run("check", _cli.PathOf(NcxFileOf(source)), "--machine", NakamuraWy);
 
         Assert.True(exitCode == 0, _cli.Error);
         Assert.DoesNotContain(": ERROR ", _cli.Error, StringComparison.Ordinal);

@@ -183,13 +183,46 @@ internal static class SiemensFrames
         return new SiemensChainEntry("SHIFT", name, shift);
     }
 
-    // The value of a shift in NCX. A Siemens facing axis keeps its frame offsets as radii, MD20360 bit 3 off
-    // (Funktionshandbuch Grundfunktionen 2012 p.901-903, cnc-manuals), while NCX reads SHIFT X under DIAMETER=ON as a
-    // diameter, so the reader doubles the X of a shift under DIAMON and DIAM90; where [[axis]] frames_in_diameter
-    // says the control keeps them as diameters, X is taken as written (D125, D388).
+    // The value of a shift in NCX: the X of TRANS, ATRANS and G58/G59 with the frame factor of the axis, the inverse
+    // of the factor the compiler writes TRANS X with (D125, D388).
     private static Value ShiftValue(SiemensBlock block, string axis, Value value)
     {
-        return axis == "X" && XInRadius(block) ? SiemensMotion.Doubled(block, value) : value;
+        if (axis != "X")
+        {
+            return value;
+        }
+
+        decimal factor = XFactor(block);
+        if (factor == 2m)
+        {
+            return SiemensMotion.Doubled(block, value);
+        }
+
+        if (factor == 0.5m)
+        {
+            return SiemensMotion.Halved(block, value);
+        }
+
+        return value;
+    }
+
+    /// <summary>
+    /// The factor from an X value the control keeps as a frame offset or reads as the machine position, $AA_IM[X], to
+    /// the NCX value of X, the inverse of the factor the compiler writes them with (D125, D240, D388; Funktionshandbuch
+    /// Grundfunktionen 2012 p.901-903): 2 where the control keeps them as radii while NCX reads a diameter (XInRadius);
+    /// 1/2 under DIAMOF on an X axis that sets frames_in_diameter, MD20360 bits 3, 6 and 7, where the control keeps
+    /// them as diameters "ohne Umrechnung" while NCX reads a radius; 1 otherwise.
+    /// </summary>
+    /// <param name="block">The block being read.</param>
+    public static decimal XFactor(SiemensBlock block)
+    {
+        if (XInRadius(block))
+        {
+            return 2m;
+        }
+
+        bool diameterMode = block.Facts.DiameterMode is "DIAMON" or "DIAM90";
+        return !diameterMode && block.Machine.ResolveAxis("X")?.FramesInDiameter == true ? 0.5m : 1m;
     }
 
     /// <summary>

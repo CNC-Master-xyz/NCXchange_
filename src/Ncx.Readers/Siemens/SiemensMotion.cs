@@ -597,6 +597,23 @@ internal static class SiemensMotion
     }
 
     /// <summary>
+    /// Half a value, for the radius NCX reads under DIAMETER=OFF from a frame offset of X the control keeps as a
+    /// diameter, frames_in_diameter (D125, D388).
+    /// </summary>
+    /// <param name="block">The block being read.</param>
+    /// <param name="value">The diameter.</param>
+    public static Value Halved(SiemensBlock block, Value value)
+    {
+        if (SiemensNumbers.NumberOf(value) is decimal number)
+        {
+            return SiemensNumbers.Of(number / 2);
+        }
+
+        string text = value is ExprValue expression ? expression.Text : value.ToCanonical();
+        return SiemensExpression.Parse(block, "(" + text + ") / 2", out _) ?? value;
+    }
+
+    /// <summary>
     /// Why a block that depends on a fact the reader does not know stays RAW (D5).
     /// </summary>
     /// <param name="fact">The fact, "G90 or G91".</param>

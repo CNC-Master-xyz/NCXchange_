@@ -31,7 +31,7 @@ public sealed class FixtureTests
         Assert.Empty(differing);
     }
 
-    // The five example machines are the shipped machine files: machines/ holds a copy of each, kept identical to the
+    // The six example machines are the shipped machine files: machines/ holds a copy of each, kept identical to the
     // example byte for byte, so that the specification folder stays the single source of truth and a fix is made in
     // docs/spec/examples/machines and copied (implementation 12, P2-04; machine-config 11).
     [Fact]
@@ -55,7 +55,7 @@ public sealed class FixtureTests
             }
         }
 
-        Assert.Equal(5, exampleMachines.Count);
+        Assert.Equal(6, exampleMachines.Count);
         Assert.Empty(differing);
     }
 

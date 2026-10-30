@@ -1,3 +1,4 @@
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using static Ncx.Readers.Tests.Fanuc.FanucRead;
 
@@ -95,6 +96,21 @@ public sealed class FanucToolTests
             LoadMachineFile("docs/spec/examples/machines/nakamura-ntjx.toml"));
 
         Assert.Contains("TOOL:TURRET2=6 OFFSET=56", text, StringComparison.Ordinal);
+    }
+
+    // D219: [tool_change] describes the change of default_holder, so a template that begins with a G code, the
+    // "G0 T{tool:02}{offset:02}" of the WY-250L (4810004EEE p.67), reads the T words of that holder's path alone; in
+    // the path-2 file the same line is the turret form with the role of turret 2, and in the path-1 file the change
+    // of default_holder.
+    [Fact]
+    public void ToolWord_MatchingAGTemplateInTheFileOfAnotherHolder_IsTheTurretFormWithThatHoldersRole()
+    {
+        MachineConfig machine = LoadMachineFile("docs/spec/examples/machines/nakamura-wy250l.toml");
+
+        Assert.Contains("TOOL:TURRET2=12 OFFSET=12", TextOfFile("O1000.P-2", "%\nO1000\nG0T1212\nM30\n%\n", machine),
+            StringComparison.Ordinal);
+        Assert.Contains("TOOL=1 OFFSET=1", TextOfFile("O1000", "%\nO1000\nG0T0101\nM30\n%\n", machine),
+            StringComparison.Ordinal);
     }
 
     // The builder's change macro of [tool_change], G340 T0101. A02., is the change with its offset and the preload of

@@ -43,8 +43,8 @@ public sealed partial class ConvertExampleTests : IDisposable
             { "2.5D_FRAESEN.h", "heidenhain-itnc530" },
             { "BOHREN.h", "heidenhain-itnc530" },
             { "3D_FRAESEN.h", "heidenhain-itnc530" },
-            { "NAKAMURA_WY250L_O1000.nc", "nakamura-ntjx" },
-            { "NAKAMURA_WY250L_O1000.P-2.nc", "nakamura-ntjx" },
+            { "NAKAMURA_WY250L_O1000.nc", "nakamura-wy250l" },
+            { "NAKAMURA_WY250L_O1000.P-2.nc", "nakamura-wy250l" },
         };
     }
 
