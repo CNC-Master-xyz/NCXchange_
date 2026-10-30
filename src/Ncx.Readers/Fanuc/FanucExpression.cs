@@ -246,8 +246,10 @@ internal sealed class FanucExpression
                 return " <= ";
             case "AND" or "OR" or "MOD":
                 return " " + name + " ";
-            case "SIN" or "COS" or "TAN" or "ASIN" or "ACOS" or "SQRT" or "ABS" or "ROUND" or "LN" or "EXP":
+            case "SIN" or "COS" or "TAN" or "ACOS" or "SQRT" or "ABS" or "ROUND" or "LN" or "EXP":
                 return name + "(" + Argument(name) + ")";
+            case "ASIN":
+                return InTheRangeOfTheControl("ASIN(" + Argument(name) + ")");
             case "FIX":
                 // FIX discards the fraction, INT truncates toward zero (language 4.12).
                 return "INT(" + Argument(name) + ")";
@@ -290,11 +292,8 @@ internal sealed class FanucExpression
 
     // ATAN[a]/[b] and ATAN[a,b] are the arc tangent of a over b, ATAN[a] the one of a single argument.
     // D119: ATAN2(y, x) takes the ordinate first, which is the argument order of Fanuc's two-argument ATAN too, so
-    // ATAN[a]/[b] reads as ATAN2(a, b) (decisions.md; wave-1 question #86).
-    // TODO(question): D119 has the Fanuc reader convert the range as well: the control gives 0 to 360 degrees unless
-    // bit 0 (NAT) of parameter 6004 is 1, while NCX ATAN2 runs above -180 up to 180, and the program does not carry
-    // that bit, so the conversion waits on the machine-file key D119 asks for and no key of machine-config 7 carries.
-    // Until then the value is read unconverted, as the Fanuc compiler writes it unconverted (FanucExpressions.Call).
+    // ATAN[a]/[b] reads as ATAN2(a, b) (decisions.md; wave-1 question #86). The two-argument form is converted to the
+    // range of the control (D404).
     private string ArcTangent()
     {
         string first = Argument("ATAN");
@@ -308,10 +307,21 @@ internal sealed class FanucExpression
         {
             _position += 2;
             string second = Sequence(']');
-            return "ATAN2(" + first + ", " + second + ")";
+            return InTheRangeOfTheControl("ATAN2(" + first + ", " + second + ")");
         }
 
         _position = afterFirst;
-        return first.Contains(',', StringComparison.Ordinal) ? "ATAN2(" + first + ")" : "ATAN(" + first + ")";
+        return first.Contains(',', StringComparison.Ordinal)
+            ? InTheRangeOfTheControl("ATAN2(" + first + ")")
+            : "ATAN(" + first + ")";
+    }
+
+    // D404: under the factory setting of parameter 6004#0 NAT, [variables] atan_nat = false, the two-argument ATAN of
+    // the control gives 0 to 360 and ASIN 270 to 0 to 90 (B-64490EN-05 p.340-341), while NCX ATAN2 runs above -180 up
+    // to 180 and ASIN -90 to 90; the reader reads the value of the control, (f + 360) MOD 360. Under NAT = 1 the
+    // ranges agree and the function is read plain. The parentheses keep the form one operand, 2 * ATAN[a]/[b].
+    private string InTheRangeOfTheControl(string function)
+    {
+        return _block.Machine.Variables.AtanNat ? function : "((" + function + " + 360) MOD 360)";
     }
 }

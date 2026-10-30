@@ -37,6 +37,40 @@ public sealed class FanucFlowTests
         Assert.Equal("#2 = 4\n#1 = [#2 * SIN[30]] + FIX[2.5]\n", body);
     }
 
+    // D404: under the factory setting of parameter 6004#0 NAT, [variables] atan_nat = false, the two-argument ATAN of
+    // the control runs 0 to 360, so NCX ATAN2 is written mapped back to -180 to 180: exactly 180 becomes -180, the
+    // same direction (B-64490EN-05 p.340-341, cnc-manuals pages 340-341).
+    [Fact]
+    public void Atan2_UnderTheFactoryNat_IsMappedToTheNcxRange()
+    {
+        string body = FanucCompile.Body("VAR:V2=1\nVAR:V3=1\nVAR:V1={ATAN2($V2, $V3)}");
+
+        Assert.Equal("#2 = 1\n#3 = 1\n#1 = [ATAN[#2]/[#3] - 360 * FIX[ATAN[#2]/[#3] / 180]]\n", body);
+    }
+
+    // D404: with atan_nat = true the control's range is the NCX range, and ATAN2 is written plain; ASIN follows the
+    // same bit.
+    [Fact]
+    public void Atan2AndAsin_UnderAtanNat_AreWrittenPlain()
+    {
+        string toml = FanucCompile.Mill().Replace("[variables]\n", "[variables]\natan_nat = true\n",
+            StringComparison.Ordinal);
+        string text = FanucCompile.TextOf(FanucCompile.Run(
+            FanucCompile.Program("VAR:V2=1", "VAR:V3=1", "VAR:V1={ATAN2($V2, $V3)}", "VAR:V4={ASIN(0.5)}"), toml));
+
+        Assert.Contains("#1 = ATAN[#2]/[#3]\n", text, StringComparison.Ordinal);
+        Assert.Contains("#4 = ASIN[0.5]\n", text, StringComparison.Ordinal);
+    }
+
+    // D404: ASIN under NAT = 0 gives 270 to 0 to 90, and the compiler maps it back to -90 to 90 the same way.
+    [Fact]
+    public void Asin_UnderTheFactoryNat_IsMappedToTheNcxRange()
+    {
+        string body = FanucCompile.Body("VAR:V1={ASIN(-0.5)}");
+
+        Assert.Equal("#1 = [ASIN[-0.5] - 360 * FIX[ASIN[-0.5] / 180]]\n", body);
+    }
+
     // D51, machine-config 7: a SYS_ name is the native variable of [system_variables], with its index.
     [Fact]
     public void SystemVariables_AreTheNativeVariablesOfTheMachine()

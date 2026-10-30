@@ -488,6 +488,7 @@ declared = ["XMW_1", "GC1_XDREMI"]        # optional: names the machine declares
 block_cap = 1000000
 call_depth = 8
 repeat_counters = ["#149", "#148"]  # optional, Fanuc: the counter variable of each REPEAT nesting depth (D280)
+atan_nat = false                   # optional, Fanuc: parameter 6004#0 NAT; false (default, factory setting) = ATAN of two arguments 0..360 and ASIN 270..0..90, which reader and compiler convert to the NCX range; true = -180..180 and -90..90, written plain (D404)
 
 [system_variables]                 # NCX SYS_ names to native system variables (D51); {index} is the NCX index
 SYS_POS_X = "#5041"                # workpiece coordinates

@@ -35,27 +35,45 @@ public sealed class FanucMacroTests
             Body("#1=FIX[#2]\n#3=FUP[#4]"));
     }
 
-    // ATAN[a]/[b] is the arc tangent of a over b, in the argument order of NCX ATAN2 (D119).
+    // ATAN[a]/[b] is the arc tangent of a over b, in the argument order of NCX ATAN2 (D119). D404: under the factory
+    // setting of parameter 6004#0 NAT, [variables] atan_nat = false, the control gives 0 to 360, so the reader reads
+    // it as (ATAN2(a, b) + 360) MOD 360, in parentheses so that it stays one operand.
     [Fact]
-    public void AtanOfTwoBrackets_IsAtan2()
+    public void AtanOfTwoBrackets_IsAtan2InTheRangeOfTheControl()
     {
-        Assert.Equal(Lines("VAR:V1={ATAN2($V2, $V3)}"), Body("#1=ATAN[#2]/[#3]"));
+        Assert.Equal(Lines("VAR:V1={((ATAN2($V2, $V3) + 360) MOD 360)}"), Body("#1=ATAN[#2]/[#3]"));
     }
 
-    // D119 puts the range conversion of the two-argument ATAN on the Fanuc reader as well as on the Fanuc compiler,
-    // and makes it wait on a machine-file key that says which range the control uses; no key carries that, so the
-    // reader writes the value unconverted. A deferral of a settled decision is recorded, like the compiler's in row 60
-    // of wave 3: the open-questions table names the reader's marker and the decision it waits on (00-method 4).
+    // D404: with atan_nat = true the control gives -180 to 180, the range of NCX ATAN2, and the reader reads the plain
+    // form.
     [Fact]
-    public void D119Rows_TheRangeConversionOfTheFanucReader_AreRecordedAsTheOpenQuestionItIs()
+    public void AtanOfTwoBrackets_UnderAtanNat_IsThePlainAtan2()
+    {
+        Assert.Equal(Lines("VAR:V1={ATAN2($V2, $V3)}"),
+            Body("#1=ATAN[#2]/[#3]", MillWith("[variables]\natan_nat = true")));
+    }
+
+    // D404: ASIN follows the same bit, 270 to 0 to 90 under NAT = 0 (B-64490EN-05 p.340-341, cnc-manuals pages
+    // 340-341), and -90 to 90 under NAT = 1.
+    [Fact]
+    public void Asin_FollowsTheNatBit()
+    {
+        Assert.Equal(Lines("VAR:V1={((ASIN($V2) + 360) MOD 360)}"), Body("#1=ASIN[#2]"));
+        Assert.Equal(Lines("VAR:V1={ASIN($V2)}"), Body("#1=ASIN[#2]", MillWith("[variables]\natan_nat = true")));
+    }
+
+    // D404 settles the range conversion of the Fanuc reader that D119 left waiting on a machine key: its row of the
+    // open-questions table is settled with that decision (00-method 4).
+    [Fact]
+    public void D404Rows_TheRangeConversionOfTheFanucReader_IsSettled()
     {
         string path = Path.Combine(Fixture.RepositoryRoot(), "docs", "implementation", "03-open-questions.md");
         string? row = Array.Find(File.ReadAllLines(path),
-            line => line.Contains("`src/Ncx.Readers/Fanuc/FanucExpression.cs:272`", StringComparison.Ordinal));
+            line => line.Contains("src/Ncx.Readers/Fanuc/FanucExpression.cs", StringComparison.Ordinal)
+                && line.Contains("range", StringComparison.Ordinal));
 
         Assert.NotNull(row);
-        Assert.Contains("D119", row, StringComparison.Ordinal);
-        Assert.Contains("range", row, StringComparison.Ordinal);
+        Assert.Contains("settled 2026-10-30 (D404)", row, StringComparison.Ordinal);
     }
 
     // IF [ ] GOTO n is JUMP=n with IF, EQ is == (controller-mapping 6; language 4.9).

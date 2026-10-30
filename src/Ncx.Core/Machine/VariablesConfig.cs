@@ -40,4 +40,11 @@ public sealed record VariablesConfig
     /// empty when left out, and the compiler reports an ERROR for a REPEAT that needs one (machine-config 7, D280).
     /// </summary>
     public IReadOnlyList<string> RepeatCounters { get; init; } = [];
+
+    /// <summary>
+    /// atan_nat: the setting of Fanuc parameter 6004#0 NAT. False, the factory setting and the value when left out:
+    /// the two-argument ATAN of the control gives 0 to 360 and ASIN 270 to 0 to 90; true: -180 to 180 and -90 to 90,
+    /// the ranges of NCX ATAN2 and ASIN (machine-config 7, D404).
+    /// </summary>
+    public bool AtanNat { get; init; }
 }
