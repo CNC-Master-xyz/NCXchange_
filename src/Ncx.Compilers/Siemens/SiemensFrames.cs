@@ -26,6 +26,10 @@ internal static partial class SiemensFrames
     private const string ProgrammableFrame = "TRANS";
     private const string Swivel = "CYCLE800";
 
+    // The target key of a frame a RAW subprogram or builder-cycle call may have changed (D420): it stands in the target
+    // state while it is unknown, from such a RAW line to the next motion, which writes the full frame again.
+    private const string RawCallFrame = "FRAME_CALL";
+
     // The target key of the plane, group 6, as SiemensMotion keeps it (controllers siemens.md 2).
     private const string PlaneGroup = "G17";
 
@@ -65,6 +69,14 @@ internal static partial class SiemensFrames
             }
         }
 
+        // D420: after a RAW call the frame is unknown, and the next motion writes the full frame of the virtual machine
+        // first, as MCALL alone ends a modal call the call may have armed (D343).
+        if (write.IsMadeUnknown(RawCallFrame) && block.Verb?.Key is "RAPID" or "LINE" or "ARC" or "RETRACT"
+            or "CYCLE_CALL")
+        {
+            WriteFullFrame(write);
+        }
+
         // ROT is not available on Siemens and is ignored with a WARNING (controller-mapping 1, MOVE and ROT; language
         // 4.2, ROT).
         if (block.Has("ROT"))
@@ -102,6 +114,27 @@ internal static partial class SiemensFrames
         for (int index = kept; index < chain.Count; index++)
         {
             WriteEntry(write, chain, index, StartsProgrammableFrame(chain, index), appended: true);
+        }
+    }
+
+    // D420: the full frame of the virtual machine, after a RAW call that may have changed it on the control: the datum
+    // where the program has set one, the end of the swivel where [transform] gives it one (TILT_OFF), the tilts and
+    // the programmable frame of the chain again, TRANS alone where the chain holds none of it.
+    private static void WriteFullFrame(SiemensBlock write)
+    {
+        write.Target.Forget(RawCallFrame);
+        if (write.File.HasOriginBefore(write.Step) && DatumCode(write.After.Frame.Origin) is string datum)
+        {
+            SiemensMotion.Change(write, DatumGroup, SiemensLine.DatumRank, datum);
+        }
+
+        bool endsSwivel = write.Machine.Transform?.TiltOff is not null;
+        ChainChange none = ChainWriter.Between(write.After.Frame, write.After.Frame);
+        WriteRemoved(write, none, write.After.Frame.Chain.Count, endsProgrammable: true, endsSwivel);
+        write.Target.Forget(ProgrammableFrame);
+        if (endsSwivel)
+        {
+            write.Target.Forget(Swivel);
         }
     }
 
@@ -267,16 +300,21 @@ internal static partial class SiemensFrames
     /// siemens.md 4; controller-mapping 1, TILT; language 4.1, D5): it is unknown until a block ends it (WriteChain).
     /// The settable frame is the datum, which every RAW line leaves unknown already.
     /// </summary>
-    // TODO(question): the documents do not say whether a RAW line that names none of them, a builder cycle (the STAMA
-    // DREH(...), NEWCOORD(...); machine-builders 2) or a subprogram it calls, changes the frame; the frame stays as the
-    // chain has it after such a RAW, since TRANS and CYCLE800() before the next ORIGIN after every MSG and STOPRE would
-    // stand where the source has none (controllers sample-corpus.md: MSG before every operation), until that is
-    // answered, as for the modal call (SiemensCycles.AfterRaw).
+    // D420: a RAW subprogram or builder-cycle call (the STAMA DREH(...), NEWCOORD; machine-builders 2) may change the
+    // frame as well, so the frame is unknown after it and the next motion writes it again (WriteFullFrame), as D343
+    // does for the modal call. A RAW line that is MSG, STOPRE, a comment, G4 or another frame-neutral instruction
+    // leaves the frame known, so that no frame stands after every MSG (controllers sample-corpus.md: MSG before every
+    // operation; SiemensRawCall).
     public static void AfterRaw(SiemensBlock write, string raw)
     {
         foreach (string key in KeysNamedBy(raw))
         {
             write.MakeUnknown(key);
+        }
+
+        if (SiemensRawCall.IsCall(raw))
+        {
+            write.MakeUnknown(RawCallFrame);
         }
     }
 
@@ -296,21 +334,22 @@ internal static partial class SiemensFrames
 
     /// <summary>
     /// The keys of the target state that a RAW text may change, the programmable frame and the swivel, by the
-    /// instructions and the frame variables it names (AfterRaw).
+    /// instructions and the frame variables it names, or both where it calls a subprogram or a builder cycle (AfterRaw,
+    /// D420).
     /// </summary>
     /// <param name="raw">The text of the RAW block.</param>
     public static List<string> KeysNamedBy(string raw)
     {
         // The words of the text, without its strings and its comments, whose words are no instructions.
         string code = StringOrComment().Replace(raw, " ");
-        bool frameVariable = FrameVariable().IsMatch(code);
+        bool everyFrame = FrameVariable().IsMatch(code) || SiemensRawCall.IsCall(raw);
         var keys = new List<string>();
-        if (frameVariable || ProgrammableInstruction().IsMatch(code))
+        if (everyFrame || ProgrammableInstruction().IsMatch(code))
         {
             keys.Add(ProgrammableFrame);
         }
 
-        if (frameVariable || SwivelInstruction().IsMatch(code))
+        if (everyFrame || SwivelInstruction().IsMatch(code))
         {
             keys.Add(Swivel);
         }

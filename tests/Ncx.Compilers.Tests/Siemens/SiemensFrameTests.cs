@@ -335,6 +335,39 @@ public sealed class SiemensFrameTests
             MillTurnBody("ORIGIN=1", "RAW:SIEMENS=\"MSG(\\\"TRANS X10\\\")\"", "ORIGIN=1"));
     }
 
+    // D420: a RAW subprogram or builder-cycle call may change the frame, as it may arm a modal call (D343), so the
+    // frame is unknown after it and the compiler writes the full frame before the next motion: the datum, the
+    // programmable frame again (TRANS alone where the chain holds none) and the end of the swivel where the machine has
+    // TILT_OFF.
+    [Theory]
+    [InlineData("DREH(1,2)")]
+    [InlineData("NEWCOORD")]
+    [InlineData("L100")]
+    [InlineData("CALL \\\"MYSUB\\\"")]
+    public void Motion_AfterARawCall_WritesTheFullFrameAgain(string call)
+    {
+        string written = call.Replace("\\", "", StringComparison.Ordinal);
+        Assert.Equal(Lines("G54", "TRANS X5", written, "CYCLE800()", "TRANS X5", "MCALL", "G1 G54 G90 G95 X1 F100"),
+            MillTurnBody("ORIGIN=1", "SHIFT X=10", $"RAW:SIEMENS=\"{call}\"", "LINE X=1 F=100"));
+    }
+
+    // D420: a RAW line that is MSG, STOPRE, a comment, G4 or another frame-neutral instruction leaves the frame known,
+    // so no frame is written before the next motion.
+    [Theory]
+    [InlineData("STOPRE")]
+    [InlineData("G4 F2")]
+    [InlineData("SOFT")]
+    [InlineData("WORKPIECE(,,,\\\"CYLINDER\\\",0,0,-80,-80,40)")]
+    [InlineData("CYCLE832(0.01,0,1)")]
+    [InlineData("R1=SIN(30)")]
+    [InlineData("IF R1>2 GOTOF MARKE")]
+    public void Motion_AfterAFrameNeutralRawLine_WritesNoFrame(string neutral)
+    {
+        string written = neutral.Replace("\\", "", StringComparison.Ordinal);
+        Assert.Equal(Lines("G54", "TRANS X5", written, "MCALL", "G1 G90 G95 X1 F100"),
+            MillTurnBody("ORIGIN=1", "SHIFT X=10", $"RAW:SIEMENS=\"{neutral}\"", "LINE X=1 F=100"));
+    }
+
     // Controller-mapping 1, HOME: G74 with the machine axis names and 0 (siemens 3), G75 with the axes, FP= the point.
     [Fact]
     public void Home_ReferencePointAndPoint2_IsG74WithMachineNamesAndG75WithFp()
