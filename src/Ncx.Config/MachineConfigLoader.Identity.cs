@@ -10,13 +10,14 @@ public static partial class MachineConfigLoader
     [
         "name", "controller", "dialect", "builder", "gcode_system", "s_binds_to_spindle_word", "limits", "channels",
         "units_default", "default_spindle", "default_holder", "default_workpiece", "tool_table", "kinematics",
-        "arc_tolerance", "arc_radius_tolerance", "dwell_increment", "base_units", "extended_units",
+        "arc_tolerance", "arc_radius_tolerance", "dwell_increment", "input_increment", "base_units", "extended_units",
     ];
 
     private static readonly string[] s_controllers = ["fanuc", "heidenhain", "siemens"];
     private static readonly string[] s_gcodeSystems = ["A", "B", "C"];
     private static readonly string[] s_limitPolicies = ["warn", "clamp"];
     private static readonly string[] s_units = ["MM", "INCH"];
+    private static readonly string[] s_incrementSystems = ["IS-A", "IS-B", "IS-C"];
 
     // base_units takes the words of MD10240 in the lower case of the D292 row.
     private static readonly string[] s_baseUnits = ["mm", "inch"];
@@ -91,6 +92,15 @@ public static partial class MachineConfigLoader
             ArcTolerance = table.PositiveNumber("arc_tolerance"),
             ArcRadiusTolerance = table.PositiveNumber("arc_radius_tolerance"),
             DwellIncrement = table.PositiveNumber("dwell_increment") ?? 0.001m,
+
+            // The increment system of a Fanuc control, parameter 1013 (B-64490EN-05 p.57-58): the least input
+            // increment in mm, IS-B when the file leaves it out (controllers fanuc.md 2).
+            InputIncrement = table.Choice("input_increment", s_incrementSystems) switch
+            {
+                "IS-A" => 0.01m,
+                "IS-C" => 0.0001m,
+                _ => 0.001m,
+            },
 
             // The basic system and G700/G710 of a Siemens control, MD10240 and MD10260 (D292).
             BaseUnits = table.Choice("base_units", s_baseUnits) switch

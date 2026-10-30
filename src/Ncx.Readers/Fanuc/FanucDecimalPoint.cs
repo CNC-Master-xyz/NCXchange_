@@ -5,7 +5,8 @@ namespace Ncx.Readers.Fanuc;
 
 /// <summary>
 /// The numbers without a decimal point of a Fanuc block under [format] calculator_input = false, parameter 3401#0
-/// DPI = 0: an address that can take a decimal point counts least input increments, X70 is 0.070 mm (B-64484EN p.229,
+/// DPI = 0: an address that can take a decimal point counts least input increments, X70 is 0.070 mm under IS-B
+/// ([machine] input_increment) (B-64484EN p.229,
 /// 8.3; B-64490EN-05 p.190; controllers fanuc.md 2). The words are rewritten to the value they stand for, with its
 /// decimal point, before any concern reads them, so that every concern reads the same number the control does.
 /// </summary>
@@ -40,12 +41,7 @@ internal static class FanucDecimalPoint
         GcodeSystem? system = machine.Machine.GcodeSystem;
         string addresses = system is null ? MillAddresses : LatheAddresses + (system == GcodeSystem.A ? "H" : "");
         bool dwell = block.Words.Any(word => word.Address == "G" && NativeCode.Of(word) == "G4");
-        // The units and the feed mode the header assumes where the program has set none: units_default, per minute
-        // (FanucHeader).
-        string? unitsCode = state.ActiveCode(FanucModalGroups.Units);
-        bool inch = unitsCode is null
-            ? machine.Machine.UnitsDefault?.ToUpperInvariant() == "INCH"
-            : unitsCode == (system == GcodeSystem.C ? "G70" : "G20");
+        bool inch = FanucNumbers.IsInch(state, machine);
         var words = new List<SourceWord>();
         bool changed = false;
         foreach (SourceWord word in block.Words)
@@ -56,9 +52,15 @@ internal static class FanucDecimalPoint
                 && !word.Text.Contains('.', StringComparison.Ordinal)
                 && !(dwell && word.Address is "X" or "U"))
             {
-                increment = word.Address == "F"
-                    ? (feedModeUnknown ? null : FeedIncrement(state, system, inch))
-                    : AddressIncrement(word.Address, machine, system, inch);
+                if (word.Address != "F")
+                {
+                    increment = AddressIncrement(word.Address, machine, system, inch);
+                }
+                else if (!feedModeUnknown)
+                {
+                    increment = FeedIncrement(state, system, inch);
+                }
+
                 if (word.Address == "F" && increment is null)
                 {
                     problem = $"F{word.Text} has no decimal point, so it counts least input increments of the feed "
@@ -89,23 +91,23 @@ internal static class FanucDecimalPoint
         return changed ? block with { Words = words } : block;
     }
 
-    // The least input increment of an address other than F, IS-B (B-64484EN p.527-528, NOTE 2 and 3): a rotary axis
-    // 0.001 degree, a linear axis and a non-axis address of the reference axis 0.001 mm or 0.0001 inch; B U V W
-    // as a non-axis address take whole numbers; null for no scaling.
+    // The least input increment of an address other than F (B-64484EN p.527-528, NOTE 2 and 3) from [machine]
+    // input_increment, parameter 1013 (B-64490EN-05 p.57-58): a rotary axis that number in degrees, a linear axis and
+    // a non-axis address of the reference axis that number in mm or a tenth of it in inch; B U V W as a non-axis
+    // address take whole numbers; null for no scaling.
     private static decimal? AddressIncrement(string address, MachineConfig machine, GcodeSystem? system, bool inch)
     {
         AxisDef? axis = AxisOf(address, machine, system);
         if (axis is not null)
         {
-            return axis.Kind == AxisKind.Rotary ? 0.001m : Linear(inch);
+            return axis.Kind == AxisKind.Rotary
+                ? machine.Machine.InputIncrement
+                : machine.Machine.LinearIncrement(inch);
         }
 
-        return ReferenceAddresses.Contains(address, StringComparison.Ordinal) ? Linear(inch) : null;
-    }
-
-    private static decimal Linear(bool inch)
-    {
-        return inch ? 0.0001m : 0.001m;
+        return ReferenceAddresses.Contains(address, StringComparison.Ordinal)
+            ? machine.Machine.LinearIncrement(inch)
+            : null;
     }
 
     // The axis an address names: the address or the incremental letter of an [[axis]] (machine-config 4), H the

@@ -371,6 +371,14 @@ internal static class FanucCycles
     // (FanucPaths).
     private static void Ended(FanucBlock write)
     {
+        // The cancel of a rigid tapping run clears the S of the rigid tapping to S0 (B-64484EN-2 p.104 and p.108, S
+        // command), so the control's speed of the tap's spindle is S0 until an S is written again
+        // (FanucToolWords.RestoreSpeed).
+        if (InARunWithItsBeforeLine(write) && TapSpindleOf(write) is string tap)
+        {
+            write.Target.Set(FanucToolWords.SpeedKey + tap, FanucToolWords.ClearedSpeed);
+        }
+
         write.Target.Set(FanucCodes.Cycle, "G80");
         if (!write.DependsOnThePath(Definition))
         {
@@ -539,6 +547,10 @@ internal static class FanucCycles
             }
 
             values.Set("rpm", write.After.Spindles[id].Rpm);
+            // The S of the line is the speed of the block: an S in the cycle block itself, M29 S600 / G84 ... S600,
+            // is an S command between M29 and G84, alarm PS0203 (B-64484EN-2 p.103-104), so the spindle words of
+            // the block write no S (FanucToolWords.AddSpindle).
+            write.SpeedInBeforeLine.Add(id);
         }
 
         if (write.Render(entry.Before, $"[[cycle]] {entry.Name} before (machine-config 6, D256)", values)
@@ -548,6 +560,7 @@ internal static class FanucCycles
         }
 
         write.Write(text);
+        write.BeforeLineWritten = true;
         return true;
     }
 
@@ -567,7 +580,9 @@ internal static class FanucCycles
         CycleEntry? previous = CatalogOf(write).Find(activeName, write.After.Cycle.Axis);
         if (!string.IsNullOrEmpty(entry.Before) || !string.IsNullOrEmpty(previous?.Before))
         {
+            // The G80 of a rigid run clears its S to S0 (B-64484EN-2 p.104), which the call writes again.
             Cancel(write);
+            FanucToolWords.RestoreSpeed(write);
         }
     }
 
@@ -850,7 +865,8 @@ internal static class FanucCycles
             return;
         }
 
-        decimal increment = write.After.Frame.Units == Units.Inch ? 0.0001m : 0.001m;
+        // [machine] input_increment, parameter 1013 (B-64490EN-05 p.57-58): IS-B 0.001 mm or 0.0001 inch.
+        decimal increment = write.Machine.Machine.LinearIncrement(write.After.Frame.Units == Units.Inch);
         if (FanucFunctions.NumberOf(peck) is decimal depth)
         {
             decimal units = Math.Round(depth / increment, 0, MidpointRounding.AwayFromZero);
@@ -922,18 +938,21 @@ internal static class FanucCycles
             known = pitch is not ExprValue;
         }
 
-        AddFeedWord(write, feed, known);
+        // A definition that its before line enters or re-arms writes F every time: the manual writes F in every rigid
+        // G84 block that follows M29 S (B-64484EN-2 p.105), and the G80 that ended an earlier run clears the drilling
+        // data (p.84; B-64484EN-1 p.309), so a re-armed run does not lean on the F of the run before.
+        AddFeedWord(write, feed, known, always: write.BeforeLineWritten);
     }
 
     // The F of the cycle block, written where the control's feed differs from it (D218).
-    private static void AddFeedWord(FanucBlock write, string? feed, bool known)
+    private static void AddFeedWord(FanucBlock write, string? feed, bool known, bool always = false)
     {
         if (feed is null)
         {
             return;
         }
 
-        if (!known || write.DependsOnThePath("F") || write.Target.ActiveOf("F") != feed)
+        if (always || !known || write.DependsOnThePath("F") || write.Target.ActiveOf("F") != feed)
         {
             write.Main.Word("F" + feed);
         }

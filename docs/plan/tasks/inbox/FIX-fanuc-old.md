@@ -32,3 +32,22 @@ Branch: `fix-fanuc-old` (worktree `.worktrees/fix-fanuc-old`), from `main` 4fc31
 
 Gate 2026-10-30 on the final state: `dotnet build NCXchange.sln -warnaserror` 0 warnings, 0 errors; `dotnet test NCXchange.sln` 5814 passed, 0 failed, 7 skipped (Acceptance); `dotnet format NCXchange.sln --verify-no-changes` clean. Each commit was built and tested on its own.
 Gate 2026-10-30 after step 5: build -warnaserror 0 warnings, 0 errors; test 5822 passed, 0 failed, 7 skipped; format --verify-no-changes clean.
+
+6. Review round (orchestrator, 2026-10-30). Main (fix-wy-siemens) merged in first.
+   - Units of the lathe Q: one helper `FanucNumbers.IsInch` (G20/G21, else units_default as the header assumes) used by `LeastInputIncrement` and `FanucDecimalPoint`; an inch-default lathe without G20 read the Q 10x off.
+   - `[machine] input_increment` = "IS-A" | "IS-B" | "IS-C" (parameter 1013, B-64490EN-05 p.57-58), default IS-B: 0.01 / 0.001 / 0.0001 mm, a tenth in inch, the same number in degrees on a rotary axis; used by the lathe Q (reader and compiler) and the calculator_input = false reading.
+   - An RPM on a call inside a rigid run: the re-arm line carries the S (`M29 S600`), the G84 block none (an S there is PS0203, B-64484EN-2 p.103-104).
+   - A definition that the before line enters or re-arms writes F every time (B-64484EN-2 p.105; G80 clears the drilling data, p.84).
+   - The G80 that ends a rigid run clears its S to S0 (B-64484EN-2 p.104): the target state holds S0 for the tap's spindle, and the next cut or cycle call with the spindle running writes the programmed S again before it (also before a compensating G84 that follows a rigid run).
+   - Reader: an M29 inside any tapping run, compensating included, is RAW with PS0204 (B-64484EN-2 p.104; B-64484EN-1 p.119).
+   - Nested ternary in `FanucDecimalPoint` replaced, stale comment in `FanucBeforeLineWalk` removed.
+
+## Decision lines for decisions.md
+
+- calculator_input: Gap closed 2026-10-30 (delegated): `[format] calculator_input = true|false`, default true, is parameter 3401#0 DPI (B-64490EN-05 p.190) for the addresses that take a decimal point (B-64484EN p.229). True reads X, R, F, the mill Q and G4 X/U without a point as written (mm, inch, degrees, seconds); false counts least input increments of `input_increment`, F by the feed mode (B-64484EN p.527-528), G4 X/U in dwell_increment. Cycle P, G4 P and the lathe Q count increments under both. The compiler writes the point on every such address, under false also where `decimals` writes none.
+- input_increment: Gap closed 2026-10-30 (delegated): `[machine] input_increment = "IS-A" | "IS-B" | "IS-C"`, default "IS-B", parameter 1013 (B-64490EN-05 p.57-58): 0.01 / 0.001 / 0.0001 mm, 0.001 / 0.0001 / 0.00001 inch. Every count of the least input increment uses it: the lathe Q, the calculator_input = false reading.
+- End the run, then re-arm: Gap closed 2026-10-30 (delegated): an S word or a spindle code inside a run that the before line entered ends the run with G80 before the block, and the next call re-arms it with the line and the full definition, F included; an RPM on the call stands in the line only; after the G80 the control's S is S0 and the next cut or cycle call writes the programmed S again (B-64484EN-2 p.103-105, p.108).
+- No G80 for G90/G92/G94: Gap closed 2026-10-30 (delegated): a CYCLE=OFF or a cancel that ends a simple turning cycle (G77-G79 in B, G20/G21/G24 in C) writes no G80; the group-01 code of the block or of the next motion ends it (B-64484EN-1 p.46, p.309).
+- D159 (corrected): Gap closed 2026-10-30 (delegated): G4 X/U without a decimal point follow `[format] calculator_input` (parameter 3401#0): seconds by default, `dwell_increment` under false; G4 P and the cycle P always count `dwell_increment`.
+
+Gate 2026-10-30 after step 6 (with main merged): build -warnaserror 0 warnings, 0 errors; test 5955 passed, 0 failed, 7 skipped; format --verify-no-changes clean.

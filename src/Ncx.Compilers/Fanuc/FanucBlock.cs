@@ -238,6 +238,17 @@ internal sealed class FanucBlock
     public HashSet<string> SpindleCodesWritten { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The spindles whose speed the "before" line of a cycle in this block carries, M29 S600, so that the block
+    /// writes no S of its own for them (B-64484EN-2 p.103-104, PS0203).
+    /// </summary>
+    public HashSet<string> SpeedInBeforeLine { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// True where the "before" line of a cycle stands in front of this block, M29 S500 before G84 (machine-config 6).
+    /// </summary>
+    public bool BeforeLineWritten { get; set; }
+
+    /// <summary>
     /// Writes the function lines that stand before the main line, the main line when anything stands in it, then the
     /// lines that follow it.
     /// </summary>

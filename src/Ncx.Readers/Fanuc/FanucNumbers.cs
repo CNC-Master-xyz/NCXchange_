@@ -55,17 +55,28 @@ internal static class FanucNumbers
     }
 
     /// <summary>
-    /// The least input increment of a linear address in the units of the block, 0.001 mm or 0.0001 inch: the unit of
-    /// an address that takes no decimal point (B-64484EN p.229, 8.3; p.527-528, the increment system IS-B), the
-    /// increment system NCX assumes for every family (machine-config 2, decimals; parameter 1004#7 IPR is not
-    /// modelled).
+    /// The least input increment of a linear address in the units of the block: the unit of an address that takes no
+    /// decimal point (B-64484EN p.229, 8.3; p.527-528), [machine] input_increment in mm, a tenth of it in inch
+    /// (parameter 1013, B-64490EN-05 p.57-58; parameter 1004#7 IPR is not modelled).
     /// </summary>
-    /// <param name="block">The block being read, whose source-side state gives G20 or G21 (G70 or G71 in system
-    /// C).</param>
+    /// <param name="block">The block being read.</param>
     public static decimal LeastInputIncrement(FanucBlock block)
     {
-        string inch = block.System == GcodeSystem.C ? "G70" : "G20";
-        return block.State.ActiveCode(FanucModalGroups.Units) == inch ? 0.0001m : 0.001m;
+        return block.Machine.Machine.LinearIncrement(IsInch(block.State, block.Machine));
+    }
+
+    /// <summary>
+    /// Whether the block is read in inch: G20 (G70 in system C) in the source-side state, or where the program has set
+    /// no units yet, [machine] units_default, as the header assumes (FanucHeader).
+    /// </summary>
+    /// <param name="state">The source-side state after the modal codes of the block.</param>
+    /// <param name="machine">The machine with its G-code system and units_default.</param>
+    public static bool IsInch(SourceState state, MachineConfig machine)
+    {
+        string? units = state.ActiveCode(FanucModalGroups.Units);
+        return units is null
+            ? machine.Machine.UnitsDefault?.ToUpperInvariant() == "INCH"
+            : units == (machine.Machine.GcodeSystem == GcodeSystem.C ? "G70" : "G20");
     }
 
     /// <summary>

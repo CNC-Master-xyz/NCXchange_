@@ -67,15 +67,16 @@ internal static class FanucCycles
             return;
         }
 
-        // An M29 inside a running tapping cycle alarms PS0204 (B-64484EN-2 p.104 and p.108; B-64484EN-1 p.114,
-        // cnc-manuals pages 104, 108 and 114), so a block that carries the codes of the line while the run that the
-        // line entered goes on, alone, with its S or with a call position, stays RAW with that reason (controllers
-        // fanuc.md 9 rule 9). A block with G80, a code of group 01 or another cycle code ends the run first.
-        if (block.Fanuc.Cycle is { EnteredWithBefore: true, Entry: { Before: { Length: > 0 } before } entry } running
+        // An M29 inside a running tapping cycle alarms PS0204 (B-64484EN-2 p.104 and p.108; B-64484EN-1 p.114 and
+        // p.119, cnc-manuals pages 104, 108, 114 and 119), rigid or with a compensating chuck alike, so a block that
+        // carries the codes of the line of an entry on the running code, G84 or G74, alone, with its S or with a call
+        // position, stays RAW with that reason (controllers fanuc.md 9 rule 9). A block with G80, a code of group 01
+        // or another cycle code ends the run first.
+        if (block.Fanuc.Cycle is FanucCycle running && LineOfTheCode(block, running.Code) is string before
             && FanucBeforeLineWalk.CarriesTheCodesOf(block.Source, before) && !EndsTheRun(block, running.Code))
         {
-            block.Draft.KeepAsRaw($"{CodesOf(before)} inside the running tapping cycle {running.Code} of "
-                + $"CYCLE={entry.Name}, which the control rejects with alarm PS0204 (B-64484EN-2 p.104, p.108)");
+            block.Draft.KeepAsRaw($"{CodesOf(before)} inside the running tapping cycle {running.Code}, which the "
+                + "control rejects with alarm PS0204 (B-64484EN-2 p.104, p.108)");
             return;
         }
 
@@ -103,6 +104,21 @@ internal static class FanucCycles
 
         block.Draft.AddState("RPM", FanucFunctions.SpindleAddress(block, role), FanucNumbers.Of(rpm));
         block.Fanuc.Rpm[role ?? ""] = rpm;
+    }
+
+    // The "before" line of a catalog entry on this native code, M29 S{rpm} of TAP on G84; null where no entry on the
+    // code has one (machine-config 6, D256).
+    private static string? LineOfTheCode(FanucBlock block, string code)
+    {
+        foreach (CycleEntry entry in block.Machine.CycleCatalog.Entries)
+        {
+            if (entry.Native == code && !string.IsNullOrEmpty(entry.Before))
+            {
+                return entry.Before;
+            }
+        }
+
+        return null;
     }
 
     // Whether a block ends the run of a cycle before its other words count: G80, a code of group 01, or a cycle code

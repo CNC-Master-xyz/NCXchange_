@@ -221,6 +221,7 @@ public sealed class FanucCompiler : CompilerBase
         FanucFrames.WriteChain(write);
         WriteTools(write);
         FanucCycles.CancelBeforeSpindle(write);
+        FanucToolWords.RestoreSpeed(write);
         FanucToolWords.WriteSpindleLines(write);
         FanucFrames.WriteTransformations(write);
         FanucUnits.Check(write);

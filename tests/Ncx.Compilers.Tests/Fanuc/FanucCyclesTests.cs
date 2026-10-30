@@ -150,8 +150,10 @@ public sealed class FanucCyclesTests
             + "\nCYCLE=TAP_COMPENSATING CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL X=20"
             + "\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL X=30", MillCatalog);
 
-        Assert.EndsWith("M29 S500\nG84 G99 Z-20. R5. F750.\nG80\nG84 G99 X20. Z-20. R5.\nG80\nM29 S500\n"
-            + "G84 G99 X30. Z-20. R5.\n", body, StringComparison.Ordinal);
+        // The G80 of the rigid run clears its S to S0 (B-64484EN-2 p.104), so the compensating G84 gets S500 again; a
+        // re-armed rigid run writes F (p.105).
+        Assert.EndsWith("M29 S500\nG84 G99 Z-20. R5. F750.\nG80\nS500\nG84 G99 X20. Z-20. R5.\nG80\nM29 S500\n"
+            + "G84 G99 X30. Z-20. R5. F750.\n", body, StringComparison.Ordinal);
     }
 
     // Language 4.7 CYCLE_DWELL (seconds), controllers fanuc.md 6 (P in milliseconds) and 7: an expression dwell is P
@@ -566,8 +568,55 @@ public sealed class FanucCyclesTests
             + "\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL\nSPINDLE=CW RPM=600\nCYCLE_CALL X=30"
             + "\nCYCLE=OFF");
 
-        Assert.EndsWith("M29 S500\nG84 G99 Z-20. R5. F750.\nG80\nS600 M3\nM29 S600\nG84 G99 X30. Z-20. R5.\nG80\n",
+        Assert.EndsWith(
+            "M29 S500\nG84 G99 Z-20. R5. F750.\nG80\nS600 M3\nM29 S600\nG84 G99 X30. Z-20. R5. F750.\nG80\n",
             body, StringComparison.Ordinal);
+    }
+
+    // An RPM on a call inside a run of the rigid TAP ends the run and re-arms it with M29 S600; the S stands in that
+    // line only, since an S in the G84 block is an S command between M29 and G84, alarm PS0203 (B-64484EN-2
+    // p.103-104), and the re-armed definition writes its F (p.105).
+    [Fact]
+    public void Tap_WithAnRpmOnACallInsideTheRun_WritesTheSpeedInTheLineOnly()
+    {
+        string body = FanucCompile.Body("TOOL=1\nSPINDLE=CW RPM=500\nRAPID X=10 Y=10\nRAPID Z=5"
+            + "\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL\nCYCLE_CALL X=30 RPM=600\nCYCLE=OFF");
+
+        Assert.EndsWith("M29 S500\nG84 G99 Z-20. R5. F750.\nG80\nM29 S600\nG84 G99 X30. Z-20. R5. F750.\nG80\n",
+            body, StringComparison.Ordinal);
+    }
+
+    // The G80 that ends a rigid TAP run clears its S to S0 (B-64484EN-2 p.104), so the next cycle that needs the
+    // spindle writes the programmed S again before it.
+    [Fact]
+    public void Drill_AfterARigidTapRun_WritesTheSpeedAgain()
+    {
+        string body = FanucCompile.Body("TOOL=1\nSPINDLE=CW RPM=500\nRAPID X=10 Y=10\nRAPID Z=5"
+            + "\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL\nCYCLE=OFF\nRAPID Z=10"
+            + "\nCYCLE=DRILL CLEARANCE=5 DEPTH=-20 CYCLE_F=100\nCYCLE_CALL X=40\nCYCLE=OFF");
+
+        Assert.EndsWith("G84 G99 Z-20. R5. F750.\nG80\nG0 Z10.\nS500\nG81 G99 X40. Z-20. R5. F100.\nG80\n", body,
+            StringComparison.Ordinal);
+    }
+
+    // [machine] input_increment = "IS-C" (parameter 1013, B-64490EN-05 p.57-58): the lathe Q counts 0.0001 mm.
+    [Fact]
+    public void Peck_OnALatheOfIsC_IsQInTenThousandths()
+    {
+        string text = FanucCompile.TextOf(FanucCompile.Run(FanucCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+            "FEED_MODE=PER_REV COMP=OFF UNITS=MM WORKPLANE=XY DIAMETER=ON CYCLE=OFF",
+            "SPINDLE:MAIN=CW RPM:MAIN=500",
+            "RAPID X=0 Z=5",
+            "CYCLE=PECK CLEARANCE=2 DEPTH=-40 PECK=2 CYCLE_F=0.2",
+            "CYCLE_CALL",
+            "CYCLE=OFF",
+            "PROGRAM=END",
+            "FILE=END"), FanucCompile.Lathe().Replace("units_default = \"MM\"",
+            "units_default = \"MM\"\ninput_increment = \"IS-C\"", StringComparison.Ordinal)));
+
+        Assert.Contains("\nG83 Z-40. R-3. Q20000 F0.2\n", text, StringComparison.Ordinal);
     }
 
     // A spindle stop inside a run of the rigid TAP ends the run the same way (B-64484EN-2 p.104).

@@ -1,3 +1,4 @@
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.Writing;
 using static Ncx.Readers.Tests.Fanuc.FanucRead;
@@ -147,6 +148,18 @@ public sealed class FanucCycleTests
             + "\nG80\nM30\n%\n");
 
         Assert.Contains("RAW:FANUC=\"" + line + "\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("PS0204", program.Diagnostics.ToText(), StringComparison.Ordinal);
+    }
+
+    // An M29 inside a tapping cycle alarms PS0204 with a compensating chuck as well (B-64484EN-2 p.104; B-64484EN-1
+    // p.119): a G84 run without the line in front of it, TAP_COMPENSATING, keeps the M29 block RAW too.
+    [Fact]
+    public void RigidTapLine_InsideACompensatingTapRun_IsAlarmPs0204AndStaysRaw()
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X10. Y10. Z10.\nG84 G99 Z-20. R5. F750\nM29 S500\nX30.\n"
+            + "G80\nM30\n%\n", MillWithCycles(""));
+
+        Assert.Contains("RAW:FANUC=\"M29 S500\"", NcxWriter.Write(program), StringComparison.Ordinal);
         Assert.Contains("PS0204", program.Diagnostics.ToText(), StringComparison.Ordinal);
     }
 
@@ -674,6 +687,36 @@ public sealed class FanucCycleTests
 
         Assert.Contains(peck, text, StringComparison.Ordinal);
         Assert.DoesNotContain("RAW:", text, StringComparison.Ordinal);
+    }
+
+    // The units of a lathe Q are those the header assumes where the program sets none: units_default = "INCH" without
+    // G20 counts 0.0001 inch, and [machine] input_increment (parameter 1013, B-64490EN-05 p.57-58) sets the
+    // increment system: IS-C counts 0.0001 mm.
+    [Theory]
+    [InlineData("units_default = \"INCH\"", "G0 Z0.2\nG83 Z-1. R-0.1 Q20000 F0.01", "PECK=2 ")]
+    [InlineData("units_default = \"MM\"\ninput_increment = \"IS-C\"", "G0 Z5.\nG83 Z-40. R-5. Q20000 F0.2",
+        "PECK=2 ")]
+    [InlineData("units_default = \"MM\"\ninput_increment = \"IS-A\"", "G0 Z5.\nG83 Z-40. R-5. Q200 F0.2",
+        "PECK=2 ")]
+    public void LathePeckQ_CountsTheIncrementOfTheUnitsDefaultAndTheIncrementSystem(string keys, string source,
+        string peck)
+    {
+        MachineConfig machine = FromToml(LatheToml.Replace("units_default = \"MM\"", keys, StringComparison.Ordinal));
+        string text = Text("%\nO0001\n" + source + "\nG80\nM30\n%\n", machine);
+
+        Assert.Contains(peck, text, StringComparison.Ordinal);
+        Assert.DoesNotContain("RAW:", text, StringComparison.Ordinal);
+    }
+
+    // calculator_input = false counts the increment of input_increment: X10 is 0.10 mm under IS-A.
+    [Fact]
+    public void NumbersWithoutAPoint_UnderIsA_CountHundredths()
+    {
+        MachineConfig machine = FromToml(MillToml.Replace("units_default = \"MM\"",
+            "units_default = \"MM\"\ninput_increment = \"IS-A\"", StringComparison.Ordinal)
+            + "\n[format]\ncalculator_input = false\n");
+
+        Assert.Equal(Lines("RAPID X=0.10 Y=0.20"), Body("G0 X10 Y20", machine));
     }
 
     // A lathe takes no decimal point in Q (B-64484EN p.229), so a lathe Q2. is no peck the reader can read: RAW.
