@@ -14,11 +14,12 @@
 
   <!--
     The package of the .NET tool, versioned by the Version of Directory.Build.props: the id that P7-03 installs
-    (dotnet tool install NCXchange.Cli), the MIT license of D75 and the repository. Authors is answered with
-    D165 and stays out until then (D347).
+    (dotnet tool install NCXchange.Cli), the MIT license of D75, the copyright holder of D165 and the
+    repository (D347).
   -->
   <PropertyGroup>
     <PackageId>NCXchange.Cli</PackageId>
+    <Authors>Peter Burgener</Authors>
     <Description>ncx, the command line of NCXchange: converts, checks, formats and compiles NCX programs.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/NC-PB/NCXchange_</RepositoryUrl>

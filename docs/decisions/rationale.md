@@ -8,9 +8,9 @@ Status: 2026-10-01, six rounds answered; the fourth round (2026-09-11) got follo
 
 Sixth round, asked 2026-09-13: seventy-five questions found while building wave 1 (the tasks P0-01 to P0-06, P2-01 to P2-04a, P1-01 to P1-03a and P4-01a). They cover 87 of the 111 questions those tasks recorded; the other 24 are answered by the documents or are a matter of implementation. Of the seventy-five, 23 were settled on 2026-10-01 from the manual library and stand in "Answered (ninth round, 2026-10-01)" below; 52 are still open here. Until an entry is answered, the code keeps the least committal workaround, marked `TODO(question)` where it applies, and the answer replaces workaround and marker in the commit that changes the specification. `../implementation/03-open-questions.md` maps every question and its code location to its entry here, or to the section that already answers it. The entries are grouped by when the answer is needed; the last group holds facts about controllers and machines that a manual or the machine has to confirm, each with the recommendation that applies if it does.
 
-Status 2026-10-27: every entry below was answered or decided on the maintainer's delegation and moved to "Answered (tenth to thirteenth rounds, 2026-10-27)", except D165. The fourteenth round, D389 to D393, was asked the same day while implementing the measurement points and answered by the maintainer the same day ("Answered (fourteenth round, 2026-10-27)").
+Status 2026-10-27: every entry below was answered or decided on the maintainer's delegation and moved to "Answered (tenth to thirteenth rounds, 2026-10-27)", except D165, which the maintainer answered on 2026-10-30 ("Answered (sixteenth round, 2026-10-30)"); nothing is open. The fourteenth round, D389 to D393, was asked the same day while implementing the measurement points and answered by the maintainer the same day ("Answered (fourteenth round, 2026-10-27)").
 
-### Later
+## Answered (sixteenth round, 2026-10-30; settled in `decisions.md`)
 
 #### D165 Copyright holder in LICENSE
 Question: D75 decides MIT, and code-guidelines 9 and architecture 1 repeat it. No document names the copyright holder that the MIT notice's line `Copyright (c) <year> <holder>` needs. LICENSE on main reads "Copyright (c) 2026 the NCXchange authors", a placeholder chosen in P0-01. Who holds the copyright?
@@ -19,6 +19,7 @@ Where: LICENSE; code-guidelines 9 (license line); optionally the D75 row.
 
 ANSWER:
 Proposed from the manual library 2026-09-27: the library does not answer this (searched the whole cached library for 'MIT License', 'MIT-Lizenz', 'Open-Source-Lizenz', 'Open Source License', 'GNU General Public', 'Apache License' and 'BSD License': no file matches any of them. 'Urheberrechtsinhaber' / 'copyright holder' matches exactly three files, all three Philips MillPlus IT manuals, and in each it is the publisher's own reservation of rights beside '© Heidenhain Numeric B.V. Eindhoven, Niederlande 2008' ('Vervielfältigen ... ist lediglich zulässig mit schriftlicher Zustimmung des Urheberrechtsinhabers', page 18 of the V600 Programmierhandbuch). No manual discusses open-source licensing or how to name a copyright holder. Nothing in a CNC manual bears on who holds the copyright of NCXchange; this is the maintainer's to state). The recommendation above stands for the maintainer.
+(Peter, 2026-10-30) The copyright holder is Peter Burgener: `Copyright (c) 2026 Peter Burgener`, and the same name for the package `Authors` (D347).
 
 ---
 

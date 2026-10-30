@@ -10,7 +10,7 @@ The tasks of wave 1 (P0-01 to P0-06, P2-01 to P2-04a, P1-01 to P1-03a and P4-01a
 |---|---|---|---|---|
 | 1 | P0-01 | The analyzers do not report CA1305 while InvariantGlobalization is true; which setting gives way? | settled 2026-10-27 (D108) | `Directory.Build.props:17`; `.editorconfig:43` |
 | 2 | P0-01 | Nothing enforces the 120-character line of code-guidelines 3.3 | settled 2026-10-27 (D109) | `.editorconfig:145` |
-| 3 | P0-01 | Who is the copyright holder in LICENSE? | D165 | `LICENSE` (placeholder "the NCXchange authors", no marker) |
+| 3 | P0-01 | Who is the copyright holder in LICENSE? | settled 2026-10-30 (D165) | `LICENSE` (placeholder "the NCXchange authors", no marker) |
 | 4 | P2-04a | Are home, limits and [positions] of a diameter-programmed X axis diameters or radii? | settled 2026-10-27 (D137) | `docs/spec/examples/machines/doosan-puma-2600sy.toml:55`, `mori-ntx1000-mapps.toml:63`, `nakamura-ntjx.toml:63`, `dmg-ctx-840d.toml:67` |
 | 5 | P2-04a | Address of the sub spindle C axis on the Nakamura NTJX: C or C2=? | settled 2026-10-27 (D179) | `docs/spec/examples/machines/nakamura-ntjx.toml:130` |
 | 6 | P2-04a | Does a preload template use {tool} or {next}? | settled 2026-10-27 (D150) | `machines/fanuc-mill-30i.toml:41`, `heidenhain-itnc530.toml:39`, `siemens-840dsl-mill.toml:40` |
