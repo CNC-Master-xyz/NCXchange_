@@ -109,10 +109,9 @@ internal static partial class SiemensExpressions
     // Q1 as R1, which the R parameter of the manual takes without leading zeros; a name no entry covers is an ERROR,
     // the QS strings of Heidenhain among them, because an R parameter is a field of type REAL and holds no string
     // (machine-config 7, decisions.md). The loader holds the {index} form of an entry (CFG008).
-    // TODO(question): D173 makes a name no entry of the map covers an ERROR and names the Heidenhain QS strings, and
-    // it leaves names the source itself wrote (R5, DEF names) as they are, but it does not say how the compiler tells
-    // the two apart. The form decides here: a letter and digits, and the Heidenhain QL, QR and QS names, need an
-    // entry; every other name, a declared one of several letters among them, is written as it is.
+    // D419: NCX keeps no origin per name, so the form decides which names D173 needs an entry for: a letter and digits
+    // (Q1, QL5) and the Heidenhain QL, QR and QS names need one, else the D173 ERROR; every other name, an R parameter
+    // the source wrote and a declared name of several letters among them, is written as it is (D261 declares it).
     // D261: NCX keeps no type, and a name the control does not declare itself is declared with DEF REAL in the
     // definition part of the unit that uses it (SiemensFlow.WriteDeclarations), because REAL holds every INT and BOOL
     // value and the R parameters are themselves an array of REAL (decisions.md D261).
