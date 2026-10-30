@@ -168,8 +168,8 @@ public sealed class RuntimeAnalyticTests
         Assert.Equal(1.1, runtime.TotalSeconds, Precision);
     }
 
-    // The reading of the TODO(question) in RuntimeEstimator.SpeedOf: a RETRACT takes no feed (VM 3.1a) and moves at the
-    // rapid rate with the same profile, as the tool list counts it as rapid. LINE X=100 at F=600 (10 mm/s) takes
+    // D287: a RETRACT takes no feed (VM 3.1a) and is timed at the rapid rate with the same profile, like RAPID and
+    // HOME, as the tool list counts it as rapid. LINE X=100 at F=600 (10 mm/s) takes
     // 100 / 10 + 10 / 1000 s; RETRACT=50 moves Z alone at its rapid of 6000 mm/min (100 mm/s) with 1000 mm/s^2, 0.1 s
     // and 5 mm to reach it, as much to stop, 40 mm at 100 mm/s: 0.6 s, not the 5.01 s of the active F.
     [Fact]
@@ -309,6 +309,26 @@ public sealed class RuntimeAnalyticTests
 
         MotionEvent rapid = motions.Motions.Last(motion => motion.Verb == Verb.Rapid);
         Assert.Equal(200d * 1000 / (2 * Math.PI * 10), SpindleSpeed.RpmOf(rapid, machine)!.Value, Precision);
+    }
+
+    // D412: HOME and RETRACT take the end radius, like RAPID: all three move at the rapid rate and cut nothing. The
+    // motion of the RAPID X=10 from X=50 above, read as a HOME or a RETRACT, gives the rpm at radius 10 as well.
+    [Theory]
+    [InlineData(Verb.Home)]
+    [InlineData(Verb.Retract)]
+    public void CssRadius_HomeOrRetractThatChangesX_TakesTheEndRadiusAsRapidDoes(Verb verb)
+    {
+        MachineConfig machine = AnalyticMachines.Mill(AnalyticMachines.ExactStop);
+        var motions = new MotionCollector();
+        AnalyticRuns.Run(
+            Program(["RPM_MAX=20000", "VC=200", "CSS=ON", "SPINDLE=CW", "FEED_MODE=PER_REV", "RAPID X=50 Y=0 Z=0"],
+                "RAPID X=10",
+                "SPINDLE=OFF"),
+            machine,
+            motions);
+
+        MotionEvent motion = motions.Motions.Last(motion => motion.Verb == Verb.Rapid) with { Verb = verb };
+        Assert.Equal(200d * 1000 / (2 * Math.PI * 10), SpindleSpeed.RpmOf(motion, machine)!.Value, Precision);
     }
 
     // D289: a cutting motion keeps the mean of the start and the end X radius. LINE X=10 from X=50 at VC=200 gives the
