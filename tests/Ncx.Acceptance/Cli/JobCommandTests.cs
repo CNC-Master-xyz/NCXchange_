@@ -41,9 +41,9 @@ public sealed class JobCommandTests : IDisposable
         Assert.True(exitCode == 0, _cli.Error);
         Assert.DoesNotContain("VM571", _cli.Error, StringComparison.Ordinal);
         Assert.StartsWith("Channel 1: NAKAMURA_WY250L_O1000.ncx\n\nTool list: NAKAMURA_WY250L_O1000.ncx, "
-            + "the whole file, on nakamura-ntjx.toml, INTERPRETED run\n", _cli.Output, StringComparison.Ordinal);
+            + "the whole file, on nakamura-wy250l.toml, INTERPRETED run\n", _cli.Output, StringComparison.Ordinal);
         Assert.Contains("\nChannel 2: NAKAMURA_WY250L_O1000.P-2.ncx\n\nTool list: NAKAMURA_WY250L_O1000.P-2.ncx, "
-            + "the whole file, on nakamura-ntjx.toml", _cli.Output, StringComparison.Ordinal);
+            + "the whole file, on nakamura-wy250l.toml", _cli.Output, StringComparison.Ordinal);
     }
 
     // VM 3.7, D97: two channels waiting at different marks are the deadlock ERROR naming both marks, exit code 1.
@@ -218,11 +218,11 @@ public sealed class JobCommandTests : IDisposable
             StringComparison.Ordinal);
     }
 
-    // The Nakamura pair in the temporary folder: both sources converted by ncx convert with nakamura-ntjx.toml, the
+    // The Nakamura pair in the temporary folder: both sources converted by ncx convert with nakamura-wy250l.toml, the
     // machine file and the manifest of Fixtures/ next to them.
     private string NakamuraJob()
     {
-        string machine = _cli.CopyExample("machines/nakamura-ntjx.toml");
+        string machine = _cli.CopyExample("machines/nakamura-wy250l.toml");
         foreach (string path in new[] { "", ".P-2" })
         {
             string source = _cli.CopyExample("sources/NAKAMURA_WY250L_O1000" + path + ".nc");
