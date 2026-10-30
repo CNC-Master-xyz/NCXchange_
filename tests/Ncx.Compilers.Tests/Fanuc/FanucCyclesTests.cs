@@ -539,6 +539,23 @@ public sealed class FanucCyclesTests
         Assert.Contains(written, text, StringComparison.Ordinal);
     }
 
+    // calculator_input = false (parameter 3401#0 = 0): a number without a decimal point counts least input
+    // increments, so every number of an address that takes a point is written with it, also where [format] decimals
+    // writes none, F = 0 here: F100. and not F100 (B-64490EN-05 p.190; controllers fanuc.md 2). The default writes
+    // F100 as before; the lathe Q stays an integer under both (B-64484EN p.229).
+    [Theory]
+    [InlineData("true", "G81 G99 Z-20. R5. F100\n")]
+    [InlineData("false", "G81 G99 Z-20. R5. F100.\n")]
+    public void NumbersOfAddressesWithAPoint_FollowCalculatorInput(string calculator, string written)
+    {
+        string text = FanucCompile.TextOf(FanucCompile.Run(FanucCompile.Program(Approach.Split('\n')
+            .Concat(["CYCLE=DRILL CLEARANCE=5 DEPTH=-20 CYCLE_F=100", "CYCLE_CALL"]).ToArray()),
+            FanucCompile.Mill(FanucCompile.SourceHabits
+                + "\ncalculator_input = " + calculator).Replace("F = 3", "F = 0", StringComparison.Ordinal)));
+
+        Assert.EndsWith(written + "M30\n%\n", text, StringComparison.Ordinal);
+    }
+
     // B-64484EN-2 p.104 and p.108: an S command between M29 and G84 is alarm PS0203 and an M29 inside a running tapping
     // cycle PS0204, so a new speed inside a run of the rigid TAP ends the run with G80 before the S and enters it again
     // with the line and the full definition at the next call; the program stays runnable.

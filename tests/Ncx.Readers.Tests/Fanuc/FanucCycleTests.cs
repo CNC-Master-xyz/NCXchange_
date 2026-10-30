@@ -686,6 +686,30 @@ public sealed class FanucCycleTests
         Assert.Contains("p.229", program.Diagnostics.ToText(), StringComparison.Ordinal);
     }
 
+    // [format] calculator_input = false, parameter 3401#0 = 0: every address that takes a decimal point counts least
+    // input increments without one, X Y Z R and the mill Q in 0.001 mm, F under G94 in 1 mm/min (B-64484EN p.229,
+    // p.527-528; B-64490EN-05 p.190); the default true reads them as written (controllers fanuc.md 2).
+    [Theory]
+    [InlineData("true", "RAPID X=10 Y=20 Z=50",
+        "CYCLE=PECK SURFACE=0 CLEARANCE=5 DEPTH=-40 CYCLE_RETRACT=CLEARANCE PECK=2000 CYCLE_F=100")]
+    [InlineData("false", "RAPID X=0.010 Y=0.020 Z=0.050",
+        "CYCLE=PECK SURFACE=0 CLEARANCE=0.005 DEPTH=-0.040 CYCLE_RETRACT=CLEARANCE PECK=2.000 CYCLE_F=100")]
+    public void NumbersWithoutAPoint_FollowCalculatorInput(string calculator, string rapid, string cycle)
+    {
+        Assert.Equal(Lines(rapid, cycle, "CYCLE_CALL", "CYCLE=OFF"),
+            Body("G0 X10 Y20 Z50\nG83 G99 Z-40 R5 Q2000 F100\nG80",
+                MillWith("[format]\ncalculator_input = " + calculator)));
+    }
+
+    // calculator_input = false does not touch an address that takes no decimal point: the lathe Q counts increments
+    // either way (B-64484EN p.229).
+    [Fact]
+    public void LathePeckQ_UnderCalculatorInputFalse_StillCountsIncrements()
+    {
+        Assert.Contains("PECK=2 ", Text("%\nO0001\nG0 Z5.\nG83 Z-40. R-5. Q2000 F0.2\nG80\nM30\n%\n",
+            LatheWith("[format]\ncalculator_input = false")), StringComparison.Ordinal);
+    }
+
     // A mill takes a decimal point in Q (B-64484EN p.229, the M list), so Q without one follows the rule of every such
     // address, X and R among them: the reader assumes calculator-type input, parameter 3401#0 = 1, and reads Q2000 as
     // 2000 mm, as it reads X70 as 70 mm (controllers fanuc.md 2).

@@ -25,7 +25,8 @@ public static partial class MachineConfigLoader
     [
         "decimal_separator", "decimals", "trailing_zeros", "block_numbers", "line_ending", "program_end", "sub_end",
         "program_layout", "max_line_length", "comment_charset", "external_call", "header",
-        "plane_with_first_motion", "motion_code_after_tool_change", "length_offset_with_tool_axis", "channel_files",
+        "plane_with_first_motion", "calculator_input", "motion_code_after_tool_change", "length_offset_with_tool_axis",
+        "channel_files",
         "label_max", "motion_code", "m_codes_per_block", "m_codes_combinable", "helix_feed", "counter_registers",
     ];
 
@@ -153,6 +154,10 @@ public static partial class MachineConfigLoader
             PlaneWithFirstMotion = table.Flag("plane_with_first_motion"),
             MotionCodeAfterToolChange = table.Flag("motion_code_after_tool_change"),
             LengthOffsetWithToolAxis = table.Flag("length_offset_with_tool_axis"),
+
+            // Parameter 3401#0 DPI of a Fanuc control, calculator-type decimal point input, true when the file leaves
+            // it out, as controllers fanuc.md 2 assumes (B-64490EN-05 p.190).
+            CalculatorInput = table.FlagOr("calculator_input", true),
 
             // The naming of the files of a job's channels (D310, machine-config 2).
             ChannelFiles = table.Choice("channel_files", s_channelFiles) switch

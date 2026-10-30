@@ -498,8 +498,12 @@ internal sealed class FanucBlock
     /// <param name="value">The value.</param>
     public string Format(string address, decimal value)
     {
+        // Under calculator_input = false a number without a decimal point counts least input increments, so a number of
+        // an address that takes one carries its point also where [format] decimals writes none (B-64490EN-05 p.190;
+        // controllers fanuc.md 2).
         string text = Numbers.Format(address, value, Block);
-        bool whole = s_wholeNumberAddresses.Contains(address) || Numbers.DecimalsOf(address) == 0;
+        bool whole = s_wholeNumberAddresses.Contains(address)
+            || (Numbers.DecimalsOf(address) == 0 && Machine.Format?.CalculatorInput != false);
         return whole || text.Contains(Numbers.DecimalSeparator, StringComparison.Ordinal)
             ? text
             : text + Numbers.DecimalSeparator;
