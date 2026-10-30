@@ -22,7 +22,7 @@
     <Authors>Peter Burgener</Authors>
     <Description>ncx, the command line of NCXchange: converts, checks, formats and compiles NCX programs.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <RepositoryUrl>https://github.com/NC-PB/NCXchange_</RepositoryUrl>
+    <RepositoryUrl>https://github.com/CNC-Master-xyz/NCXchange_</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
