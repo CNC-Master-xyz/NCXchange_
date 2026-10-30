@@ -15,7 +15,7 @@ namespace Ncx.Acceptance.Jobs;
 
 /// <summary>
 /// The Nakamura WY-250L pair as one job, through the library (implementation 16, P6-01; milestone M9): both paths read
-/// by the Fanuc reader with the builder tables of nakamura-ntjx.toml, written as NCX and parsed again, and run by the
+/// by the Fanuc reader with the builder tables of nakamura-wy250l.toml, written as NCX and parsed again, and run by the
 /// job manifest of Fixtures/ without deadlock, the wait marks M106 to M195 paired in execution order and M199 as the
 /// start synchronization. The G411 jumps on the part status stay RAW and are not followed, so every section of both
 /// programs runs; the block skip switch is on, which skips the call of the geometry program O8889 that the repository
@@ -108,11 +108,11 @@ public sealed class NakamuraJobTests
         return vars.Variables;
     }
 
-    // nakamura-ntjx.toml, which names no cycle catalog (machine-config 6).
+    // nakamura-wy250l.toml, which names no cycle catalog (machine-config 6).
     private static MachineConfig Machine()
     {
-        var diagnostics = new Diagnostics("nakamura-ntjx.toml");
-        MachineConfig? machine = MachineConfigLoader.LoadText(Fixture.ReadText("machines/nakamura-ntjx.toml"),
+        var diagnostics = new Diagnostics("nakamura-wy250l.toml");
+        MachineConfig? machine = MachineConfigLoader.LoadText(Fixture.ReadText("machines/nakamura-wy250l.toml"),
             diagnostics);
         Assert.True(machine is not null && !diagnostics.HasErrors, diagnostics.ToText());
         return machine;

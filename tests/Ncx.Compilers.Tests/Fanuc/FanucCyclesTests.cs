@@ -150,8 +150,10 @@ public sealed class FanucCyclesTests
             + "\nCYCLE=TAP_COMPENSATING CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL X=20"
             + "\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL X=30", MillCatalog);
 
-        Assert.EndsWith("M29 S500\nG84 G99 Z-20. R5. F750.\nG80\nG84 G99 X20. Z-20. R5.\nG80\nM29 S500\n"
-            + "G84 G99 X30. Z-20. R5.\n", body, StringComparison.Ordinal);
+        // The G80 of the rigid run clears its S to S0 (B-64484EN-2 p.104), so the compensating G84 gets S500 again; a
+        // re-armed rigid run writes F (p.105).
+        Assert.EndsWith("M29 S500\nG84 G99 Z-20. R5. F750.\nG80\nS500\nG84 G99 X20. Z-20. R5.\nG80\nM29 S500\n"
+            + "G84 G99 X30. Z-20. R5. F750.\n", body, StringComparison.Ordinal);
     }
 
     // Language 4.7 CYCLE_DWELL (seconds), controllers fanuc.md 6 (P in milliseconds) and 7: an expression dwell is P
@@ -480,7 +482,164 @@ public sealed class FanucCyclesTests
         string text = FanucCompile.TextOf(FanucCompile.Run(program,
             FanucCompile.Lathe(FanucCompile.DefaultSync, TurnOd)));
 
-        Assert.Contains("\nG90 X60. Z-70. F0.3\nX50. Z-70.\nG80\n", text, StringComparison.Ordinal);
+        // G80 cancels the drilling cycles only; the simple turning cycle is a code of group 01, which the next code of
+        // group 01 ends (B-64484EN-1 p.46), so CYCLE=OFF writes no G80 for it.
+        Assert.Contains("\nG90 X60. Z-70. F0.3\nX50. Z-70.\nM30\n", text, StringComparison.Ordinal);
+    }
+
+    // B-64484EN-1 p.46: a simple turning cycle ends with a code of group 01 other than G90, G92 and G94, and G80
+    // cancels the drilling cycles only (p.309), so a RAPID that ends TURN_OD is G0 alone, the block the reader read it
+    // from, never G0 G80.
+    [Theory]
+    [InlineData("RAPID X=100 CYCLE=OFF", "\nG90 X60. Z-70. F0.3\nG0 X100.\nM30\n")]
+    [InlineData("CYCLE=OFF\nRAPID X=100", "\nG90 X60. Z-70. F0.3\nG0 X100.\nM30\n")]
+    [InlineData("LINE X=80 F=0.2 CYCLE=OFF", "\nG90 X60. Z-70. F0.3\nG1 X80. F0.2\nM30\n")]
+    public void TurnOd_EndedByAMotion_IsTheMotionCodeWithoutG80(string end, string written)
+    {
+        const string TurnOd =
+            "[[cycle]]\nname = \"TURN_OD\"\nnative = \"G90\"\nmodal = true\nparams = { CYCLE_F = \"F\" }";
+        var lines = new List<string>
+        {
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+            "FEED_MODE=PER_REV COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
+            "RAPID X=70 Z=2",
+            "CYCLE=TURN_OD CYCLE_F=0.3",
+            "CYCLE_CALL X=60 Z=-70",
+        };
+        lines.AddRange(end.Split('\n'));
+        lines.Add("PROGRAM=END");
+        lines.Add("FILE=END");
+
+        string text = FanucCompile.TextOf(FanucCompile.Run(FanucCompile.Lines(lines.ToArray()),
+            FanucCompile.Lathe(FanucCompile.DefaultSync, TurnOd)));
+
+        Assert.Contains(written, text, StringComparison.Ordinal);
+    }
+
+    // A lathe takes no decimal point in Q (B-64484EN p.229), so the peck of G83 is written in least input increments,
+    // 0.001 mm or 0.0001 inch, as the lathe manual writes it (B-64484EN-1 p.96, Q5000).
+    [Theory]
+    [InlineData("MM", "PECK=2", "X=0 Z=5", "CLEARANCE=2 DEPTH=-40", "\nG83 Z-40. R-3. Q2000 F0.2\n")]
+    [InlineData("MM", "PECK=0.5", "X=0 Z=5", "CLEARANCE=2 DEPTH=-40", "\nG83 Z-40. R-3. Q500 F0.2\n")]
+    [InlineData("INCH", "PECK=0.1", "X=0 Z=0.2", "CLEARANCE=0.1 DEPTH=-1", "\nG83 Z-1. R-0.1 Q1000 F0.2\n")]
+    public void Peck_OnALathe_IsQInLeastInputIncrements(string units, string peck, string start, string planes,
+        string written)
+    {
+        string text = FanucCompile.TextOf(FanucCompile.Run(FanucCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+            $"FEED_MODE=PER_REV COMP=OFF UNITS={units} WORKPLANE=XY DIAMETER=ON CYCLE=OFF",
+            "SPINDLE:MAIN=CW RPM:MAIN=500",
+            "RAPID " + start,
+            $"CYCLE=PECK {planes} {peck} CYCLE_F=0.2",
+            "CYCLE_CALL",
+            "CYCLE=OFF",
+            "PROGRAM=END",
+            "FILE=END"), FanucCompile.Lathe()));
+
+        Assert.Contains(written, text, StringComparison.Ordinal);
+    }
+
+    // calculator_input = false (parameter 3401#0 = 0): a number without a decimal point counts least input
+    // increments, so every number of an address that takes a point is written with it, also where [format] decimals
+    // writes none, F = 0 here: F100. and not F100 (B-64490EN-05 p.190; controllers fanuc.md 2). The default writes
+    // F100 as before; the lathe Q stays an integer under both (B-64484EN p.229).
+    [Theory]
+    [InlineData("true", "G81 G99 Z-20. R5. F100\n")]
+    [InlineData("false", "G81 G99 Z-20. R5. F100.\n")]
+    public void NumbersOfAddressesWithAPoint_FollowCalculatorInput(string calculator, string written)
+    {
+        string text = FanucCompile.TextOf(FanucCompile.Run(FanucCompile.Program(Approach.Split('\n')
+            .Concat(["CYCLE=DRILL CLEARANCE=5 DEPTH=-20 CYCLE_F=100", "CYCLE_CALL"]).ToArray()),
+            FanucCompile.Mill(FanucCompile.SourceHabits
+                + "\ncalculator_input = " + calculator).Replace("F = 3", "F = 0", StringComparison.Ordinal)));
+
+        Assert.EndsWith(written + "M30\n%\n", text, StringComparison.Ordinal);
+    }
+
+    // B-64484EN-2 p.104 and p.108: an S command between M29 and G84 is alarm PS0203 and an M29 inside a running tapping
+    // cycle PS0204, so a new speed inside a run of the rigid TAP ends the run with G80 before the S and enters it again
+    // with the line and the full definition at the next call; the program stays runnable.
+    [Fact]
+    public void Tap_WithANewSpeedInsideTheRun_EndsTheRunAndEntersItAgain()
+    {
+        string body = FanucCompile.Body("TOOL=1\nSPINDLE=CW RPM=500\nRAPID X=10 Y=10\nRAPID Z=5"
+            + "\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL\nSPINDLE=CW RPM=600\nCYCLE_CALL X=30"
+            + "\nCYCLE=OFF");
+
+        Assert.EndsWith(
+            "M29 S500\nG84 G99 Z-20. R5. F750.\nG80\nS600 M3\nM29 S600\nG84 G99 X30. Z-20. R5. F750.\nG80\n",
+            body, StringComparison.Ordinal);
+    }
+
+    // An RPM on a call inside a run of the rigid TAP ends the run and re-arms it with M29 S600; the S stands in that
+    // line only, since an S in the G84 block is an S command between M29 and G84, alarm PS0203 (B-64484EN-2
+    // p.103-104), and the re-armed definition writes its F (p.105).
+    [Fact]
+    public void Tap_WithAnRpmOnACallInsideTheRun_WritesTheSpeedInTheLineOnly()
+    {
+        string body = FanucCompile.Body("TOOL=1\nSPINDLE=CW RPM=500\nRAPID X=10 Y=10\nRAPID Z=5"
+            + "\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL\nCYCLE_CALL X=30 RPM=600\nCYCLE=OFF");
+
+        Assert.EndsWith("M29 S500\nG84 G99 Z-20. R5. F750.\nG80\nM29 S600\nG84 G99 X30. Z-20. R5. F750.\nG80\n",
+            body, StringComparison.Ordinal);
+    }
+
+    // A spindle start in the block of a re-armed rigid TAP call stands on its own line before M29 S, with its S: a
+    // spindle code between M29 and G84 alarms (B-64484EN-2 p.104, p.108).
+    [Fact]
+    public void Tap_WithASpindleStartOnACallInsideTheRun_WritesItBeforeTheLine()
+    {
+        string body = FanucCompile.Body("TOOL=1\nSPINDLE=CW RPM=500\nRAPID X=10 Y=10\nRAPID Z=5"
+            + "\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL\nCYCLE_CALL X=30 SPINDLE=CW RPM=600"
+            + "\nCYCLE=OFF");
+
+        Assert.EndsWith("M29 S500\nG84 G99 Z-20. R5. F750.\nG80\nS600 M3\nM29 S600\nG84 G99 X30. Z-20. R5. F750.\n"
+            + "G80\n", body, StringComparison.Ordinal);
+    }
+
+    // The G80 that ends a rigid TAP run clears its S to S0 (B-64484EN-2 p.104), so the next cycle that needs the
+    // spindle writes the programmed S again before it.
+    [Fact]
+    public void Drill_AfterARigidTapRun_WritesTheSpeedAgain()
+    {
+        string body = FanucCompile.Body("TOOL=1\nSPINDLE=CW RPM=500\nRAPID X=10 Y=10\nRAPID Z=5"
+            + "\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL\nCYCLE=OFF\nRAPID Z=10"
+            + "\nCYCLE=DRILL CLEARANCE=5 DEPTH=-20 CYCLE_F=100\nCYCLE_CALL X=40\nCYCLE=OFF");
+
+        Assert.EndsWith("G84 G99 Z-20. R5. F750.\nG80\nG0 Z10.\nS500\nG81 G99 X40. Z-20. R5. F100.\nG80\n", body,
+            StringComparison.Ordinal);
+    }
+
+    // [machine] input_increment = "IS-C" (parameter 1013, B-64490EN-05 p.57-58): the lathe Q counts 0.0001 mm.
+    [Fact]
+    public void Peck_OnALatheOfIsC_IsQInTenThousandths()
+    {
+        string text = FanucCompile.TextOf(FanucCompile.Run(FanucCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+            "FEED_MODE=PER_REV COMP=OFF UNITS=MM WORKPLANE=XY DIAMETER=ON CYCLE=OFF",
+            "SPINDLE:MAIN=CW RPM:MAIN=500",
+            "RAPID X=0 Z=5",
+            "CYCLE=PECK CLEARANCE=2 DEPTH=-40 PECK=2 CYCLE_F=0.2",
+            "CYCLE_CALL",
+            "CYCLE=OFF",
+            "PROGRAM=END",
+            "FILE=END"), FanucCompile.Lathe().Replace("units_default = \"MM\"",
+            "units_default = \"MM\"\ninput_increment = \"IS-C\"", StringComparison.Ordinal)));
+
+        Assert.Contains("\nG83 Z-40. R-3. Q20000 F0.2\n", text, StringComparison.Ordinal);
+    }
+
+    // A spindle stop inside a run of the rigid TAP ends the run the same way (B-64484EN-2 p.104).
+    [Fact]
+    public void Tap_WithASpindleStopInsideTheRun_EndsTheRunFirst()
+    {
+        string body = FanucCompile.Body("TOOL=1\nSPINDLE=CW RPM=500\nRAPID X=10 Y=10\nRAPID Z=5"
+            + "\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL\nSPINDLE=OFF");
+
+        Assert.EndsWith("G84 G99 Z-20. R5. F750.\nG80\nM5\n", body, StringComparison.Ordinal);
     }
 
     // D174: the lathe manual gives the simple turning cycles G90, G92, G94 of system A as G77, G78, G79 in system B
@@ -528,7 +687,8 @@ public sealed class FanucCyclesTests
 
         string text = FanucCompile.TextOf(FanucCompile.Run(program, FanucCompile.Lathe()));
 
-        Assert.Contains("\nG92 X60. Z-30.\nG80\n", text, StringComparison.Ordinal);
+        // G92 is a code of group 01 that G80 does not cancel (B-64484EN-1 p.46), so CYCLE=OFF writes no G80 for it.
+        Assert.Contains("\nG92 X60. Z-30.\nM30\n", text, StringComparison.Ordinal);
     }
 
     // D177, D362: G81 and G83 have no P, and a CYCLE_DWELL of 0, which the readers write for Q211=0 and DTB=0, is the

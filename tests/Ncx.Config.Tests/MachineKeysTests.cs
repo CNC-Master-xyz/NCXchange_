@@ -56,6 +56,32 @@ public sealed class MachineKeysTests
         Assert.False(machine.Machine.ExtendedUnits);
     }
 
+    // input_increment is the increment system of parameter 1013 (B-64490EN-05 p.57-58): IS-A 0.01, IS-B 0.001, IS-C
+    // 0.0001 mm, a tenth of it in inch; IS-B when the file leaves it out (gap closed 2026-10-30, delegated).
+    [Theory]
+    [InlineData("", 0.001, 0.0001)]
+    [InlineData("input_increment = \"IS-A\"", 0.01, 0.001)]
+    [InlineData("input_increment = \"IS-B\"", 0.001, 0.0001)]
+    [InlineData("input_increment = \"IS-C\"", 0.0001, 0.00001)]
+    public void InputIncrement_WrittenOrLeftOut_IsTheLeastInputIncrement(string line, double mm, double inch)
+    {
+        MachineConfig machine = LoadClean("[machine]\nname = \"Test lathe\"\ncontroller = \"fanuc\"\n" + line + "\n");
+
+        Assert.Equal((decimal)mm, machine.Machine.InputIncrement);
+        Assert.Equal((decimal)mm, machine.Machine.LinearIncrement(inch: false));
+        Assert.Equal((decimal)inch, machine.Machine.LinearIncrement(inch: true));
+    }
+
+    // input_increment takes IS-A, IS-B or IS-C only.
+    [Fact]
+    public void InputIncrement_OtherValue_IsValueNotAllowed()
+    {
+        Diagnostic error = SingleError("[machine]\nname = \"Test lathe\"\ncontroller = \"fanuc\"\n"
+            + "input_increment = \"IS-D\"\n");
+
+        Assert.Equal(DiagnosticCodes.ValueNotAllowed, error.Code);
+    }
+
     // A tolerance or an increment of 0 or below is no length and no time: CFG005 on its line.
     [Theory]
     [InlineData("arc_tolerance = 0")]

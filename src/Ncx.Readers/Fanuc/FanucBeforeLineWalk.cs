@@ -483,8 +483,13 @@ internal sealed class FanucBeforeLineWalk
         return null;
     }
 
-    // Whether a block carries every code of a "before" line, the M29 of "M29 S{rpm}", so that it may be that line.
-    private static bool CarriesTheCodesOf(SourceBlock block, string before)
+    /// <summary>
+    /// Whether a block carries every G and M code of a "before" line, M29 of "M29 S{rpm}"; false for a line without
+    /// one (machine-config 6, D256).
+    /// </summary>
+    /// <param name="block">The source block.</param>
+    /// <param name="before">The before line of the catalog entry.</param>
+    public static bool CarriesTheCodesOf(SourceBlock block, string before)
     {
         bool any = false;
         foreach (string token in before.Split(' ', StringSplitOptions.RemoveEmptyEntries))

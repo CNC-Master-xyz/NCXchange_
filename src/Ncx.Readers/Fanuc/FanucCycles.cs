@@ -67,6 +67,19 @@ internal static class FanucCycles
             return;
         }
 
+        // An M29 inside a running tapping cycle alarms PS0204 (B-64484EN-2 p.104 and p.108; B-64484EN-1 p.114 and
+        // p.119, cnc-manuals pages 104, 108, 114 and 119), rigid or with a compensating chuck alike, so a block that
+        // carries the codes of the line of an entry on the running code, G84 or G74, alone, with its S or with a call
+        // position, stays RAW with that reason (controllers fanuc.md 9 rule 9). A block with G80, a code of group 01
+        // or another cycle code ends the run first.
+        if (block.Fanuc.Cycle is FanucCycle running && LineOfTheCode(block, running.Code) is string before
+            && FanucBeforeLineWalk.CarriesTheCodesOf(block.Source, before) && !EndsTheRun(block, running.Code))
+        {
+            block.Draft.KeepAsRaw($"{CodesOf(before)} inside the running tapping cycle {running.Code}, which the "
+                + "control rejects with alarm PS0204 (B-64484EN-2 p.104, p.108)");
+            return;
+        }
+
         if (!BeforeLineMatches(block, block.Fanuc.CycleBefore.GetValueOrDefault(block.Line),
                 out TemplateValues values)
             && !BeforeLineMatches(block, EntryOfTheCycleOf(block), out values))
@@ -91,6 +104,45 @@ internal static class FanucCycles
 
         block.Draft.AddState("RPM", FanucFunctions.SpindleAddress(block, role), FanucNumbers.Of(rpm));
         block.Fanuc.Rpm[role ?? ""] = rpm;
+    }
+
+    // The "before" line of a catalog entry on this native code, M29 S{rpm} of TAP on G84; null where no entry on the
+    // code has one (machine-config 6, D256).
+    private static string? LineOfTheCode(FanucBlock block, string code)
+    {
+        foreach (CycleEntry entry in block.Machine.CycleCatalog.Entries)
+        {
+            if (entry.Native == code && !string.IsNullOrEmpty(entry.Before))
+            {
+                return entry.Before;
+            }
+        }
+
+        return null;
+    }
+
+    // Whether a block ends the run of a cycle before its other words count: G80, a code of group 01, or a cycle code
+    // other than the run's own (controllers fanuc.md 6; D247).
+    private static bool EndsTheRun(FanucBlock block, string runningCode)
+    {
+        foreach (SourceWord word in block.Source.Words)
+        {
+            if (word.Address == "G" && NativeCode.Of(word) is string code && code != runningCode
+                && (code == "G80" || s_motion.Contains(code) || s_millCycles.Contains(code)
+                    || s_latheDrilling.Contains(code)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // The G and M codes of a "before" line, "M29" of "M29 S{rpm}", for a message.
+    private static string CodesOf(string before)
+    {
+        return string.Join(" ", before.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(token => !token.Contains('{', StringComparison.Ordinal) && token[0] is 'G' or 'M'));
     }
 
     // Whether the words of the block are the "before" line of the named catalog entry; false for no name and for an
@@ -968,7 +1020,7 @@ internal static class FanucCycles
         SourceWord? peck = block.Take("Q");
         if (peck is not null)
         {
-            cycle.Peck = FanucMacro.ValueOf(block, peck);
+            cycle.Peck = block.IsLathe ? LathePeck(block, peck) : FanucMacro.ValueOf(block, peck);
         }
 
         // D159: P of a cycle is the dwell in units of [machine] dwell_increment, seconds per unit, 0.001 by default.
@@ -1026,6 +1078,30 @@ internal static class FanucCycles
         {
             Call(block, cycle, positions, count);
         }
+    }
+
+    // A lathe takes no decimal point in Q (B-64484EN p.229, the T list of 8.3, cnc-manuals page 229), so the peck Q of
+    // G83 and G87 counts least input increments whatever parameter 3401#0 DPI says, Q5000 for 5 mm (B-64484EN-1 p.96,
+    // the example of 4.3.1): PECK is Q times the increment of the units (controllers fanuc.md 2). A Q with a decimal
+    // point, or from an expression whose scaling the manuals do not give for an address without one, stays RAW.
+    private static Value? LathePeck(FanucBlock block, SourceWord word)
+    {
+        if (word.Number is not decimal units || word.Expression is not null)
+        {
+            block.Draft.KeepAsRaw($"Q{word.Text} of {block.Fanuc.Cycle?.Code ?? "the cycle"}: a lathe takes Q in least "
+                + "input increments without a decimal point (B-64484EN p.229), and the reader does not know how the "
+                + "control scales an expression there");
+            return null;
+        }
+
+        if (word.Text.Contains('.', StringComparison.Ordinal))
+        {
+            block.Draft.KeepAsRaw($"Q{word.Text}: a lathe takes Q without a decimal point only, in least input "
+                + "increments (B-64484EN p.229, controllers fanuc.md 2)");
+            return null;
+        }
+
+        return FanucNumbers.Of(units * FanucNumbers.LeastInputIncrement(block));
     }
 
     // D248: the R level of a lathe drilling cycle, the initial level plus R, twice R on a diameter X axis.

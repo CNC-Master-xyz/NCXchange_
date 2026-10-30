@@ -28,11 +28,12 @@ internal static class JobOption
         command.Add(job);
 
         // A file or --job, not both and not neither: anything else is a usage error, exit code 2 before the run starts
-        // (D97, architecture 10).
+        // (D97, architecture 10). --job written without its manifest is the parser's own usage error, CLI001, so it
+        // counts as given here and its missing value is not read.
         command.Validators.Add(result =>
         {
             bool hasFile = result.GetValue(file) is not null;
-            bool hasJob = result.GetValue(job) is not null;
+            bool hasJob = result.GetResult(job) is { Implicit: false };
             if (hasFile && hasJob)
             {
                 result.AddError($"ncx {command.Name} takes a file or --job, not both (architecture 10)");
