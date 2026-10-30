@@ -186,10 +186,10 @@ internal static class SiemensTilt
     // rotation of the order the bit pairs give, not the angles about X, Y and Z: mode 27 (Z Y X) is exactly TILT with
     // A = _C, B = _B, C = _A, and every other order becomes TILT through the rotation matrix. The spatial-angle mode
     // turns by _A about Z and then by _B about the rotated Y, which is TILT A=0 B=_B C=_A (D335).
-    // TODO(question): D335 settles the axis-wise and the spatial modes; its evidence gives the projection angles no
-    // construction a rotation matrix can be built from (the Zyklen manual describes them as the angle of the swivelled
-    // face projected onto the first two axes, with the third rotation building on the ones before), so the projection
-    // mode stays RAW.
+    // D425: D335 settles the axis-wise and the spatial modes; no page gives the projection angles a construction a
+    // rotation matrix can be built from (the Zyklen manual describes them as the angle of the swivelled face projected
+    // onto the first two axes, with the third rotation building on the ones before), so the projection mode stays RAW
+    // until a manual gives the construction.
     // D296: _A and _B of the rotary-axes mode are the angles of rotary axis 1 and 2 of the swivel data record _TC
     // names, and which machine axes those are belongs to the commissioned kinematics, not to the program; the reader
     // takes their NCX names from the machine's [transform] TILT_AXIS_ON template, the placeholder in the place of _A

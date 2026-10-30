@@ -246,11 +246,11 @@ internal static class SiemensPatterns
         return points;
     }
 
-    // One CYCLE_CALL per position of the pattern, in the order the parameters give them.
-    // TODO(question): the pattern cycles work out the order of the positions themselves from the position reached
-    // before the call (D341, the closing note of its answer; HOLES1 decides from the actual position whether it works
-    // the row from the first or the last hole), and no document says which order NCX writes; the calls stand in the
-    // order the parameters give, as they do for HOLES1 and HOLES2.
+    // One CYCLE_CALL per position of the pattern, in the order the parameters give them (D423): the expansion states
+    // the set of holes, and the order the control machines them in, which the pattern cycles work out themselves from
+    // the position reached before the call (D341; HOLES1 decides whether it works the row from the first or the last
+    // hole), is documented nowhere; the compiler writes the calls as positions, so nothing depends on it (language
+    // 4.7).
     private static void WriteCalls(SiemensBlock block, SiemensCycle cycle,
         List<(decimal First, decimal Second)> points)
     {

@@ -208,7 +208,7 @@ Reader rules for the sources (details in `controller-mapping.md`): Fanuc `T4 M6`
 
 ### 4.7 Cycles
 
-A cycle is defined once (modal) and executed by `CYCLE_CALL` at each position. `SURFACE`, `CLEARANCE`, `DEPTH` and `SAFE` of the built-in drilling family are absolute coordinates along the drilling axis in the active frame (Z on a mill, Z or X on a lathe, see `AXIS`); readers convert Heidenhain depths relative to Q203 and Fanuc `R` planes. Like every axis word they give the tool's programmed point, the point the active length register refers to, at which the control executes them (4.3, D369).
+A cycle is defined once (modal) and executed by `CYCLE_CALL` at each position. A hole pattern of a control that a reader expands into `CYCLE_CALL` blocks (Siemens `HOLES1`, `HOLES2`, `CYCLE801`, `CYCLE802`) states the set of holes in the order the parameters give them, which is not the order the control machines them in, since the pattern cycles choose that order themselves from the position reached before the call; a compiler writes the calls as positions and never packs them into a pattern cycle again (D341, D423). `SURFACE`, `CLEARANCE`, `DEPTH` and `SAFE` of the built-in drilling family are absolute coordinates along the drilling axis in the active frame (Z on a mill, Z or X on a lathe, see `AXIS`); readers convert Heidenhain depths relative to Q203 and Fanuc `R` planes. Like every axis word they give the tool's programmed point, the point the active length register refers to, at which the control executes them (4.3, D369).
 
 | Word | Value | Meaning | Scope |
 |---|---|---|---|
