@@ -1,4 +1,5 @@
 using System.Globalization;
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 
 namespace Ncx.Readers.Fanuc;
@@ -51,6 +52,31 @@ internal static class FanucNumbers
     {
         int dot = word.Text.IndexOf('.', StringComparison.Ordinal);
         return dot < 0 ? 0 : word.Text.Length - dot - 1;
+    }
+
+    /// <summary>
+    /// The least input increment of a linear address in the units of the block: the unit of an address that takes no
+    /// decimal point (B-64484EN p.229, 8.3; p.527-528), [machine] input_increment in mm, a tenth of it in inch
+    /// (parameter 1013, B-64490EN-05 p.57-58; parameter 1004#7 IPR is not modelled).
+    /// </summary>
+    /// <param name="block">The block being read.</param>
+    public static decimal LeastInputIncrement(FanucBlock block)
+    {
+        return block.Machine.Machine.LinearIncrement(IsInch(block.State, block.Machine));
+    }
+
+    /// <summary>
+    /// Whether the block is read in inch: G20 (G70 in system C) in the source-side state, or where the program has set
+    /// no units yet, [machine] units_default, as the header assumes (FanucHeader).
+    /// </summary>
+    /// <param name="state">The source-side state after the modal codes of the block.</param>
+    /// <param name="machine">The machine with its G-code system and units_default.</param>
+    public static bool IsInch(SourceState state, MachineConfig machine)
+    {
+        string? units = state.ActiveCode(FanucModalGroups.Units);
+        return units is null
+            ? machine.Machine.UnitsDefault?.ToUpperInvariant() == "INCH"
+            : units == (machine.Machine.GcodeSystem == GcodeSystem.C ? "G70" : "G20");
     }
 
     /// <summary>

@@ -338,6 +338,14 @@ internal sealed class ConfigTable
     }
 
     /// <summary>
+    /// true or false; the given value when the key is missing, or not true or false, which is reported.
+    /// </summary>
+    public bool FlagOr(string key, bool missing)
+    {
+        return _table.ContainsKey(key) ? Flag(key) : missing;
+    }
+
+    /// <summary>
     /// A string that must be one of the words its key takes; null when the key is missing or the word is not one of
     /// them, which is reported.
     /// </summary>
