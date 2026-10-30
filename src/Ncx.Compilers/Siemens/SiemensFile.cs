@@ -59,6 +59,9 @@ internal sealed partial class SiemensFile
     // (SiemensCalls.ReadProc).
     private readonly Dictionary<Section, Block> _procRaws = [];
 
+    // The block numbers the RAW lines of each unit carry, with the block that carries each (D417).
+    private readonly Dictionary<(Section? Unit, int Number), Block> _rawNumbers = [];
+
     // The SUB sections whose first block the walk has met.
     private readonly HashSet<Section> _subsBegun = [];
 
@@ -101,6 +104,24 @@ internal sealed partial class SiemensFile
     public static SiemensFile Of(IReadOnlyList<BlockStep> steps)
     {
         return new SiemensFile(steps);
+    }
+
+    /// <summary>
+    /// Records the block number a RAW line of a unit carries; false where another block of the unit carries it
+    /// already, which leaves a GOTO to it no one block (controllers siemens.md 1, 8; D417).
+    /// </summary>
+    /// <param name="unit">The program or subprogram of the line.</param>
+    /// <param name="number">The N of the line.</param>
+    /// <param name="block">The block of the line; a further walk of the same block is no second line.</param>
+    public bool TakeBlockNumber(Section? unit, int number, Block block)
+    {
+        if (_rawNumbers.TryGetValue((unit, number), out Block? taken))
+        {
+            return ReferenceEquals(taken, block);
+        }
+
+        _rawNumbers[(unit, number)] = block;
+        return true;
     }
 
     /// <summary>

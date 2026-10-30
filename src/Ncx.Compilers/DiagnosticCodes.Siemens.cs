@@ -31,6 +31,12 @@ public static partial class DiagnosticCodes
     public const string SiemensUnitNameTaken = "CMP503";
 
     /// <summary>
+    /// CMP504, a WARNING: two RAW lines of one program or subprogram carry the same block number, which RAW keeps as
+    /// written, so a GOTO to that number names no one block (controllers siemens.md 1, 8; D417).
+    /// </summary>
+    public const string SiemensBlockNumberTwice = "CMP504";
+
+    /// <summary>
     /// CMP510, a WARNING: OFFSET:LEN and OFFSET:RAD name two registers, and the D of the control is one register for
     /// length and radius (controller-mapping 3, OFFSET:LEN; controllers siemens.md 5).
     /// </summary>
