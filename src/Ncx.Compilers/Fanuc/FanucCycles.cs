@@ -113,7 +113,14 @@ internal static class FanucCycles
                 : CatalogOf(write).Find(name, write.After.Cycle.Axis);
             CheckCarried(write, defined);
             // D224: a CYCLE=OFF that ends a one-shot cycle writes nothing.
-            if (name == "OFF" && write.Target.ActiveOf(FanucCodes.Cycle) != "G80" && !EndsAOneShotCycle(write))
+            if (name == "OFF" && write.Target.ActiveOf(FanucCodes.Cycle) is string active && IsTurning(write, active))
+            {
+                // A simple turning cycle ends with a code of group 01 other than G90, G92 and G94 and not with G80
+                // (B-64484EN-1 p.46): the block's own motion code, or that of the next motion, which Ended makes it
+                // write, so a RAPID that ends TURN_OD is G0 alone, never G0 G80.
+                Ended(write);
+            }
+            else if (name == "OFF" && write.Target.ActiveOf(FanucCodes.Cycle) != "G80" && !EndsAOneShotCycle(write))
             {
                 write.Main.Code(FanucCodes.RankOf(FanucCodes.Cycle), "G80");
                 Ended(write);
@@ -326,13 +333,32 @@ internal static class FanucCycles
             && !string.IsNullOrEmpty(entry.Before));
     }
 
+    // A simple turning cycle, G90, G92, G94 of system A (G77, G78, G79 in B; G20, G21, G24 in C), is a code of group 01
+    // that a code of group 01 other than these ends; G80 cancels the drilling cycles only (B-64484EN-1 p.46 and p.309,
+    // cnc-manuals pages 46 and 309; controllers fanuc.md 3, 6).
+    private static bool IsTurning(FanucBlock write, string code)
+    {
+        return write.System switch
+        {
+            GcodeSystem.A => s_turningOfSystemB.ContainsKey(code),
+            GcodeSystem.B => s_turningOfSystemB.ContainsValue(code),
+            GcodeSystem.C => s_turningOfSystemC.ContainsValue(code),
+            _ => false,
+        };
+    }
+
     // G80 in a line of its own where the control has a canned cycle active, or where the target state does not know
     // whether it has one: in a subprogram, which is written from an unknown target state (D99), and after a label that
     // a jump reaches; a caller of the subprogram may have left a cycle active, and in NCX a RAPID, LINE, ARC or HOME
     // never calls one (language 4.7, CYCLE_CALL). G80 without an active cycle changes nothing.
     private static void Cancel(FanucBlock write)
     {
-        if (write.Target.ActiveOf(FanucCodes.Cycle) != "G80")
+        if (write.Target.ActiveOf(FanucCodes.Cycle) is string active && IsTurning(write, active))
+        {
+            // A simple turning cycle ends with the next code of group 01, which Ended makes the next motion write.
+            Ended(write);
+        }
+        else if (write.Target.ActiveOf(FanucCodes.Cycle) != "G80")
         {
             write.Write("G80");
             Ended(write);

@@ -480,7 +480,39 @@ public sealed class FanucCyclesTests
         string text = FanucCompile.TextOf(FanucCompile.Run(program,
             FanucCompile.Lathe(FanucCompile.DefaultSync, TurnOd)));
 
-        Assert.Contains("\nG90 X60. Z-70. F0.3\nX50. Z-70.\nG80\n", text, StringComparison.Ordinal);
+        // G80 cancels the drilling cycles only; the simple turning cycle is a code of group 01, which the next code of
+        // group 01 ends (B-64484EN-1 p.46), so CYCLE=OFF writes no G80 for it.
+        Assert.Contains("\nG90 X60. Z-70. F0.3\nX50. Z-70.\nM30\n", text, StringComparison.Ordinal);
+    }
+
+    // B-64484EN-1 p.46: a simple turning cycle ends with a code of group 01 other than G90, G92 and G94, and G80
+    // cancels the drilling cycles only (p.309), so a RAPID that ends TURN_OD is G0 alone, the block the reader read it
+    // from, never G0 G80.
+    [Theory]
+    [InlineData("RAPID X=100 CYCLE=OFF", "\nG90 X60. Z-70. F0.3\nG0 X100.\nM30\n")]
+    [InlineData("CYCLE=OFF\nRAPID X=100", "\nG90 X60. Z-70. F0.3\nG0 X100.\nM30\n")]
+    [InlineData("LINE X=80 F=0.2 CYCLE=OFF", "\nG90 X60. Z-70. F0.3\nG1 X80. F0.2\nM30\n")]
+    public void TurnOd_EndedByAMotion_IsTheMotionCodeWithoutG80(string end, string written)
+    {
+        const string TurnOd =
+            "[[cycle]]\nname = \"TURN_OD\"\nnative = \"G90\"\nmodal = true\nparams = { CYCLE_F = \"F\" }";
+        var lines = new List<string>
+        {
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+            "FEED_MODE=PER_REV COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
+            "RAPID X=70 Z=2",
+            "CYCLE=TURN_OD CYCLE_F=0.3",
+            "CYCLE_CALL X=60 Z=-70",
+        };
+        lines.AddRange(end.Split('\n'));
+        lines.Add("PROGRAM=END");
+        lines.Add("FILE=END");
+
+        string text = FanucCompile.TextOf(FanucCompile.Run(FanucCompile.Lines(lines.ToArray()),
+            FanucCompile.Lathe(FanucCompile.DefaultSync, TurnOd)));
+
+        Assert.Contains(written, text, StringComparison.Ordinal);
     }
 
     // A lathe takes no decimal point in Q (B-64484EN p.229), so the peck of G83 is written in least input increments,
@@ -576,7 +608,8 @@ public sealed class FanucCyclesTests
 
         string text = FanucCompile.TextOf(FanucCompile.Run(program, FanucCompile.Lathe()));
 
-        Assert.Contains("\nG92 X60. Z-30.\nG80\n", text, StringComparison.Ordinal);
+        // G92 is a code of group 01 that G80 does not cancel (B-64484EN-1 p.46), so CYCLE=OFF writes no G80 for it.
+        Assert.Contains("\nG92 X60. Z-30.\nM30\n", text, StringComparison.Ordinal);
     }
 
     // D177, D362: G81 and G83 have no P, and a CYCLE_DWELL of 0, which the readers write for Q211=0 and DTB=0, is the
