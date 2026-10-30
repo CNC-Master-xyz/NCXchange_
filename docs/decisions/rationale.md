@@ -3643,6 +3643,330 @@ Confidence: high for (1)-(8) and (11)-(17); medium for (9) and (10).
 
 ---
 
+### Fifteenth round: the open TODO(question) markers, decided 2026-10-30
+
+An inventory of 2026-10-30 found 57 TODO(question) markers in the repository: 15 already settled by decisions (only their comments change) and 42 in 32 question groups. Each group was decided on the maintainer's delegation of 2026-10-27 (short web search, else the approach a control manufacturer would choose; RAW or a diagnostic over a silent guess). New key and code names follow their neighbours; Heidenhain cycle 27 ships in release 1; Siemens G973 stays RAW (D424). Source: `.worktrees/openitems/decisions-open.md` and `inventory.md`.
+
+#### D394 Heidenhain cycle 27 for CYLINDER
+Markers: src/Ncx.Compilers/Heidenhain/HeidenhainFrames.cs:62   Row: CAM-234
+Decision: The Heidenhain compiler writes a CYLINDER section (`CYLINDER=r` .. `CYLINDER=OFF`) as `CYCL DEF 14 KONTUR` + `CYCL DEF 27 ZYLINDER-MANTEL` + `CYCL CALL` **only** when the section has the shape the cycle executes itself: (1) positioning moves above the start point, (2) one feed motion along the radial axis to a constant depth (the plunge), (3) a chain of LINE/ARC in the cylinder plane at that constant radial position, (4) a retract along the radial axis. Several passes with the same contour at increasing depth are allowed and set Q10. The contour of (3) becomes a contour subprogram `LBL n` .. `LBL 0`. It takes its label from the D271 allocation, uses X for the circumference and Y along the axis on the TNC 640 (the machine's rotary letter on the iTNC 530, D146), puts both coordinates in its first block, and uses L/CC+C/CR only. COMP=LEFT/RIGHT becomes RL/RR in the first block. Q values: Q1 = depth − r (negative); Q3 = 0; Q6 = plunge start radius − r, which must be > the tool radius (else CMP101); Q10 = depth step (= |Q1| for one pass); Q11 = F of the plunge; Q12 = F of the contour, and a contour with more than one F is CMP101; Q16 = r; Q17 = 1 (mm, because the NCX C word is a length on the circumference, D102). Anything else stays CMP101 and writes nothing, as it does now. This includes COMP=OFF (the manual describes a contour that the cycle offsets), a contour with a RAPID, a varying radius, or a CHF/RND that NCX has already expanded. The reader keeps a source `CYCL DEF 27` native (`CYCLE:HEIDENHAIN=27`, D94) and does not expand it.
+Basis: manual + logical
+Source: TNC640 Zyklen 892905-18 (doc `Heidenhain_TNC640_Zyklen_892905-18_NC-SW-34059x-10_DE_2019.pdf`) p.333-335: the contour is described in a subprogram set by cycle 14, always in X/Y, with L, CHF, CR, RND, CT; the cycle positions, mills at each infeed Q10 down to Q1, and retracts to Q6; "the set-up clearance must be greater than the tool radius"; the NC example lists Q1, Q3, Q6, Q10, Q11, Q12, Q16, Q17. The shape test is logical: the cycle does its own infeed, so only an NCX section that already has that infeed can map to it without changing the toolpath.
+Confidence: medium (the parameters come from the manual; the shape matcher is our own rule)
+Code impact: HeidenhainFrames.RefuseCylinder → new HeidenhainCylinder writer; HeidenhainLabels (allocation); CMP101 keeps the fallback; tests with a TNC 640 and an iTNC 530 machine.
+
+---
+
+#### D395 Heidenhain: where M0/M1 of STOP stand
+Markers: src/Ncx.Compilers/Heidenhain/HeidenhainFunctions.cs:32 (refs :76, tests/.../HeidenhainFunctionTests.cs:57)   Row: W3-33
+Decision: Keep the code. STOP writes M0/M1 after the motion (in a block of its own, or in the L block itself, where it also acts at the block end). The half of D252's compiler sentence that puts STOP in the block before the L is withdrawn. A note under D252 records that STOP follows the VM order. D252's own evidence lists M0 and M1 as functions that act at the block end, so this placement stops where the NCX block stops.
+Basis: logical (from D252's own manual evidence)
+Source: D252 lists M0, M1 as acting at the end of the positioning block; an M0 in a block before the L would stop before the motion, earlier than NCX language 4.1 / VM 3 steps 5 and 7.
+Confidence: high
+Code impact: comment only in HeidenhainFunctions; decisions.md D252 note; the two refs.
+
+---
+
+#### D396 Klartext F and S with a formula or a signed parameter
+Markers: src/Ncx.Compilers/Heidenhain/HeidenhainParameters.cs:134 (ref HeidenhainMotionTests.cs:222)   Row: none (the remainder D338 names)
+Decision: Extend D338 to F and S. A formula, or a parameter with a sign, in F or S is spilled into the highest free QL in a block of its own directly before the block, which then writes `F QLn` / `S QLn`, as D338 does for coordinates. CMP102 stays only where no QL is free. A literal negative F or S is not new here: it is already a VM error.
+Basis: logical (D338 + heidenhain 6: "a Q parameter may stand wherever a number stands")
+Source: D338 spills coordinates the same way; F and S accept a Q parameter, so they accept the spilled QL.
+Confidence: high
+Code impact: HeidenhainParameters, the D338 spill helper; HeidenhainMotionTests (CMP102 → spill).
+
+---
+
+#### D397 Target of the FN 18 SYSREAD block
+Markers: src/Ncx.Compilers/Heidenhain/HeidenhainFormula.cs:186, machines/heidenhain-itnc530.toml:165   Row: none (W1-10 / D182)
+Decision: A `$SYS_` name read in a block is assigned to the highest free QL of the D338 pool, in `FN 18: SYSREAD QLn = ID.. NR.. IDX..`, in a block of its own directly before the block that uses it, one QL per distinct name in the block. QL is local to the program, so the read cannot clobber a user Q. When no QL is free, the result is CMP102. This unblocks the FN 18 ID270/ID240 route of D320.
+Basis: logical
+Source: D182 fixes the id and the separate block; D338 already reserves the highest free QL for compiler temporaries, so one pool keeps the allocation predictable.
+Confidence: high
+Code impact: HeidenhainFormula ($SYS_ no longer refused), the shared QL allocator, heidenhain-itnc530.toml comment, D320 follow-up in HeidenhainSetpos.
+
+---
+
+#### D398 Replacing Klartext transform with others after it (7-10-7)
+Markers: src/Ncx.Compilers/Heidenhain/HeidenhainChain.cs:135, src/Ncx.Compilers/Heidenhain/HeidenhainSetpos.cs:108, :278 (refs in HeidenhainFrameTests, HeidenhainSetposTests)   Row: W3-19, W3-40, W3-43
+Decision: Final as coded. A cycle 7/8/10/11/26/19/PLANE that would replace an entry with others after it in the chain is CMP106. A RESET that removes a transform the SETPOS cycle 7 follows is CMP114. The compiler never writes either case. This is the end state, not a waiting state, so the comment cites D253(a) and this decision instead of "open". Revisit only with a machine test.
+Basis: logical (manual search did not settle it)
+Source: the iTNC 530 manuals say only that tilting acts about the active datum and that a shift before or after cycle 19 shifts different systems (iTNC530 Benutzerhandbuch-Klartext 340422 p.446). No page says whether a redefined cycle 7 acts in place or at the end of the chain. With no evidence either way, the control maker reports the case rather than guessing.
+Confidence: high (as a policy)
+Code impact: comments in the three sites and the test refs; D319's "until D253 settles" sentence is replaced by a pointer to this decision.
+
+---
+
+#### D399 REPEAT without TIMES, compiler form
+Markers: src/Ncx.Compilers/Heidenhain/HeidenhainFlow.cs:252, src/Ncx.Compilers/Siemens/SiemensFlow.cs:253 (refs HeidenhainFlowTests.cs:92, :107, assertion :156)   Row: W3-29, W3-139
+Decision: Heidenhain writes `CALL LBL n REP 1`. Without REP it would be a subprogram call, which is a different construct. Siemens writes `REPEAT start end` with no P, which is the form D212 names as equal to "once more". Fanuc keeps its counter form.
+Basis: logical
+Source: D212 ("a REPEAT without TIMES runs the blocks once more, as a Sinumerik REPEAT without P"); on Klartext a program-section repeat is `CALL LBL n REP k`, and a CALL LBL without REP is a subprogram call.
+Confidence: high
+Code impact: comments only; HeidenhainFlowTests.cs:156 asserts that the marker exists and is replaced by an assertion of the written text.
+
+---
+
+#### D400 Klartext CC with one axis of the plane
+Markers: src/Ncx.Readers/Heidenhain/HeidenhainArcs.cs:64   Row: W2-86
+Decision: Final: the pole is unknown and the arcs about it stay RAW, with a reader WARNING that names the CC block. No reading of the missing coordinate is invented.
+Basis: manual (absence) + logical
+Source: TNC640 Programmierung-Klartext 340590-05 p.226: CC is entered with the rectangular coordinates of the centre, or takes the last programmed position. No form with one coordinate is described (D254(2) records the same).
+Confidence: high
+Code impact: comment; add the WARNING if it is not emitted already.
+
+---
+
+#### D401 CHF next to an arc
+Markers: src/Ncx.Readers/Heidenhain/HeidenhainCorners.cs:247 (ref HeidenhainCornerTests.cs:173)   Row: none
+Decision: A CHF whose neighbour is not a straight line is invalid on the control. The reader keeps it RAW (as now) with the reason "CHF only between two straight lines". The compiler never writes a CHF next to an arc (NCX expands corners anyway).
+Basis: manual
+Source: iTNC530 Lotse-Klartext 340490-04 p.24 and Benutzerhandbuch-Klartext 340422 p.202: "Fase CHF zwischen zwei Geraden einfügen: contour corners formed by the intersection of two straight lines can be chamfered".
+Confidence: high
+Code impact: comment and RAW reason text in HeidenhainCorners; test ref.
+
+---
+
+#### D402 CT after a CHF or RND
+Markers: src/Ncx.Readers/Heidenhain/HeidenhainNextElement.cs:102 (ref HeidenhainCornerTests.cs:188)   Row: none
+Decision: Final as coded. The corner and the CT stay RAW, with a reader WARNING naming the CT. A CT that is tangent to the element before it leaves no corner for a RND/CHF, so the combination is either redundant or an error on the control. NCX does not guess which.
+Basis: logical
+Source: CT is tangent to the preceding contour element (controllers heidenhain.md 2); a RND/CHF needs a corner between two non-tangent elements; no manual describes the combination.
+Confidence: medium
+Code impact: comment; WARNING text.
+
+---
+
+#### D403 Decimals of numbers a reader computes
+Markers: src/Ncx.Readers/Fanuc/FanucNumbers.cs:31, src/Ncx.Readers/Heidenhain/HeidenhainNumbers.cs:34, src/Ncx.Readers/Fanuc/FanucCycles.cs:1173   Row: none (W1-46 / D121 for the VM)
+Decision: Extend D121 to the readers. A value a reader computes (polar point, tangential arc centre, chamfer or rounding point, spatial angle, pitch F/S) is rounded to 6 decimals, half away from zero, and trailing zeros are dropped. The rule "as many as the source words, at least three" goes. The compiler's `[format]` decimals alone decide the digits written to the control.
+Basis: logical
+Source: D121 already fixes 6 decimals for every VM-computed value so that computed and written points compare equal. Using one precision in reader and VM removes a second rule. Six decimals is below every control resolution.
+Confidence: high
+Code impact: FanucNumbers, HeidenhainNumbers (one shared helper), FanucCycles:1173 (comment only); expected NCX files with computed values may gain digits.
+
+---
+
+#### D404 Fanuc ATAN range (parameter 6004#0 NAT)
+Markers: src/Ncx.Compilers/Fanuc/FanucExpressions.cs:238, src/Ncx.Readers/Fanuc/FanucExpression.cs:294   Row: W3-60, W1-86
+Decision: New optional machine key `[variables] atan_nat` (bool, default `false` = the factory setting: ATAN gives 0..360). With `false`, the reader reads `ATAN[y]/[x]` as `(ATAN2(y, x) + 360) MOD 360`, and the compiler writes NCX `ATAN2(y, x)` as `[ATAN[y]/[x] - 360*FIX[ATAN[y]/[x]/180]]`, which maps 0..360 to -180..180. Exactly 180 becomes -180, the same direction. With `true`, both write the plain form. Fanuc ASIN follows the same bit (270..0..90 under 0) and gets the same treatment where ASIN is mapped.
+Basis: manual
+Source: 30i-B Parameterhandbuch B-64490EN-05 p.340-341, parameter 6004 #0 NAT: "0: the result of ATAN is 0 to 360.0 … 1: −180.0 to 0 to 180.0" (the same in 30i-A B-63950EN-03 p.383).
+Confidence: high (behaviour), medium (key name)
+Code impact: machine-config 7 + loader key, FanucExpressions.Call, FanucExpression reader, D119 note; tests for both settings.
+
+---
+
+#### D405 Fanuc HOME of an axis with no incremental letter (G28 B in system A)
+Markers: src/Ncx.Compilers/Fanuc/FanucFrames.cs:519, tests/Ncx.Acceptance/Jobs/NakamuraJobCompileTests.cs:26 (refs :126, README.md:5)   Row: W3-65, W3-175
+Decision: The compiler writes HOME of such an axis as `G28 B<v>`, where v is a known position that makes the intermediate move zero or the one NCX asked for. (a) A `RAPID B=v` directly before `HOME B`, with nothing between, folds into `G28 Bv`; this is the reader's own D243 reading of `G28 B0`, so the round trip is exact. (b) Otherwise, if the VM knows the current B, the compiler writes `G28 B<current>` (an intermediate point equal to the current position means no intermediate motion). (c) If B is unknown, CMP321 stays an ERROR. It never writes G91, which is not the incremental code in system A. The Nakamura test drops its incremental-letter patch.
+Basis: logical (from D243 and the system A address rules)
+Source: D243: an absolute word of G28 is the intermediate point, reached at rapid; an address with no incremental twin is always absolute. Writing the point the axis already stands at is what a programmer does on the control.
+Confidence: medium-high
+Code impact: FanucFrames.WriteHome, a look-back at the previous RAPID, CMP321 narrowed to the unknown case; nakamura-ntjx test.
+
+---
+
+#### D406 Pass-through ARG: M98 or G65
+Markers: src/Ncx.Compilers/Fanuc/FanucFlow.cs:415 (ref FanucFlowTests.cs:156)   Row: W3-196
+Decision: Final as coded. The compiler writes the M98 (the shape the reader produced it from) and reports WARNING CMP311 that names the G65 reading. The two calls are identical as long as the callee does not write `#1..#33` back. Where it does, D148 has already reported it on the reader's side.
+Basis: logical
+Source: M98 shares the caller's locals, so `ARG:Vn={$Vn}` with M98 is a byte-identical round trip; G65 would change the text and the local-variable level.
+Confidence: high
+Code impact: comment only.
+
+---
+
+#### D407 External program and #1..#33
+Markers: src/Ncx.Readers/Fanuc/FanucMacro.cs:328   Row: W3-194
+Decision: Keep the CALL without ARG (the program is not visible, D99 does not follow it). Add a reader WARNING (next free RDR) on the external call when the caller has assigned any of `#1..#33` before it: "external program may read or write #1..#33; NCX passes none".
+Basis: logical
+Source: D148 needs the callee's blocks to decide ARG; without them, a diagnostic is better than a silent loss.
+Confidence: medium
+Code impact: FanucMacro, a new RDR code, test.
+
+---
+
+#### D408 G50 S / G92 S speed limit with several spindles
+Markers: src/Ncx.Compilers/Fanuc/FanucToolWords.cs:545   Row: none
+Decision: Keep writing the limit alone (`G50 S..` / `G92 S..`) before the spindle's M code, as the Nakamura source does. Treat it as a limit of the spindle selected when the block executes. The compiler writes it after the selection of the spindle the limit belongs to (P word or role M code, as the machine's templates give it) and reports CMP (next free, WARNING) where the NCX `RPM_MAX` belongs to a spindle other than the one selected at that point and the machine gives no `{spindle}`/P form for RPM_MAX.
+Basis: manual + logical
+Source: 0i-F Bedienung-Drehen-Fraesen B-64604EN p.156 (clamp of maximum spindle speed G92 S, notes on multi-spindle selection by address P); 0i-D B-64304EN p.127-128 (G50 S in system A). No page says the clamp is shared by all spindles.
+Confidence: medium
+Code impact: FanucToolWords (order check + WARNING).
+
+---
+
+#### D409 Other words of G70..G76 and the two-block form
+Markers: cycles/fanuc-lathe.toml:140, src/Ncx.Readers/Fanuc/FanucCycles.cs:256   Row: W1-18 (D175 remainder)
+Decision: No new NCX words. The catalog entries get the remaining addresses as catalog parameters with descriptive names (D114 provisional form, kept in source order). The two-block form is one catalog cycle whose parameters carry a block suffix: G71/G72 `DEPTH_OF_CUT`=U (or W on G72) and `RETRACT`=R of block 1, then `ALLOWANCE_X`=U and `ALLOWANCE_Z`=W of block 2 with P/Q as the contour; G73 `RELIEF_X`=U, `RELIEF_Z`=W, `DIVISIONS`=R / `ALLOWANCE_X`, `ALLOWANCE_Z`; G74/G75 `RETURN`=R (block 1), `STEP_X`=P, `STEP_Z`=Q, `ESCAPE`=R (block 2); G76 `THREAD_DATA`=P (mmrraa), `MIN_DEPTH`=Q, `FINISH_ALLOWANCE`=R (block 1), `TAPER`=R, `HEIGHT`=P, `FIRST_DEPTH`=Q, `PITCH`=F (block 2). The compiler writes the two blocks in the control's order. The one-block (Series 15) form stays RAW. Until the catalog lands, the current RAW + WARNING stays.
+Basis: manual + logical
+Source: Fanuc lathe manuals give the two-block formats (e.g. 0i-D Bedienerhandbuch-Drehen B-64304EN-1-01 p.82-88, G70-G75 description, G74/G75 "cutting by Δi, return by e, escape Δd"). Native parameters, not NCX words, keep NCX free of Fanuc-only semantics (D114, D94).
+Confidence: medium (parameter names are ours)
+Code impact: cycles/fanuc-lathe.toml, the reader's two-block join (FanucCycles), FanucCycles compiler writer, ShippedCatalogsTests.
+
+---
+
+#### D410 A catalog file cannot withdraw an inherited entry
+Markers: cycles/fanuc-lathe.toml:23   Row: none (D160 / D377 follow-up)
+Decision: Allow `available = false` on a `[[cycle]]` entry of a catalog file (no `channel` there; CFG157 then covers only `channel`). An unavailable entry is removed from the merged catalog. The reader no longer reads its native code as that cycle: a G82/G86 block on a lathe stays RAW with the catalog-missing reason, and G73/G74 resolve to the lathe entries. The compiler reports CMP004 as D377 does. fanuc-lathe.toml marks DRILL_DWELL, CHIP_BREAK and BORE unavailable.
+Basis: logical
+Source: D377 already defines `available` and CMP004 for machine overrides. Reusing it in catalogs is the smallest change, and it stops mill codes from being written for a lathe, where G73/G74 mean something else (D176).
+Confidence: high
+Code impact: catalog loader (CFG157 narrowed), cycles/fanuc-lathe.toml, ShippedCatalogsTests, reader catalog lookup.
+
+---
+
+#### D411 Where G71/G72 type I, G74 and G75 leave the tool
+Markers: src/Ncx.Core/VirtualMachine/CycleRules.cs:68   Row: none (D187/D188 remainder)
+Decision: After G70, G71, G72 (type I and II), G73, G74 and G75 the tool stands at the cycle start point, the position before the cycle block. The VM sets both axes to it instead of leaving the drilling axis unknown.
+Basis: manual
+Source: 0i-FPlus Parameter B-64700EN p.290, parameter DTP: in G71/G72 type I "the tool returns to the cycle start point" (only the path differs); 0i-FPlus Bedienung-Drehen B-64694EN-1 p.77: "returns to the cycle start point in rapid traverse"; 0i-D B-64304EN-1-01 p.88 (G74/G75 cycle operation returning to the start, then moving on by Δk until point C).
+Confidence: medium-high (G74/G75 return inferred from the cycle description)
+Code impact: CycleRules (four cases), VM tests.
+
+---
+
+#### D412 CSS radius for HOME and RETRACT in the runtime estimate
+Markers: src/Ncx.Analytics/Runtime/SpindleSpeed.cs:73 (ref RuntimeAnalyticTests.cs:171)   Row: W3-91
+Decision: HOME and RETRACT take the end radius, like RAPID. All three move at the rapid rate and cut nothing.
+Basis: logical (from D289's Fanuc rapid rule)
+Source: D289: Fanuc computes the G96 rpm of a rapid block from its end position. G28 and the retract are rapid moves.
+Confidence: high
+Code impact: SpindleSpeed (one branch); nothing reads it today; update the test comment ref (dangling name).
+
+---
+
+#### D413 ncx analyze when an ERROR stops the run
+Markers: src/Ncx.Cli/Commands/AnalyzeCommand.cs:237 (refs AnalyzeJob.cs:65, AnalyzeCommandTests.cs:219)   Row: W3-94
+Decision: As coded. D205 is extended to analyze and analyze --job: reports of the blocks executed before the ERROR, after a "run stopped" line, exit 1. Nothing is written when the run does not start. Architecture 10 names analyze beside trace.
+Basis: logical
+Source: D205 for trace; analyze is a trace consumer.
+Confidence: high
+Code impact: comments; architecture 10 row.
+
+---
+
+#### D414 Binding only some states of a table to a channel
+Markers: src/Ncx.Compilers/ChannelBinding.cs:22, machines/mori-ntx1000-mapps.toml:235   Row: W3-161 tail (D312 case c)
+Decision: New optional key on a function table: `state_channels = { OFF = 1 }` (state name → channel number or "all"). A state listed there takes that binding. Every other state follows the table's `channel`/`channels`, and is unbound when the table has neither. Mori NTX: the sync table keeps `channels = "all"` and adds `state_channels = { OFF = 1 }`, so M36 is written in the program of channel 1 only. A state name that the table does not have is CFG005.
+Basis: logical
+Source: D312 confirmed that the machine needs it. The state names are the D198 names, so the key reuses an existing vocabulary.
+Confidence: medium (behaviour high, key name a proposal)
+Code impact: loader (machine-config 5), ChannelBinding, mori-ntx1000-mapps.toml, CMP701 test.
+
+---
+
+#### D415 Two sequences for one state (DMG M436 / M433)
+Markers: src/Ncx.Core/Machine/ExpansionRule.cs:15   Row: none (D198 remainder)
+Decision: One rule per table stays. The state that is safe in every condition is the table's template: chuck open = M436, "spindle standing". The variant that is only valid while the spindle runs (M433) is a separate named function (`FUNC`) that the program must ask for explicitly. The VM rejects a chuck-open word while the spindle turns, as its existing validation does.
+Basis: logical
+Source: a control maker never picks the "open while running" code implicitly; opening a chuck on a running spindle must be an explicit act.
+Confidence: high
+Code impact: comment; the DMG machine file gets the second FUNC entry.
+
+---
+
+#### D416 A channel the configuration does not name
+Markers: src/Ncx.Core/VirtualMachine/ResourceResolver.cs:250   Row: none
+Decision: As coded, and recorded: an ERROR with a machine file, the D103 WARNING "not checked: no machine file" without one, the same as an unknown function or coolant channel (D130). Add "channel" to the VM 5 ERROR list.
+Basis: logical
+Source: D130 applies the same rule to every other named resource.
+Confidence: high
+Code impact: comment, VM 5 list.
+
+---
+
+#### D417 Siemens block_numbers and the N of a RAW line
+Markers: src/Ncx.Compilers/Siemens/SiemensCompiler.cs:122   Row: none
+Decision: As coded. RAW text is never changed: the N stays, and the compiler's numbering continues above it. Add a WARNING (next free CMP) only where a GOTO target would become ambiguous because a generated N equals a RAW N in the same program.
+Basis: logical
+Source: RAW is verbatim (language rule 6); Siemens jumps may target block numbers, so renumbering could move a jump target.
+Confidence: high
+Code impact: SiemensCompiler numbering, duplicate-N check.
+
+---
+
+#### D418 Siemens F or S that may not be written between two RAW lines
+Markers: src/Ncx.Compilers/Siemens/SiemensCycles.cs:208   Row: none (D259 remainder)
+Decision: Keep D259 (no bare F/S block there). Severity follows the risk: when a RAW line between the dropped word and the next block that writes it could use it (any RAW line while the modal call is armed or unknown), the drop is an ERROR (CMP596 raised to ERROR in that case), because the drilling feed would silently change. Otherwise it stays the WARNING and the word is written at the next block that needs it.
+Basis: logical
+Source: a silent change of the cutting feed is the case "a diagnostic over a guess" is for; a bare F would fire the modal call (D259), so no safe text exists.
+Confidence: medium
+Code impact: SiemensCycles (severity split), DiagnosticCodes.Siemens.
+
+---
+
+#### D419 Siemens: names D173 maps versus names the source wrote
+Markers: src/Ncx.Compilers/Siemens/SiemensExpressions.cs:112   Row: W3-137
+Decision: As coded, and recorded: the form decides. A letter plus digits (Q1, QL5) and the Heidenhain QL/QR/QS names need a `[variables] map` entry (else the D173 ERROR). Any other name, including R parameters the source wrote and declared names of several letters, is written as it is (D261 declares it).
+Basis: logical
+Source: D173 + D261; NCX keeps no origin per name, so the form is the only stable signal.
+Confidence: high
+Code impact: comment only.
+
+---
+
+#### D420 Does a RAW builder cycle change the Siemens frame?
+Markers: src/Ncx.Compilers/Siemens/SiemensFrames.cs:270   Row: none
+Decision: Split by what the RAW line is. A RAW line that is MSG, STOPRE, a comment, G4, or an instruction the reader already classifies as frame-neutral leaves the frame known (as now). A RAW subprogram or builder-cycle call (a name with or without parentheses that is not a known frame-neutral instruction) makes the frame unknown, as D343 does for the modal call. The compiler then writes the full frame (ORIGIN, TRANS…, CYCLE800) before the next motion.
+Basis: logical
+Source: D343 treats a RAW call as able to change channel state; frames are channel state. Exempting the known neutral lines avoids writing frames after every MSG.
+Confidence: medium
+Code impact: SiemensFrames (AfterRaw), a list of neutral RAW forms shared with SiemensCycles.AfterRaw.
+
+---
+
+#### D421 Siemens datum (G54..G599, G500) and the CYCLE800 swivel
+Markers: src/Ncx.Readers/Siemens/SiemensFrames.cs:44   Row: W3-189
+Decision: The datum leaves the swivel standing. CYCLE800 writes system frames (D333), and a settable frame is a separate component of the total frame (D340(3)). The reader writes, after the ORIGIN, the programmable entries (as now) and also the standing TILT with MOVE=STAY, the same reading D253(d) gives Heidenhain cycle 247. The Siemens compiler writes nothing for a TILT MOVE=STAY right after an ORIGIN when it equals the swivel the control still holds, so the round trip is unchanged.
+Basis: manual + decision
+Source: Sinumerik 840D sl Programming Manual NC Programming (2020) p.144 and p.305-306: a settable work offset is a settable frame, separate from the programmable and system frame components; D333 (2026-10-27): CYCLE800 writes system frames.
+Confidence: medium-high
+Code impact: SiemensFrames reader (ORIGIN path), SiemensFrames compiler (skip identical STAY tilt), tests.
+
+---
+
+#### D422 Position block while an unknown modal call is armed
+Markers: src/Ncx.Readers/Siemens/SiemensMotion.cs:232   Row: none (D259 remainder)
+Decision: Extend D259. From a RAW `MCALL` (or an MCALL of a subprogram the reader cannot expand) to the MCALL alone that disarms it, within the unit, every block stays RAW, found by the same look-ahead. Without a closing MCALL in the unit, the range runs to the end of the unit. Reading the positions as plain motions would let a compiler insert F/S/plane blocks between them, which fire the modal call (D259).
+Basis: logical
+Source: D259's own argument (S or F with G0/G1 calls the modal subprogram).
+Confidence: medium-high
+Code impact: SiemensMotion / SiemensCycles look-ahead; expected files of sources with a subprogram MCALL.
+
+---
+
+#### D423 Order of the CYCLE_CALL blocks of an expanded pattern
+Markers: src/Ncx.Readers/Siemens/SiemensPatterns.cs:250   Row: W3-192
+Decision: As coded: parameter order. A reader INFO/WARNING is not needed. The NCX expansion states the hole set, and the order the control picks from its start position is not documented. Language 4.7 notes that the expanded order is not the control's machining order. The compiler writes a CYCLE_CALL sequence as positions, never as a repacked pattern cycle, so nothing depends on it.
+Basis: logical
+Source: D341; the positions and the drilled geometry are the same in either order.
+Confidence: medium
+Code impact: comment, one sentence in language 4.7.
+
+---
+
+#### D424 Siemens G973
+Markers: src/Ncx.Readers/Siemens/SiemensSpindles.cs:205   Row: W3-190
+Decision: Siemens G973 stays RAW with a WARNING naming that NCX has no form for constant cutting speed off without the speed limit; the round trip stays exact and the control keeps exactly what the source programmed (maintainer ruling on delegation, 2026-10-30, overriding the draft that wrote G97).
+Basis: logical (from D342)
+Source: D342: G973 is G97 without the speed limit and leaves the feed per revolution.
+Confidence: medium (the round trip text changes G973 → G97 by design)
+Code impact: SiemensSpindles reader, a new RDR WARNING, expected files using G973.
+
+---
+
+#### D425 CYCLE800 projection angles
+Markers: src/Ncx.Readers/Siemens/SiemensTilt.cs:189   Row: W3-191
+Decision: Final as coded: the projection mode (_MODE bits 7..6 = 10) stays RAW (D335). Revisit only when a manual gives the construction.
+Basis: logical
+Source: D335: no page gives a construction a rotation matrix can be built from.
+Confidence: high
+Code impact: comment only.
+
+---
+
 ## Answered (ninth round, 2026-10-01; settled in `decisions.md`)
 
 Eighty-four questions of the sixth, seventh and eighth rounds, answered from the maintainer's manual library and settled on 2026-10-01. Each draft was researched by one agent and checked by a second, who re-opened every manual page the answer cites and struck or corrected whatever the page did not carry; the Evidence line of each entry names the manual and the page, so any reader can do the same. Of the answers that came back, the maintainer let exactly one group be applied without reviewing each entry: those whose manual-confirmed answer agrees with the draft's own recommendation and rests on a page the verifier gave high confidence. Those are the entries below, each carrying the line "Settled 2026-10-01" and a row in `decisions.md`. Everything else stays in "Still open" above and still waits for the maintainer: the drafts whose manual-confirmed answer contradicts the recommendation, the drafts whose manual pages only inform the question without settling it, and the drafts the library does not cover at all. The headings below keep each entry's round and urgency, so an entry can still be found where it stood.

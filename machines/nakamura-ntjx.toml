@@ -32,6 +32,7 @@ sub_end = "M99"
 MAIN = "S1"
 SUB = "S2"
 TOOL = "S3"
+TOOL2 = "S4"
 TURRET1 = "T1"
 TURRET2 = "T2"
 
@@ -50,6 +51,10 @@ id = "S3"
 type = "tool_spindle"
 
 [[resource]]
+id = "S4"
+type = "tool_spindle"              # the rotary tool drive of the lower turret, M488/M489/M490 (4810004EDG-1 p.58, p.252; 18i-TB guide 2009 p.12)
+
+[[resource]]
 id = "T1"
 type = "tool_holder"
 spindle = "S3"
@@ -59,6 +64,7 @@ channel = 1
 [[resource]]
 id = "T2"
 type = "tool_holder"
+spindle = "S4"
 magazine = false                   # lower turret
 channel = 2
 
@@ -195,6 +201,14 @@ CCW = "M89"
 OFF = "M90"
 rpm_min = 50
 rpm_max = 12000
+accel_time = 1.0
+
+[spindle.TOOL2]                    # the lower turret's rotary tool (4810004EDG-1 p.58, p.252)
+CW = "M488"
+CCW = "M489"
+OFF = "M490"
+rpm_min = 180                      # programmable range S180 to S3600 (4810004EDG-1 p.252)
+rpm_max = 3600
 accel_time = 1.0
 
 [spindle_mode.MAIN]

@@ -49,8 +49,8 @@ public sealed class SiemensFrameTests
     }
 
     // D125: a Siemens facing axis keeps its frame offsets as radii (MD20360 bit 3 off), while NCX reads SHIFT X under
-    // DIAMETER=ON as a diameter, so the reader doubles the X of TRANS, ATRANS and G58/G59 under DIAMON; under DIAMOF,
-    // and where the machine file sets frames_in_diameter, X is taken as written.
+    // DIAMETER=ON as a diameter, so the reader doubles the X of TRANS, ATRANS and G58/G59 under DIAMON; under DIAMOF
+    // X is taken as written.
     [Fact]
     public void TransX_UnderDiamon_IsDoubledIntoTheDiameter()
     {
@@ -58,15 +58,17 @@ public sealed class SiemensFrameTests
             CheckedBody("DIAMON\nTRANS X10 Z5\nATRANS X2\nDIAMOF\nATRANS X3", MillTurn()));
     }
 
-    // D125, D388: with frames_in_diameter the control keeps the frame offsets of X as diameters, which NCX writes as
-    // they are.
+    // D125, D388: with frames_in_diameter the control keeps the frame offsets of X as diameters, under DIAMOF too
+    // (MD20360 bit 3, Funktionshandbuch Grundfunktionen 2012 p.903), which NCX writes as they are under DIAMETER=ON
+    // and halved into the radius NCX reads under DIAMETER=OFF; the compiler doubles that radius again.
     [Fact]
-    public void TransX_WithFramesInDiameter_IsTakenAsWritten()
+    public void TransX_WithFramesInDiameter_IsTheDiameterUnderDiamonAndItsHalfUnderDiamof()
     {
         MachineConfig machine = MillTurnWith("programming = \"switchable\"",
             "programming = \"switchable\"\nframes_in_diameter = true");
 
-        Assert.Equal(Lines("DIAMETER=ON", "SHIFT X=10 Z=5"), CheckedBody("DIAMON\nTRANS X10 Z5", machine));
+        Assert.Equal(Lines("DIAMETER=ON", "SHIFT X=10 Z=5", "DIAMETER=OFF", "SHIFT X=4"),
+            CheckedBody("DIAMON\nTRANS X10 Z5\nDIAMOF\nATRANS X8", machine));
     }
 
     // D125: only an X axis whose programming is diameter or switchable has radius frames to double; the mill's X is
@@ -85,6 +87,18 @@ public sealed class SiemensFrameTests
         const string Swivel = "CYCLE800(0,\"TABLE\",0,27,1,0,0,0,45,0,0,0,0,-1,100,1)";
 
         Assert.Equal(Lines("DIAMETER=ON", Raw(Swivel)), Body("DIAMON\n" + Swivel, MillTurn()));
+    }
+
+    // D125, D388: with frames_in_diameter the compiler writes _X0 of CYCLE800 as a frame value in diameters, so under
+    // DIAMOF the reader halves it into the radius of SHIFT X, as for TRANS X.
+    [Fact]
+    public void CYCLE800_WithAnXReferencePointUnderDiamofWithFramesInDiameter_IsTheHalfShift()
+    {
+        MachineConfig machine = MillTurnWith("programming = \"switchable\"",
+            "programming = \"switchable\"\nframes_in_diameter = true");
+
+        Assert.Contains("SHIFT X=5",
+            Body("DIAMOF\nCYCLE800(0,\"TABLE\",0,27,10,0,0,0,45,0,0,0,0,-1,100,1)", machine));
     }
 
     // D333, D5: after a CYCLE800 kept as RAW the chain holds a swivel the reader does not know, so a later TRANS and
@@ -118,6 +132,22 @@ public sealed class SiemensFrameTests
             BodyOf(NcxWriter.Write(program)));
         Assert.Equal([DiagnosticCodes.SiemensMachinePositionDoubled], Codes(program));
         Assert.Equal(Lines("DIAMETER=ON", "VAR:R1={$SYS_MPOS_X}"), Body("DIAMON\nR1=$AA_IM[X]", inDiameter));
+    }
+
+    // D240, D388: with frames_in_diameter (MD20360 bits 6/7) $AA_IM[X] reads a diameter under DIAMOF too, twice the
+    // radius $SYS_MPOS_X reads under DIAMETER=OFF, so the reader writes the NCX name doubled, without RDR510 since the
+    // machine file states the factor; the compiler writes $SYS_MPOS_X back as ($AA_IM[X]/2).
+    [Fact]
+    public void AaImX_UnderDiamofWithFramesInDiameter_IsTheNcxNameDoubled()
+    {
+        MachineConfig inDiameter = MillTurnWith("call_depth = 8\n", "call_depth = 8\n\n[system_variables]\n"
+            + "SYS_MPOS_X = \"$AA_IM[X]\"\n", "programming = \"switchable\"",
+            "programming = \"switchable\"\nframes_in_diameter = true");
+
+        NcxProgram program = FramedProgram("DIAMOF\nR1=$AA_IM[X]", inDiameter);
+
+        Assert.Equal(Lines("DIAMETER=OFF", "VAR:R1={($SYS_MPOS_X * 2)}"), BodyOf(NcxWriter.Write(program)));
+        Assert.Empty(Codes(program));
     }
 
     // Rule 4: ROT and MIRROR cut the chain like TRANS, AROT and AMIRROR append; MIRROR=OFF resets a mirror (D124).
