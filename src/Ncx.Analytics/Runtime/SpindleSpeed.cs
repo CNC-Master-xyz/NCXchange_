@@ -94,7 +94,8 @@ internal static class SpindleSpeed
     }
 
     // The rpm at one radius of the motion, the mean for a cutting motion of the runtime estimate, the end radius for
-    // a motion at the rapid rate (D412) and the two ends for the rpm range of the tool list (D289); the radius matters under CSS only.
+    // a motion at the rapid rate (D412) and the two ends for the rpm range of the tool list (D289); the radius matters
+    // under CSS only.
     private static double? RpmOf(MotionEvent motion, MachineConfig machine, Radius which)
     {
         ChannelSnapshot state = motion.After;
