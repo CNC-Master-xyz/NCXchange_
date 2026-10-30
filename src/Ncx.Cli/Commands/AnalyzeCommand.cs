@@ -234,10 +234,9 @@ internal static class AnalyzeCommand
         });
 
         // The reports cover the blocks the run executed; there are none when there was no program to run.
-        // TODO(question): virtual machine 8 does not say what analyze writes when an ERROR stops the run, the question
-        // wave-2 question #42 asks for trace and annotate. The reports cover the blocks executed before the ERROR,
-        // after a line that says so, and nothing is written when the file, the machine file, the parser or the
-        // expander stopped the run before its first block, as trace does, until that is answered.
+        // D413, D205 extended to analyze: the reports cover the blocks executed before an ERROR, after a line that
+        // says so, with the exit code 1, and nothing is written when the file, the machine file, the parser or the
+        // expander stopped the run before its first block, as trace does (architecture 10).
         if (result.Program is not null)
         {
             if (result.Diagnostics.HasErrors)

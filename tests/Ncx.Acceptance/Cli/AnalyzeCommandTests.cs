@@ -216,8 +216,8 @@ public sealed class AnalyzeCommandTests : IDisposable
         Assert.Contains("ERROR CLI002", _cli.Error, StringComparison.Ordinal);
     }
 
-    // The reading of the TODO(question) in AnalyzeCommand (wave-2 question #42): an ERROR stops the run, the reports
-    // cover the blocks before it after a line that says so, and the exit code is 1 (D97).
+    // D413, D205 extended to analyze: an ERROR stops the run, the reports cover the blocks before it after a line that
+    // says so, and the exit code is 1 (D97).
     [Fact]
     public void Analyze_RunStoppedByAnError_WritesTheReportsAfterALineThatSaysSo()
     {
