@@ -21,11 +21,6 @@ internal sealed record HeidenhainCallerState
     public required HeidenhainPoint? Pole { get; init; }
 
     /// <summary>
-    /// The decimals of the pole's source words.
-    /// </summary>
-    public required int PoleDecimals { get; init; }
-
-    /// <summary>
     /// The active cycle definition; null when none is, or it is not known.
     /// </summary>
     public required HeidenhainDefinition? Definition { get; init; }
@@ -75,7 +70,6 @@ internal sealed record HeidenhainCallerState
         {
             Plane = state.Plane,
             Pole = state.Pole,
-            PoleDecimals = state.PoleDecimals,
             Definition = state.Definition,
             DefinitionUnknown = state.DefinitionUnknown,
             CycleOn = state.CycleOn,

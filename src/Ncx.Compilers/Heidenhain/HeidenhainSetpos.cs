@@ -103,10 +103,11 @@ internal static class HeidenhainSetpos
     /// </summary>
     // D319: the setpos shift keeps its displacement in space; when a ROTATE or MIRROR with a known value before it is
     // removed the virtual machine turns the shift into the remaining frame, and after a removed tilt or expression
-    // angle it becomes unknown (decisions.md D319). The compiler keeps CMP114 for such a RESET until D253 settles where
-    // the cycle 7 goes; a place the target state does not know counts as the end of the chain.
-    // TODO(question): D253: where the Klartext cycle acts that cancels a transform the cycle 7 of the SETPOS follows is
-    // open, so the cycle 7 cannot be rewritten for the remaining frame; such a RESET is reported (CMP114).
+    // angle it becomes unknown (decisions.md D319). A place the target state does not know counts as the end of the
+    // chain.
+    // D253(a), D398: where the Klartext cycle acts that cancels a transform the cycle 7 of the SETPOS follows is not
+    // settled by any manual, so the cycle 7 is not rewritten for the remaining frame; such a RESET is reported
+    // (CMP114), and the compiler never writes it. This is the end state; revisit only with a machine test.
     public static void CheckRemoved(HeidenhainBlock writing, ChainChange change)
     {
         if (change.Removed.Count == 0)
@@ -275,10 +276,11 @@ internal static class HeidenhainSetpos
 
     // The cycle 7 of the SETPOS is the one cycle 7 the control has active, after the transforms of the chain active at
     // the SETPOS (language 4.2, D31); a new cycle 7 replaces the previous one (controllers heidenhain.md 3).
-    // TODO(question): D253: where a replacing Klartext transform acts when others follow the one it replaces is open;
-    // a SETPOS while a SHIFT stands in the chain, and one whose cycle 7 replaces the cycle 7 of an earlier SETPOS that
-    // transforms of the chain follow (or may follow, where the target state does not know its place), are reported
-    // (CMP106), as HeidenhainChain.Append reports a SHIFT while one stands.
+    // D253(a), D398: where a replacing Klartext transform acts when others follow the one it replaces (7-10-7) is not
+    // settled by any manual, so the compiler never writes it: a SETPOS while a SHIFT stands in the chain, and one whose
+    // cycle 7 replaces the cycle 7 of an earlier SETPOS that transforms of the chain follow (or may follow, where the
+    // target state does not know its place), are reported (CMP106), as HeidenhainChain.Append reports a SHIFT while
+    // one stands. This is the end state; revisit only with a machine test.
     private static bool FitsTheChain(HeidenhainBlock writing, bool origin)
     {
         foreach (TransformEntry entry in writing.After.Frame.Chain)

@@ -1,3 +1,4 @@
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.Writing;
 using static Ncx.Readers.Tests.Fanuc.FanucRead;
@@ -133,6 +134,33 @@ public sealed class FanucCycleTests
         Assert.Contains("CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-20", text, StringComparison.Ordinal);
         Assert.Contains("CYCLE=TAP SURFACE=0 CLEARANCE=5 DEPTH=-25", text, StringComparison.Ordinal);
         Assert.DoesNotContain("RAW:", text, StringComparison.Ordinal);
+    }
+
+    // An M29 inside a running tapping cycle alarms PS0204 (B-64484EN-2 p.104, p.108; B-64484EN-1 p.114), so the block
+    // that carries it, alone, with its S or with a call position, stays RAW with that reason.
+    [Theory]
+    [InlineData("X30.\nM29 S500\nX40.", "M29 S500")]
+    [InlineData("M29\nX40.", "M29")]
+    [InlineData("X30. M29 S500", "X30. M29 S500")]
+    public void RigidTapLine_InsideTheRunningTapCycle_IsAlarmPs0204AndStaysRaw(string run, string line)
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X10. Y10. Z10.\nM29 S500\nG84 G99 Z-20. R5. F750\n" + run
+            + "\nG80\nM30\n%\n");
+
+        Assert.Contains("RAW:FANUC=\"" + line + "\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("PS0204", program.Diagnostics.ToText(), StringComparison.Ordinal);
+    }
+
+    // An M29 inside a tapping cycle alarms PS0204 with a compensating chuck as well (B-64484EN-2 p.104; B-64484EN-1
+    // p.119): a G84 run without the line in front of it, TAP_COMPENSATING, keeps the M29 block RAW too.
+    [Fact]
+    public void RigidTapLine_InsideACompensatingTapRun_IsAlarmPs0204AndStaysRaw()
+    {
+        NcxProgram program = Program("%\nO0001\nS500 M3\nG0 X10. Y10. Z10.\nG84 G99 Z-20. R5. F750\nM29 S500\nX30.\n"
+            + "G80\nM30\n%\n", MillWithCycles(""));
+
+        Assert.Contains("RAW:FANUC=\"M29 S500\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("PS0204", program.Diagnostics.ToText(), StringComparison.Ordinal);
     }
 
     // D256 names three ways into the rigid-tapping mode, the second of them "M29 S in the same block as the tapping
@@ -639,11 +667,99 @@ public sealed class FanucCycleTests
     [InlineData("G83 Z-40. R-5. F0.2",
         "CYCLE=DRILL AXIS=Z SURFACE=0 CLEARANCE=0 DEPTH=-40 CYCLE_RETRACT=CLEARANCE CYCLE_F=0.2")]
     [InlineData("G83 Z-40. R-5. Q2000 F0.2",
-        "CYCLE=PECK AXIS=Z SURFACE=0 CLEARANCE=0 DEPTH=-40 CYCLE_RETRACT=CLEARANCE PECK=2000 CYCLE_F=0.2")]
+        "CYCLE=PECK AXIS=Z SURFACE=0 CLEARANCE=0 DEPTH=-40 CYCLE_RETRACT=CLEARANCE PECK=2 CYCLE_F=0.2")]
     public void LatheDrillingEntry_G83WithAndWithoutQ_IsPeckAndDrill(string source, string cycle)
     {
         Assert.Equal(Lines("RAPID Z=5", cycle, "CYCLE_CALL", "CYCLE=OFF"),
             Body("G0 Z5.\n" + source + "\nG80", Lathe()));
+    }
+
+    // A lathe takes no decimal point in Q (B-64484EN p.229, the T list of 8.3), so the peck Q of G83 counts least input
+    // increments whatever parameter 3401#0 says: Q2000 is 2 mm at the 0.001 mm of IS-B, Q20000 is 2 inch at 0.0001 inch
+    // (B-64484EN-1 p.96, G83 Z-40.0 R-5.0 Q5000).
+    [Theory]
+    [InlineData("G21", "G0 Z5.\nG83 Z-40. R-5. Q2000 F0.2", "PECK=2 ")]
+    [InlineData("G21", "G0 Z5.\nG83 Z-40. R-5. Q500 F0.2", "PECK=0.5 ")]
+    [InlineData("G20", "G0 Z0.2\nG83 Z-1. R-0.1 Q20000 F0.01", "PECK=2 ")]
+    public void LathePeckQ_WithoutADecimalPoint_CountsLeastInputIncrements(string units, string source, string peck)
+    {
+        string text = Text("%\nO0001\n" + units + "\n" + source + "\nG80\nM30\n%\n", Lathe());
+
+        Assert.Contains(peck, text, StringComparison.Ordinal);
+        Assert.DoesNotContain("RAW:", text, StringComparison.Ordinal);
+    }
+
+    // The units of a lathe Q are those the header assumes where the program sets none: units_default = "INCH" without
+    // G20 counts 0.0001 inch, and [machine] input_increment (parameter 1013, B-64490EN-05 p.57-58) sets the
+    // increment system: IS-C counts 0.0001 mm.
+    [Theory]
+    [InlineData("units_default = \"INCH\"", "G0 Z0.2\nG83 Z-1. R-0.1 Q20000 F0.01", "PECK=2 ")]
+    [InlineData("units_default = \"MM\"\ninput_increment = \"IS-C\"", "G0 Z5.\nG83 Z-40. R-5. Q20000 F0.2",
+        "PECK=2 ")]
+    [InlineData("units_default = \"MM\"\ninput_increment = \"IS-A\"", "G0 Z5.\nG83 Z-40. R-5. Q200 F0.2",
+        "PECK=2 ")]
+    public void LathePeckQ_CountsTheIncrementOfTheUnitsDefaultAndTheIncrementSystem(string keys, string source,
+        string peck)
+    {
+        MachineConfig machine = FromToml(LatheToml.Replace("units_default = \"MM\"", keys, StringComparison.Ordinal));
+        string text = Text("%\nO0001\n" + source + "\nG80\nM30\n%\n", machine);
+
+        Assert.Contains(peck, text, StringComparison.Ordinal);
+        Assert.DoesNotContain("RAW:", text, StringComparison.Ordinal);
+    }
+
+    // calculator_input = false counts the increment of input_increment: X10 is 0.10 mm under IS-A.
+    [Fact]
+    public void NumbersWithoutAPoint_UnderIsA_CountHundredths()
+    {
+        MachineConfig machine = FromToml(MillToml.Replace("units_default = \"MM\"",
+            "units_default = \"MM\"\ninput_increment = \"IS-A\"", StringComparison.Ordinal)
+            + "\n[format]\ncalculator_input = false\n");
+
+        Assert.Equal(Lines("RAPID X=0.10 Y=0.20"), Body("G0 X10 Y20", machine));
+    }
+
+    // A lathe takes no decimal point in Q (B-64484EN p.229), so a lathe Q2. is no peck the reader can read: RAW.
+    [Fact]
+    public void LathePeckQ_WithADecimalPoint_StaysRaw()
+    {
+        NcxProgram program = Program("%\nO0001\nG0 Z5.\nG83 Z-40. R-5. Q2. F0.2\nG80\nM30\n%\n", Lathe());
+
+        Assert.Contains("RAW:FANUC=\"G83 Z-40. R-5. Q2. F0.2\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("p.229", program.Diagnostics.ToText(), StringComparison.Ordinal);
+    }
+
+    // [format] calculator_input = false, parameter 3401#0 = 0: every address that takes a decimal point counts least
+    // input increments without one, X Y Z R and the mill Q in 0.001 mm, F under G94 in 1 mm/min (B-64484EN p.229,
+    // p.527-528; B-64490EN-05 p.190); the default true reads them as written (controllers fanuc.md 2).
+    [Theory]
+    [InlineData("true", "RAPID X=10 Y=20 Z=50",
+        "CYCLE=PECK SURFACE=0 CLEARANCE=5 DEPTH=-40 CYCLE_RETRACT=CLEARANCE PECK=2000 CYCLE_F=100")]
+    [InlineData("false", "RAPID X=0.010 Y=0.020 Z=0.050",
+        "CYCLE=PECK SURFACE=0 CLEARANCE=0.005 DEPTH=-0.040 CYCLE_RETRACT=CLEARANCE PECK=2.000 CYCLE_F=100")]
+    public void NumbersWithoutAPoint_FollowCalculatorInput(string calculator, string rapid, string cycle)
+    {
+        Assert.Equal(Lines(rapid, cycle, "CYCLE_CALL", "CYCLE=OFF"),
+            Body("G0 X10 Y20 Z50\nG83 G99 Z-40 R5 Q2000 F100\nG80",
+                MillWith("[format]\ncalculator_input = " + calculator)));
+    }
+
+    // calculator_input = false does not touch an address that takes no decimal point: the lathe Q counts increments
+    // either way (B-64484EN p.229).
+    [Fact]
+    public void LathePeckQ_UnderCalculatorInputFalse_StillCountsIncrements()
+    {
+        Assert.Contains("PECK=2 ", Text("%\nO0001\nG0 Z5.\nG83 Z-40. R-5. Q2000 F0.2\nG80\nM30\n%\n",
+            LatheWith("[format]\ncalculator_input = false")), StringComparison.Ordinal);
+    }
+
+    // A mill takes a decimal point in Q (B-64484EN p.229, the M list), so Q without one follows the rule of every such
+    // address, X and R among them: the reader assumes calculator-type input, parameter 3401#0 = 1, and reads Q2000 as
+    // 2000 mm, as it reads X70 as 70 mm (controllers fanuc.md 2).
+    [Fact]
+    public void MillPeckQ_WithoutADecimalPoint_FollowsTheCalculatorTypeAssumption()
+    {
+        Assert.Contains("PECK=2000 ", Body("G0 X0 Y0 Z5.\nG83 Z-40. R-5. Q2000 F100\nG80"), StringComparison.Ordinal);
     }
 
     // D161: THREAD is G76, the one-shot cycle that cuts the whole thread, and the modal G92, which cuts one pass per
@@ -745,7 +861,7 @@ public sealed class FanucCycleTests
             Lines(
                 "FILE=BEGIN NCX=1",
                 "PROGRAM=BEGIN NUMBER=1",
-                "FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY DIAMETER=ON CYCLE=OFF",
+                "FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
                 "RAPID X=40 Z=2",
                 "CYCLE=" + cycle + " CONTOUR=CONTOUR_10_20",
                 "CYCLE_CALL",
@@ -760,6 +876,20 @@ public sealed class FanucCycleTests
             text);
         AssertFormatsToItself(text);
         Assert.False(Check(text, Lathe()).HasErrors, Check(text, Lathe()).ToText());
+    }
+
+    // D410: the lathe catalog withdraws G82 and G86, which no Fanuc lathe has, so such a block names no cycle of the
+    // catalog and stays RAW.
+    [Theory]
+    [InlineData("G82 Z-5. R-2. P500 F0.1")]
+    [InlineData("G86 Z-5. R-2. F0.1")]
+    public void MillDrillingCode_OnALathe_StaysRaw(string source)
+    {
+        string text = Body("G0 X0 Z5.\n" + source + "\nG80", Lathe());
+
+        Assert.Contains("RAW:FANUC=\"" + source + "\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("CYCLE=DRILL_DWELL", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("CYCLE=BORE", text, StringComparison.Ordinal);
     }
 
     // D176: P and Q of G74, G75 and G76 are infeed steps and thread data, not a block range, so those entries carry
@@ -812,18 +942,144 @@ public sealed class FanucCycleTests
             Body("G70 P10 Q20\nG0 X50.\nN10 G0 X20.\nN20 G1 Z-10.", Lathe()));
     }
 
-    // The other words of G70 to G76, depth of cut, allowances and feed, have no NCX word (wave-1 question #18): a G71
-    // with U, W and F stays RAW with the blocks of its contour, which the RAW cycle reads as the control does (D5).
+    // D409: the two blocks of G71 are one catalog cycle: U and R of the first block are DEPTH_OF_CUT and
+    // RETRACT_AMOUNT, U, W and F of the second ALLOWANCE_X, ALLOWANCE_Z and CYCLE_F, with P and Q the contour; the
+    // first block writes no block of its own.
     [Fact]
-    public void G71_WithWordsTheCatalogDoesNotMap_IsKeptAsRawWithItsContour()
+    public void G71_TwoBlockForm_IsOneCycleWithTheParamsOfBothBlocks()
     {
         Assert.Equal(
             Lines(
-                "RAW:FANUC=\"G71 P10 Q20 U0.5 W0.1 F0.2\"",
+                "RAPID X=40 Z=2",
+                "CYCLE=ROUGH_TURN CYCLE_F=0.2 CONTOUR=CONTOUR_10_20 DEPTH_OF_CUT=2 RETRACT_AMOUNT=0.5 ALLOWANCE_X=0.5 "
+                    + "ALLOWANCE_Z=0.1",
+                "CYCLE_CALL",
+                "CYCLE=OFF",
+                "RAPID X=100"),
+            Body("G0 X40. Z2.\nG71 U2. R0.5\nG71 P10 Q20 U0.5 W0.1 F0.2\nN10 G0 X20.\nN20 G1 Z-10.\nG0 X100.",
+                Lathe()));
+    }
+
+    // D409: the catalog params of the two-block cycles are words the parser takes and the virtual machine checks
+    // against the catalog of the machine (D114), and the program formats to itself.
+    [Fact]
+    public void TwoBlockCycles_ReadProgram_ChecksWithoutErrorAndFormatsToItself()
+    {
+        string text = Text("%\nO0001\nG0 X40. Z2.\nG71 U2. R0.5\nG71 P10 Q20 U0.5 W0.1 F0.2\nN10 G0 X20.\n"
+            + "N20 G1 Z-10.\nG0 X42. Z-20.\nG75 R0.5\nG75 X30. Z-30. P1000 Q2000 F0.1\nG0 X30. Z5.\n"
+            + "G76 P021060 Q100 R0.02\nG76 X27.4 Z-20. R0 P1300 Q400 F2.\nM30\n%\n", Lathe());
+
+        Assert.DoesNotContain("RAW:", text, StringComparison.Ordinal);
+        AssertFormatsToItself(text);
+        Assert.False(Check(text, Lathe()).HasErrors, Check(text, Lathe()).ToText());
+    }
+
+    // D409: the second block alone is the cycle with the params it carries; the control takes the depth of cut and
+    // the retract from its parameters.
+    [Fact]
+    public void G71_SecondBlockAlone_IsTheCycleWithItsOwnParams()
+    {
+        Assert.Equal(
+            Lines(
+                "CYCLE=ROUGH_TURN CYCLE_F=0.2 CONTOUR=CONTOUR_10_20 ALLOWANCE_X=0.5 ALLOWANCE_Z=0.1",
+                "CYCLE_CALL",
+                "CYCLE=OFF",
+                "RAPID X=100"),
+            Body("G71 P10 Q20 U0.5 W0.1 F0.2\nN10 G0 X20.\nN20 G1 Z-10.\nG0 X100.", Lathe()));
+    }
+
+    // D409: the one-block form of Series 15, G71 P Q U W D F, carries D, which no param maps, and stays RAW with the
+    // blocks of its contour, which the RAW cycle reads as the control does (D5); so does a first block that its
+    // second block does not follow.
+    [Fact]
+    public void G71_OneBlockFormOrALoneFirstBlock_StaysRaw()
+    {
+        Assert.Equal(
+            Lines(
+                "RAW:FANUC=\"G71 P10 Q20 U0.5 W0.1 D2. F0.2\"",
                 "RAW:FANUC=\"N10 G0 X20.\"",
                 "RAW:FANUC=\"N20 G1 Z-10.\"",
                 "RAPID X=100"),
-            Body("G71 P10 Q20 U0.5 W0.1 F0.2\nN10 G0 X20.\nN20 G1 Z-10.\nG0 X100.", Lathe()));
+            Body("G71 P10 Q20 U0.5 W0.1 D2. F0.2\nN10 G0 X20.\nN20 G1 Z-10.\nG0 X100.", Lathe()));
+        Assert.Contains("RAW:FANUC=\"G71 U2. R0.5\"", Body("G71 U2. R0.5\nG0 X100.", Lathe()),
+            StringComparison.Ordinal);
+    }
+
+    // D409: G75 R(e) / G75 X Z P Q F is GROOVE with RETURN_AMOUNT, STEP_X, STEP_Z and CYCLE_F; X and Z of the second
+    // block are the end point, the axis words of the CYCLE_CALL, after which the tool stands at the start point again
+    // (D411).
+    [Fact]
+    public void G75_TwoBlockForm_IsGrooveWithItsEndPointOnTheCall()
+    {
+        Assert.Equal(
+            Lines(
+                "RAPID X=42 Z=-20",
+                "CYCLE=GROOVE CYCLE_F=0.1 RETURN_AMOUNT=0.5 STEP_X=1000 STEP_Z=2000",
+                "CYCLE_CALL X=30 Z=-30",
+                "CYCLE=OFF",
+                "RAPID IX=10"),
+            Body("G0 X42. Z-20.\nG75 R0.5\nG75 X30. Z-30. P1000 Q2000 F0.1\nG0 U10.", Lathe()));
+    }
+
+    // D409: a first block whose second block stays RAW is no longer held: the control reads both as they stand, so
+    // the first block stands RAW in front of the second, never dropped. S of G71, M8 on G76, a variable end point
+    // and an incremental end point from an unknown start each keep the second block RAW.
+    [Theory]
+    [InlineData("G0 X40. Z2.\nG71 U2. R0.5\nG71 P10 Q20 U0.5 W0.1 F0.2 S800\nN10 G0 X20.\nN20 G1 Z-10.\nG0 X100.",
+        "G71 U2. R0.5", "G71 P10 Q20 U0.5 W0.1 F0.2 S800")]
+    [InlineData("G0 X30. Z5.\nG76 P021060 Q100 R0.02\nG76 X27.4 Z-20. R0 P1300 Q400 F2. M8\nG0 X100.",
+        "G76 P021060 Q100 R0.02", "G76 X27.4 Z-20. R0 P1300 Q400 F2. M8")]
+    [InlineData("G0 X42. Z-20.\nG75 R0.5\nG75 X#100 Z-30. P1000 Q2000 F0.1\nG0 X100.",
+        "G75 R0.5", "G75 X#100 Z-30. P1000 Q2000 F0.1")]
+    [InlineData("G75 R0.5\nG75 U-12. W-10. P1000 Q2000 F0.1\nG0 X100.",
+        "G75 R0.5", "G75 U-12. W-10. P1000 Q2000 F0.1")]
+    public void FirstBlock_BeforeASecondBlockThatStaysRaw_StaysRawInFrontOfIt(string source, string first,
+        string second)
+    {
+        string text = Body(source, Lathe());
+
+        Assert.Contains("RAW:FANUC=\"" + first + "\"\nRAW:FANUC=\"" + second + "\"", text,
+            StringComparison.Ordinal);
+    }
+
+    // D409, D218: F of G71 and of G75 is the modal F of the control as well, so a later G1 without F runs at it and
+    // the reader writes that feed on the LINE, as after G90 and G94.
+    [Theory]
+    [InlineData("G0 X40. Z2.\nG71 P10 Q20 U0.5 W0.1 F0.3\nN10 G0 X20.\nN20 G1 Z-10. F0.1\nG0 X40. Z2.\n"
+        + "G1 X50.")]
+    [InlineData("G0 X40. Z2.\nG1 X41. F0.1\nG0 X42. Z-20.\nG75 R0.5\nG75 X30. Z-30. P1000 Q2000 F0.3\n"
+        + "G1 X50.")]
+    public void CycleFeed_OfG71AndG75_IsTheFeedOfTheNextLine(string source)
+    {
+        string text = Body(source, Lathe());
+
+        Assert.EndsWith("LINE X=50 F=0.3", text.TrimEnd('\n'), StringComparison.Ordinal);
+    }
+
+    // D409: R of the first G73 block is the number of divisions, a count (0i-D B-64304EN-1-01 p.79-80; parameter
+    // 5137, unit cycle), which calculator_input = false does not scale, while U and W of the block are lengths.
+    [Fact]
+    public void G73_DivisionsWithoutADecimalPoint_AreACountUnderCalculatorInputFalse()
+    {
+        string text = Body("G0 X40. Z2.\nG73 U2. W2. R3\nG73 P10 Q20 U0.5 W0.1 F0.2\nN10 G0 X20.\nN20 G1 Z-10.\n"
+            + "G0 X100.", LatheWith("[format]\ncalculator_input = false"));
+
+        Assert.Contains(" RELIEF_X=2 RELIEF_Z=2 DIVISIONS=3 ", text, StringComparison.Ordinal);
+    }
+
+    // D409: G76 P(m r a) Q(dmin) R(d) / G76 X Z R(i) P(k) Q(d) F(L) is THREAD with THREAD_DATA, MIN_DEPTH,
+    // FINISH_ALLOWANCE, TAPER, HEIGHT, FIRST_DEPTH and PITCH.
+    [Fact]
+    public void G76_TwoBlockForm_IsThreadWithTheParamsOfBothBlocks()
+    {
+        Assert.Equal(
+            Lines(
+                "RAPID X=30 Z=5",
+                "CYCLE=THREAD PITCH=2 THREAD_DATA=021060 MIN_DEPTH=100 FINISH_ALLOWANCE=0.02 TAPER=0 HEIGHT=1300 "
+                    + "FIRST_DEPTH=400",
+                "CYCLE_CALL X=27.4 Z=-20",
+                "CYCLE=OFF"),
+            Body("G0 X30. Z5.\nG76 P021060 Q100 R0.02\nG76 X27.4 Z-20. R0 P1300 Q400 F2.", Lathe()));
     }
 
     // G76 of a mill has no cycle in the catalog: its blocks stay RAW until G80.

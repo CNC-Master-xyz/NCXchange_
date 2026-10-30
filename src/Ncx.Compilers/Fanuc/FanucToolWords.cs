@@ -32,6 +32,12 @@ internal static class FanucToolWords
     public const string SpeedKey = "S:";
 
     /// <summary>
+    /// The speed the target state holds for a spindle after the G80 that ended a rigid tapping run, which clears the S
+    /// of the rigid tapping (B-64484EN-2 p.104).
+    /// </summary>
+    public const string ClearedSpeed = "S0";
+
+    /// <summary>
     /// The key of G96 or G97, which the control has for a spindle, CSS: with its resource id: under G96 its S is the
     /// cutting speed, under G97 the speed (controllers fanuc.md 4).
     /// </summary>
@@ -364,6 +370,21 @@ internal static class FanucToolWords
             || write.Machine.Resources.Count(resource => resource.IsSpindle) <= 1;
     }
 
+    // D408: the spindle a limit without a spindle of its own applies to is the one whose M code the control saw last,
+    // its first spindle, the default of the machine, before any; a machine with one spindle has no other.
+    private static bool LimitStandsAlone(FanucBlock write, string id)
+    {
+        string? selected = write.Target.ActiveOf(LastSpindle) ?? write.Machine.ResolveDefaultSpindle()?.Id;
+        return selected == id || write.Machine.Resources.Count(resource => resource.IsSpindle) <= 1;
+    }
+
+    // A template that selects its spindle in its own block: {spindle} or a P word, G92 S3000 P2 (D408).
+    private static bool SelectsItsSpindle(string template)
+    {
+        return template.Contains("{spindle}", StringComparison.Ordinal)
+            || template.Split(' ', StringSplitOptions.RemoveEmptyEntries).Any(token => token.StartsWith('P'));
+    }
+
     // The words of one spindle: S and its M code (controllers fanuc.md 5; controller-mapping 4, SPINDLE and RPM).
     private static void AddSpindle(FanucBlock write, string? role)
     {
@@ -393,6 +414,13 @@ internal static class FanucToolWords
         string key = SpeedKey + id;
         bool runs = spindle.Direction != SpindleDirection.Off;
         string? speed = spindle.Css ? null : SpeedOf(write, rpm, spindle, table, what);
+        if (speed is not null && write.SpeedInBeforeLine.Contains(id))
+        {
+            // The before line of the cycle in this block writes the speed, M29 S600 (FanucCycles.WriteBefore).
+            write.Target.Set(key, speed);
+            speed = null;
+        }
+
         string? direction = runs && !write.SpindleCodesWritten.Contains(id)
             ? Code(write, table, spindle.Direction == SpindleDirection.Clockwise ? "CW" : "CCW", what)
             : null;
@@ -473,6 +501,107 @@ internal static class FanucToolWords
         }
     }
 
+    /// <summary>
+    /// After the G80 that ended a rigid tapping run the control's S is S0 (B-64484EN-2 p.104), so a block that cuts or
+    /// calls a cycle with a running spindle the target state holds at S0 writes the programmed S again in a line before
+    /// it, with the spindle's M code where an S alone would bind to another spindle (controllers fanuc.md 5, 10 rule
+    /// 2); a block that writes the spindle's own words does that itself (AddSpindle).
+    /// </summary>
+    public static void RestoreSpeed(FanucBlock write)
+    {
+        Block block = write.Block;
+        bool cuts = block.Verb?.Key is "LINE" or "ARC" or "CYCLE_CALL";
+        if (!cuts)
+        {
+            return;
+        }
+
+        foreach ((string id, SpindleSnapshot spindle) in write.After.Spindles)
+        {
+            if (write.Target.ActiveOf(SpeedKey + id) != ClearedSpeed || spindle.Css
+                || spindle.Direction == SpindleDirection.Off || spindle.Mode != SpindleMode.Spindle)
+            {
+                continue;
+            }
+
+            string? role = RoleOf(write, id);
+            if (block.Find("SPINDLE", role) is not null || block.Find("RPM", role) is not null)
+            {
+                continue;
+            }
+
+            string? tableRole = TableRoleOf(write, role, id);
+            FunctionTable? table = tableRole is not null
+                && write.Machine.SpindleTables.TryGetValue(tableRole, out FunctionTable? found) ? found : null;
+            string what = $"[spindle.{tableRole}]";
+            if (SpeedOf(write, null, spindle, table, what) is not string speed)
+            {
+                continue;
+            }
+
+            string? direction = SpeedStandsAlone(write, id)
+                ? null
+                : Code(write, table, spindle.Direction == SpindleDirection.Clockwise ? "CW" : "CCW", what);
+            write.Write(direction is null ? speed : speed + " " + direction);
+            write.Target.Set(SpeedKey + id, speed);
+            write.Target.Set(LastSpindle, id);
+        }
+    }
+
+    /// <summary>
+    /// The spindle start of a block whose cycle the "before" line enters, S600 M3 in front of M29 S600: a spindle code
+    /// between M29 and G84 alarms (B-64484EN-2 p.104, p.108; controllers fanuc.md 10 rule 7), so it stands on a line
+    /// of its own before the line, with the speed, and the block's own spindle words write neither again
+    /// (AddSpindle).
+    /// </summary>
+    /// <param name="write">The block being written.</param>
+    /// <param name="id">The spindle that turns the tap.</param>
+    public static void WriteSpindleBeforeLine(FanucBlock write, string id)
+    {
+        string? role = RoleOf(write, id);
+        if (write.Block.Find("SPINDLE", role) is null || !write.After.Spindles.TryGetValue(id, out SpindleSnapshot?
+            spindle) || spindle.Direction == SpindleDirection.Off || spindle.Css)
+        {
+            return;
+        }
+
+        string? tableRole = TableRoleOf(write, role, id);
+        FunctionTable? table = tableRole is not null
+            && write.Machine.SpindleTables.TryGetValue(tableRole, out FunctionTable? found) ? found : null;
+        string what = $"[spindle.{tableRole}]";
+        string? speed = SpeedOf(write, write.Block.Find("RPM", role), spindle, table, what);
+        string? direction = Code(write, table, spindle.Direction == SpindleDirection.Clockwise ? "CW" : "CCW", what);
+        if (speed is null || direction is null)
+        {
+            return;
+        }
+
+        write.Write(speed + " " + direction);
+        write.SpindleCodesWritten.Add(id);
+        write.SpeedInBeforeLine.Add(id);
+        write.Target.Set(SpeedKey + id, speed);
+        write.Target.Set(LastSpindle, id);
+    }
+
+    // The role of a spindle, the key of [roles] that names it; null for the default spindle without one.
+    private static string? RoleOf(FanucBlock write, string id)
+    {
+        if (write.Machine.ResolveDefaultSpindle()?.Id == id)
+        {
+            return null;
+        }
+
+        foreach (KeyValuePair<string, string> role in write.Machine.Roles)
+        {
+            if (role.Value == id)
+            {
+                return role.Key;
+            }
+        }
+
+        return null;
+    }
+
     // A start without RPM takes the speed of the state before it: nothing where the control holds the speed of NCX of
     // each path, the speed where the control has another, CMP309 where neither can be (FanucBlock.NeedsValueOfTheWalk);
     // an RPM from an expression is not known in the STATIC walk (virtual machine 1), so only the control can hold it.
@@ -542,12 +671,21 @@ internal static class FanucToolWords
             return;
         }
 
-        // TODO(question): fanuc 5 gives the S of a block to the spindle of the M code in it, otherwise to the spindle
-        // selected last, and fanuc 4 does not say whether the speed limit of G50 S and G92 S is one per spindle; the
-        // limit is written alone, as NAKAMURA_WY250L_O1000.nc writes G50S2500 before any M code, until that is
-        // answered.
+        // D408: the limit of G50 S and G92 S is written alone, as NAKAMURA_WY250L_O1000.nc writes G50S2500 before
+        // any M code, and is the limit of the spindle selected when its block runs, the one whose M code the control
+        // saw last, its first spindle before any (0i-F B-64604EN p.156; 0i-D B-64304EN p.127-128). Where that is
+        // another spindle and the template selects none itself, with {spindle} or a P word, the limit reaches the
+        // wrong spindle: the WARNING CMP343.
         if (id is null || state == "RPM_MAX")
         {
+            if (id is not null && state == "RPM_MAX" && !SelectsItsSpindle(template!) && !LimitStandsAlone(write, id))
+            {
+                write.Warning(DiagnosticCodes.FanucSpeedLimitOfAnotherSpindle,
+                    $"{word.ToCanonical()}: {text} limits the spindle selected when its block runs, and the M code "
+                    + $"the control saw last belongs to another spindle than {word.Addr ?? id}; the template of "
+                    + $"{what} RPM_MAX names no spindle ({{spindle}} or P) (controllers fanuc.md 5; D408).");
+            }
+
             write.Write(text);
             return;
         }

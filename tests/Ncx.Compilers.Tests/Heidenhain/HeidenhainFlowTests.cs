@@ -86,10 +86,9 @@ public sealed class HeidenhainFlowTests
         Assert.Equal("LBL 3\nFN 11: IF +Q1 GT +0 GOTO LBL 1\nL X+0 Y+0 R0 FMAX\nLBL 1", HeidenhainCompile.Body(result));
     }
 
-    // Controllers heidenhain.md 1; controller-mapping 6, REPEAT: CALL LBL n REP k. D212 settles the default alone,
-    // that TIMES is optional and a REPEAT without it runs the blocks once more; the REP 1 that
-    // HeidenhainFlow.WriteRepeat writes for such a REPEAT is the compiler's own text and the open question its
-    // TODO(question) carries, which the record test below bounds.
+    // Controllers heidenhain.md 1; controller-mapping 6, REPEAT: CALL LBL n REP k. D212: TIMES is optional and a
+    // REPEAT without it runs the blocks once more; D399: the compiler writes it as CALL LBL n REP 1, since a CALL LBL
+    // without REP would be a subprogram call.
     [Fact]
     public void Repeat_IsCallLblRep()
     {
@@ -99,39 +98,18 @@ public sealed class HeidenhainFlowTests
         Assert.Equal("LBL 1\nL X+0 Y+0 R0 FMAX\nCALL LBL 1 REP 3\nCALL LBL 1 REP 1", HeidenhainCompile.Body(result));
     }
 
-    // The REP 1 above is what the Heidenhain compiler writes, not a rule of D212: its ANSWER settles that TIMES is
-    // optional and defaults to 1, for a REPEAT and for a CALL, and says nothing about the text a compiler writes for a
-    // REPEAT without TIMES (the Fanuc compiler writes no count at all). The whole record states only what the
-    // maintainer settled and keeps the rest as the open question it is: the D212 row of docs/decisions/decisions.md
-    // decides no compiler text, no row of docs/implementation/03-open-questions.md that cites D212 claims one is
-    // settled (rows 29 and 139), and the two WriteRepeat sites carry the TODO(question) that the head of wave 1 of
-    // that file asks for at the location of an unanswered question (rationale.md D212).
+    // D399 settles the text a compiler writes for a REPEAT without TIMES: the D399 row names REP 1 for Heidenhain and
+    // no P for Siemens, and the comments of the two WriteRepeat sites cite D399 and carry no TODO(question) any more.
     [Fact]
-    public void D212Record_TheTextACompilerWritesForARepeatWithoutTimes_IsKeptAsTheOpenQuestionItIs()
+    public void D399Record_TheTextACompilerWritesForARepeatWithoutTimes_IsSettled()
     {
         string root = Fixture.RepositoryRoot();
         string? row = Array.Find(File.ReadAllLines(Path.Combine(root, "docs", "decisions", "decisions.md")),
-            line => line.StartsWith("| D212 |", StringComparison.Ordinal));
+            line => line.StartsWith("| D399 |", StringComparison.Ordinal));
 
         Assert.NotNull(row);
-        Assert.Contains("defaults to 1", row, StringComparison.Ordinal);
-        Assert.DoesNotContain("the compilers write the count", row, StringComparison.Ordinal);
-        Assert.DoesNotContain("writes no `P`", row, StringComparison.Ordinal);
-
-        string[] citing = Array.FindAll(
-            File.ReadAllLines(Path.Combine(root, "docs", "implementation", "03-open-questions.md")),
-            line => line.StartsWith("| ", StringComparison.Ordinal)
-                && line.Contains("(D212)", StringComparison.Ordinal));
-
-        Assert.NotEmpty(citing);
-        foreach (string question in citing)
-        {
-            Assert.DoesNotContain("the compilers write the count", question, StringComparison.Ordinal);
-        }
-
-        string marker = Assert.Single(Array.FindAll(citing,
-            line => line.Contains("Heidenhain/HeidenhainFlow.cs", StringComparison.Ordinal)));
-        Assert.Contains("waits for the maintainer", marker, StringComparison.Ordinal);
+        Assert.Contains("`CALL LBL n REP 1`", row, StringComparison.Ordinal);
+        Assert.Contains("no P", row, StringComparison.Ordinal);
 
         foreach (string compiler in new[] { "Heidenhain/HeidenhainFlow.cs", "Siemens/SiemensFlow.cs" })
         {
@@ -153,8 +131,8 @@ public sealed class HeidenhainFlowTests
             }
 
             string block = string.Join("\n", comment);
-            Assert.Contains("TODO(question):", block, StringComparison.Ordinal);
-            Assert.Contains("D212", block, StringComparison.Ordinal);
+            Assert.DoesNotContain("TODO(question)", block, StringComparison.Ordinal);
+            Assert.Contains("D399", block, StringComparison.Ordinal);
         }
     }
 

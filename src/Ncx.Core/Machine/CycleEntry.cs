@@ -60,6 +60,13 @@ public sealed record CycleEntry
     public IReadOnlyList<string> Contour { get; init; } = [];
 
     /// <summary>
+    /// first_block: the params of a Fanuc cycle written in two blocks that stand in the first block, G71 U R before
+    /// G71 P Q U W F; the other params stand in the second block, with the contour and the call (D409). Empty for a
+    /// cycle of one block.
+    /// </summary>
+    public IReadOnlyList<string> FirstBlock { get; init; } = [];
+
+    /// <summary>
     /// signature: every native parameter in the order the control writes it, also those without an NCX word; empty
     /// for Fanuc entries, whose parameters are address words of the cycle block (machine-config 6).
     /// </summary>
@@ -315,6 +322,7 @@ public sealed record CycleEntry
                 : AbsoluteFromSurface,
             Modal = entry.Writes("modal") ? entry.Modal : Modal,
             Contour = entry.Writes("contour") ? entry.Contour : Contour,
+            FirstBlock = entry.Writes("first_block") ? entry.FirstBlock : FirstBlock,
             Signature = entry.Writes("signature") ? entry.Signature : Signature,
             Fixed = entry.Writes("fixed") ? entry.Fixed : Fixed,
             Defaults = entry.Writes("defaults") ? entry.Defaults : Defaults,

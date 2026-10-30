@@ -143,18 +143,22 @@ public sealed class CycleCallTests
         Assert.Equal(Workpiece(2m), vm.Position("Z"));
     }
 
-    // D187 takes only the cycles the manual states a return for; no page says where G71 type I, G72 type I, G74 and
-    // G75 leave the tool, so a GROOVE on G75 keeps the D94 rule: the plane axes stand at the call point and the
-    // drilling axis of the plane, Y under WORKPLANE=ZX, is unknown.
-    [Fact]
-    public void CycleCall_FanucCycleWithoutAStatedReturn_KeepsTheRuleOfD94()
+    // D411: G71 and G72 (type I and II), G74 and G75 leave the tool at the cycle start point too (0i-FPlus B-64700EN
+    // p.290, parameter DTP; B-64694EN-1 p.77; 0i-D B-64304EN-1-01 p.88), so ROUGH_TURN, ROUGH_FACE, FACE_GROOVE and
+    // GROOVE leave every axis where it stood, as TURN_OD does.
+    [Theory]
+    [InlineData("ROUGH_TURN")]
+    [InlineData("ROUGH_FACE")]
+    [InlineData("FACE_GROOVE")]
+    [InlineData("GROOVE")]
+    public void CycleCall_FanucCycleOfG71ToG75_LeavesEveryAxisAtTheStartPoint(string name)
     {
         VmHarness vm = Turning().Execute(
-            "WORKPLANE=ZX", "RAPID X=70 Y=0 Z=2", "CYCLE=GROOVE", "CYCLE_CALL X=60 Z=-70");
+            "WORKPLANE=ZX", "RAPID X=70 Y=0 Z=2", "CYCLE=" + name, "CYCLE_CALL X=60 Z=-70");
 
-        Assert.Equal(Workpiece(60m), vm.Position("X"));
-        Assert.Equal(AxisPosition.Unknown, vm.Position("Y"));
-        Assert.Equal(Workpiece(-70m), vm.Position("Z"));
+        Assert.Equal(Workpiece(70m), vm.Position("X"));
+        Assert.Equal(Workpiece(0m), vm.Position("Y"));
+        Assert.Equal(Workpiece(2m), vm.Position("Z"));
     }
 
     // VM 3.3, D59, D60: a side drilling cycle on a lathe with AXIS=X under DIAMETER=ON, as the cross holes of
@@ -523,8 +527,8 @@ public sealed class CycleCallTests
     }
 
     // The default machine of D103 with ExpandCycles and the units set.
-    // A machine whose cycle catalog is the Fanuc one with the simple turning cycle TURN_OD on G90, which returns to
-    // its start point, and the one-shot GROOVE on G75, which no page of the manual states a return for (D187).
+    // A machine whose cycle catalog is the Fanuc one with the simple turning cycle TURN_OD on G90 and the one-shot
+    // cycles G71, G72, G74 and G75, which all return to their start point (D187, D411).
     private static VmHarness Turning()
     {
         MachineConfig machine = VmMachines.Default() with
@@ -535,6 +539,9 @@ public sealed class CycleCallTests
                 Entries =
                 [
                     new CycleEntry { Name = "TURN_OD", Native = "G90", Modal = true },
+                    new CycleEntry { Name = "ROUGH_TURN", Native = "G71" },
+                    new CycleEntry { Name = "ROUGH_FACE", Native = "G72" },
+                    new CycleEntry { Name = "FACE_GROOVE", Native = "G74" },
                     new CycleEntry { Name = "GROOVE", Native = "G75" },
                 ],
             },

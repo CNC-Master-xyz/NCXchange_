@@ -1,11 +1,11 @@
 namespace Ncx.Compilers.Fanuc;
 
-// TODO(question): the documents fix no order of the words in a Fanuc block, and the control executes them together
-// (controllers fanuc.md 1); fanuc 10 rule 2 and controller-mapping 4 write M3 S1000 and M88 S1000, the sources S1592 M3
-// and M29 S500. A block is written as the sources write theirs, which the round trips of phase 3 compare word for
-// word: the modal codes by group, the motion code first, the one-shot codes last (G0 G17 X50.4, G91 G28 Z0); the axis
-// words; I J K or R; the cycle words; H, D and F; then the M codes of the named functions, S with the M code of its
-// spindle, the coolant and the other M codes (M29 S500, S1592 M3).
+// The order of the words in a Fanuc block: the control executes them together (controllers fanuc.md 1), and a block is
+// written as the sources write theirs, which the round trips of phase 3 compare word for word (code-guidelines 8;
+// 13-phase-3 P3-07: the order of the words inside a block must match the source; controllers fanuc.md 1): the modal
+// codes by group, the motion code first, the one-shot codes last (G0 G17 X50.4, G91 G28 Z0); the axis words; I J K or
+// R; the cycle words; H, D and F; then the M codes of the named functions, S with the M code of its spindle, the
+// coolant and the other M codes (M29 S500, S1592 M3).
 
 /// <summary>
 /// One line of a Fanuc program being composed: the G codes in the order of their groups, the address words in the

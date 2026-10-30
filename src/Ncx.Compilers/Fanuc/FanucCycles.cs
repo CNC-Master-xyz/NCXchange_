@@ -113,7 +113,14 @@ internal static class FanucCycles
                 : CatalogOf(write).Find(name, write.After.Cycle.Axis);
             CheckCarried(write, defined);
             // D224: a CYCLE=OFF that ends a one-shot cycle writes nothing.
-            if (name == "OFF" && write.Target.ActiveOf(FanucCodes.Cycle) != "G80" && !EndsAOneShotCycle(write))
+            if (name == "OFF" && write.Target.ActiveOf(FanucCodes.Cycle) is string active && IsTurning(write, active))
+            {
+                // A simple turning cycle ends with a code of group 01 other than G90, G92 and G94 and not with G80
+                // (B-64484EN-1 p.46): the block's own motion code, or that of the next motion, which Ended makes it
+                // write, so a RAPID that ends TURN_OD is G0 alone, never G0 G80.
+                Ended(write);
+            }
+            else if (name == "OFF" && write.Target.ActiveOf(FanucCodes.Cycle) != "G80" && !EndsAOneShotCycle(write))
             {
                 write.Main.Code(FanucCodes.RankOf(FanucCodes.Cycle), "G80");
                 Ended(write);
@@ -282,6 +289,91 @@ internal static class FanucCycles
         return parameters;
     }
 
+    /// <summary>
+    /// D409: the first block of a two-block cycle, the code with the params the entry names in first_block, G71 U2.
+    /// R0.5; null for a cycle of one block and where the cycle gives none of them, so the control takes its own
+    /// parameters.
+    /// </summary>
+    /// <param name="write">The block of the CYCLE_CALL.</param>
+    /// <param name="entry">The catalog entry.</param>
+    /// <param name="cycle">The cycle of NCX.</param>
+    /// <param name="code">The code in the numbers of the machine's G-code system.</param>
+    public static string? FirstBlockLine(FanucBlock write, CycleEntry entry, CycleSnapshot cycle, string code)
+    {
+        var words = new List<string>();
+        foreach (string parameter in entry.FirstBlock)
+        {
+            if (ParamWord(write, entry, cycle, parameter) is string word)
+            {
+                words.Add(word);
+            }
+        }
+
+        return words.Count == 0 ? null : code + " " + string.Join(" ", words);
+    }
+
+    /// <summary>
+    /// D409: the params of the second block of a contour cycle after its P and Q, " U0.5 W0.1 F0.25", in the order of
+    /// the entry; CYCLE_F is the F. Empty where the cycle gives none.
+    /// </summary>
+    /// <param name="write">The block of the CYCLE_CALL.</param>
+    /// <param name="entry">The catalog entry.</param>
+    /// <param name="cycle">The cycle of NCX.</param>
+    public static string SecondBlockWords(FanucBlock write, CycleEntry entry, CycleSnapshot cycle)
+    {
+        var words = new List<string>();
+        foreach (KeyValuePair<string, string> parameter in entry.Params)
+        {
+            if (!entry.FirstBlock.Contains(parameter.Key)
+                && ParamWord(write, entry, cycle, parameter.Key) is string word)
+            {
+                words.Add(" " + word);
+            }
+        }
+
+        return string.Concat(words);
+    }
+
+    // D409: a param of a catalog entry as its address and value, R0.5; null where the cycle gives none. P and Q of a
+    // one-shot turning cycle, G74 to G76, take no decimal point (0i-D B-64304EN-1-01 p.85, p.87, p.89): a value with
+    // a fraction is the ERROR CMP397 and is not written, never rounded.
+    private static string? ParamWord(FanucBlock write, CycleEntry entry, CycleSnapshot cycle, string parameter)
+    {
+        string address = entry.Params[parameter];
+        if (Parameter(cycle, parameter) is not Value value)
+        {
+            return null;
+        }
+
+        if (!entry.Modal && address is "P" or "Q" && value is DecimalValue { Number: var number }
+            && number != decimal.Truncate(number))
+        {
+            write.Error(DiagnosticCodes.FanucCycleIncrementWithFraction,
+                $"{parameter}={value.ToCanonical()} of CYCLE={entry.Name} is {address} of {entry.Native}, which takes "
+                + "least input increments without a decimal point, so a fraction cannot be written (0i-D "
+                + "B-64304EN-1-01 p.85-89; D409).");
+            return null;
+        }
+
+        return FanucExpressions.WordValue(write, DecimalsAddressOf(address), value, 1m) is string text
+            ? address + text
+            : null;
+    }
+
+    // D409: the decimals a param of a turning cycle takes: U and W those of X and Z, P and Q none, since the lathe
+    // takes them in least input increments without a decimal point (0i-D B-64304EN-1-01 p.82-88; B-64484EN p.229),
+    // any other address its own.
+    private static string DecimalsAddressOf(string address)
+    {
+        return address switch
+        {
+            "U" => "X",
+            "W" => "Z",
+            "P" or "Q" => "P",
+            _ => address,
+        };
+    }
+
     // Whether a word's value is the number 0 (D362).
     private static bool IsZero(Value value)
     {
@@ -293,13 +385,65 @@ internal static class FanucCycles
         };
     }
 
+    /// <summary>
+    /// A run of a cycle entered with its "before" line, the rigid tapping of M29 S, ends with G80 in a line of its own
+    /// before a block that writes an S word or a spindle code: an S command between M29 and G84 is alarm PS0203 and an
+    /// M29 inside a running tapping cycle PS0204 (B-64484EN-2 p.104 and p.108, cnc-manuals pages 104 and 108), and the
+    /// cancel clears the speed of the rigid tapping to S0 (p.104, S command). The next call enters the run again with
+    /// the line and the full definition (WriteCall, WriteBefore), so the program keeps running with the new speed
+    /// (controllers fanuc.md 10 rule 7).
+    /// </summary>
+    public static void CancelBeforeSpindle(FanucBlock write)
+    {
+        bool spindle = write.Block.Words.Any(word => word.Key is "SPINDLE" or "RPM" or "ORIENT" or "VC" or "CSS"
+            or "RPM_MAX" or "SPINDLE_MODE");
+        if (spindle && InARunWithItsBeforeLine(write))
+        {
+            Cancel(write);
+        }
+    }
+
+    // Whether the control runs a cycle that its catalog entry enters with a "before" line, CYCLE=TAP with M29 S on
+    // G84 (machine-config 6, D256).
+    private static bool InARunWithItsBeforeLine(FanucBlock write)
+    {
+        if (write.Target.ActiveOf(FanucCodes.Cycle) is not string code || code == "G80"
+            || write.Target.ActiveOf(Definition) is not string active)
+        {
+            return false;
+        }
+
+        string name = active.Substring(0, active.IndexOf(' ', StringComparison.Ordinal));
+        return CatalogOf(write).Entries.Any(entry => entry.Name == name && entry.Native == code
+            && !string.IsNullOrEmpty(entry.Before));
+    }
+
+    // A simple turning cycle, G90, G92, G94 of system A (G77, G78, G79 in B; G20, G21, G24 in C), is a code of group 01
+    // that a code of group 01 other than these ends; G80 cancels the drilling cycles only (B-64484EN-1 p.46 and p.309,
+    // cnc-manuals pages 46 and 309; controllers fanuc.md 3, 6).
+    private static bool IsTurning(FanucBlock write, string code)
+    {
+        return write.System switch
+        {
+            GcodeSystem.A => s_turningOfSystemB.ContainsKey(code),
+            GcodeSystem.B => s_turningOfSystemB.ContainsValue(code),
+            GcodeSystem.C => s_turningOfSystemC.ContainsValue(code),
+            _ => false,
+        };
+    }
+
     // G80 in a line of its own where the control has a canned cycle active, or where the target state does not know
     // whether it has one: in a subprogram, which is written from an unknown target state (D99), and after a label that
     // a jump reaches; a caller of the subprogram may have left a cycle active, and in NCX a RAPID, LINE, ARC or HOME
     // never calls one (language 4.7, CYCLE_CALL). G80 without an active cycle changes nothing.
     private static void Cancel(FanucBlock write)
     {
-        if (write.Target.ActiveOf(FanucCodes.Cycle) != "G80")
+        if (write.Target.ActiveOf(FanucCodes.Cycle) is string active && IsTurning(write, active))
+        {
+            // A simple turning cycle ends with the next code of group 01, which Ended makes the next motion write.
+            Ended(write);
+        }
+        else if (write.Target.ActiveOf(FanucCodes.Cycle) != "G80")
         {
             write.Write("G80");
             Ended(write);
@@ -312,6 +456,14 @@ internal static class FanucCycles
     // (FanucPaths).
     private static void Ended(FanucBlock write)
     {
+        // The cancel of a rigid tapping run clears the S of the rigid tapping to S0 (B-64484EN-2 p.104 and p.108, S
+        // command), so the control's speed of the tap's spindle is S0 until an S is written again
+        // (FanucToolWords.RestoreSpeed).
+        if (InARunWithItsBeforeLine(write) && TapSpindleOf(write) is string tap)
+        {
+            write.Target.Set(FanucToolWords.SpeedKey + tap, FanucToolWords.ClearedSpeed);
+        }
+
         write.Target.Set(FanucCodes.Cycle, "G80");
         if (!write.DependsOnThePath(Definition))
         {
@@ -420,6 +572,12 @@ internal static class FanucCycles
             return;
         }
 
+        // D409: the first block of a two-block cycle, G75 R(e), stands in a line of its own before the cycle block.
+        if (entry is not null && FirstBlockLine(write, entry, cycle, code) is string firstBlock)
+        {
+            write.Write(firstBlock);
+        }
+
         write.Main.Code(FanucCodes.RankOf(FanucCodes.Cycle), code);
         if (entry is null)
         {
@@ -480,6 +638,10 @@ internal static class FanucCycles
             }
 
             values.Set("rpm", write.After.Spindles[id].Rpm);
+            // The S of the line is the speed of the block: an S in the cycle block itself, M29 S600 / G84 ... S600,
+            // is an S command between M29 and G84, alarm PS0203 (B-64484EN-2 p.103-104), so the spindle words of
+            // the block write no S (FanucToolWords.AddSpindle).
+            write.SpeedInBeforeLine.Add(id);
         }
 
         if (write.Render(entry.Before, $"[[cycle]] {entry.Name} before (machine-config 6, D256)", values)
@@ -488,7 +650,15 @@ internal static class FanucCycles
             return false;
         }
 
+        // A spindle code between M29 and G84 alarms (B-64484EN-2 p.104, p.108; D385), so the spindle start of the
+        // block stands on a line of its own in front of the line, with its S.
+        if (TapSpindleOf(write) is string spindle)
+        {
+            FanucToolWords.WriteSpindleBeforeLine(write, spindle);
+        }
+
         write.Write(text);
+        write.BeforeLineWritten = true;
         return true;
     }
 
@@ -508,7 +678,9 @@ internal static class FanucCycles
         CycleEntry? previous = CatalogOf(write).Find(activeName, write.After.Cycle.Axis);
         if (!string.IsNullOrEmpty(entry.Before) || !string.IsNullOrEmpty(previous?.Before))
         {
+            // The G80 of a rigid run clears its S to S0 (B-64484EN-2 p.104), which the call writes again.
             Cancel(write);
+            FanucToolWords.RestoreSpeed(write);
         }
     }
 
@@ -642,17 +814,30 @@ internal static class FanucCycles
             write.Main.Word("R" + r);
         }
 
-        AddMapped(write, entry, cycle, "PECK", "Q", address, 1m);
-        if (entry.NativeOf("PECK") is null && TakesPeckRigidTapping(write, entry) && Parameter(cycle, "PECK") is Value
-            peck && !IsZero(peck) && FanucExpressions.WordValue(write, address, peck, 1m) is string q)
+        if (write.IsLathe)
         {
-            // D279: peck rigid tapping, Q on G84 where the machine declares it.
-            write.Main.Word("Q" + q);
+            AddLathePeck(write, entry, cycle);
         }
+        else
+        {
+            AddMapped(write, entry, cycle, "PECK", "Q", address, 1m);
+            if (entry.NativeOf("PECK") is null && TakesPeckRigidTapping(write, entry)
+                && Parameter(cycle, "PECK") is Value peck && !IsZero(peck)
+                && FanucExpressions.WordValue(write, address, peck, 1m) is string q)
+            {
+                // D279: peck rigid tapping, Q on G84 where the machine declares it.
+                write.Main.Word("Q" + q);
+            }
+        }
+
         foreach (string parameter in CatalogParameters(entry))
         {
-            // D114: a parameter name of the catalog entry, TAPER of G90 as R (D175).
-            AddMapped(write, entry, cycle, parameter, entry.Params[parameter], entry.Params[parameter], 1m);
+            // D114: a parameter name of the catalog entry, TAPER of G90 as R (D175); D409: those of the second block
+            // of a two-block cycle, the first block standing in a line of its own.
+            if (!entry.FirstBlock.Contains(parameter) && ParamWord(write, entry, cycle, parameter) is string word)
+            {
+                write.Main.Word(word);
+            }
         }
 
         // D177: P stands where the entry maps CYCLE_DWELL, G82, G84, G89 on a machining centre and every lathe entry.
@@ -660,7 +845,7 @@ internal static class FanucCycles
         AddDwell(write, entry, cycle);
 
         // The definition calls at its position and drills along the tool axis: H stands before F, as the sources
-        // write G43 Z2. H1 (language 4.4; the TODO(question) of FanucLine).
+        // write G43 Z2. H1 (language 4.4; the word order of FanucLine).
         FanucToolWords.AddOffsets(write, movesToolAxis: true);
         AddFeed(write, entry, cycle);
         return true;
@@ -769,6 +954,34 @@ internal static class FanucCycles
         }
     }
 
+    // A lathe takes no decimal point in Q (B-64484EN p.229, the T list of 8.3, cnc-manuals page 229), so the peck of
+    // G83 and G87, and of G84 under peck rigid tapping (D279), is Q in least input increments, an integer, 0.001 mm or
+    // 0.0001 inch, as the lathe manual writes Q5000 (B-64484EN-1 p.96); an expression is written with its factor
+    // (controllers fanuc.md 2, 6).
+    private static void AddLathePeck(FanucBlock write, CycleEntry entry, CycleSnapshot cycle)
+    {
+        bool rigidPeck = entry.NativeOf("PECK") is null && TakesPeckRigidTapping(write, entry);
+        if (Parameter(cycle, "PECK") is not Value peck || (entry.NativeOf("PECK") is null && !rigidPeck)
+            || (rigidPeck && IsZero(peck)))
+        {
+            return;
+        }
+
+        // [machine] input_increment, parameter 1013 (B-64490EN-05 p.57-58): IS-B 0.001 mm or 0.0001 inch.
+        decimal increment = write.Machine.Machine.LinearIncrement(write.After.Frame.Units == Units.Inch);
+        if (FanucFunctions.NumberOf(peck) is decimal depth)
+        {
+            decimal units = Math.Round(depth / increment, 0, MidpointRounding.AwayFromZero);
+            write.Main.Word("Q" + units.ToString("0", CultureInfo.InvariantCulture));
+            return;
+        }
+
+        if (FanucExpressions.WordValue(write, "P", peck, 1m / increment) is string text)
+        {
+            write.Main.Word("Q" + text);
+        }
+    }
+
     // D159: the P of a cycle block, the dwell in units of dwell_increment, an integer for a number; an expression is
     // written with its factor (controllers fanuc.md 7).
     private static void AddDwell(FanucBlock write, CycleEntry entry, CycleSnapshot cycle)
@@ -797,8 +1010,7 @@ internal static class FanucCycles
     // not the F of NCX, so the next LINE or ARC writes that again where it differs (FanucBlock.WroteAnotherValue); one
     // from an expression stands every time, since its value may have changed since the last one (controllers fanuc.md
     // 7).
-    // TODO(question): D218: the F of the cycle block is written only where the control's feed differs, as D218
-    // recommends, until D218 is answered.
+    // D218: the F of the cycle block is written only where the control's feed differs.
     private static void AddFeed(FanucBlock write, CycleEntry entry, CycleSnapshot cycle)
     {
         // D175: the F of a thread turning cycle is the lead itself, which the entry maps as PITCH; it is written as
@@ -827,18 +1039,21 @@ internal static class FanucCycles
             known = pitch is not ExprValue;
         }
 
-        AddFeedWord(write, feed, known);
+        // A definition that its before line enters or re-arms writes F every time: the manual writes F in every rigid
+        // G84 block that follows M29 S (B-64484EN-2 p.105), and the G80 that ended an earlier run clears the drilling
+        // data (p.84; B-64484EN-1 p.309), so a re-armed run does not lean on the F of the run before.
+        AddFeedWord(write, feed, known, always: write.BeforeLineWritten);
     }
 
     // The F of the cycle block, written where the control's feed differs from it (D218).
-    private static void AddFeedWord(FanucBlock write, string? feed, bool known)
+    private static void AddFeedWord(FanucBlock write, string? feed, bool known, bool always = false)
     {
         if (feed is null)
         {
             return;
         }
 
-        if (!known || write.DependsOnThePath("F") || write.Target.ActiveOf("F") != feed)
+        if (always || !known || write.DependsOnThePath("F") || write.Target.ActiveOf("F") != feed)
         {
             write.Main.Word("F" + feed);
         }

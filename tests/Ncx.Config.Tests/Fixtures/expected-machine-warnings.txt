@@ -1,4 +1,4 @@
-# The diagnostics of the eight machine files: the five examples of machine-config 11 (D104) and the three mills of
+# The diagnostics of the nine machine files: the six examples of machine-config 11 (D104) and the three mills of
 # machines/ (P2-04), as ExampleMachinesTests loads them (P2-01). Every line is a WARNING and names a gap in a file;
 # a gap that only an open question can close stays here with its wave-1 question number.
 

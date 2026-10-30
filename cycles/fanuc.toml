@@ -13,8 +13,7 @@ ncx_schema = 1                     # the version of the machine-configuration sc
 # - The cycle block defines and calls at its own position, every following block with a position calls again, G80 cancels (fanuc 9.5): modal = true.
 # - CYCLE_RETRACT is the group 10 word of the cycle block: G99 returns to the R level (CLEARANCE), G98 to the initial level (SAFE) (controller-mapping 5).
 # - SAFE is the initial level, the drilling-axis position before the cycle block; it has no address (controller-mapping 5).
-# - SURFACE has no address: R minus the clearance of the machine file, or 0 (controller-mapping 5).
-#   TODO(question): machine-config has no key for that clearance (D158).
+# - SURFACE has no address: R minus the clearance of the machine file, [cycles] surface_clearance, or 0 (controller-mapping 5, D158).
 # - Z and R are absolute under G90; the reader converts to the absolute DEPTH and CLEARANCE (fanuc 6). Z is the drilling axis of G17; on a mill the drilling axis
 #   is the tool axis of G17..G19 (controller-mapping 5, AXIS), and no address carries AXIS.
 # - K on the cycle block repeats the cycle at incremental steps; the reader expands it into CYCLE_CALL blocks (fanuc 6, controller-mapping 5).

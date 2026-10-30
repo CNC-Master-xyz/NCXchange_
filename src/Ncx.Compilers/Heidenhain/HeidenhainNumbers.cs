@@ -66,11 +66,17 @@ internal static class HeidenhainNumbers
 
     /// <summary>
     /// The QL parameter with its sign that a formula is spilled into, +QL499 (D338); null for an expression without a
-    /// Klartext formula, or where no QL is free.
+    /// Klartext formula, or where no QL is free. A SYS_ name alone is the QL its FN 18 read sets (D397).
     /// </summary>
     public static string? Spilled(HeidenhainBlock writing, ExprNode tree)
     {
-        string? formula = HeidenhainFormula.Of(tree, writing.Numbers.DecimalSeparator, out _);
+        if (HeidenhainFormula.Unwrapped(tree) is VariableNode system
+            && HeidenhainFormula.IsSystem(system.Name))
+        {
+            return writing.SystemRead(system) is string read ? "+" + read : null;
+        }
+
+        string? formula = HeidenhainFormula.Of(writing, tree, out _);
         return formula is not null && writing.Spill(formula) is string register ? "+" + register : null;
     }
 

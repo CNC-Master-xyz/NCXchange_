@@ -12,6 +12,8 @@ namespace Ncx.Readers.Heidenhain;
 /// </summary>
 internal sealed class HeidenhainState
 {
+    private HeidenhainPoint? _pole;
+
     private readonly List<SourceBlock> _blocks = [];
     private readonly Dictionary<int, int> _indexOfLine = [];
 
@@ -60,12 +62,34 @@ internal sealed class HeidenhainState
     /// The pole of CC, the centre of C and CP and the pole of LP (controllers heidenhain.md 2); null while none is
     /// known.
     /// </summary>
-    public HeidenhainPoint? Pole { get; set; }
+    public HeidenhainPoint? Pole
+    {
+        get => _pole;
+        set
+        {
+            _pole = value;
+            OneAxisPole = null;
+        }
+    }
 
     /// <summary>
-    /// The decimals of the source words the pole was taken from.
+    /// The CC block with one axis of the plane that left the pole unknown (D400); null where the pole is known or was
+    /// set otherwise since. Setting Pole clears it.
     /// </summary>
-    public int PoleDecimals { get; set; }
+    public SourceBlock? OneAxisPole { get; set; }
+
+    /// <summary>
+    /// Why an element about the pole has none: the CC with one axis of the plane that left it unknown, which the
+    /// WARNING of the RAW element names (D400), or the plain reason of a block that needs it.
+    /// </summary>
+    /// <param name="element">The element, C, CP or LP.</param>
+    public string PoleMissing(string element)
+    {
+        return OneAxisPole is SourceBlock cc
+            ? $"{element} needs the pole of a CC, and \"{cc.Text}\" on line {cc.Line} gives only one axis of the "
+                + "plane, so the pole is unknown; no reading of the missing coordinate is invented (D400)"
+            : $"{element} needs the pole of a CC (controllers heidenhain.md 2)";
+    }
 
     /// <summary>
     /// The direction the last contour element ended in, which CT continues (controllers heidenhain.md 2); null while it

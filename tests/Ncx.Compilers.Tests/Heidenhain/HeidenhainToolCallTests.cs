@@ -26,7 +26,7 @@ public sealed class HeidenhainToolCallTests
         Assert.Equal("TOOL CALL 1 Z S10000\nM3", HeidenhainCompile.Body(result));
     }
 
-    // The TODO(question) of HeidenhainToolCall.FollowingBlock: the block after a PRELOAD that TOOL DEF writes right
+    // D275 (HeidenhainToolCall.FollowingBlock): the block after a PRELOAD that TOOL DEF writes right
     // after the call is the following block (Expected/BOHREN.ncx: TOOL=1, PRELOAD=2, SPINDLE=CW RPM=10000).
     [Fact]
     public void Rule3_ToolCall_TakesTheRpmOfTheBlockAfterItsPreload()
@@ -132,6 +132,19 @@ public sealed class HeidenhainToolCallTests
             HeidenhainCompile.Body(result));
     }
 
+    // D396: a formula in a speed is spilled into the highest free QL in a block of its own directly before the TOOL
+    // CALL, which writes SQL499, in the call of the tool and in the RPM template of a speed without a tool.
+    [Fact]
+    public void Rule3_SpeedOfAFormula_IsSpilledIntoAQlParameter()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "VAR:Q2=1500", "TOOL=1 RPM={$Q2 + 100}", "RAPID X=0 Y=0", "RPM={$Q2 * 2}"));
+
+        Assert.Equal(
+            "Q2 = 1500\nQL499 = Q2 + 100\nTOOL CALL 1 Z SQL499\nL X+0 Y+0 R0 FMAX\nQL499 = Q2 * 2\nTOOL CALL SQL499",
+            HeidenhainCompile.Body(result));
+    }
+
     // Heidenhain 8 rule 3; language 4.9: the TOOL CALL takes the RPM of the following block, and a jump to the label on
     // that block does not pass the TOOL CALL, so the speed stands again after the label, as every modal word does.
     [Fact]
@@ -165,7 +178,7 @@ public sealed class HeidenhainToolCallTests
         Assert.Equal("TOOL CALL 1 Y S500", HeidenhainCompile.Body(result));
     }
 
-    // The TODO(question) of HeidenhainToolCall.CheckWorkplane: a WORKPLANE that changes the tool axis of the last TOOL
+    // D321 (HeidenhainToolCall.CheckWorkplane): a WORKPLANE that changes the tool axis of the last TOOL
     // CALL without a TOOL, after a motion, is CMP110.
     [Fact]
     public void Workplane_ThatChangesTheToolAxisOfTheLastCall_IsTheErrorCmp110()

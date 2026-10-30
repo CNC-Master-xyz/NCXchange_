@@ -32,8 +32,14 @@ internal static class HeidenhainArcs
         // Up to the element after a chamfer or a rounding the current position is the corner point
         // (HeidenhainCorners.CurrentPosition).
         List<SourceWord> words = HeidenhainMotion.AxisWords(block, [first, second]);
-        state.Pole = PoleOf(words, first, HeidenhainCorners.CurrentPosition(block), out int decimals);
-        state.PoleDecimals = decimals;
+        state.Pole = PoleOf(words, first, HeidenhainCorners.CurrentPosition(block));
+
+        // D400: a CC with exactly one axis of the plane leaves the pole unknown, and the arcs about it stay RAW with a
+        // WARNING that names the CC (HeidenhainState.PoleMissing).
+        if (words.Count == 1)
+        {
+            state.OneAxisPole = block.Source;
+        }
     }
 
     /// <summary>
@@ -43,11 +49,8 @@ internal static class HeidenhainArcs
     /// <param name="words">The axis words of the CC in the plane.</param>
     /// <param name="first">The first axis of the plane.</param>
     /// <param name="current">The current position; null where it is not known.</param>
-    /// <param name="decimals">The decimals of the source words the pole is taken from, at least three.</param>
-    public static HeidenhainPoint? PoleOf(IReadOnlyList<SourceWord> words, string first, HeidenhainPoint? current,
-        out int decimals)
+    public static HeidenhainPoint? PoleOf(IReadOnlyList<SourceWord> words, string first, HeidenhainPoint? current)
     {
-        decimals = HeidenhainNumbers.LeastDecimals;
         decimal? x = words.Count == 0 ? current?.First : null;
         decimal? y = words.Count == 0 ? current?.Second : null;
         foreach (SourceWord word in words)
@@ -56,16 +59,14 @@ internal static class HeidenhainArcs
             decimal? here = isFirst ? current?.First : current?.Second;
             decimal? from = word.Address.StartsWith('I') ? here : 0m;
             decimal? value = word.Number is decimal number && from is decimal origin ? origin + number : null;
-            decimals = Math.Max(decimals, HeidenhainNumbers.DecimalsOf(word));
             x = isFirst ? value : x;
             y = isFirst ? y : value;
         }
 
-        // TODO(question): what a CC with one axis of the plane leaves for the other, the coordinate of the earlier
-        // pole or of the current position, is still open: D254 settled the other two halves of its question and
-        // recorded that the manuals describe CC with both coordinates, CC with none and an incremental CC
-        // coordinate, but never CC with exactly one axis word (decisions.md). The pole is then not known, and the
-        // arcs about it stay RAW.
+        // D254(2), D400: the manuals describe CC with both coordinates, CC with none and an incremental CC coordinate,
+        // but never CC with exactly one axis word (TNC640 Programmierung-Klartext 340590-05 p.226). The pole is then
+        // unknown and the arcs about it stay RAW with a WARNING naming the CC; no reading of the missing coordinate is
+        // invented.
         return x is decimal poleX && y is decimal poleY ? new HeidenhainPoint(poleX, poleY) : null;
     }
 
@@ -85,7 +86,7 @@ internal static class HeidenhainArcs
 
         if (state.Pole is not HeidenhainPoint pole)
         {
-            block.Draft.KeepAsRaw("C needs the pole of a CC (controllers heidenhain.md 2)");
+            block.Draft.KeepAsRaw(state.PoleMissing("C"));
             return;
         }
 
@@ -201,10 +202,9 @@ internal static class HeidenhainArcs
         }
 
         double scale = ((distanceX * distanceX) + (distanceY * distanceY)) / (2 * across);
-        int decimals = Decimals(axes);
         var center = new HeidenhainPoint(
-            HeidenhainNumbers.Round((double)start.First + (scale * normalX), decimals),
-            HeidenhainNumbers.Round((double)start.Second + (scale * normalY), decimals));
+            HeidenhainNumbers.Round((double)start.First + (scale * normalX)),
+            HeidenhainNumbers.Round((double)start.Second + (scale * normalY)));
         bool ccw = scale > 0;
         HeidenhainDraftBlock arc = block.Draft.Main.WithVerb("ARC", new IdentValue(ccw ? "CCW" : "CW"));
         arc.Words.AddRange(main.Words);
@@ -230,6 +230,12 @@ internal static class HeidenhainArcs
         }
 
         SourceWord? angle = block.Take("PA") ?? block.Take("IPA");
+        if (state.Pole is null)
+        {
+            block.Draft.KeepAsRaw(state.PoleMissing("CP"));
+            return;
+        }
+
         if (state.Pole is not HeidenhainPoint pole || start is null || angle?.Number is not decimal sweep)
         {
             block.Draft.KeepAsRaw("CP needs the pole of a CC, the current position and its angle PA or IPA as a number "
@@ -288,7 +294,7 @@ internal static class HeidenhainArcs
         // Up to the element after a chamfer or a rounding the current position is the corner point
         // (HeidenhainCorners.CurrentPosition).
         HeidenhainState state = block.Heidenhain;
-        if (PolarPoint(state.Pole!, state.PoleDecimals, HeidenhainCorners.CurrentPosition(block), radius, angle, out x,
+        if (PolarPoint(state.Pole!, HeidenhainCorners.CurrentPosition(block), radius, angle, out x,
             out y))
         {
             return true;
@@ -304,14 +310,13 @@ internal static class HeidenhainArcs
     /// is no number or the current position it needs is not known.
     /// </summary>
     /// <param name="pole">The pole.</param>
-    /// <param name="poleDecimals">The decimals of the source words the pole was taken from.</param>
     /// <param name="current">The current position; null where it is not known.</param>
     /// <param name="radius">The PR or IPR word; null to keep the radius of the current position.</param>
     /// <param name="angle">The PA or IPA word; null to keep the angle of the current position.</param>
     /// <param name="x">The coordinate of the first axis of the plane.</param>
     /// <param name="y">The coordinate of the second axis of the plane.</param>
-    public static bool PolarPoint(HeidenhainPoint pole, int poleDecimals, HeidenhainPoint? current, SourceWord? radius,
-        SourceWord? angle, out decimal x, out decimal y)
+    public static bool PolarPoint(HeidenhainPoint pole, HeidenhainPoint? current, SourceWord? radius, SourceWord? angle,
+        out decimal x, out decimal y)
     {
         x = 0;
         y = 0;
@@ -330,18 +335,8 @@ internal static class HeidenhainArcs
         r += radius?.Address == "IPR" ? currentRadius : 0;
         double a = angle is null ? currentAngle : (double)angle.Number!.Value;
         a += angle?.Address == "IPA" ? currentAngle : 0;
-        var words = new List<SourceWord>();
-        foreach (SourceWord? word in new[] { radius, angle })
-        {
-            if (word is not null)
-            {
-                words.Add(word);
-            }
-        }
-
-        int decimals = Math.Max(poleDecimals, Decimals(words));
-        x = HeidenhainNumbers.Round((double)pole.First + (r * Math.Cos(a * Math.PI / 180)), decimals);
-        y = HeidenhainNumbers.Round((double)pole.Second + (r * Math.Sin(a * Math.PI / 180)), decimals);
+        x = HeidenhainNumbers.Round((double)pole.First + (r * Math.Cos(a * Math.PI / 180)));
+        y = HeidenhainNumbers.Round((double)pole.Second + (r * Math.Sin(a * Math.PI / 180)));
         return true;
     }
 
@@ -409,7 +404,7 @@ internal static class HeidenhainArcs
         double side = (ccw && radius > 0) || (!ccw && radius < 0) ? 1 : -1;
         double x = ((double)(start.First + end.First) / 2) + (side * h * -dy / d);
         double y = ((double)(start.Second + end.Second) / 2) + (side * h * dx / d);
-        return new HeidenhainPoint(HeidenhainNumbers.Round(x, 6), HeidenhainNumbers.Round(y, 6));
+        return new HeidenhainPoint(HeidenhainNumbers.Round(x), HeidenhainNumbers.Round(y));
     }
 
     private static double Distance(HeidenhainPoint first, HeidenhainPoint second)
@@ -417,17 +412,5 @@ internal static class HeidenhainArcs
         double dx = (double)(second.First - first.First);
         double dy = (double)(second.Second - first.Second);
         return Math.Sqrt((dx * dx) + (dy * dy));
-    }
-
-    // Computed coordinates keep the decimals of the source words they come from, at least three (wave-1 question #46).
-    private static int Decimals(IReadOnlyList<SourceWord> words)
-    {
-        int decimals = HeidenhainNumbers.LeastDecimals;
-        foreach (SourceWord word in words)
-        {
-            decimals = Math.Max(decimals, HeidenhainNumbers.DecimalsOf(word));
-        }
-
-        return decimals;
     }
 }

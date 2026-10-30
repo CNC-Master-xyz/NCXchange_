@@ -5,7 +5,7 @@ using Ncx.Tests.Fixtures;
 namespace Ncx.Config.Tests;
 
 /// <summary>
-/// The five example machine files of machine-config 11 (with millturn1.toml, D104) and the three mills of machines/
+/// The six example machine files of machine-config 11 (with millturn1.toml, D104) and the three mills of machines/
 /// load; what they still report is listed in a committed file (phase 2, P2-01, P2-04).
 /// </summary>
 public sealed class ExampleMachinesTests
@@ -13,10 +13,11 @@ public sealed class ExampleMachinesTests
     // The committed list of the WARNINGs the machine files report; each names a gap in a file, which P2-04 fixes.
     private const string ExpectedWarningsResource = "Fixtures/expected-machine-warnings.txt";
 
-    // The five example machines, as paths relative to docs/spec/examples (tests/README.md).
+    // The six example machines, as paths relative to docs/spec/examples (tests/README.md).
     private static readonly string[] s_exampleMachines =
     [
         "machines/nakamura-ntjx.toml",
+        "machines/nakamura-wy250l.toml",
         "machines/doosan-puma-2600sy.toml",
         "machines/mori-ntx1000-mapps.toml",
         "machines/dmg-ctx-840d.toml",
@@ -32,7 +33,7 @@ public sealed class ExampleMachinesTests
     ];
 
     /// <summary>
-    /// The five example machines for the theories.
+    /// The six example machines for the theories.
     /// </summary>
     public static TheoryData<string> ExampleMachines => new(s_exampleMachines);
 
@@ -42,7 +43,7 @@ public sealed class ExampleMachinesTests
     public static TheoryData<string> MillMachines => new(s_millMachines);
 
     /// <summary>
-    /// The eight files of machines/: the five example machines, copied there by name, and the three mills (P2-04).
+    /// The nine files of machines/: the six example machines, copied there by name, and the three mills (P2-04).
     /// </summary>
     public static TheoryData<string> ShippedMachines
     {
@@ -63,7 +64,7 @@ public sealed class ExampleMachinesTests
         }
     }
 
-    // P2-01 done when: the five example machine files load without ERROR.
+    // P2-01 done when: the six example machine files load without ERROR.
     [Theory]
     [MemberData(nameof(ExampleMachines))]
     public void ExampleMachine_EveryFile_LoadsWithoutError(string examplePath)
@@ -89,7 +90,7 @@ public sealed class ExampleMachinesTests
         Assert.NotNull(machine);
     }
 
-    // P2-04: the eight files of machines/, the five example machines copied there and the three mills, load without
+    // P2-04: the nine files of machines/, the six example machines copied there and the three mills, load without
     // ERROR and without WARNING; every gap of P2-01's committed list is fixed in the files.
     [Theory]
     [MemberData(nameof(ShippedMachines))]
@@ -149,8 +150,9 @@ public sealed class ExampleMachinesTests
         Assert.Equal(MotionCode.EveryBlock, Shipped("millturn1.toml").Format?.MotionCode);
     }
 
-    // D250: SYS_WEAR_Z and SYS_MPOS_B of the Nakamura; D314, D388 (9): the NTJX start mark is M198; D179: the sub
-    // spindle C axis is C/H on the Nakamura and the Doosan.
+    // D250: SYS_WEAR_Z and SYS_MPOS_B of the Nakamura; D314, D388 (9): the NTJX start mark is M198; the lower turret
+    // drives its rotary tools with M488 (4810004EDG-1 p.58, p.252); D179: the sub spindle C axis is C/H on the
+    // Nakamura and the Doosan.
     [Fact]
     public void LatheMachines_Data_IsTheDecidedOne()
     {
@@ -158,6 +160,8 @@ public sealed class ExampleMachinesTests
         Assert.Equal("#11{index:03}", nakamura.SystemVariables.Find("SYS_WEAR_Z"));
         Assert.Equal("#5025", nakamura.SystemVariables.Find("SYS_MPOS_B"));
         Assert.Equal(198, nakamura.Sync?.StartMark);
+        Assert.Equal("S4", nakamura.FindResource("T2")?.Spindle);
+        Assert.Equal("M488", nakamura.SpindleTables["TOOL2"].States["CW"]);
         foreach (MachineConfig lathe in new[] { nakamura, Shipped("doosan-puma-2600sy.toml") })
         {
             AxisDef c2 = Assert.Single(lathe.Axes, axis => axis.Id == "C2");
@@ -175,7 +179,7 @@ public sealed class ExampleMachinesTests
         return machine;
     }
 
-    // P2-01: the WARNINGs of the eight files are listed in a committed file, each one a gap in a file.
+    // P2-01: the WARNINGs of the nine files are listed in a committed file, each one a gap in a file.
     [Fact]
     public void MachineFiles_Warnings_AreTheCommittedList()
     {
@@ -195,6 +199,34 @@ public sealed class ExampleMachinesTests
         }
 
         Assert.Equal(string.Join('\n', ExpectedWarnings()), string.Join('\n', reported));
+    }
+
+    // D314, D388: the WY-250L starts its programs at M199 (WY-Anleitung 2008 p.21, Handbuch 2019 p.15), and M198, the
+    // wait before the bar-end check of its template, is a reserved wait mark like M199 of the G196 transfer, not a
+    // function; its turrets index with the four-digit T word and have no ATC (4810004EEE p.66).
+    [Fact]
+    public void NakamuraWy250l_SyncAndToolChange_AreThoseOfTheWyManuals()
+    {
+        MachineConfig wy = Shipped("nakamura-wy250l.toml");
+
+        Assert.Equal("Nakamura WY-250L", wy.Machine.Name);
+        Assert.Equal(199, wy.Sync?.StartMark);
+        Assert.Equal([198, 199], wy.Sync?.ReservedMarks);
+        Assert.Equal(100, wy.Sync?.MarkRange?.First);
+        Assert.Equal(199, wy.Sync?.MarkRange?.Last);
+        Assert.DoesNotContain(wy.Functions.Values, function => function.States.Values.Contains("M198"));
+        Assert.Equal("G0 T{tool:02}{offset:02}", wy.ToolChange?.Change);
+        Assert.Null(wy.ToolChange?.Preload);
+        Assert.Equal("#5025", wy.SystemVariables.Find("SYS_MPOS_B"));
+        Assert.Equal("C2", wy.ResolveAxis("C", "S2")?.Id);
+        Assert.Equal(2, wy.SpindleSync?.Channel);
+
+        // The lower turret drives its rotary tools with M488/M489/M490 (4810004EEE p.273; WY-Anleitung 2008 p.12-13).
+        Assert.Equal("S4", wy.ResolveRole("TOOL2")?.Id);
+        Assert.Equal("S4", wy.FindResource("T2")?.Spindle);
+        Assert.Equal("M488", wy.SpindleTables["TOOL2"].States["CW"]);
+        Assert.Equal("M489", wy.SpindleTables["TOOL2"].States["CCW"]);
+        Assert.Equal("M490", wy.SpindleTables["TOOL2"].States["OFF"]);
     }
 
     // F23: the sub spindle of the Nakamura names the axis C2, which the file declares; C resolves to it while the sub

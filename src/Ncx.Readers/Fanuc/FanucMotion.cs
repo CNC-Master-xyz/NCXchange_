@@ -176,9 +176,11 @@ internal static class FanucMotion
         };
     }
 
-    // D159: G4 X or U with a decimal point is seconds; P, and X or U without a decimal point, count in units of
-    // [machine] dwell_increment, seconds per unit, 0.001 by default (controllers fanuc.md 4; controller-mapping 1,
-    // DWELL; machine-config 1). Parameter 3405#1 DWL, a dwell in revolutions under G95, is not modelled.
+    // D159: G4 X or U with a decimal point is seconds; P counts in units of [machine] dwell_increment, seconds per
+    // unit, 0.001 by default (controllers fanuc.md 4; controller-mapping 1, DWELL; machine-config 1). X and U take a
+    // decimal point (B-64484EN p.188), so without one they follow [format] calculator_input, parameter 3401#0: seconds
+    // under the calculator type, dwell_increment otherwise (B-64490EN-05 p.190; gap closed 2026-10-30, delegated).
+    // Parameter 3405#1 DWL, a dwell in revolutions under G95, is not modelled.
     private static void ReadDwell(FanucBlock block)
     {
         if (!block.TakeCode("G4"))
@@ -190,7 +192,8 @@ internal static class FanucMotion
         decimal increment = block.Machine.Machine.DwellIncrement;
         if (word?.Number is decimal duration && word.Expression is null)
         {
-            bool seconds = word.Address != "P" && word.Text.Contains('.', StringComparison.Ordinal);
+            bool seconds = word.Address != "P" && (word.Text.Contains('.', StringComparison.Ordinal)
+                || block.Machine.Format?.CalculatorInput != false);
             block.Draft.Main.Add("DWELL", seconds && word.ToNcxNumber() is Value time
                 ? time
                 : FanucNumbers.Of(duration * increment));

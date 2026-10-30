@@ -11,12 +11,14 @@ public static partial class CycleCatalogLoader
     private static readonly string[] s_entryKeys =
     [
         "name", "native", "for_axis", "params", "absolute_from_surface", "modal", "contour", "signature",
-        "fixed", "before", "defaults", "title", "dwell_native", "channel", "available",
+        "fixed", "before", "defaults", "title", "dwell_native", "channel", "available", "first_block",
         "pre", "post", "requires", "restore",
     ];
 
     // The keys only a [[cycle]] table of a machine file takes (D361, D377).
-    private static readonly string[] s_machineOnlyKeys = ["channel", "available"];
+    // D377, D410: channel describes one machine; available is a key of both files, since a catalog file may withdraw
+    // an entry it inherits.
+    private static readonly string[] s_machineOnlyKeys = ["channel"];
 
     // The word that the words of absolute_from_surface are relative to (machine-config 6, language 4.7).
     private const string SurfaceWord = "SURFACE";
@@ -28,8 +30,8 @@ public static partial class CycleCatalogLoader
     /// <param name="tables">The [[cycle]] tables of the file.</param>
     /// <param name="controller">The controller family the entries belong to; null when the machine file names
     /// none.</param>
-    /// <param name="catalogFile">True for the entries of a catalog file, which take no channel and no available key
-    /// (D377).</param>
+    /// <param name="catalogFile">True for the entries of a catalog file, which take no channel key (D377); available
+    /// withdraws an entry there too (D410).</param>
     internal static IReadOnlyList<CycleEntry> ReadEntries(
         IReadOnlyList<ConfigTable> tables, Controller? controller, bool catalogFile = false)
     {
@@ -82,6 +84,7 @@ public static partial class CycleCatalogLoader
         IReadOnlyList<string> absoluteFromSurface = table.TextList("absolute_from_surface");
         bool modal = table.Flag("modal");
         IReadOnlyList<string> contour = ReadContour(table);
+        IReadOnlyList<string> firstBlock = ReadFirstBlock(table, parameters);
         IReadOnlyList<string> signature = table.TextList("signature");
         IReadOnlyDictionary<string, decimal> fixedValues =
             table.Table("fixed")?.Numbers() ?? new Dictionary<string, decimal>();
@@ -89,7 +92,7 @@ public static partial class CycleCatalogLoader
         ExpansionRule? rule = MachineConfigLoader.ReadRule(table);
         CheckFamilyKeys(table, controller, modal, signature);
         int? channel = catalogFile ? null : table.Integer("channel");
-        bool available = catalogFile || !table.Has("available") || table.Flag("available");
+        bool available = !table.Has("available") || table.Flag("available");
         if (catalogFile)
         {
             WarnMachineKeys(table);
@@ -109,6 +112,7 @@ public static partial class CycleCatalogLoader
             AbsoluteFromSurface = absoluteFromSurface,
             Modal = modal,
             Contour = contour,
+            FirstBlock = firstBlock,
             Signature = signature,
             Fixed = fixedValues,
             Defaults = defaults,
@@ -237,6 +241,25 @@ public static partial class CycleCatalogLoader
         return contour;
     }
 
+    // D409: first_block names the params of a two-block Fanuc cycle that stand in its first block, so each must be a
+    // params word of the entry.
+    private static IReadOnlyList<string> ReadFirstBlock(ConfigTable table,
+        IReadOnlyDictionary<string, string> parameters)
+    {
+        IReadOnlyList<string> firstBlock = table.TextList("first_block");
+        foreach (string word in firstBlock)
+        {
+            if (!parameters.ContainsKey(word))
+            {
+                table.Diagnostics.Error(table.LineOf("first_block"), DiagnosticCodes.CycleFirstBlockNotAParameter,
+                    $"first_block in {table.Name} names {word}, which is no params word of the entry; the first block "
+                    + "of a two-block cycle carries params of the entry only (machine-config 6, D409).");
+            }
+        }
+
+        return firstBlock;
+    }
+
     // Heidenhain and Siemens entries leave modal out, their calls are words of their own (CYCL CALL, M99, MCALL);
     // Fanuc entries leave the signature out, their parameters are address words of the cycle block (machine-config 6).
     private static void CheckFamilyKeys(
@@ -257,8 +280,8 @@ public static partial class CycleCatalogLoader
         }
     }
 
-    // D377: channel and available describe one machine, so a catalog file that writes them gets CFG157 and the loader
-    // ignores them.
+    // D377: channel describes one machine, so a catalog file that writes it gets CFG157 and the loader ignores it;
+    // available = false withdraws an entry in a catalog file as in a machine file (D410).
     private static void WarnMachineKeys(ConfigTable table)
     {
         foreach (string key in s_machineOnlyKeys)

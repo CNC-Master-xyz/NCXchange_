@@ -223,6 +223,13 @@ public static partial class DiagnosticCodes
     public const string HeidenhainRepeatWithoutCounter = "CMP130";
 
     /// <summary>
+    /// CMP131, a WARNING: a CYLINDER section is written as cycle 27, whose set-up clearance Q6 must be greater than the
+    /// tool radius, and the tool table gives no radius for the tool, so the compiler does not check it (D394; TNC 640
+    /// Zyklen 892905-18 p. 334).
+    /// </summary>
+    public const string HeidenhainCylinderClearanceUnchecked = "CMP131";
+
+    /// <summary>
     /// CMP140, a WARNING: CYCLE_RETRACT=SAFE with a SAFE at or below CLEARANCE; the control uses the second set-up
     /// clearance Q204 only above Q200, so the tool retracts to CLEARANCE only (D157, D226; controller-mapping 5).
     /// </summary>

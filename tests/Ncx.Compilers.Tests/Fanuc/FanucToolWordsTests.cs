@@ -213,6 +213,60 @@ public sealed class FanucToolWordsTests
         Assert.Contains("\nS1000 M3\nS800 M88\nG96 S140 M3\nG97 S1000\nM5\nM3\n", text, StringComparison.Ordinal);
     }
 
+    // D408: G50 S is the limit of the spindle selected when its block runs, and is written alone before the M code, as
+    // the Nakamura source writes it; where the last selection is another spindle's M code and the template names no
+    // spindle, the limit reaches the wrong spindle, the WARNING CMP343.
+    [Fact]
+    public void RpmMax_AfterTheCodeOfAnotherSpindle_IsCmp343()
+    {
+        CompileResult result = FanucCompile.Run(LatheProgram("SPINDLE:TOOL=CW RPM:TOOL=800", "RPM_MAX:MAIN=2500",
+            "SPINDLE:MAIN=CW RPM:MAIN=1000"), FanucCompile.Lathe());
+
+        Assert.Contains("\nS800 M88\nG50 S2500\nS1000 M3\n", FanucCompile.TextOf(result), StringComparison.Ordinal);
+        Diagnostic warning = Assert.Single(FanucCompile.CompilerDiagnostics(result));
+        Assert.Equal((Severity.Warning, "CMP343"), (warning.Severity, warning.Code));
+    }
+
+    // D408: after the M code of its own spindle, or before any selection, where the control has its first spindle
+    // selected, the limit belongs to the spindle that runs its block, and no WARNING.
+    [Fact]
+    public void RpmMax_OfTheSelectedSpindle_HasNoWarning()
+    {
+        CompileResult result = FanucCompile.Run(LatheProgram("RPM_MAX:MAIN=2500", "SPINDLE:MAIN=CW RPM:MAIN=1000",
+            "RPM_MAX:MAIN=3000"), FanucCompile.Lathe());
+
+        Assert.Contains("\nG50 S2500\nS1000 M3\nG50 S3000\n", FanucCompile.TextOf(result), StringComparison.Ordinal);
+        Assert.Empty(FanucCompile.CompilerDiagnostics(result));
+    }
+
+    // D408: a template that names the spindle itself, with {spindle} or a P word, selects it in the limit's own
+    // block, and no WARNING.
+    [Fact]
+    public void RpmMax_WithAPWordInItsTemplate_HasNoWarning()
+    {
+        string lathe = FanucCompile.Lathe().Replace("RPM_MAX = \"G50 S{value}\"", "RPM_MAX = \"G50 S{value} P11\"",
+            StringComparison.Ordinal);
+
+        CompileResult result = FanucCompile.Run(LatheProgram("SPINDLE:TOOL=CW RPM:TOOL=800", "RPM_MAX:MAIN=2500"),
+            lathe);
+
+        Assert.Contains("\nS800 M88\nG50 S2500 P11\n", FanucCompile.TextOf(result), StringComparison.Ordinal);
+        Assert.Empty(FanucCompile.CompilerDiagnostics(result));
+    }
+
+    private static string LatheProgram(params string[] blocks)
+    {
+        return FanucCompile.Lines(
+            [
+                "FILE=BEGIN NCX=1",
+                "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+                "FEED_MODE=PER_REV COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
+                .. blocks,
+                "PROGRAM=END",
+                "FILE=END",
+            ]);
+    }
+
     // Controller-mapping 1, SKIP; language 4.5 (RPM is modal); D53: the speed is 2000 where the skipped block ran and
     // 1000 where it did not, and the control keeps either, so the next start writes no S of the walk.
     [Fact]

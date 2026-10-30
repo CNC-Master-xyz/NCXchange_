@@ -169,8 +169,10 @@ internal static class HeidenhainMotion
         BlockStep step = writing.LookAhead.Steps[index];
         if (step.After.Unknown.Contains(FeedKey))
         {
-            return SourceOf(writing, index) is int source && ParameterAt(writing, source) is string parameter
-                && HeidenhainParameters.Holds(writing, active, parameter, source);
+            return SourceOf(writing, index) is int source
+                && writing.LookAhead.Steps[source].Block.Find(FeedKey) is Word word
+                && HeidenhainParameters.KeyOf(writing, word, out _) is string key
+                && HeidenhainParameters.Holds(writing, active, key, HeidenhainParameters.ReadsOf(word), source);
         }
 
         if (step.After.Motion.Feed is not decimal feed || !TryNumberOf(writing, active, out decimal written))
@@ -243,41 +245,35 @@ internal static class HeidenhainMotion
 
         Word word = writing.LookAhead.Steps[source].Block.Find(FeedKey)
             ?? throw new InvalidOperationException("The source of the feed has no F.");
-        if (HeidenhainParameters.Of(word.Value) is not string parameter)
+        if (HeidenhainParameters.KeyOf(writing, word) is not string key)
         {
-            HeidenhainParameters.ReportValue(writing, word);
             return null;
         }
 
         // The control has the feed of the word where its last F read the parameter for it, or for an earlier word
         // while the parameter kept its value; the motion then writes no F (heidenhain 8 rule 2).
-        if (HeidenhainParameters.Holds(writing, writing.Target.ActiveOf(FeedKey), parameter, source))
+        IReadOnlySet<string> reads = HeidenhainParameters.ReadsOf(word);
+        if (HeidenhainParameters.Holds(writing, writing.Target.ActiveOf(FeedKey), key, reads, source))
         {
             return null;
         }
 
-        // F of a motion stands after the VAR lines of its block (language 5 rule 3; HeidenhainCompiler.WriteBlock).
-        if (!HeidenhainParameters.Keeps(writing, word, parameter, source, afterVariables: true))
+        // F of a motion stands after the VAR lines of its block (language 5 rule 3; HeidenhainCompiler.WriteBlock);
+        // a formula is spilled into a QL parameter in a block of its own directly before it (D396).
+        if (!HeidenhainParameters.Keeps(writing, word, reads, source, afterVariables: true)
+            || HeidenhainParameters.Written(writing, word) is not string written)
         {
             return null;
         }
 
-        writing.Target.Set(FeedKey, HeidenhainParameters.Active(parameter, source));
-        return FeedKey + parameter;
+        writing.Target.Set(FeedKey, HeidenhainParameters.Active(key, source));
+        return FeedKey + written;
     }
 
     // The step of the F word that set a feed the virtual machine keeps UNKNOWN (HeidenhainParameters.SourceOf).
     private static int? SourceOf(HeidenhainBlock writing, int index)
     {
         return HeidenhainParameters.SourceOf(writing, index, FeedKey, block => block.Find(FeedKey));
-    }
-
-    // The Q parameter of the F word of a step; null where it is no parameter.
-    private static string? ParameterAt(HeidenhainBlock writing, int source)
-    {
-        return writing.LookAhead.Steps[source].Block.Find(FeedKey) is Word word
-            ? HeidenhainParameters.Of(word.Value)
-            : null;
     }
 
     // The number an F with a number wrote, F1,5 as 1.5 with the decimal separator of the machine (machine-config 2);

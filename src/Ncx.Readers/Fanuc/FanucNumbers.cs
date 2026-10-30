@@ -1,4 +1,5 @@
 using System.Globalization;
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 
 namespace Ncx.Readers.Fanuc;
@@ -6,7 +7,8 @@ namespace Ncx.Readers.Fanuc;
 /// <summary>
 /// The numbers of a Fanuc source as NCX writes them: taken as written where the source gives them (language 2 rule 5,
 /// controllers fanuc.md 9 rule 8), and in the shortest form of language 3 where the reader computes one, an absolute
-/// clearance from an incremental R, the centre of an arc from its start and I J K.
+/// clearance from an incremental R, the centre of an arc from its start and I J K; a number computed with
+/// trigonometry or a quotient keeps 6 decimals (ComputedNumbers, D403).
 /// </summary>
 internal static class FanucNumbers
 {
@@ -28,13 +30,10 @@ internal static class FanucNumbers
             : new IntegerValue(long.Parse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture), text);
     }
 
-    // TODO(question): no document says how many decimals a number the reader computes with trigonometry keeps, a point
-    // of a polar coordinate, a chamfer, a rounding or a spatial angle (wave-1 question #46); the caller keeps as many
-    // as the source words it was computed from, at least three.
-
     /// <summary>
-    /// A number of the geometry, computed in double, rounded to a decimal: half away from zero, the one rounding NCX
-    /// defines (language 4.12, ROUND).
+    /// A number computed in double, rounded to the given decimals, half away from zero, the one rounding NCX defines
+    /// (language 4.12, ROUND): the scaled F of a helix, which keeps 3 (D354). A point, an angle or a pitch the reader
+    /// computes keeps 6 instead (ComputedNumbers, D403).
     /// </summary>
     /// <param name="number">The computed number.</param>
     /// <param name="decimals">The decimals to keep.</param>
@@ -44,13 +43,28 @@ internal static class FanucNumbers
     }
 
     /// <summary>
-    /// The digits a source number has after its decimal point: 3 for X50.534, 0 for X70. and X70.
+    /// The least input increment of a linear address in the units of the block: the unit of an address that takes no
+    /// decimal point (B-64484EN p.229, 8.3; p.527-528), [machine] input_increment in mm, a tenth of it in inch
+    /// (parameter 1013, B-64490EN-05 p.57-58; parameter 1004#7 IPR is not modelled).
     /// </summary>
-    /// <param name="word">The source word with a number.</param>
-    public static int DecimalsOf(SourceWord word)
+    /// <param name="block">The block being read.</param>
+    public static decimal LeastInputIncrement(FanucBlock block)
     {
-        int dot = word.Text.IndexOf('.', StringComparison.Ordinal);
-        return dot < 0 ? 0 : word.Text.Length - dot - 1;
+        return block.Machine.Machine.LinearIncrement(IsInch(block.State, block.Machine));
+    }
+
+    /// <summary>
+    /// Whether the block is read in inch: G20 (G70 in system C) in the source-side state, or where the program has set
+    /// no units yet, [machine] units_default, as the header assumes (FanucHeader).
+    /// </summary>
+    /// <param name="state">The source-side state after the modal codes of the block.</param>
+    /// <param name="machine">The machine with its G-code system and units_default.</param>
+    public static bool IsInch(SourceState state, MachineConfig machine)
+    {
+        string? units = state.ActiveCode(FanucModalGroups.Units);
+        return units is null
+            ? machine.Machine.UnitsDefault?.ToUpperInvariant() == "INCH"
+            : units == (machine.Machine.GcodeSystem == GcodeSystem.C ? "G70" : "G20");
     }
 
     /// <summary>

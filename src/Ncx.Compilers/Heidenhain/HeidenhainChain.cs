@@ -132,9 +132,10 @@ internal static class HeidenhainChain
     // An appended entry, unless an entry of its kind still stands in the chain before it: cycles 7, 8 and 10 and a new
     // PLANE replace the one before them on the control (controllers heidenhain.md 3), so the chain of NCX would not be
     // the chain of the control (language 4.2, D31).
-    // TODO(question): D253: where a replacing Klartext transform acts when others follow the one it replaces is open;
-    // an entry appended while one of its kind stands in the chain is reported (CMP106), and so is a SHIFT while the
-    // setpos shift of a SETPOS stands, whose cycle 7 it would replace (machine-config 3, HeidenhainSetpos).
+    // D253(a), D398: where a replacing Klartext transform acts when others follow the one it replaces (7-10-7) is not
+    // settled by any manual, so the compiler never writes it: an entry appended while one of its kind stands in the
+    // chain is reported (CMP106), and so is a SHIFT while the setpos shift of a SETPOS stands, whose cycle 7 it would
+    // replace (machine-config 3, HeidenhainSetpos). This is the end state; revisit only with a machine test.
     private static void Append(HeidenhainBlock writing, TransformEntry entry)
     {
         foreach (TransformEntry earlier in writing.After.Frame.Chain)

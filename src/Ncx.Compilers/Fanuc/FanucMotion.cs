@@ -40,10 +40,10 @@ internal static class FanucMotion
             Change(write, FanucCodes.FeedMode, FanucCodes.FeedModeCode(after.Motion.FeedMode, write.System));
         }
 
-        // The plane stands in the motion block itself, and under plane_with_first_motion only there (the TODO(question)
-        // of OutputFormat). The lines of a skipped block run only where the block runs (controller-mapping 1, SKIP), so
-        // the plane of a skipped block stands in its own lines. A plane the next motion writes is the same on every
-        // path from here on.
+        // The plane stands in the motion block itself, and under plane_with_first_motion only there ([format]
+        // plane_with_first_motion, machine-config 2, D276). The lines of a skipped block run only where the block
+        // runs (controller-mapping 1, SKIP), so the plane of a skipped block stands in its own lines. A plane the next
+        // motion writes is the same on every path from here on.
         if (block.Has("WORKPLANE"))
         {
             write.Written("WORKPLANE");
@@ -109,6 +109,12 @@ internal static class FanucMotion
         }
 
         write.Written(verb);
+        if (FanucFrames.FoldsIntoHome(write))
+        {
+            write.WrittenAll();
+            return;
+        }
+
         bool machineFrame = block.Has("FRAME", null, "MACHINE");
         if (machineFrame)
         {
@@ -159,8 +165,8 @@ internal static class FanucMotion
         }
 
         // G53 ends at a machine position, which the length offset does not move (controllers fanuc.md 4), so an offset
-        // that waits for the tool axis waits for the next move in the workpiece frame (the TODO(question) of
-        // OutputFormat).
+        // that waits for the tool axis waits for the next move in the workpiece frame ([format]
+        // length_offset_with_tool_axis, machine-config 2, D276).
         AddToolVector(write);
         FanucToolWords.AddOffsets(write, HasToolAxisWord(write, axes) && !machineFrame);
         AddFeed(write, verb);
@@ -287,7 +293,7 @@ internal static class FanucMotion
 
     // The code is written as [format] motion_code says, "arcs" by default: G0 and G1 where they change, G2 and G3 on
     // every arc block (D282 (a), D299; controllers fanuc.md 10 rule 1), and the first motion after a tool change writes
-    // its code under motion_code_after_tool_change (the TODO(question) of OutputFormat).
+    // its code under motion_code_after_tool_change ([format] motion_code_after_tool_change, machine-config 2, D276).
     private static void WriteMotionCode(FanucBlock write, string verb, Value value)
     {
         string code = verb switch
@@ -351,8 +357,8 @@ internal static class FanucMotion
     // it. The feed mode stands with the feed where the control has another (controllers fanuc.md 2, 3). A feed and a
     // feed mode the block does not state are those of the state before it, which the control holds where they differ
     // by path (FanucBlock.NeedsValueOfTheWalk).
-    // TODO(question): D218: where the F of a Fanuc cycle block stands is open; the compiler counts it as the control's
-    // feed and writes F only where the NCX feed differs, as D218 recommends, until D218 is answered.
+    // D218: the F of a Fanuc cycle block is the control's modal feed, so the compiler writes F on the next feed motion
+    // only where the NCX feed differs.
     private static void AddFeed(FanucBlock write, string verb)
     {
         Word? feedWord = write.Block.Find("F");

@@ -105,22 +105,27 @@ public sealed class FanucProgramTests
         Assert.Equal(Lines("STOP=PROGRAM", "STOP=OPTIONAL"), Body("M0\nM01"));
     }
 
-    // D159: G4 X and G4 U with a decimal point are seconds; P, and X or U without one, count in units of
-    // [machine] dwell_increment, 0.001 s by default (controller-mapping 1, DWELL).
+    // D159: G4 X and G4 U with a decimal point are seconds; P counts in units of [machine] dwell_increment, 0.001 s
+    // by default (controller-mapping 1, DWELL). X or U without a point follow [format] calculator_input, parameter
+    // 3401#0: seconds by default, dwell_increment under false (B-64490EN-05 p.190; gap closed 2026-10-30, delegated).
     [Fact]
     public void Dwell_G4PAndG4XAndG4U_AreDwellInSeconds()
     {
         Assert.Equal(Lines("DWELL=0.5"), Body("G4 P500"));
-        Assert.Equal(Lines("DWELL=2", "DWELL=0.2", "DWELL=0.002"), Body("G4 X2.\nG4 U0.2\nG4 X2", Lathe()));
+        Assert.Equal(Lines("DWELL=2", "DWELL=0.2", "DWELL=2"), Body("G4 X2.\nG4 U0.2\nG4 X2", Lathe()));
+        Assert.Equal(Lines("DWELL=2", "DWELL=0.002", "DWELL=0.5"),
+            Body("G4 X2.\nG4 X2\nG4 P500", LatheWith("[format]\ncalculator_input = false")));
     }
 
-    // A lathe whose X is programmed in diameters reads with DIAMETER=ON (controller-mapping 1, DIAMETER; D60).
+    // A lathe whose X is programmed in diameters reads with DIAMETER=ON (controller-mapping 1, DIAMETER; D60). A lathe
+    // starts in G18, the Z-X plane, under the factory setting of parameter 3458#0 TPS (B-64490EN-05 p.204), so a
+    // header without a plane is WORKPLANE=ZX on a lathe (D34).
     [Fact]
     public void Header_XInDiameters_HasDiameterOn()
     {
         string text = Text("%\nO0001\nG0 X20.\nM30\n%\n", Lathe());
 
-        Assert.Contains("\nFEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY DIAMETER=ON CYCLE=OFF\nRAPID X=20\n",
+        Assert.Contains("\nFEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF\nRAPID X=20\n",
             text, StringComparison.Ordinal);
     }
 

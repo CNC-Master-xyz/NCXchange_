@@ -66,7 +66,6 @@ internal sealed class HeidenhainCalls
 
         state.Plane = plane ? first?.Plane : null;
         state.Pole = pole ? first?.Pole : null;
-        state.PoleDecimals = first?.PoleDecimals ?? 0;
         state.Definition = definition ? first!.Definition : null;
         state.DefinitionUnknown = !definition;
         state.CycleOn = cycleOn ? first?.CycleOn : null;
