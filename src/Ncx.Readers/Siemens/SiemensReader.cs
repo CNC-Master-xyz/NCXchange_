@@ -530,7 +530,7 @@ public sealed class SiemensReader : ReaderBase
         source.FeedMode = facts.FeedType switch
         {
             "G94" or "G961" or "G971" => FeedMode.PerMin,
-            "G95" or "G96" => FeedMode.PerRev,
+            "G95" or "G96" or "G973" => FeedMode.PerRev,
             _ => null,
         };
         source.ActiveCycle = facts.ModalCycle?.Native;

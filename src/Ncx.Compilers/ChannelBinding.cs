@@ -29,6 +29,19 @@ internal static class ChannelBinding
     }
 
     /// <summary>
+    /// What binds a word, as a message names it: the section of machine-config 5, "[spindle_sync]", "[func] DOOR", and
+    /// the state behind it where state_channels binds that state alone, "[spindle_sync] OFF" (D414).
+    /// </summary>
+    public static string BindingName(Word word, MachineConfig machine)
+    {
+        string name = TableName(word, machine);
+        string? state = FunctionStates.Of(word);
+        return state is not null && TableOf(word, machine)?.StateChannels.ContainsKey(state) == true
+            ? name + " " + state
+            : name;
+    }
+
+    /// <summary>
     /// The section of machine-config 5 that binds a word, as a message names it: "[spindle_sync]", "[func] DOOR".
     /// </summary>
     public static string TableName(Word word, MachineConfig machine)
@@ -81,7 +94,7 @@ internal static class ChannelBinding
                 continue;
             }
 
-            string name = TableName(word, machine);
+            string name = BindingName(word, machine);
             if (table.Channel is int owner && !channels.Contains(owner))
             {
                 diagnostics.Error(block, DiagnosticCodes.WordBoundToAnotherChannel, string.Create(

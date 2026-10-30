@@ -134,6 +134,15 @@ public sealed class SiemensToolTests
         Assert.Equal([DiagnosticCodes.SiemensG973HasNoForm, DiagnosticCodes.SiemensWordsKeptAsRaw], Codes(program));
     }
 
+    // D424: after G973 S is a spindle speed in rpm again until the next code of group 15 (840D sl NC Programming 2020,
+    // connector p.98, p.101), so S1500 is RPM and not VC.
+    [Fact]
+    public void SpeedAfterG973_IsRpm()
+    {
+        Assert.Equal(Lines("FEED_MODE=PER_REV SPINDLE=CW CSS=ON VC=200", Raw("G973"), "RPM=1500"),
+            Body("G96 S200 M3\nG973\nS1500"));
+    }
+
     // D154: M19 orients at the angle the machine sets (SD43240), so the reader writes ORIENT=0 with the WARNING RDR021
     // naming the code.
     [Fact]

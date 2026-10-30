@@ -97,8 +97,10 @@ internal static partial class SiemensSpindles
                 break;
             case "RPM":
                 // Under CSS the spindle follows VC and RPM is ignored (language 4.11): on the control S would be the
-                // cutting speed, so the speed is written when CSS goes off.
-                if (spindle is { Css: true })
+                // cutting speed, so the speed is written when CSS goes off. D424: after a RAW G973 the control runs
+                // without the surface speed although NCX holds it, and S is a speed in rpm there (NC Programming 2020
+                // p.98, p.101), so RPM is written.
+                if (spindle is { Css: true } && !SiemensMotion.SurfaceSpeedOffOnTheControl(write))
                 {
                     break;
                 }

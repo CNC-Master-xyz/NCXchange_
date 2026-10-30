@@ -203,7 +203,8 @@ internal static class SiemensSpindles
     // mode; G97 switches it off with the feed type G95, G971 with G94, G972 leaves the feed type (controller-mapping 4,
     // CSS; D342). D424: G973, off without the speed limit, has no NCX form and stays a RAW word written back in place
     // with the WARNING RDR511, so the round trip stays exact and the control keeps exactly what the source programmed;
-    // no FEED_MODE and no CSS=OFF is written for it, since the G97 the compiler would write keeps the limit.
+    // no FEED_MODE and no CSS=OFF is written for it, since the G97 the compiler would write keeps the limit. The
+    // reader follows the control: an S after G973 is RPM, not VC.
     private static void ReadSurfaceSpeed(SiemensBlock block)
     {
         foreach (string code in new[] { "G96", "G961", "G962", "G97", "G971", "G972", "G973" })
@@ -215,7 +216,11 @@ internal static class SiemensSpindles
 
             if (code == "G973")
             {
+                // After G973 S is a spindle speed in rpm again until the next code of group 15 (840D sl NC
+                // Programming 2020, connector p.98, p.101), with the feed per revolution.
                 block.KeepAsRawWord(word);
+                block.Facts.FeedType = code;
+                block.Facts.Unknown.Remove(SiemensFacts.Feed);
                 block.Draft.ReadingWarnings.Add(new SiemensWarning(DiagnosticCodes.SiemensG973HasNoForm,
                     "G973 switches the constant surface speed off without the speed limit, which NCX has no form for; "
                     + "it stays a RAW word written back as the source wrote it, and NCX keeps the surface speed of the "

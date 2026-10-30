@@ -17,6 +17,9 @@ internal static class SiemensMotion
     private const string CompensationGroup = "G40";
     private const string DistanceGroup = "G90";
     private const string FeedTypeGroup = "G94";
+
+    // The target key of a surface speed that a RAW G973 switched off while NCX holds it on (D424).
+    private const string RawSurfaceSpeedOff = "G973";
     private const string UnitsGroup = "G70";
     private const string Feed = "F";
 
@@ -142,6 +145,25 @@ internal static class SiemensMotion
     public static bool IsFeedTypeCode(string code)
     {
         return code is "G93" or "G94" or "G95" or "G96" or "G961" or "G962" or "G97" or "G971" or "G972" or "G973";
+    }
+
+    /// <summary>
+    /// True where a RAW G973 switched the constant surface speed off and the control has no code of group 15 active
+    /// since that switches it on again (D424): S is then a speed in rpm on the control, whatever NCX holds.
+    /// </summary>
+    public static bool SurfaceSpeedOffOnTheControl(SiemensBlock write)
+    {
+        return write.ActiveOf(RawSurfaceSpeedOff) == "ON" && write.ActiveOf(FeedTypeGroup) is "G93" or "G94" or "G95";
+    }
+
+    /// <summary>
+    /// Records that a RAW G973 switched the constant surface speed off, with the feed per revolution (D424; 840D sl NC
+    /// Programming 2020, connector p.98).
+    /// </summary>
+    public static void RawG973(SiemensBlock write)
+    {
+        FeedTypeSwitched(write, "G973");
+        write.Target.Set(RawSurfaceSpeedOff, "ON");
     }
 
     /// <summary>

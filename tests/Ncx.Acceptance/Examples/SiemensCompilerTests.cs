@@ -193,6 +193,26 @@ public sealed class SiemensCompilerTests : IDisposable
         Assert.DoesNotContain("RET", lines);
     }
 
+    // D424: G973 switches the constant cutting rate off without the speed limit, and after it S is a spindle speed in
+    // rpm (840D sl Programming Manual NC Programming 2020, connector p.98, p.101). It stays a RAW word, and the round
+    // trip writes G973 back and no G96 after it: the compiler knows the surface speed is off, the reader reads S1500 as
+    // the rpm it is.
+    [Fact]
+    public void RoundTrip_G973_IsWrittenBackWithoutG96AfterIt()
+    {
+        MachineConfig machine = MillTurn();
+        NcxProgram read = new SiemensReader().Read(new SourceFile("CSS.mpf",
+            "%_N_CSS_MPF\nG18 G90 G95 G71\nT1 D1\nM6\nG96 S200 M3\nG0 X50 Z2\nG973\nS1500\nG1 X30 F0.2\nM30\n"),
+            machine, new ReadOptions());
+
+        List<string> lines = LinesWithoutNumbers(Compile(NcxWriter.Write(read), machine));
+        int g973 = lines.IndexOf("G973");
+
+        Assert.True(g973 >= 0, string.Join("\n", lines));
+        Assert.DoesNotContain(lines.Skip(g973), line => line.Contains("G96", StringComparison.Ordinal));
+        Assert.Contains(lines.Skip(g973), line => line.Contains("S1500", StringComparison.Ordinal));
+    }
+
     // Phase 5 exit, M8: under NCX_CORPUS the Hermle C22 U program and the Burkhardt+Weber programs read and compile
     // back to themselves under the comparison rules of phase 3 (block numbers, comments and blank lines left out,
     // numbers compared by value, the modal lines before the first motion compared per G group).

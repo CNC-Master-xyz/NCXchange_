@@ -73,7 +73,14 @@ public sealed class ChannelBindingTests
         }
         else
         {
-            Assert.Equal(code, ErrorOf(result).Code);
+            Diagnostic error = ErrorOf(result);
+            Assert.Equal(code, error.Code);
+
+            // D414: CMP700 names the state that state_channels binds, not the whole table.
+            if (code == DiagnosticCodes.WordBoundToAnotherChannel)
+            {
+                Assert.Contains("[spindle_sync] OFF only from channel 1", error.Message, StringComparison.Ordinal);
+            }
         }
     }
 

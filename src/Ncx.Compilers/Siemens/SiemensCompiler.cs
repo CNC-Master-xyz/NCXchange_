@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.State;
@@ -14,7 +15,7 @@ namespace Ncx.Compilers.Siemens;
 /// SiemensProgramFrame, SiemensMotion with SiemensArcs, SiemensTools, SiemensSpindles, SiemensFunctions, SiemensFrames,
 /// SiemensCycles, SiemensFlow, SiemensChannels.
 /// </summary>
-public sealed class SiemensCompiler : CompilerBase, ICompiler
+public sealed partial class SiemensCompiler : CompilerBase, ICompiler
 {
     // What the compiler knows of the file being written across its blocks.
     private SiemensFile? _file;
@@ -249,6 +250,13 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
             write.MakeUnknown(key);
         }
 
+        // D424: a RAW G973 switches the surface speed off with the feed per revolution, which the control then has
+        // active, so no G96 is written again after it for a speed the program gives in rpm (NC Programming 2020 p.98).
+        if (G973().IsMatch(raw))
+        {
+            SiemensMotion.RawG973(write);
+        }
+
         SiemensCycles.AfterRaw(write, raw);
         SiemensFrames.AfterRaw(write, raw);
         SiemensProgramFrame.WriteComment(write);
@@ -361,4 +369,8 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
             ? config.ChangeNamed
             : config?.Change;
     }
+
+    // G973 as a word of its own, not inside a string or a longer name (controllers siemens.md 2, group 15).
+    [GeneratedRegex("(?<![A-Za-z0-9_$\"])G973(?![0-9])", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex G973();
 }
