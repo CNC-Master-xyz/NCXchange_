@@ -434,14 +434,16 @@ internal static partial class SiemensExpression
         return end;
     }
 
-    // $AA_IW[X] reads a diameter under DIAMON and maps one to one, while $AA_IM[X] reads a radius where MD20360 bits
-    // 6/7 are off, half the diameter NCX reads under DIAMETER=ON, so under DIAMON and DIAM90 the reader writes the
-    // NCX name halved;
-    // where [[axis]] frames_in_diameter says the control gives diameters it maps one to one (D240, D388;
-    // Funktionshandbuch Grundfunktionen 2012 p.901-903, cnc-manuals).
-    private static bool MachinePositionInRadius(SiemensBlock block, string native)
+    // $AA_IW[X] reads a diameter under DIAMON and maps one to one, while $AA_IM[X], the machine position, takes the
+    // factor of the X frames: a radius where MD20360 bits 6/7 are off, half the diameter NCX reads under DIAMETER=ON,
+    // and a diameter where [[axis]] frames_in_diameter says the bits are set, twice the radius NCX reads under
+    // DIAMETER=OFF (D240, D388; Funktionshandbuch Grundfunktionen 2012 p.901-903, cnc-manuals). The factor from the
+    // source value to the NCX name, 1 where the two agree.
+    private static decimal MachinePositionFactor(SiemensBlock block, string native)
     {
-        return string.Equals(native, "$AA_IM[X]", StringComparison.OrdinalIgnoreCase) && SiemensFrames.XInRadius(block);
+        return string.Equals(native, "$AA_IM[X]", StringComparison.OrdinalIgnoreCase)
+            ? SiemensFrames.XFactor(block)
+            : 1m;
     }
 
     // R1 and R[1] are $R1; an indirect R[R1] is RAW (controller-mapping 6, VAR); a system variable is the SYS_ name
@@ -456,9 +458,18 @@ internal static partial class SiemensExpression
             {
                 if (string.Equals(entry.Value.Replace(" ", ""), native, StringComparison.OrdinalIgnoreCase))
                 {
-                    if (!MachinePositionInRadius(block, native))
+                    decimal factor = MachinePositionFactor(block, native);
+                    if (factor == 1m)
                     {
                         return "$" + entry.Key;
+                    }
+
+                    // D388: with frames_in_diameter the machine file states the factor, so the source value, a
+                    // diameter, is twice the radius ${entry.Key} reads under DIAMETER=OFF; the compiler writes the
+                    // NCX name back as ($AA_IM[X]/2).
+                    if (factor == 0.5m)
+                    {
+                        return "($" + entry.Key + " * 2)";
                     }
 
                     // D240: the factor rests on the default of MD20360 until it is measured on a machine, so the
