@@ -90,6 +90,13 @@ internal static partial class SiemensFrames
         // RAW text did: ORIGIN starts an empty chain and a RESET removes the entries of its kind (language 4.2); TRANS
         // alone ends the programmable frame and CYCLE800() the swivel (controllers siemens.md 4). What stays of the
         // chain is written again after it, so that the control has the chain of the virtual machine from here on.
+        // D421: the entries of the swivel that the reader writes again after a datum, which the control still holds,
+        // are written neither at the datum nor again.
+        if (write.File.IsHeldSwivel(write.Step))
+        {
+            return;
+        }
+
         bool endsProgrammable = write.IsMadeUnknown(ProgrammableFrame) && EndsProgrammableFrame(block);
         bool endsSwivel = write.IsMadeUnknown(Swivel) && EndsSwivel(write);
         ChainChange change = ChainWriter.Between(write.Before.Frame, write.After.Frame);
@@ -99,6 +106,11 @@ internal static partial class SiemensFrames
         }
 
         int kept = write.After.Frame.Chain.Count - change.Appended.Count;
+        if (block.Has("ORIGIN") && HeldSwivel(write) is { Count: > 0 } held)
+        {
+            change = change with { Removed = [.. change.Removed.Where(entry => !held.Contains(entry))] };
+        }
+
         WriteRemoved(write, change, kept, endsProgrammable, endsSwivel);
         if (endsProgrammable)
         {
@@ -115,6 +127,85 @@ internal static partial class SiemensFrames
         {
             WriteEntry(write, chain, index, StartsProgrammableFrame(chain, index), appended: true);
         }
+    }
+
+    // D421: the swivel of CYCLE800 stands on the control after a datum of group 8, a component of the total frame of
+    // its own (D333, D340 (3)), and the reader writes it again after the ORIGIN, the TILT with MOVE=STAY. Where the
+    // blocks right after the ORIGIN append exactly the entries of the chain before it up to its last tilt, the tilts
+    // with MOVE=STAY, the control still holds that swivel: those entries, the shifts its reference point carries among
+    // them, are held, and neither the datum ends them nor those blocks write them again. Empty where they differ.
+    private static HashSet<TransformEntry> HeldSwivel(SiemensBlock write)
+    {
+        var held = new HashSet<TransformEntry>(ReferenceEqualityComparer.Instance);
+        IReadOnlyList<TransformEntry> before = write.Before.Frame.Chain;
+        int lastTilt = -1;
+        for (int index = 0; index < before.Count; index++)
+        {
+            lastTilt = IsTilt(before[index]) ? index : lastTilt;
+        }
+
+        if (lastTilt < 0 || write.After.Frame.Chain.Count > 0)
+        {
+            return held;
+        }
+
+        var steps = new List<BlockStep>();
+        foreach (BlockStep step in write.File.StepsAfter(write.Step))
+        {
+            IReadOnlyList<TransformEntry> chain = step.After.Frame.Chain;
+            bool chainOnly = step.Block.Verb?.Key is "SHIFT" or "TILT" or "TILT_AXIS";
+            if (!chainOnly || chain.Count != steps.Count + 1 || chain.Count > lastTilt + 1
+                || !SameSwivelEntry(before[chain.Count - 1], chain[^1]))
+            {
+                return held;
+            }
+
+            steps.Add(step);
+            if (chain.Count == lastTilt + 1)
+            {
+                write.File.HoldSwivel(steps);
+                for (int index = 0; index <= lastTilt; index++)
+                {
+                    held.Add(before[index]);
+                }
+
+                return held;
+            }
+        }
+
+        return held;
+    }
+
+    // The same entry of a swivel written again after a datum: the same kind and values, a tilt with MOVE=STAY (D421).
+    private static bool SameSwivelEntry(TransformEntry standing, TransformEntry again)
+    {
+        if (IsTilt(again) && again.Move != TiltMove.Stay)
+        {
+            return false;
+        }
+
+        return standing.Kind == again.Kind && standing.Rot == again.Rot && standing.Angle == again.Angle
+            && standing.Workplane == again.Workplane && standing.Mirrored.SequenceEqual(again.Mirrored)
+            && SameValues(standing.Shift, again.Shift) && SameValues(standing.Angles, again.Angles);
+    }
+
+    private static bool SameValues(
+        IReadOnlyDictionary<string, decimal?> first, IReadOnlyDictionary<string, decimal?> second)
+    {
+        if (first.Count != second.Count)
+        {
+            return false;
+        }
+
+        foreach (KeyValuePair<string, decimal?> value in first)
+        {
+            if (!second.TryGetValue(value.Key, out decimal? other) || other != value.Value)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     // D420: the full frame of the virtual machine, after a RAW call that may have changed it on the control: the datum

@@ -335,6 +335,40 @@ public sealed class SiemensFrameTests
             MillTurnBody("ORIGIN=1", "RAW:SIEMENS=\"MSG(\\\"TRANS X10\\\")\"", "ORIGIN=1"));
     }
 
+    // D421: a datum leaves the swivel of CYCLE800 standing on the control, and the reader writes it again after the
+    // ORIGIN with MOVE=STAY; where the tilt right after the ORIGIN equals the swivel the control still holds, the
+    // compiler writes neither CYCLE800() at the datum nor CYCLE800 for the tilt, so the round trip is unchanged.
+    [Fact]
+    public void Origin_FollowedByTheStandingTiltWithMoveStay_WritesNoSwivel()
+    {
+        Assert.Equal(Lines("G54", "CYCLE800(1,\"TC1\",0,27,0,0,0,0,45,0,0,0,0,-1,100,1)", "TRANS X2.5", "TRANS", "G55",
+                "TRANS X2.5", "G1 X10 F100"),
+            MillTurnBody("ORIGIN=1", "TILT A=0 B=45 C=0 MOVE=TURN", "SHIFT X=5", "ORIGIN=2",
+                "TILT A=0 B=45 C=0 MOVE=STAY", "SHIFT X=5", "LINE X=10 F=100"));
+    }
+
+    // D421: the reference point before the rotation, a SHIFT before the TILT, belongs to the swivel the control holds,
+    // so neither it nor the tilt is written again after the datum.
+    [Fact]
+    public void Origin_FollowedByTheStandingSwivelWithItsReferencePoint_WritesNoSwivel()
+    {
+        Assert.Equal(Lines("G54", "TRANS Y7", "CYCLE800(1,\"TC1\",0,27,0,7,0,0,45,0,0,0,0,-1,100,1)", "G55",
+                "G1 X10 F100"),
+            MillTurnBody("ORIGIN=1", "SHIFT Y=7", "TILT A=0 B=45 C=0 MOVE=TURN", "ORIGIN=2", "SHIFT Y=7",
+                "TILT A=0 B=45 C=0 MOVE=STAY", "LINE X=10 F=100"));
+    }
+
+    // D421: a tilt after the datum that differs from the swivel the control holds is written, after CYCLE800() at the
+    // datum, as before.
+    [Fact]
+    public void Origin_FollowedByAnotherTilt_EndsTheSwivelAndWritesTheNewOne()
+    {
+        Assert.Equal(Lines("G54", "CYCLE800(1,\"TC1\",0,27,0,0,0,0,45,0,0,0,0,-1,100,1)", "CYCLE800()", "G55",
+                "CYCLE800(1,\"TC1\",0,27,0,0,0,0,30,0,0,0,0,0,100,1)", "G1 X10 F100"),
+            MillTurnBody("ORIGIN=1", "TILT A=0 B=45 C=0 MOVE=TURN", "ORIGIN=2", "TILT A=0 B=30 C=0 MOVE=STAY",
+                "LINE X=10 F=100"));
+    }
+
     // D420: a RAW subprogram or builder-cycle call may change the frame, as it may arm a modal call (D343), so the
     // frame is unknown after it and the compiler writes the full frame before the next motion: the datum, the
     // programmable frame again (TRANS alone where the chain holds none) and the end of the swivel where the machine has

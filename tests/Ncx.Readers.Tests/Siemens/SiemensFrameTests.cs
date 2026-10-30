@@ -23,14 +23,26 @@ public sealed class SiemensFrameTests
             CheckedBody("G54\nTRANS X10\nG55\nG500"));
     }
 
-    // D340 (3) settles the programmable frame of group 3 alone, and the swivel of CYCLE800 belongs to none of its
-    // instructions: whether a datum leaves that swivel standing is the open D333, so the ORIGIN writes the shift again
-    // and no second TILT, which would move the rotary axes a second time.
+    // D421: the datum leaves the swivel standing, since CYCLE800 writes system frames (D333) and the settable frame is
+    // a component of the total frame of its own (D340 (3)). ORIGIN empties the NCX chain, so the reader writes the
+    // standing TILT again after it with MOVE=STAY, which moves no rotary axis, and the programmable entries as before,
+    // in the order of the chain (the reading D253 (d) gives Heidenhain cycle 247).
     [Fact]
-    public void Datum_AfterACycle800Swivel_WritesTheShiftAgainAndNoSecondTilt()
+    public void Datum_AfterACycle800Swivel_WritesTheTiltAgainWithMoveStayAndTheShift()
     {
-        Assert.Equal(Lines("TILT A=0 B=45 C=0 MOVE=TURN", "SHIFT X=5", "ORIGIN=1", "SHIFT X=5", "LINE X=10 F=100"),
+        Assert.Equal(Lines("TILT A=0 B=45 C=0 MOVE=TURN", "SHIFT X=5", "ORIGIN=1", "TILT A=0 B=45 C=0 MOVE=STAY",
+                "SHIFT X=5", "LINE X=10 F=100"),
             CheckedBody("CYCLE800(0,\"TABLE\",0,27,0,0,0,0,45,0,0,0,0,-1,100,1)\nATRANS X5\nG54\nG1 X10 F100"));
+    }
+
+    // D421: the reference point of CYCLE800 before the rotation, a SHIFT before the TILT, belongs to the swivel and is
+    // written again with it.
+    [Fact]
+    public void Datum_AfterACycle800SwivelWithAReferencePoint_WritesTheReferenceShiftAndTheTiltAgain()
+    {
+        Assert.Equal(Lines("SHIFT Y=7", "TILT A=0 B=45 C=0 MOVE=TURN", "ORIGIN=2", "SHIFT Y=7",
+                "TILT A=0 B=45 C=0 MOVE=STAY"),
+            CheckedBody("CYCLE800(0,\"TABLE\",0,27,0,7,0,0,45,0,0,0,0,-1,100,1)\nG55"));
     }
 
     // G54 to G57 are the datums 1 to 4, G505 to G599 5 and up, G500 cancels them (controller-mapping 1, ORIGIN).

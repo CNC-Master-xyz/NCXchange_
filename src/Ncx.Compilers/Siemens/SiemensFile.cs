@@ -62,6 +62,9 @@ internal sealed partial class SiemensFile
     // The block numbers the RAW lines of each unit carry, with the block that carries each (D417).
     private readonly Dictionary<(Section? Unit, int Number), Block> _rawNumbers = [];
 
+    // The steps whose chain entries re-state the swivel the control holds after a datum (D421).
+    private readonly HashSet<int> _heldSwivelSteps = [];
+
     // The SUB sections whose first block the walk has met.
     private readonly HashSet<Section> _subsBegun = [];
 
@@ -104,6 +107,27 @@ internal sealed partial class SiemensFile
     public static SiemensFile Of(IReadOnlyList<BlockStep> steps)
     {
         return new SiemensFile(steps);
+    }
+
+    /// <summary>
+    /// Records the steps after a datum that write the swivel the control still holds again (D421).
+    /// </summary>
+    /// <param name="steps">The steps.</param>
+    public void HoldSwivel(IEnumerable<BlockStep> steps)
+    {
+        foreach (BlockStep step in steps)
+        {
+            _heldSwivelSteps.Add(step.Index);
+        }
+    }
+
+    /// <summary>
+    /// True for a step whose chain entry re-states the swivel the control holds after a datum (D421).
+    /// </summary>
+    /// <param name="step">A step of the walk.</param>
+    public bool IsHeldSwivel(BlockStep step)
+    {
+        return _heldSwivelSteps.Contains(step.Index);
     }
 
     /// <summary>
