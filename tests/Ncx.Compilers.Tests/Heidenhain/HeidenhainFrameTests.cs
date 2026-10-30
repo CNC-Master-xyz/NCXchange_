@@ -1,4 +1,8 @@
+using Ncx.Compilers.Heidenhain;
+using Ncx.Config;
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
+using Ncx.Core.Parsing;
 
 namespace Ncx.Compilers.Tests.Heidenhain;
 
@@ -433,26 +437,124 @@ public sealed class HeidenhainFrameTests
             "CYCL DEF 32.0 TOLERANZ\nCYCL DEF 32.1 T0,02\nCYCL DEF 32.2 HSC-MODE:0", HeidenhainCompile.Body(result));
     }
 
-    // D146; controller-mapping 1, CYLINDER: cycle 27 takes its contour from a subprogram in the letters of the control,
-    // which the compiler does not write; CYLINDER is CMP101, and no C word is written under the NCX letter.
-    [Fact]
-    public void Cylinder_IsTheErrorCmp101()
-    {
-        var mill = HeidenhainCompile.MillAnd("""
-            [[axis]]
-            id = "C1"
-            ncx = "C"
-            letter = "C"
-            kind = "rotary"
-            owner = "TABLE1"
-            """);
+    // The NCX section of a slot on a cylinder of radius 30 along X, the table axis A1 parallel to X under the tool axis
+    // Z: positioning above the start point, the plunge to 25, the contour under COMP=LEFT, the retract to 32 (D394).
+    private static readonly string[] s_cylinderSection =
+    [
+        "TOOL=1 RPM=2000", "SPINDLE=CW", "CYLINDER=30", "RAPID X=20 C=40", "RAPID Z=32", "LINE Z=25 F=100",
+        "LINE C=50 COMP=LEFT F=250", "ARC=CW X=40 C=70 R=20", "LINE X=60", "ARC=CCW X=60 C=40 CENTER:X=60 CENTER:C=55",
+        "RAPID Z=32", "CYLINDER=OFF",
+    ];
 
-        CompileResult result = HeidenhainCompile.Run(
-            HeidenhainCompile.Program("CYLINDER=30", "CYLINDER=OFF"), mill);
+    // D394: a CYLINDER section of the shape of cycle 27 is CYCL DEF 14 KONTUR, CYCL DEF 27 with Q1 = depth - r,
+    // Q6 = plunge start - r, Q10 = |Q1| for one pass, Q11 and Q12 the feeds, Q16 = r and Q17 = 1, and CYCL CALL; on the
+    // iTNC 530 the contour subprogram after the M30 takes the rotary letter A and the parallel axis X (D146), the start
+    // point with both coordinates and RL, and the arc directions of the plane X then A, which are those of NCX.
+    [Fact]
+    public void Cylinder_OfTheShapeOfCycle27_IsCycle27WithItsContourAfterTheM30()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(s_cylinderSection), CylinderMill());
+
+        Assert.Equal(
+            "TOOL CALL 1 Z S2000\nM3\nCYCL DEF 14.0 KONTUR\nCYCL DEF 14.1 KONTURLABEL 1\n"
+            + "CYCL DEF 27 ZYLINDER-MANTEL ~\n    Q1=-5 ~\n    Q3=+0 ~\n    Q6=+2 ~\n    Q10=+5 ~\n    Q11=+100 ~\n"
+            + "    Q12=+250 ~\n    Q16=+30 ~\n    Q17=+1\nCYCL CALL",
+            HeidenhainCompile.Body(result));
+        List<string> lines = HeidenhainCompile.LinesOf(HeidenhainCompile.TextOf(result));
+        int end = lines.IndexOf("M30");
+        Assert.Equal(
+            ["LBL 1", "L A+40 X+20 RL", "L A+50 X+20", "CR A+70 X+40 R+20 DR-", "L A+70 X+60", "CC A+55 X+60",
+                "C A+40 X+60 DR+", "LBL 0", "END PGM T MM"],
+            lines.GetRange(end + 1, lines.Count - end - 1));
+        Assert.Contains(result.Diagnostics.Items,
+            diagnostic => diagnostic.Code == DiagnosticCodes.HeidenhainCylinderClearanceUnchecked);
+    }
+
+    // D394, D146: on the TNC 640 the contour is always in X along the circumference and Y along the axis; X before Y
+    // turns the plane of NCX, the cylinder axis then C, so the arc directions flip.
+    [Fact]
+    public void Cylinder_OnTheTnc640_WritesTheContourInXAndY()
+    {
+        MachineConfig mill = CylinderMill("dialect = \"TNC640\"");
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(s_cylinderSection), mill);
+
+        List<string> lines = HeidenhainCompile.LinesOf(HeidenhainCompile.TextOf(result));
+        int end = lines.IndexOf("M30");
+        Assert.Equal(
+            ["LBL 1", "L X+40 Y+20 RL", "L X+50 Y+20", "CR X+70 Y+40 R+20 DR+", "L X+70 Y+60", "CC X+55 Y+60",
+                "C X+40 Y+60 DR-", "LBL 0", "END PGM T MM"],
+            lines.GetRange(end + 1, lines.Count - end - 1));
+    }
+
+    // D394: two passes with the same contour at 27 and 25 are one cycle 27 with the infeed Q10 = 3 to Q1 = -5.
+    [Fact]
+    public void Cylinder_WithTwoPassesAtIncreasingDepth_SetsTheInfeed()
+    {
+        string[] pass = ["RAPID X=20 C=40", "RAPID Z=32", "LINE Z={0} F=100", "LINE C=50 COMP=LEFT F=250", "LINE X=60",
+            "RAPID Z=32"];
+        var blocks = new List<string> { "TOOL=1 RPM=2000", "SPINDLE=CW", "CYLINDER=30" };
+        blocks.AddRange(pass.Select(block => block.Replace("{0}", "27", StringComparison.Ordinal)));
+        blocks.AddRange(pass.Select(block => block.Replace("{0}", "25", StringComparison.Ordinal)));
+        blocks.Add("CYLINDER=OFF");
+
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program([.. blocks]), CylinderMill());
+
+        Assert.Contains("    Q1=-5 ~\n    Q3=+0 ~\n    Q6=+2 ~\n    Q10=+3 ~\n", HeidenhainCompile.Body(result),
+            StringComparison.Ordinal);
+    }
+
+    // D394: COMP=OFF on the contour, a RAPID in the contour, and a section without the plunge stay CMP101 and write
+    // nothing.
+    [Theory]
+    [InlineData("LINE C=50 F=250")]
+    [InlineData("RAPID C=50 COMP=LEFT")]
+    [InlineData("LINE C=50 Z=24 COMP=LEFT F=250")]
+    public void Cylinder_NotOfTheShapeOfCycle27_IsTheErrorCmp101(string contour)
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "TOOL=1 RPM=2000", "SPINDLE=CW", "CYLINDER=30", "RAPID X=20 C=40", "RAPID Z=32", "LINE Z=25 F=100",
+            contour, "LINE X=60", "RAPID Z=32", "CYLINDER=OFF"), CylinderMill());
 
         Assert.Empty(result.Files);
         Diagnostic error = Assert.Single(result.Diagnostics.Items,
-            diagnostic => diagnostic.Code == DiagnosticCodes.HeidenhainWordWithoutKlartext && diagnostic.Line == 4);
+            diagnostic => diagnostic.Code == DiagnosticCodes.HeidenhainWordWithoutKlartext && diagnostic.Line == 6);
         Assert.Contains("cycle 27", error.Message, StringComparison.Ordinal);
+    }
+
+    // D394: a set-up clearance Q6 at or below the radius the tool table gives is CMP101.
+    [Fact]
+    public void Cylinder_WithAClearanceNotAboveTheToolRadius_IsTheErrorCmp101()
+    {
+        NcxProgram program = Parser.Parse(HeidenhainCompile.Program(s_cylinderSection), "T.ncx", new ParserOptions());
+        var tools = new Diagnostics("tools.toml");
+        ToolTable? table = ToolTable.LoadText("[[tool]]\nnumber = 1\nkind = \"MILL\"\nradius = 3\n", tools);
+        Assert.True(table is not null, tools.ToText());
+
+        CompileResult result = new HeidenhainCompiler().Compile(program, CylinderMill(),
+            new CompileOptions { ToolTable = table });
+
+        Assert.Empty(result.Files);
+        Assert.Contains(result.Diagnostics.Items, diagnostic =>
+            diagnostic.Code == DiagnosticCodes.HeidenhainWordWithoutKlartext
+            && diagnostic.Message.Contains("tool radius", StringComparison.Ordinal));
+    }
+
+    // The iTNC 530 of machines/ with the rotary table axis A1 of TABLE1 parallel to X (D146).
+    private static MachineConfig CylinderMill(string? dialect = null)
+    {
+        const string Rotary = """
+
+            [[axis]]
+            id = "A1"
+            ncx = "A"
+            letter = "A"
+            kind = "rotary"
+            owner = "TABLE1"
+            parallel = "X"
+
+            [positions]
+            """;
+        return HeidenhainCompile.MillWithAll(("\n[positions]", Rotary),
+            ("dialect = \"iTNC530\"", dialect ?? "dialect = \"iTNC530\""));
     }
 }

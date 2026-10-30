@@ -91,6 +91,16 @@ internal sealed class HeidenhainBlock
     public required HeidenhainSpills Spills { get; init; }
 
     /// <summary>
+    /// The CYLINDER sections cycle 27 writes (D394).
+    /// </summary>
+    public required HeidenhainCylinders Cylinders { get; init; }
+
+    /// <summary>
+    /// The radius the tool table gives a tool; null where it gives none or there is no table (D10).
+    /// </summary>
+    public required Func<ToolRef, decimal?> ToolRadius { get; init; }
+
+    /// <summary>
     /// Writes one line of the block (CompilerBase.Line).
     /// </summary>
     public required Action<string> WriteLine { get; init; }

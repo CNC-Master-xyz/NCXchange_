@@ -467,7 +467,7 @@ The twelve requests of opencam, the first client of NCXchange, for its release 1
 | 231 | CAM-tool-point, P1-01 and P1-02 | Which holder does a point word without a role address, and which do TIP_OFFSET and POINT_RADIUS follow? | settled 2026-10-27 (D391, as coded in `VirtualMachine.ResolvePointWords`) | R1-11 |
 | 232 | CAM-tool-point, P0-04 | What may a block of the point words carry beside them? | settled 2026-10-27 (D392, as coded: PAR017 in `BlockRules.CheckPointWords`) | R1-11 |
 | 233 | CAM-tool-point, P3-03 with the three family compilers | Does an explicit TOOL_POINT=1 write the register of the mapping? | settled 2026-10-27 (D393, as coded: `HolderState.PointNamed` and `CompilerBase.PointRegistersOf`, with the WARNING CMP033 of `CompilerBase.CheckOffsetAfterPoint`) | R1-11, R1-13 |
-| 234 | CW-W2-5 (D146) | How does a CYLINDER section become cycle 27 on Heidenhain: which blocks form the contour subprogram of cycle 14, and where do Q1, Q3, Q6, Q10, Q11, Q12 and Q17 come from, which no NCX word carries? | new 2026-10-27, the remainder of D146, which settles only the letters of the contour per family (TNC 640 X/Y, iTNC 530 the machine's rotary letter); the compiler reports CYLINDER (CMP101) and writes nothing for it | `src/Ncx.Compilers/Heidenhain/HeidenhainFrames.cs` RefuseCylinder |
+| 234 | CW-W2-5 (D146) | How does a CYLINDER section become cycle 27 on Heidenhain: which blocks form the contour subprogram of cycle 14, and where do Q1, Q3, Q6, Q10, Q11, Q12 and Q17 come from, which no NCX word carries? | settled 2026-10-30 (D394) | `src/Ncx.Compilers/Heidenhain/HeidenhainFrames.cs` RefuseCylinder |
 
 ## Manual audit 2026-10-26
 

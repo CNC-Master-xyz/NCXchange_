@@ -27,3 +27,14 @@ Branch open-hh. Brief: `.worktrees/openitems/BRIEF.md`.
 - Dangling pointers fixed: HeidenhainChainArrivals (D124), HeidenhainFrameTests:146, HeidenhainSetposTests:167/191,
   HeidenhainToolCallTests:29/168.
 - Rows without their own 03-open-questions row (Q-3, Q-4, Q-8, Q-9, Q-10) are cited by their D number in the code.
+- D394 (Q-1): HeidenhainCylinder + HeidenhainCylinderReader + HeidenhainCylinders. A CYLINDER section of the cycle's
+  shape is CYCL DEF 14.0/14.1, CYCL DEF 27 (Q1, Q3=0, Q6, Q10, Q11, Q12, Q16, Q17=1) and CYCL CALL in place of the
+  CYLINDER=r block; the covered blocks write nothing; the contour LBL n .. LBL 0 stands right after the M30 (before the
+  SUB sections), label from the D271 numbering (key "CYLINDER <line>"). Letters: TNC 640 X/Y, iTNC 530 rotary letter and
+  the parallel axis letter (D146). Gap choices: (1) DR flips where the circumference letter comes first in the Klartext
+  plane (always on the TNC 640), since NCX turns from the cylinder axis to C (D102); (2) the retract must return to the
+  radius the plunge started from, where the cycle ends; (3) a tool table without a radius writes the cycle with the new
+  WARNING CMP131 instead of CMP101; (4) CYLINDER inside a SUB, incremental words, a block skip, comments or other
+  words inside the section stay CMP101; (5) the tool axis must be the radial axis. The reader is unchanged: a source
+  CYCL DEF 27 is not in the catalog and stays RAW (not expanded); the native CYCLE:HEIDENHAIN=27 form of D394 would need
+  a catalog entry and is left open. Row CAM-234 settled.
