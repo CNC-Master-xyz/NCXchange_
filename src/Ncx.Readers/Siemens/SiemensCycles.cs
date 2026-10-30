@@ -208,17 +208,58 @@ internal static partial class SiemensCycles
         return false;
     }
 
+    /// <summary>
+    /// True where the block stands in a modal range that a RAW MCALL armed, after it and before the MCALL that ends
+    /// it: D422 extends D259 from a pattern the reader cannot expand to every MCALL it keeps RAW, an MCALL of a
+    /// subprogram among them, since every position block there calls the modal subprogram and a compiler would write
+    /// F, S or plane blocks between them that fire it. Without a closing MCALL in the unit the range runs to its end.
+    /// </summary>
+    /// <param name="block">The block being read, which names no MCALL itself.</param>
+    public static bool InRawRange(SiemensBlock block)
+    {
+        return !HasMcall(block.Source) && ArmingMcallBefore(block, block.Source) is SourceBlock armed
+            && ArmsRawRange(block, armed);
+    }
+
     // True where this bare MCALL ends a modal range the reader kept RAW: a look-back within the unit to the MCALL
-    // block before it, which must arm a call, and the same look-ahead over the range between the two (D259).
+    // block before it, which must arm a call the reader keeps RAW (D259, D422).
     private static bool EndsRawRange(SiemensBlock block)
     {
-        SourceBlock? armed = block.Siemens.Units.PreviousInUnit(block.Source);
+        return ArmingMcallBefore(block, block.Source) is SourceBlock armed && ArmsRawRange(block, armed);
+    }
+
+    // The nearest MCALL block before a block within the unit, where it arms a call; null where there is none or the
+    // nearest one ends a call.
+    private static SourceBlock? ArmingMcallBefore(SiemensBlock block, SourceBlock source)
+    {
+        SourceBlock? armed = block.Siemens.Units.PreviousInUnit(source);
         while (armed is not null && !HasMcall(armed))
         {
             armed = block.Siemens.Units.PreviousInUnit(armed);
         }
 
-        return armed is not null && Arms(armed) && RangeKeepsAPattern(block, armed);
+        return armed is not null && Arms(armed) ? armed : null;
+    }
+
+    // An arming MCALL the reader keeps RAW (ReadModalCall): one of a subprogram, or of a name that is no cycle of the
+    // catalog, and one whose range holds a pattern the reader cannot expand (D259, D422).
+    private static bool ArmsRawRange(SiemensBlock block, SourceBlock mcall)
+    {
+        SourceWord? call = null;
+        bool afterMcall = false;
+        foreach (SourceWord word in mcall.Words)
+        {
+            if (afterMcall && word.Address is not ("N" or ":"))
+            {
+                call = word;
+                break;
+            }
+
+            afterMcall |= word.Address == "MCALL";
+        }
+
+        return call is null || !call.Text.StartsWith('(') || block.Machine.CycleCatalog.FindNative(call.Address) is null
+            || RangeKeepsAPattern(block, mcall);
     }
 
     // True where an MCALL block arms a call, MCALL CYCLE81(...), and does not end one.

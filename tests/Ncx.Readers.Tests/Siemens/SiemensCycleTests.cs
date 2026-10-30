@@ -178,6 +178,45 @@ public sealed class SiemensCycleTests
             BodyOf(NcxWriter.Write(program)));
     }
 
+    // D422: from a RAW MCALL of a subprogram to the MCALL alone that disarms it every block stays RAW, since each
+    // position block calls the modal subprogram and a compiler would otherwise write F, S or plane blocks between them
+    // that fire it (D259); the block after the range is read again.
+    [Fact]
+    public void ModalRange_OfASubprogramMcall_StaysRawToTheMcallThatEndsIt()
+    {
+        string[] range = ["MCALL BOHR", "G0 X10 Y10", "X20", "MCALL"];
+        NcxProgram program = FramedProgram("G0 X0 Y0 Z10\n" + string.Join('\n', range) + "\nG0 X30");
+
+        Assert.Equal(Lines("RAPID X=0 Y=0 Z=10", Raw(range[0]), Raw(range[1]), Raw(range[2]), Raw(range[3]),
+                "RAPID X=30"),
+            BodyOf(NcxWriter.Write(program)));
+    }
+
+    // D422: a position between the MCALL of a pattern the reader keeps RAW and the pattern stays RAW with the range.
+    [Fact]
+    public void ModalRange_OfAPatternTheReaderCannotExpand_KeepsAPositionInsideItRaw()
+    {
+        string[] range =
+        [
+            "F200", "MCALL CYCLE81(10,0,2,-5,)", "G0 X5 Y5", "CYCLE801(0,0,0,10,10,3,3,0,0,0,0)", "MCALL",
+        ];
+        NcxProgram program = FramedProgram("G0 X0 Y0 Z10\n" + string.Join('\n', range));
+
+        Assert.Equal(Lines("RAPID X=0 Y=0 Z=10", Raw(range[0]), Raw(range[1]), Raw(range[2]), Raw(range[3]),
+                Raw(range[4])),
+            BodyOf(NcxWriter.Write(program)));
+    }
+
+    // D422: without an MCALL alone that ends it, the range runs to the end of the unit.
+    [Fact]
+    public void ModalRange_WithoutAnMcallThatEndsIt_RunsToTheEndOfTheUnit()
+    {
+        NcxProgram program = FramedProgram("G0 X0 Y0 Z10\nMCALL BOHR\nG0 X10\nG1 X20 F100");
+
+        Assert.Equal(Lines("RAPID X=0 Y=0 Z=10", Raw("MCALL BOHR"), Raw("G0 X10"), Raw("G1 X20 F100")),
+            BodyOf(NcxWriter.Write(program)));
+    }
+
     // D259: only the MCALL that ends a modal range the reader kept RAW stays RAW with it. A bare MCALL in a unit
     // whose callers the reader cannot all see ends no such range and is the lossless CYCLE=OFF.
     [Fact]

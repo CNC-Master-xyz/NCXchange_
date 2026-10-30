@@ -192,8 +192,17 @@ public sealed class SiemensReader : ReaderBase
         {
             ReadStructureWords(reading);
 
-            // A block of a structure kept as RAW is RAW as well, since NCX cannot branch on its condition (D5).
-            if (!SiemensStructures.ReadInRaw(reading))
+            // D422: a block in the modal range of an MCALL the reader keeps RAW stays RAW with the range (D259); the
+            // end of the unit, M30, M17 or RET, ends the range and is read as the end it is.
+            bool endsUnit = state.Unit is SiemensUnit current && RoleOf(block, current) != StructureRole.None;
+            if (!endsUnit && SiemensCycles.InRawRange(reading))
+            {
+                reading.MarkAllRead();
+                reading.Draft.KeepAsRaw("the block stands in the modal range of an MCALL kept as RAW, where a position "
+                    + "calls the modal subprogram, and the range travels together (controllers siemens.md 7; D259, "
+                    + "D422)");
+            }
+            else if (!SiemensStructures.ReadInRaw(reading))
             {
                 SiemensRaw.Read(reading);
                 SiemensFlow.Read(reading);
