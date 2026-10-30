@@ -126,6 +126,12 @@ internal static class HeidenhainMotion
         ReadCompensation(block);
         HeidenhainState state = block.Heidenhain;
         HeidenhainPoint? start = state.Position();
+        if (state.Pole is null && state.OneAxisPole is not null)
+        {
+            block.Draft.KeepAsRaw(state.PoleMissing("LP"));
+            return;
+        }
+
         if (!state.PlaneAxes(out string first, out string second, out string toolAxis) || state.Pole is null)
         {
             block.Draft.KeepAsRaw("LP needs the pole of a CC in a known working plane (controllers heidenhain.md 2)");

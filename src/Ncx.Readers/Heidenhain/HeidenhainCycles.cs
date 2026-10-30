@@ -499,9 +499,10 @@ internal static partial class HeidenhainCycles
     // coordinates along the tool axis made absolute: SURFACE = Q203, CLEARANCE = Q203 + Q200, DEPTH = Q203 + Q201, SAFE
     // = Q203 + Q204 (heidenhain 5; machine-config 6, absolute_from_surface). Any other cycle is written natively,
     // CYCLE:HEIDENHAIN=n with its Q parameters in source order (language 4.7.1, D94; cycles/heidenhain.toml).
-    // TODO(question): the catalog maps cycles 204 to 209, 240, 241 and 251 to 257 only partly (wave-1 question #22),
-    // and a catalog cycle's own parameter names, LENGTH and WIDTH of RECT_POCKET, are not words the parser knows
-    // (wave-1 questions #36 and #59); such a definition is written natively.
+    // D178 gives the Q parameter lists of cycles 200 to 209, 240, 241 and 251 to 257 (the catalog signatures), and
+    // D114 lets the parser take a catalog cycle's own parameter names, LENGTH and WIDTH of RECT_POCKET, as cycle
+    // parameters; outside the drilling family the reader still takes the named entry only where every word of the
+    // entry is a word of the language, and writes any other definition natively (D94), which loses nothing.
     // D164: the reader takes the named entry only when every Q parameter no word of the entry carries holds what the
     // compiler would write for it (HeidenhainCycleMatch), so CAM output that differs only where the cycle does not use
     // a value still converts; otherwise it keeps the cycle as CYCLE:HEIDENHAIN=n (D94), as D5 requires (decisions.md).

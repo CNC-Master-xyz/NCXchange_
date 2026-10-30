@@ -114,6 +114,14 @@ internal sealed class HeidenhainLabelNumbers
     }
 
     /// <summary>
+    /// The LBL number of the contour subprogram of cycle 27 for a CYLINDER=r block (D394); null when it has none.
+    /// </summary>
+    public string? CylinderOf(Block block)
+    {
+        return Find(CylinderKey(block));
+    }
+
+    /// <summary>
     /// The LBL number before the M30 of a program that JUMP=END jumps to; null when it has none.
     /// </summary>
     public string? EndOf(Section program)
@@ -182,6 +190,12 @@ internal sealed class HeidenhainLabelNumbers
                 keys.Add(new HeidenhainLabelKey(LabelKey(section, label.Value), label.Value, block, owner));
             }
 
+            // D394: the contour subprogram of cycle 27 for a CYLINDER section of a program takes the next free label.
+            if (block.Find("CYLINDER") is { Value: not IdentValue } && section is { Kind: SectionKind.Program })
+            {
+                keys.Add(new HeidenhainLabelKey(CylinderKey(block), null, block, section));
+            }
+
             if (block.Has("SUB", null, "BEGIN") && block.Find("NAME") is Word name)
             {
                 keys.Add(new HeidenhainLabelKey(SubKey(name.Value), name.Value, block, null));
@@ -233,6 +247,11 @@ internal sealed class HeidenhainLabelNumbers
     {
         string text = name is StringValue named ? named.Content : name.ToCanonical();
         return "SUB " + text;
+    }
+
+    private static string CylinderKey(Block block)
+    {
+        return "CYLINDER " + block.Line.ToString(CultureInfo.InvariantCulture);
     }
 
     private static string EndKey(Section program)
@@ -305,7 +324,9 @@ internal sealed class HeidenhainLabelNumbers
         {
             return key.Key.StartsWith("END", StringComparison.Ordinal)
                 ? "The label of JUMP=END before the M30"
-                : "The return label before LBL 0";
+                : key.Key.StartsWith("CYLINDER", StringComparison.Ordinal)
+                    ? "The contour label of cycle 27"
+                    : "The return label before LBL 0";
         }
 
         return key.Key.StartsWith("SUB", StringComparison.Ordinal)

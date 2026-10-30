@@ -219,16 +219,83 @@ public sealed class HeidenhainMotionTests
         Assert.Equal(8, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainParameterReadElsewhere).Line);
     }
 
-    // The TODO(question) of HeidenhainParameters: F takes a number or a Q parameter, and a formula there has no
-    // Klartext form, CMP102.
+    // D396 extends D338 to F: a formula in F is spilled into the highest free QL in a block of its own directly
+    // before the motion, which writes FQL499; the next motion with the same feed writes no F.
     [Fact]
-    public void Rule2_FeedOfAFormula_IsTheErrorCmp102()
+    public void Rule2_FeedOfAFormula_IsSpilledIntoAQlParameter()
     {
         CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
-            "RAPID X=0 Y=0", "LINE X=10 F={$Q1 * 2}"));
+            "VAR:Q1=100", "RAPID X=0 Y=0", "LINE X=10 F={$Q1 * 2}", "LINE X=20"));
+
+        Assert.Equal("Q1 = 100\nL X+0 Y+0 R0 FMAX\nQL499 = Q1 * 2\nL X+10 FQL499\nL X+20",
+            HeidenhainCompile.Body(result));
+    }
+
+    // D396: the feed of a formula is written again where a parameter it reads changed after its word, which NCX read
+    // before, CMP117.
+    [Fact]
+    public void Rule2_FeedOfAFormulaWhoseParameterChanged_IsTheErrorCmp117()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "VAR:Q1=100", "RAPID X=0 Y=0", "F={$Q1 * 2}", "VAR:Q1=5", "LINE X=20"));
+
+        Assert.Empty(result.Files);
+        Assert.Equal(8, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainParameterReadElsewhere).Line);
+    }
+
+    // D396: CMP102 stays where Klartext has no formula for the value of F.
+    [Fact]
+    public void Rule2_FeedWithoutAKlartextFormula_IsTheErrorCmp102()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "RAPID X=0 Y=0", "LINE X=10 F={MAX($Q1, 2)}"));
 
         Assert.Empty(result.Files);
         Assert.Equal(5, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainValueWithoutKlartext).Line);
+    }
+
+    // D397: a SYS_ name is read by FN 18: SYSREAD into the highest free QL in a block of its own directly before the
+    // block that uses it, one QL per distinct name, from the same pool as the spilled formulas (D182, D338).
+    [Fact]
+    public void Rule2_SystemVariable_IsReadByFn18IntoAQlParameter()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "RAPID X={$SYS_POS_X + 5} Y={$SYS_POS_X}"));
+
+        Assert.Equal(
+            "FN 20: WAIT FOR SYNC\nFN 18: SYSREAD QL499 = ID270 NR1 IDX1\nQL498 = QL499 + 5\nL X+QL498 Y+QL499 R0 FMAX",
+            HeidenhainCompile.Body(result));
+    }
+
+    // D397 (delegated 2026-10-30): an FN 18 read of real-time data, the position ID270 or ID240, stands after FN 20:
+    // WAIT FOR SYNC, which stops the look-ahead (iTNC 530 Klartext 340490-05 p. 313-314); other data needs none.
+    [Fact]
+    public void Rule2_SystemVariableOfThePosition_IsReadAfterWaitForSync()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "VAR:Q1={$SYS_MPOS_Z}", "VAR:Q2={$SYS_TOOL_LEN}"));
+
+        Assert.Equal("FN 20: WAIT FOR SYNC\nFN 18: SYSREAD QL499 = ID240 NR1 IDX3\nQ1 = QL499\n"
+            + "FN 18: SYSREAD QL499 = ID200 NR2\nQ2 = QL499", HeidenhainCompile.Body(result));
+    }
+
+    // D397: a SYS_ name in an assignment is read the same way, with the index of [system_variables].
+    [Fact]
+    public void Rule2_SystemVariableInAnAssignment_IsReadByFn18()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program("VAR:Q1={$SYS_WEAR_Z[3] * 2}"));
+
+        Assert.Equal("FN 18: SYSREAD QL499 = ID50 NR4 IDX3\nQ1 = QL499 * 2", HeidenhainCompile.Body(result));
+    }
+
+    // D397: a SYS_ name the machine does not map has no FN 18 read, CMP102.
+    [Fact]
+    public void Rule2_SystemVariableWithoutARead_IsTheErrorCmp102()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program("RAPID X={$SYS_POS_W}"));
+
+        Assert.Empty(result.Files);
+        Assert.Equal(4, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainValueWithoutKlartext).Line);
     }
 
     // D338: a formula in a coordinate is spilled into the highest free QL parameter in a block of its own directly

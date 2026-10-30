@@ -26,6 +26,7 @@ public sealed class HeidenhainCompiler : CompilerBase
     private HeidenhainLabelNumbers? _labelNumbers;
     private HeidenhainRepeats? _repeats;
     private HeidenhainSpills? _spills;
+    private HeidenhainCylinders? _cylinders;
 
     /// <summary>
     /// Heidenhain, the controller of the machine files whose programs this compiler writes (machine-config 1).
@@ -157,6 +158,18 @@ public sealed class HeidenhainCompiler : CompilerBase
     {
         HeidenhainBlock writing = NewBlock();
 
+        // D394: a block of a CYLINDER section that cycle 27 writes writes nothing of its own.
+        if (HeidenhainCylinder.Covers(writing))
+        {
+            foreach (Word word in writing.Unwritten())
+            {
+                writing.MarkWritten(word);
+            }
+
+            _lastTarget = Target;
+            return;
+        }
+
         // The structure of the file and the comments first, and a label where the block begins, the target of a jump
         // (language 4.9, 4.13).
         HeidenhainProgramFrame.WriteStart(writing);
@@ -250,6 +263,7 @@ public sealed class HeidenhainCompiler : CompilerBase
             _labelNumbers = HeidenhainLabelNumbers.Of(LookAhead, Machine.Format?.LabelMax ?? 999, Diagnostics);
             _repeats = HeidenhainRepeats.Of(LookAhead, CounterRange.Of(Machine.Format), Diagnostics);
             _spills = HeidenhainSpills.Of(LookAhead, CounterRange.Of(Machine.Format));
+            _cylinders = new HeidenhainCylinders();
         }
 
         return new HeidenhainBlock
@@ -265,6 +279,8 @@ public sealed class HeidenhainCompiler : CompilerBase
             LabelNumbers = _labelNumbers!,
             Repeats = _repeats!,
             Spills = _spills!,
+            Cylinders = _cylinders!,
+            ToolRadius = tool => Options.ToolTable?.Find(tool)?.Radius,
             WriteLine = Line,
             WriteToolChange = (values, suffix) => WriteToolChange(values, suffix),
             WritePreload = () => WritePreload(),

@@ -1,4 +1,6 @@
+using System.Globalization;
 using Ncx.Config.Templates;
+using Ncx.Core.Expressions;
 using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.State;
@@ -22,9 +24,21 @@ internal sealed class HeidenhainBlock
     // (TargetState.TakeOver; virtual machine 3.9, D99), so the unknown stands as a value.
     private const string UnknownValue = "?";
 
+    // The function that reads a system datum into a Q parameter (D182; TNC 640 Programmierung-Klartext 892903-18,
+    // connector p. 569: FN 18 reads a system datum and stores it in a Q parameter).
+    private const string SystemReadKey = "FN 18: SYSREAD ";
+
+    // The block that stops the look-ahead of the control before an FN 18 read of real-time data (D397, delegated
+    // 2026-10-30).
+    private const string WaitForSync = "FN 20: WAIT FOR SYNC";
+
+    // The FN 18 groups of real-time data: the position in the active system and in the REF system (D182).
+    private static readonly string[] s_realTimeIds = ["ID270 ", "ID240 "];
+
     private readonly HashSet<Word> _written = [];
 
     // The formulas of the block spilled into QL parameters, by formula (D338).
+    // The FN 18 reads of SYS_ names take their QL from the same pool, under this text and their ids (D397).
     private readonly Dictionary<string, string> _spilled = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -82,6 +96,16 @@ internal sealed class HeidenhainBlock
     /// The QL parameters free for the formulas of a block (D338).
     /// </summary>
     public required HeidenhainSpills Spills { get; init; }
+
+    /// <summary>
+    /// The CYLINDER sections cycle 27 writes (D394).
+    /// </summary>
+    public required HeidenhainCylinders Cylinders { get; init; }
+
+    /// <summary>
+    /// The radius the tool table gives a tool; null where it gives none or there is no table (D10).
+    /// </summary>
+    public required Func<ToolRef, decimal?> ToolRadius { get; init; }
 
     /// <summary>
     /// Writes one line of the block (CompilerBase.Line).
@@ -320,6 +344,50 @@ internal sealed class HeidenhainBlock
     }
 
     /// <summary>
+    /// The text that stands for a SYS_ name in a formula before it is written, $SYS_POS_X, where [system_variables] of
+    /// the machine gives it an FN 18 read; null where it gives none (machine-config 7; D182, D397).
+    /// </summary>
+    public string? SystemReadable(VariableNode variable)
+    {
+        return SystemIds(variable, render: false) is null ? null : variable.ToCanonical();
+    }
+
+    /// <summary>
+    /// The QL parameter a SYS_ name is read into, set by FN 18: SYSREAD QL499 = ID270 NR1 IDX1 in a block of its own
+    /// written now, before the line that reads it; the highest free QL of the D338 pool, one per distinct name in the
+    /// block (D182, D397). Null where [system_variables] gives the name no FN 18 read or no QL is free.
+    /// </summary>
+    public string? SystemRead(VariableNode variable)
+    {
+        if (SystemIds(variable, render: true) is not string ids)
+        {
+            return null;
+        }
+
+        string key = SystemReadKey + ids;
+        if (_spilled.TryGetValue(key, out string? held))
+        {
+            return held;
+        }
+
+        if (Spills.Free(_spilled.Count) is not string register)
+        {
+            return null;
+        }
+
+        // A position read needs the real time: FN 20: WAIT FOR SYNC stops the look-ahead until the program has
+        // reached the block (iTNC 530 Programmierung-Klartext 340490-05, connector p. 313-314, the example of ID270).
+        if (s_realTimeIds.Any(id => ids.StartsWith(id, StringComparison.Ordinal)))
+        {
+            Line(WaitForSync);
+        }
+
+        Line(SystemReadKey + register + " = " + ids);
+        _spilled.Add(key, register);
+        return register;
+    }
+
+    /// <summary>
     /// Reports an ERROR on the block (D98).
     /// </summary>
     public void Error(string code, string message)
@@ -347,6 +415,37 @@ internal sealed class HeidenhainBlock
         }
 
         return string.Join(" ", texts);
+    }
+
+    // The ids of the FN 18 read of a SYS_ name, ID270 NR1 IDX1, from [system_variables] with {index} the number of
+    // its index; when not rendered, any text for a name the machine maps with a number or no index; null for a name
+    // the machine does not map, or maps to nothing, and for an index that is not a number (machine-config 7; D182).
+    private string? SystemIds(VariableNode variable, bool render)
+    {
+        string? template = Machine.SystemVariables.Find(variable.Name);
+        if (string.IsNullOrEmpty(template))
+        {
+            return null;
+        }
+
+        var values = new TemplateValues();
+        if (variable.Index is NumberNode index
+            && decimal.TryParse(index.Text, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal number))
+        {
+            values.Set("index", number);
+        }
+        else if (variable.Index is not null)
+        {
+            return null;
+        }
+
+        if (!render)
+        {
+            return template;
+        }
+
+        Template parsed = Templates.For(template) ?? new Template(template, 1, new Diagnostics(Machine.Machine.Name));
+        return parsed.Render(values, Block, Diagnostics);
     }
 
     // The line with each run of spaces as one space and none at its end.

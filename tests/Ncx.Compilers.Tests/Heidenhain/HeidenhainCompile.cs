@@ -47,6 +47,25 @@ internal static class HeidenhainCompile
     {
         return Load(MachineText.With(ReadMachineFile(), tables));
     }
+
+    /// <summary>
+    /// The iTNC 530 of machines/ with several texts of its file replaced, each where it first stands, with the
+    /// Heidenhain cycle catalog.
+    /// </summary>
+    /// <param name="replacements">Each text of machines/heidenhain-itnc530.toml and the text that replaces it.</param>
+    public static MachineConfig MillWithAll(params (string Text, string Replacement)[] replacements)
+    {
+        string toml = ReadMachineFile();
+        foreach ((string text, string replacement) in replacements)
+        {
+            int at = toml.IndexOf(text, StringComparison.Ordinal);
+            Assert.True(at >= 0, text);
+            toml = string.Concat(toml.AsSpan(0, at), replacement, toml.AsSpan(at + text.Length));
+        }
+
+        return Load(toml);
+    }
+
     /// <summary>
     /// Compiles an NCX text.
     /// </summary>

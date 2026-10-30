@@ -1,3 +1,5 @@
+using Ncx.Core.Machine;
+
 namespace Ncx.Compilers.Tests.Heidenhain;
 
 /// <summary>
@@ -53,6 +55,24 @@ public sealed class HeidenhainSubprogramTests
 
     // Controller-mapping 6, CALL and TIMES; virtual machine 3.9: CALL LBL has no count, so a CALL with TIMES=3 is the
     // call three times in sequence.
+    // Row W3-3 (S-5): a Heidenhain machine file without program_layout takes the family default file_per_program,
+    // one program per file (heidenhain 1, 8 rule 6; language 4.13; machine-config 2), as the decimal separator takes
+    // the comma; a written key still wins.
+    [Fact]
+    public void Rule6_MachineFileWithoutProgramLayout_WritesOneFilePerProgram()
+    {
+        MachineConfig machine = HeidenhainCompile.MillWith(
+            "program_layout = \"file_per_program\"", "# program_layout left out");
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"A\"", "UNITS=MM", "RAPID X=0 Y=0 Z=2", "PROGRAM=END",
+            "PROGRAM=BEGIN NAME=\"B\"", "UNITS=MM", "RAPID X=0 Y=0 Z=2", "PROGRAM=END",
+            "FILE=END"), machine);
+
+        Assert.False(result.Diagnostics.HasErrors, result.Diagnostics.ToText());
+        Assert.Equal(["A.h", "B.h"], [result.Files[0].Name, result.Files[1].Name]);
+    }
+
     [Fact]
     public void CallWithTimes_IsTheCallOnceForEveryPass()
     {

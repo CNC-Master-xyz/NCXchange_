@@ -53,8 +53,8 @@ public sealed class HeidenhainFunctionTests
     // Controller-mapping 1, STOP: M1 and M0, after the motion of their block. Unlike SPINDLE=OFF and COOLANT=OFF,
     // STOP is not written in a block before the L: it is a block word and not a state word, and its NCX block stops
     // when the motion of the block is done (language 4.1; virtual machine 3 steps 5 and 7), so an M0 before the L
-    // would stop earlier than the NCX block says. The STOP of D252's compiler sentence waits on that (the
-    // TODO(question) in HeidenhainFunctions; heidenhain 8 rule 8).
+    // would stop earlier than the NCX block says (D395, which withdraws the STOP half of D252's compiler sentence;
+    // heidenhain 8 rule 8).
     [Fact]
     public void Stop_InAMotionBlock_IsWrittenAfterTheMotion()
     {

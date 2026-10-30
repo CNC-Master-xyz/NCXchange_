@@ -12,12 +12,17 @@ namespace Ncx.Compilers.Heidenhain;
 /// TOOL the TOOL CALL (heidenhain 8 rules 2 and 3); the virtual machine keeps the value UNKNOWN in STATIC mode (virtual
 /// machine 1). The parameter is written only where it has the value NCX read at the word, and the control keeps the
 /// value it read until the next F or S, so what the control has active is the parameter with the step of the word it
-/// was read for, Q1@12: the value NCX read at that word.
+/// was read for, Q1@12: the value NCX read at that word. A formula or a parameter with a sign is spilled into a QL
+/// parameter in a block of its own directly before the block, which then writes FQL499 or SQL499 (D338, D396); the
+/// target state keeps the formula with the step, =Q1 * 2@12.
 /// </summary>
 internal static class HeidenhainParameters
 {
     // Between the parameter and the step of the word it was read for in what the target state keeps: Q1@12.
     private const string Place = "@";
+
+    // Before the Klartext formula of a feed or a speed in what the target state keeps, =Q1 * 2@12 (D396).
+    private const string FormulaMark = "=";
 
     /// <summary>
     /// The Q parameter a feed or a speed takes in place of its number, Q1 of {$Q1}; null for any other value, a number,
@@ -72,19 +77,103 @@ internal static class HeidenhainParameters
     }
 
     /// <summary>
-    /// Tells whether the control has active the feed or speed NCX has from the word of a step with the parameter: the
-    /// last F or S read the parameter for that same word, or for an earlier word while the parameter kept its value
-    /// from that word to this one.
+    /// The value of an F or RPM word as what the target state keeps names it with the step of its word: the Q parameter
+    /// of {$Q1}, Q1, or the Klartext formula of any other expression after a mark, =Q1 * 2, which F and S write as the
+    /// QL parameter it is spilled into (D396); null where Klartext has no formula for it.
+    /// </summary>
+    /// <param name="writing">The block being written.</param>
+    /// <param name="word">The F or RPM word.</param>
+    /// <param name="problem">Why Klartext has no formula for it; null when it has.</param>
+    public static string? KeyOf(HeidenhainBlock writing, Word word, out string? problem)
+    {
+        problem = null;
+        if (Of(word.Value) is string parameter)
+        {
+            return parameter;
+        }
+
+        problem = "the value has no formula of numbers";
+        return word.Value is ExprValue { Tree: ExprNode tree }
+            && HeidenhainFormula.KeyOf(writing, tree, out problem) is string formula
+            ? FormulaMark + formula
+            : null;
+    }
+
+    /// <summary>
+    /// The value of an F or RPM word as KeyOf names it; null where Klartext has no formula for it, which is reported
+    /// (CMP102).
+    /// </summary>
+    public static string? KeyOf(HeidenhainBlock writing, Word word)
+    {
+        string? key = KeyOf(writing, word, out string? problem);
+        if (key is null)
+        {
+            ReportValue(writing, word, problem);
+        }
+
+        return key;
+    }
+
+    /// <summary>
+    /// Tells whether a value as KeyOf names it is a formula, which F and S write as the QL parameter it is spilled
+    /// into.
+    /// </summary>
+    public static bool IsFormula(string key)
+    {
+        return key.StartsWith(FormulaMark, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// What F or S writes for the value of a word after the letter: the Q parameter, Q1, or the QL parameter a formula
+    /// or a parameter with a sign is spilled into, set in a block of its own written now directly before the block,
+    /// QL499 = Q1 * 2 then FQL499 (D338, D396); null where no QL is free, which is reported (CMP102).
+    /// </summary>
+    public static string? Written(HeidenhainBlock writing, Word word)
+    {
+        if (Of(word.Value) is string parameter)
+        {
+            return parameter;
+        }
+
+        string? register = word.Value is ExprValue { Tree: ExprNode tree }
+            ? HeidenhainNumbers.Spilled(writing, tree)
+            : null;
+        if (register is null)
+        {
+            ReportValue(writing, word, "no QL parameter is free to hold its formula (D338, D396)");
+            return null;
+        }
+
+        return register.TrimStart('+');
+    }
+
+    /// <summary>
+    /// The variables the value of a word reads: Q1 and Q2 of {$Q1 * $Q2}, SYS_POS_X of {$SYS_POS_X}.
+    /// </summary>
+    public static IReadOnlySet<string> ReadsOf(Word word)
+    {
+        return word.Value is ExprValue { Tree: ExprNode tree }
+            ? HeidenhainReads.NamesOf(tree)
+            : new HashSet<string>(StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Tells whether the control has active the feed or speed NCX has from the word of a step with the parameter or
+    /// formula: the last F or S read it for that same word, or for an earlier word while the variables it reads kept
+    /// their values from that word to this one.
     /// </summary>
     /// <param name="writing">The block being written.</param>
     /// <param name="active">What the target state keeps under the F or the speed of the spindle.</param>
-    /// <param name="parameter">The parameter of the word: Q1.</param>
+    /// <param name="key">The parameter or formula of the word as KeyOf names it: Q1, =Q1 * 2.</param>
+    /// <param name="reads">The variables the value of the word reads (ReadsOf).</param>
     /// <param name="source">The step of the word that set the feed or the speed NCX has.</param>
-    public static bool Holds(HeidenhainBlock writing, string? active, string parameter, int source)
+    public static bool Holds(HeidenhainBlock writing, string? active, string key, IReadOnlySet<string> reads,
+        int source)
     {
-        string[] parts = active?.Split(Place) ?? [];
-        if (parts.Length != 2 || parts[0] != parameter
-            || !int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out int read))
+        int place = active?.LastIndexOf(Place, StringComparison.Ordinal) ?? -1;
+        if (place < 0 || active!.Substring(0, place) != key
+            || !int.TryParse(active.AsSpan(place + 1), NumberStyles.None, CultureInfo.InvariantCulture,
+                out int read))
         {
             return false;
         }
@@ -93,36 +182,38 @@ internal static class HeidenhainParameters
         // parameter where it had the value NCX read at the word it was read for (Keeps). NCX reads the parameter where
         // its word stands, before the words of its block act (virtual machine 3.6), so an assignment after the word
         // of the feed NCX has changes neither that feed nor the control's.
-        return read == source || KeepsValue(writing, parameter, read, false, source, false, labels: true);
+        return read == source || KeepsValue(writing, reads, read, false, source, false, labels: true);
     }
 
     /// <summary>
-    /// Tells whether the parameter has, where the block being written reads it, the value NCX read at its word; reports
-    /// it where it may not (CMP117).
+    /// Tells whether the variables a feed or speed reads have, where the block being written reads them, the values
+    /// NCX read at its word; reports it where they may not (CMP117).
     /// </summary>
     /// <param name="writing">The block being written.</param>
-    /// <param name="word">The word that sets the feed or the speed with the parameter.</param>
-    /// <param name="parameter">The parameter: Q1.</param>
+    /// <param name="word">The word that sets the feed or the speed with the parameter or formula.</param>
+    /// <param name="reads">The variables its value reads (ReadsOf).</param>
     /// <param name="source">The step of the word: the step being written, an earlier one, or the block after a TOOL
     /// whose RPM the TOOL CALL takes.</param>
     /// <param name="afterVariables">True where the F or S stands after the VAR lines of its block.</param>
-    public static bool Keeps(HeidenhainBlock writing, Word word, string parameter, int source, bool afterVariables)
+    public static bool Keeps(HeidenhainBlock writing, Word word, IReadOnlySet<string> reads, int source,
+        bool afterVariables)
     {
         // The TOOL CALL reads the RPM of the block after the TOOL before that block, and before the VAR lines of its
         // own block, which NCX runs first. A jump to a label on that block does not pass the TOOL CALL, and the label
         // writes the speed again there (HeidenhainFlow.WriteLabel).
         int index = writing.Step.Index;
         bool keeps = source <= index
-            ? KeepsValue(writing, parameter, source, false, index, afterVariables, labels: true)
-            : KeepsValue(writing, parameter, index, afterVariables, source, false, labels: false);
+            ? KeepsValue(writing, reads, source, false, index, afterVariables, labels: true)
+            : KeepsValue(writing, reads, index, afterVariables, source, false, labels: false);
         if (!keeps)
         {
+            string names = string.Join(", ", reads.Order(StringComparer.Ordinal));
             writing.Error(DiagnosticCodes.HeidenhainParameterReadElsewhere,
                 $"{word.ToCanonical()} on line {writing.LookAhead.Steps[source].Block.Line}: Klartext writes it here "
-                + $"with {parameter} in place of the number (controllers heidenhain.md 6), and {parameter} may have "
-                + "another value here than where NCX reads it, since an assignment of it, a label that a jump reaches, "
-                + "RAW or a call of another file stands between; nothing is written for it (virtual machine 3.6; "
-                + "language 4.9).");
+                + $"with the Q parameter of {names} in place of the number (controllers heidenhain.md 6; D396), and "
+                + $"{names} may have another value here than where NCX reads it, since an assignment of it, a label "
+                + "that a jump reaches, a motion before a system datum, RAW or a call of another file stands between; "
+                + "nothing is written for it (virtual machine 3.6; language 4.9).");
         }
 
         return keeps;
@@ -131,14 +222,14 @@ internal static class HeidenhainParameters
     /// <summary>
     /// Reports a feed or a speed whose value has no Klartext form (CMP102).
     /// </summary>
-    // TODO(question): heidenhain.md 6 lets a Q parameter stand where a number stands and gives no form for a formula
-    // there, and heidenhain 2 and 4 write F and S without a sign, F500, S1592; a formula or a parameter with a minus
-    // sign in F or S is reported (CMP102), as a formula in a coordinate is (HeidenhainNumbers).
-    public static void ReportValue(HeidenhainBlock writing, Word word)
+    // D396 extends D338 to F and S: a formula or a parameter with a sign is spilled into the highest free QL in a block
+    // of its own directly before the block, which writes FQL499 or SQL499 (Written); CMP102 stays where Klartext has
+    // no formula for the value or no QL is free. A literal negative F or S is an error of the virtual machine.
+    public static void ReportValue(HeidenhainBlock writing, Word word, string? problem)
     {
         writing.Error(DiagnosticCodes.HeidenhainValueWithoutKlartext,
-            $"{word.ToCanonical()}: F and S take a number or a Q parameter in place of it, F500 or FQ1 (controllers "
-            + "heidenhain.md 2, 4, 6), and the documents give no form for a formula or a sign there; nothing is "
+            $"{word.ToCanonical()}: F and S take a number or a Q parameter in place of it, F500 or FQ1, and a formula "
+            + $"through a QL parameter (controllers heidenhain.md 2, 4, 6; D338, D396), and {problem}; nothing is "
             + "written for it.");
     }
 
@@ -147,11 +238,13 @@ internal static class HeidenhainParameters
     // motion and after its TOOL CALL (HeidenhainCompiler.WriteBlock), no RAW or call of another file, which may assign
     // any parameter, and, where labels count, no label after the first point, which a jump reaches with the value its
     // own way left (language 4.9).
-    private static bool KeepsValue(HeidenhainBlock writing, string parameter, int from, bool fromAfterVariables, int to,
-        bool toAfterVariables, bool labels)
+    // A SYS_ name has the value FN 18 reads where it is read: it keeps it within the step alone, since a motion may
+    // change it (D397).
+    private static bool KeepsValue(HeidenhainBlock writing, IReadOnlySet<string> reads, int from,
+        bool fromAfterVariables, int to, bool toAfterVariables, bool labels)
     {
         IReadOnlyList<BlockStep> steps = writing.LookAhead.Steps;
-        if (from > to)
+        if (from > to || (from != to && reads.Any(HeidenhainFormula.IsSystem)))
         {
             return false;
         }
@@ -166,7 +259,7 @@ internal static class HeidenhainParameters
 
             bool afterFirst = at > from || !fromAfterVariables;
             bool beforeSecond = at < to || toAfterVariables;
-            if (afterFirst && beforeSecond && Assigns(block, parameter))
+            if (afterFirst && beforeSecond && Assigns(block, reads))
             {
                 return false;
             }
@@ -177,11 +270,11 @@ internal static class HeidenhainParameters
 
     // VAR:Q1 assigns the parameter, and so does ARG:Q1, which Klartext sets before the call (controller-mapping 6, CALL
     // + ARG).
-    private static bool Assigns(Block block, string parameter)
+    private static bool Assigns(Block block, IReadOnlySet<string> reads)
     {
         foreach (Word word in block.Words)
         {
-            if (word.Key is "VAR" or "ARG" && word.Addr == parameter)
+            if (word.Key is "VAR" or "ARG" && word.Addr is string address && reads.Contains(address))
             {
                 return true;
             }

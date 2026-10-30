@@ -21,8 +21,8 @@ internal static class HeidenhainChainArrivals
         "with another chain of transforms or setpos shift than the way the text runs into it";
 
     // The chain words of language 4.2 by the kind of entry they append or cut: SHIFT, TILT and TILT_AXIS as verbs and
-    // with RESET, ROTATE with an angle or RESET, MIRROR with axes or OFF (virtual machine 2.1; the TODO(question) of
-    // the virtual machine for D124 reads MIRROR=OFF as the reset form).
+    // with RESET, ROTATE with an angle or RESET, MIRROR with axes or OFF (virtual machine 2.1; D124 reads MIRROR=OFF as
+    // the reset form).
     private static readonly (string Key, string Reset, TransformKind Kind)[] s_words =
     [
         ("SHIFT", "RESET", TransformKind.Shift),

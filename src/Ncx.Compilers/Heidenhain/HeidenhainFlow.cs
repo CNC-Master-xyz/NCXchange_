@@ -179,8 +179,7 @@ internal static class HeidenhainFlow
         {
             IntegerValue or DecimalValue => word.Value.ToCanonical().Replace(".", writing.Numbers.DecimalSeparator,
                 StringComparison.Ordinal),
-            ExprValue { Tree: ExprNode tree } => HeidenhainFormula.Of(tree, writing.Numbers.DecimalSeparator,
-                out problem),
+            ExprValue { Tree: ExprNode tree } => HeidenhainFormula.Of(writing, tree, out problem),
             _ => null,
         };
         if (formula is null)
@@ -249,9 +248,8 @@ internal static class HeidenhainFlow
     // controller-mapping 6, REPEAT).
     // D212 settles the default alone: TIMES is optional on REPEAT and defaults to 1, so a REPEAT without it runs
     // the blocks once more (decisions.md; rationale.md D212).
-    // TODO(question): which text a compiler writes for a REPEAT without TIMES is not in that answer, which names no
-    // compiler form, so REP 1 here, P=1 or no P on Siemens waits on the maintainer; REP 1 stays until then, and a
-    // Klartext source cannot produce the form (heidenhain.md 7 rule 3), so no round trip depends on it.
+    // D399: a REPEAT without TIMES is CALL LBL n REP 1; without REP the CALL LBL would be a subprogram call, a
+    // different construct (heidenhain.md 7 rule 3).
     // D213: where a JUMP leaves the part, the repeat is a counter loop in a register of [format] counter_registers:
     // the counter is set to 0 before the label (WriteLabel), counted here, and the jump back taken while it has not
     // passed k, then set to 0 again, so that a later arrival starts the repeat fresh with k passes, as NCX does; the

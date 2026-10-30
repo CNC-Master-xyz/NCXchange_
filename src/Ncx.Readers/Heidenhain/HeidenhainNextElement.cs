@@ -30,7 +30,6 @@ internal static class HeidenhainNextElement
         HeidenhainState state = block.Heidenhain;
         state.PlaneAxes(out string first, out string second, out _);
         HeidenhainPoint? pole = state.Pole;
-        int poleDecimals = state.PoleDecimals;
 
         // The expansion stands for the path where the flow runs through the element before the corner, the corner and
         // the element after it: a block skip may leave one of them out, and the control then turns another corner (D58,
@@ -46,7 +45,7 @@ internal static class HeidenhainNextElement
             }
             else if (HeidenhainCorners.IsPole(next))
             {
-                pole = PoleOf(next, first, second, point, out poleDecimals, out problem);
+                pole = PoleOf(next, first, second, point, out problem);
             }
 
             next = state.NextBlock(next);
@@ -64,13 +63,13 @@ internal static class HeidenhainNextElement
             return null;
         }
 
-        return ElementOf(block, next, first, second, point, pole, poleDecimals, out problem);
+        return ElementOf(block, next, first, second, point, pole, out problem);
     }
 
     // The pole a CC sets as the reader reads it (HeidenhainArcs.PoleOf), counted from the corner point; a CC with a
     // word beyond the axes of the plane the reader keeps RAW, and the corner with it.
     private static HeidenhainPoint? PoleOf(SourceBlock pole, string first, string second, HeidenhainPoint point,
-        out int decimals, out string? problem)
+        out string? problem)
     {
         var words = new List<SourceWord>();
         for (int index = 1; index < pole.Words.Count; index++)
@@ -79,7 +78,6 @@ internal static class HeidenhainNextElement
             string axis = HeidenhainMotion.AxisOf(word);
             if (word.Text.Length == 0 || (axis != first && axis != second))
             {
-                decimals = 0;
                 problem = $"the CC of the corner holds {word.Address}{word.Text}, which the reader keeps RAW";
                 return null;
             }
@@ -88,24 +86,26 @@ internal static class HeidenhainNextElement
         }
 
         problem = null;
-        return HeidenhainArcs.PoleOf(words, first, point, out decimals);
+        return HeidenhainArcs.PoleOf(words, first, point);
     }
 
     // The element of the block after the corner from its words, as the reader will read it: its end point absolute or
     // incremental from the corner point, or its polar point about the pole; the centre of C and CP the pole, of CR the
     // one its radius gives. Null, with the reason, where the reader does not expand the corner before it.
     private static HeidenhainElement? ElementOf(HeidenhainBlock block, SourceBlock next, string first, string second,
-        HeidenhainPoint point, HeidenhainPoint? pole, int poleDecimals, out string? problem)
+        HeidenhainPoint point, HeidenhainPoint? pole, out string? problem)
     {
         string kind = next.Words[0].Text.Length == 0 ? next.Words[0].Address : "";
 
-        // TODO(question): CT continues the contour element before it tangentially (controllers heidenhain.md 2), and
-        // after a CHF or RND that element is the chamfer or the rounding, whose end depends on the CT itself; no
-        // document says what a CT after a chamfer or a rounding is tangent to. The reader keeps the corner RAW, and the
-        // CT after it, whose direction it then does not know.
+        // D402: CT continues the contour element before it tangentially (controllers heidenhain.md 2), and a CT tangent
+        // to the element before it leaves no corner for a RND or CHF, so the combination is redundant or an error on
+        // the control, and NCX does not guess which. The reader keeps the corner RAW with a WARNING naming the CT, and
+        // the CT after it, whose direction it then does not know.
         if (kind == "CT")
         {
-            problem = "no document says what a CT after a chamfer or a rounding is tangent to";
+            problem = $"\"{next.Text}\" on line {next.Line} is tangent to the element before it, which leaves no "
+                + "corner for the chamfer or the rounding; the combination is redundant or an error on the control "
+                + "(D402)";
             return null;
         }
 
@@ -203,10 +203,10 @@ internal static class HeidenhainNextElement
         return kind switch
         {
             "L" => Line(point, end, incremental),
-            "LP" => PolarLine(point, pole!, poleDecimals, polarRadius, polarAngle, out problem),
+            "LP" => PolarLine(point, pole!, polarRadius, polarAngle, out problem),
             "C" => Arc(point, end, pole!, ccw, incremental, null, out problem),
             "CR" => RadiusArc(point, end, radius, ccw, incremental, out problem),
-            _ => PolarArc(point, pole!, poleDecimals, polarAngle, ccw, out problem),
+            _ => PolarArc(point, pole!, polarAngle, ccw, out problem),
         };
     }
 
@@ -236,17 +236,16 @@ internal static class HeidenhainNextElement
             Start = HeidenhainVector.Of(point),
             End = HeidenhainVector.Of(end),
             Incremental = incremental,
-            Decimals = Math.Max(end.First.Scale, end.Second.Scale),
         };
     }
 
     // LP ends at its polar point about the pole, a missing or incremental PR or PA taken from the corner point
     // (heidenhain 7 rule 5; HeidenhainArcs.PolarPoint).
-    private static HeidenhainElement? PolarLine(HeidenhainPoint point, HeidenhainPoint pole, int poleDecimals,
+    private static HeidenhainElement? PolarLine(HeidenhainPoint point, HeidenhainPoint pole,
         SourceWord? radius, SourceWord? angle, out string? problem)
     {
         problem = null;
-        if (!HeidenhainArcs.PolarPoint(pole, poleDecimals, point, radius, angle, out decimal x, out decimal y))
+        if (!HeidenhainArcs.PolarPoint(pole, point, radius, angle, out decimal x, out decimal y))
         {
             problem = "the polar point of the LP after the corner is not known";
             return null;
@@ -273,13 +272,13 @@ internal static class HeidenhainNextElement
 
     // CP about the pole with the radius of the corner point, to its polar angle PA or by its sweep IPA; beyond 360
     // degrees the sweep is the ANGLE of the arc (D84; HeidenhainArcs.ReadPolarArc).
-    private static HeidenhainElement? PolarArc(HeidenhainPoint point, HeidenhainPoint pole, int poleDecimals,
+    private static HeidenhainElement? PolarArc(HeidenhainPoint point, HeidenhainPoint pole,
         SourceWord? angle, bool ccw, out string? problem)
     {
         decimal sweep = angle?.Number ?? 0;
         bool incremental = angle?.Address == "IPA";
         if (angle is null || (incremental && sweep != 0 && (sweep > 0) != ccw)
-            || !HeidenhainArcs.PolarPoint(pole, poleDecimals, point, null, angle, out decimal x, out decimal y))
+            || !HeidenhainArcs.PolarPoint(pole, point, null, angle, out decimal x, out decimal y))
         {
             problem = "the CP after the corner needs its angle PA or IPA in its direction";
             return null;
@@ -317,7 +316,6 @@ internal static class HeidenhainNextElement
             Sweep = sweep,
             WrittenRadius = radius,
             Incremental = incremental,
-            Decimals = Math.Max(end.First.Scale, end.Second.Scale),
         };
     }
 }

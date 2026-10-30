@@ -468,6 +468,14 @@ public sealed class SiemensFlowTests
             MillBody("RAPID X=0", "LABEL=ROW", "RAPID IX=10", "REPEAT=ROW TIMES=2"));
     }
 
+    // D399: a REPEAT without TIMES is REPEAT LABEL with no P, the form D212 names as running the blocks once more.
+    [Fact]
+    public void Repeat_WithoutTimes_IsRepeatWithoutP()
+    {
+        Assert.Equal(Lines("G0 X0", "ROW:", "G0 X=IC(10)", "REPEAT ROW"),
+            MillBody("RAPID X=0", "LABEL=ROW", "RAPID IX=10", "REPEAT=ROW"));
+    }
+
     // Language 4.9, RETURN: in a subprogram the return, sub_end (machine-config 2).
     [Fact]
     public void Return_InASubprogram_IsRet()

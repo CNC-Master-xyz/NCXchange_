@@ -108,6 +108,12 @@ internal static partial class HeidenhainProgramFrame
 
             writing.Template(writing.Machine.Format?.ProgramEnd, "[format] program_end (machine-config 2, D49)",
                 new TemplateValues());
+
+            // D394: the contour subprograms of cycle 27 stand after the M30, before the SUB sections.
+            if (writing.Step.Section is Section ended)
+            {
+                HeidenhainCylinder.WriteContours(writing, ended);
+            }
         }
         else if (writing.Block.Has("SUB", null, "END"))
         {
@@ -170,7 +176,7 @@ internal static partial class HeidenhainProgramFrame
             Block block = steps[index].Block;
             if (block.Has("PROGRAM", null, "END"))
             {
-                return writing.Machine.Format?.ProgramLayout == ProgramLayout.FilePerProgram
+                return ProgramLayouts.Of(writing.Machine) == ProgramLayout.FilePerProgram
                     ? FirstProgram(steps) : null;
             }
 

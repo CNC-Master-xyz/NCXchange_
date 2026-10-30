@@ -105,11 +105,26 @@ public sealed class HeidenhainMotionTests
         Assert.Contains(DiagnosticCodes.KeptAsRaw, Codes(FramedProgram("1 CT X+20 Y+10")));
     }
 
-    // LP is converted to Cartesian with the pole: PR 10 at PA 30 about (0, 0) is (8.66, 5) (heidenhain 7 rule 5).
+    // D400: a CC with one axis of the plane leaves the pole unknown; the arc about it stays RAW with a WARNING that
+    // names the CC block, and no reading of the missing coordinate is invented.
+    [Fact]
+    public void Cc_WithOneAxisOfThePlane_KeepsTheArcAboutItRawWithAWarningNamingTheCc()
+    {
+        const string Snippet = "1 L X+0 Y+0 R0 FMAX\n2 CC X+5\n3 C X+10 Y+0 DR+ F100";
+
+        Assert.Contains("RAW:HEIDENHAIN=\"3 C X+10 Y+0 DR+ F100\"", Body(Snippet), StringComparison.Ordinal);
+        Diagnostic warning = Assert.Single(FramedProgram(Snippet).Diagnostics.Items,
+            diagnostic => diagnostic.Code == DiagnosticCodes.KeptAsRaw);
+        Assert.Contains("2 CC X+5", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("D400", warning.Message, StringComparison.Ordinal);
+    }
+
+    // LP is converted to Cartesian with the pole: PR 10 at PA 30 about (0, 0) is (8.660254, 5), six decimals whatever
+    // the decimals of the source words (heidenhain 7 rule 5; D403).
     [Fact]
     public void Lp_IsConvertedToCartesianWithThePole()
     {
-        Assert.Equal(Lines("RAPID X=8.66 Y=5 COMP=OFF"), Body("1 CC X+0 Y+0\n2 LP PR+10 PA+30 R0 FMAX"));
+        Assert.Equal(Lines("RAPID X=8.660254 Y=5 COMP=OFF"), Body("1 CC X+0 Y+0\n2 LP PR+10 PA+30 R0 FMAX"));
     }
 
     // CP PA is converted to the Cartesian end point about the pole, with the radius of the current position

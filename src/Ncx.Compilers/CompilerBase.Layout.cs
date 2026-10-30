@@ -15,14 +15,14 @@ public abstract partial class CompilerBase
     private Dictionary<Section, string>? _programFileNames;
 
     // The output files of the compile, per program_layout (machine-config 2, D48).
-    // TODO(question): machine-config 2 gives program_layout no default; a machine file that leaves it out writes one
-    // file, as "one_file", the first value it lists, until that is answered.
+    // A machine file that leaves program_layout out takes the default of its controller family, file_per_program for
+    // Heidenhain and one_file else (row W3-3; heidenhain 1, 8 rule 6; language 4.13; ProgramLayouts).
     private List<CompiledFile> Files()
     {
         NcxProgram program = _program ?? throw NotCompiling();
         string stem = Path.GetFileNameWithoutExtension(program.FileName);
         List<CompiledFile> files =
-            Machine.Format?.ProgramLayout == ProgramLayout.FilePerProgram ? FilePerProgram() : OneFile(stem);
+            ProgramLayouts.Of(Machine) == ProgramLayout.FilePerProgram ? FilePerProgram() : OneFile(stem);
         if (Options.Job?.Library is string library && UncalledSubs() is { Count: > 0 } uncalled)
         {
             files.AddRange(LibraryFiles(library, uncalled));
@@ -269,7 +269,7 @@ public abstract partial class CompilerBase
     {
         NcxProgram source = _program ?? throw NotCompiling();
         string stem = Path.GetFileNameWithoutExtension(source.FileName);
-        if (Machine.Format?.ProgramLayout != ProgramLayout.FilePerProgram)
+        if (ProgramLayouts.Of(Machine) != ProgramLayout.FilePerProgram)
         {
             return program.Name ?? stem;
         }

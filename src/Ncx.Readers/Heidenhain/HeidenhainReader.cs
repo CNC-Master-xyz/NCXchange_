@@ -158,6 +158,16 @@ public sealed partial class HeidenhainReader : ReaderBase
 
         // A reader never throws on bad input (code-guidelines 4): a number beyond the range the reader computes with
         // keeps its block as RAW.
+        // D394, gap closed 2026-10-30 (delegated): the contour of cycle 14 stays RAW with the cycle that uses it.
+        if (state.Labels.ContourLines.Contains(block.Line))
+        {
+            reading.MarkAllRead();
+            reading.Draft.KeepAsRaw("the block is the contour subprogram of cycle 14, which cycle 27 and the other "
+                + "SL cycles use; it stays RAW with the cycle (D394)");
+            Write(reading);
+            return;
+        }
+
         try
         {
             ReadStructureWords(reading);

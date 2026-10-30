@@ -162,4 +162,4 @@ SYS_MPOS_Z = "ID240 NR1 IDX3"
 SYS_WEAR_Z = "ID50 NR4 IDX{index}" # the length oversize DL of the tool table, the index being the tool number
 SYS_TOOL_LEN = "ID200 NR2"         # the active tool length including the delta values
 # D182: a read is written as a block of its own, FN 18: SYSREAD Qn = ID.. NR.. IDX.., before the block that uses Qn (decisions.md).
-# TODO(question): which Q parameter that block assigns into is not settled; the Heidenhain compiler therefore still refuses a $SYS_ name.
+# D397: the read assigns into the highest free QL of the D338 pool, one QL per distinct name in the block; CMP102 where no QL is free.

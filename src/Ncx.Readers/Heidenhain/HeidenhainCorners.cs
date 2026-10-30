@@ -90,8 +90,12 @@ internal static class HeidenhainCorners
         if (corner is null || corner.Problem is not null || corner.End is not HeidenhainPoint end)
         {
             state.Corner = null;
-            block.Draft.KeepAsRaw((corner?.Problem ?? "a chamfer or a rounding stands between two contour elements, "
-                + "and the reader has read none before it") + " (D58)");
+            // A reason that cites its own decision, D401 or D402, keeps it alone; any other is the D58 expansion's.
+            string reason = corner?.Problem ?? "a chamfer or a rounding stands between two contour elements, and the "
+                + "reader has read none before it";
+            block.Draft.KeepAsRaw(reason.EndsWith(')') && reason.Contains("(D", StringComparison.Ordinal)
+                ? reason
+                : reason + " (D58)");
             return;
         }
 
@@ -231,7 +235,7 @@ internal static class HeidenhainCorners
             return problem;
         }
 
-        problem = Size(corner, out decimal size, out int sizeDecimals, out SourceWord? feed);
+        problem = Size(corner, out decimal size, out SourceWord? feed);
         if (problem is not null)
         {
             return problem;
@@ -244,14 +248,14 @@ internal static class HeidenhainCorners
             return problem;
         }
 
-        // TODO(question): heidenhain 2 places CHF between two motion blocks and language 4.3 has the readers expand it,
-        // but no document says what a chamfer next to an arc stands for, where its length is measured along the arc and
-        // so where the chamfer line begins and ends (wave-2 question #88 asks what it measures along a line); the
-        // reader keeps it RAW, the elements about it as the source writes them.
+        // D401: a CHF whose neighbour is not a straight line is invalid on the control (iTNC530
+        // Benutzerhandbuch-Klartext 340422 p.202: only corners formed by two straight lines can be chamfered), so the
+        // reader keeps it RAW, the elements about it as the source writes them; the compiler never writes one, since
+        // NCX expands corners.
         bool isChamfer = corner.Words[0].Address == "CHF";
         if (isChamfer && (before.IsArc || after.IsArc))
         {
-            return "no document says what a chamfer next to an arc measures";
+            return "CHF only between two straight lines (D401)";
         }
 
         if ((!before.IsArc && before.Length == 0) || (!after.IsArc && after.Length == 0))
@@ -259,9 +263,7 @@ internal static class HeidenhainCorners
             return "a line of the corner has no length";
         }
 
-        // Computed points keep the decimals of the numbers they come from, at least three (wave-1 question #46).
-        int decimals = Math.Max(Math.Max(HeidenhainNumbers.LeastDecimals, sizeDecimals),
-            Math.Max(before.Decimals, after.Decimals));
+        // Computed points keep six decimals (D403; HeidenhainNumbers.Round).
         // The feed of the corner is decided before the elements about it are rewritten, so that a corner the reader
         // cannot expand leaves them as the source writes them (D255, D58).
         problem = CornerFeed(state, feed, next, out Value? cornerFeed, out Value? feedAfter);
@@ -271,8 +273,8 @@ internal static class HeidenhainCorners
         }
 
         problem = before.IsArc || after.IsArc
-            ? NextToArc(block, before, after, corner, next, size, decimals)
-            : BetweenLines(block, before, after, corner, next, isChamfer, size, decimals);
+            ? NextToArc(block, before, after, corner, next, size)
+            : BetweenLines(block, before, after, corner, next, isChamfer, size);
         if (problem is not null || cornerFeed is null)
         {
             return problem;
@@ -377,8 +379,6 @@ internal static class HeidenhainCorners
         {
             Start = HeidenhainVector.Of(start),
             End = HeidenhainVector.Of(point),
-            Decimals = Math.Max(Math.Max(start.First.Scale, start.Second.Scale),
-                Math.Max(point.First.Scale, point.Second.Scale)),
         };
         return straight ? element : ArcBefore(main, element, start, point, first, second, out problem);
     }
@@ -430,7 +430,7 @@ internal static class HeidenhainCorners
     // Between two lines a chamfer reaches its length along both from the corner point and a rounding reaches
     // R tan(a / 2) for a turn by the angle a (D58, language 4.3).
     private static string? BetweenLines(HeidenhainBlock block, HeidenhainElement before, HeidenhainElement after,
-        SourceBlock corner, SourceBlock next, bool isChamfer, decimal size, int decimals)
+        SourceBlock corner, SourceBlock next, bool isChamfer, decimal size)
     {
         HeidenhainVector inward = before.DirectionAt(before.End);
         HeidenhainVector outward = after.DirectionAt(after.Start);
@@ -455,8 +455,8 @@ internal static class HeidenhainCorners
             return "the chamfer or the rounding is longer than a line of the corner";
         }
 
-        HeidenhainPoint begin = before.End.Minus(inward.Times(reach)).Round(decimals);
-        HeidenhainPoint end = after.Start.Plus(outward.Times(reach)).Round(decimals);
+        HeidenhainPoint begin = before.End.Minus(inward.Times(reach)).Round();
+        HeidenhainPoint end = after.Start.Plus(outward.Times(reach)).Round();
 
         // The corner goes to where the line after it begins: a line for a chamfer, an arc of radius R turning with the
         // corner for a rounding, CCW for a turn to the left (language 4.3, ARC and R).
@@ -474,14 +474,14 @@ internal static class HeidenhainCorners
         HeidenhainPoint tangent = isChamfer
             ? new HeidenhainPoint(end.First - begin.First, end.Second - begin.Second)
             : Direction(outward);
-        Finish(block, before, after, corner, next, drawn, begin, end, tangent, decimals);
+        Finish(block, before, after, corner, next, drawn, begin, end, tangent);
         return null;
     }
 
     // Next to an arc the rounding touches both elements where HeidenhainRounding fits it: the element before ends there
     // and the element after starts there, an arc about its own centre (D58, language 4.3).
     private static string? NextToArc(HeidenhainBlock block, HeidenhainElement before, HeidenhainElement after,
-        SourceBlock corner, SourceBlock next, decimal size, int decimals)
+        SourceBlock corner, SourceBlock next, decimal size)
     {
         HeidenhainVector inward = before.DirectionAt(before.End);
         HeidenhainVector outward = after.DirectionAt(after.Start);
@@ -507,8 +507,8 @@ internal static class HeidenhainCorners
         }
 
         // An arc the rounding leaves nothing of, once its points are rounded, would end where it starts (D122).
-        HeidenhainPoint begin = touchBefore.Round(decimals);
-        HeidenhainPoint end = touchAfter.Round(decimals);
+        HeidenhainPoint begin = touchBefore.Round();
+        HeidenhainPoint end = touchAfter.Round();
         if ((before.IsArc && HeidenhainVector.Of(begin).Minus(before.Start).Length < Straight)
             || (after.IsArc && HeidenhainVector.Of(end).Minus(after.End).Length < Straight))
         {
@@ -520,8 +520,7 @@ internal static class HeidenhainCorners
         double sweep = HeidenhainElement.SweepBetween(center, touchBefore, touchAfter, left);
         HeidenhainDraftBlock drawn = new HeidenhainDraftBlock().WithVerb("ARC", new IdentValue(left ? "CCW" : "CW"))
             .Add("R", HeidenhainNumbers.Of(sweep <= Math.PI ? size : -size));
-        Finish(block, before, after, corner, next, drawn, begin, end, Direction(after.DirectionAt(touchAfter)),
-            decimals);
+        Finish(block, before, after, corner, next, drawn, begin, end, Direction(after.DirectionAt(touchAfter)));
         return null;
     }
 
@@ -531,13 +530,13 @@ internal static class HeidenhainCorners
     // it (RadiusAfterCorner, SweepAfterCorner).
     private static void Finish(HeidenhainBlock block, HeidenhainElement before, HeidenhainElement after,
         SourceBlock corner, SourceBlock next, HeidenhainDraftBlock drawn, HeidenhainPoint begin, HeidenhainPoint end,
-        HeidenhainPoint tangent, int decimals)
+        HeidenhainPoint tangent)
     {
         HeidenhainState state = block.Heidenhain;
         state.PlaneAxes(out string first, out string second, out _);
         HeidenhainPoint point = state.Position()!;
         drawn.Add(first, HeidenhainNumbers.Of(end.First)).Add(second, HeidenhainNumbers.Of(end.Second));
-        Shorten(block, before, first, second, begin, decimals);
+        Shorten(block, before, first, second, begin);
 
         var shift = new Dictionary<string, decimal>(StringComparer.Ordinal);
         if (after.Incremental)
@@ -559,7 +558,7 @@ internal static class HeidenhainCorners
             NextLine = next.Line,
             Shift = shift,
             NextRadiusTurns = after.WrittenRadius < 0 && after.Sweep - taken <= Math.PI,
-            NextSweepTrim = after.WritesAngle ? Degrees(taken, decimals) : 0,
+            NextSweepTrim = after.WritesAngle ? Degrees(taken) : 0,
         };
     }
 
@@ -567,14 +566,14 @@ internal static class HeidenhainCorners
     // than a turn its sweep ANGLE less the part the corner took (D84); an arc by its radius left with a half turn or
     // less of more has a positive R (language 4.3, R).
     private static void Shorten(HeidenhainBlock block, HeidenhainElement before, string first, string second,
-        HeidenhainPoint begin, int decimals)
+        HeidenhainPoint begin)
     {
         HeidenhainDraftBlock main = block.Draft.Main;
         double taken = before.IsArc ? before.ToEnd(HeidenhainVector.Of(begin)) : 0;
         if (before.WritesAngle && HeidenhainNumbers.NumberOf(main.Find("ANGLE", null)) is decimal angle)
         {
             main.Remove("ANGLE");
-            main.Add("ANGLE", HeidenhainNumbers.Of(angle - Degrees(taken, decimals)));
+            main.Add("ANGLE", HeidenhainNumbers.Of(angle - Degrees(taken)));
         }
         else
         {
@@ -616,10 +615,9 @@ internal static class HeidenhainCorners
 
     // The length of a CHF or the radius of an RND: CHF 2, RND R4, and RND 4 as heidenhain 2 writes it, with the feed
     // of the block where it has one; a word beyond them keeps the corner RAW.
-    private static string? Size(SourceBlock corner, out decimal size, out int decimals, out SourceWord? feed)
+    private static string? Size(SourceBlock corner, out decimal size, out SourceWord? feed)
     {
         size = 0;
-        decimals = 0;
         feed = null;
         SourceWord head = corner.Words[0];
         SourceWord? given = head.Text.Length > 0 ? head : null;
@@ -650,7 +648,6 @@ internal static class HeidenhainCorners
         }
 
         size = number;
-        decimals = HeidenhainNumbers.DecimalsOf(given);
         return null;
     }
 
@@ -697,9 +694,9 @@ internal static class HeidenhainCorners
         return new HeidenhainPoint((decimal)direction.First, (decimal)direction.Second);
     }
 
-    // An angle of the geometry in degrees, with the decimals of the corner.
-    private static decimal Degrees(double radians, int decimals)
+    // An angle of the geometry in degrees, with six decimals (D403).
+    private static decimal Degrees(double radians)
     {
-        return HeidenhainNumbers.Round(radians * 180 / Math.PI, decimals);
+        return HeidenhainNumbers.Round(radians * 180 / Math.PI);
     }
 }

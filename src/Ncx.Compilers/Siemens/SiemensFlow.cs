@@ -250,8 +250,7 @@ internal static partial class SiemensFlow
     // once more, which a Sinumerik REPEAT without P does too (controllers siemens.md 8; controller-mapping 6,
     // REPEAT + TIMES; D212 for that default alone). MCALL alone stands before it where a modal call may be armed, as
     // before a jump (WriteJump).
-    // TODO(question): which text this compiler writes for a REPEAT without TIMES, P=1 or no P, is not in D212's
-    // answer, which names no compiler form, so it waits on the maintainer; no P stays until then, the form of main.
+    // D399: a REPEAT without TIMES is written with no P, the form D212 names as running the blocks once more.
     private static void WriteRepeat(SiemensBlock write)
     {
         if (write.Block.Find("REPEAT") is not Word repeat)

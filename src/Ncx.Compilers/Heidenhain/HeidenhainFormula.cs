@@ -7,7 +7,9 @@ namespace Ncx.Compilers.Heidenhain;
 /// language 4.12): the Q parameters Q, QL and QR by their names, + - * / ^ and the parentheses as the expression
 /// writes them, MOD as %, and the functions SIN COS TAN ASIN ACOS ATAN SQRT ABS INT FRAC SGN LN EXP before their
 /// operand, Q2 + 3 * SIN Q3. What Klartext has no formula for is refused with the reason: ATAN2, ROUND, MIN and MAX,
-/// the comparisons, AND, OR and NOT, an index, a string parameter QS and every other variable name.
+/// the comparisons, AND, OR and NOT, an index, a string parameter QS and every other variable name. A SYS_ name of
+/// [system_variables] stands as the QL parameter that an FN 18: SYSREAD block of its own before the block reads it into
+/// (D182, D397; HeidenhainBlock.SystemRead).
 /// </summary>
 internal sealed class HeidenhainFormula
 {
@@ -44,12 +46,19 @@ internal sealed class HeidenhainFormula
     // 6), which no formula of numbers takes.
     private static readonly string[] s_parameterPrefixes = ["QL", "QR", "Q"];
 
+    // The prefix of the system variables of language 4.12, which [system_variables] maps (D51).
+    private const string SystemPrefix = "SYS_";
+
     private readonly string _separator;
+
+    // The QL parameter a SYS_ name is read into; null where the name has none, with no FN 18 read, or none is free.
+    private readonly Func<VariableNode, string?>? _system;
     private string? _problem;
 
-    private HeidenhainFormula(string separator)
+    private HeidenhainFormula(string separator, Func<VariableNode, string?>? system)
     {
         _separator = separator;
+        _system = system;
     }
 
     /// <summary>
@@ -77,7 +86,51 @@ internal sealed class HeidenhainFormula
     /// <param name="problem">Why Klartext has no formula for it; null when it has.</param>
     public static string? Of(ExprNode node, string separator, out string? problem)
     {
-        var formula = new HeidenhainFormula(separator);
+        return Of(node, separator, null, out problem);
+    }
+
+    /// <summary>
+    /// The Klartext formula of an expression as the block writes it, each SYS_ name as the QL parameter an FN 18:
+    /// SYSREAD block of its own reads it into, written now before the line that uses the formula (D182, D397); null
+    /// with the reason when Klartext has none. The formula is checked first, so that no FN 18 block stands for a
+    /// formula that is not written.
+    /// </summary>
+    /// <param name="writing">The block being written.</param>
+    /// <param name="node">The expression.</param>
+    /// <param name="problem">Why Klartext has no formula for it; null when it has.</param>
+    public static string? Of(HeidenhainBlock writing, ExprNode node, out string? problem)
+    {
+        string separator = writing.Numbers.DecimalSeparator;
+        if (Of(node, separator, writing.SystemReadable, out problem) is null)
+        {
+            return null;
+        }
+
+        return Of(node, separator, writing.SystemRead, out problem);
+    }
+
+    /// <summary>
+    /// The formula of an expression with each SYS_ name as its NCX name, $SYS_POS_X, where [system_variables] gives it
+    /// an FN 18 read: the text that tells two formulas of a feed or a speed apart, which no line writes; null with the
+    /// reason when Klartext has none.
+    /// </summary>
+    public static string? KeyOf(HeidenhainBlock writing, ExprNode node, out string? problem)
+    {
+        return Of(node, writing.Numbers.DecimalSeparator, writing.SystemReadable, out problem);
+    }
+
+    /// <summary>
+    /// Tells whether a variable name is a SYS_ name of language 4.12 (D51).
+    /// </summary>
+    public static bool IsSystem(string name)
+    {
+        return name.StartsWith(SystemPrefix, StringComparison.Ordinal);
+    }
+
+    private static string? Of(ExprNode node, string separator, Func<VariableNode, string?>? system,
+        out string? problem)
+    {
+        var formula = new HeidenhainFormula(separator, system);
         string text = formula.Write(node);
         problem = formula._problem;
         return problem is null ? text : null;
@@ -183,11 +236,17 @@ internal sealed class HeidenhainFormula
     // A variable is a Q parameter by its name; an index, a string parameter and every other name have no Klartext
     // form (controllers heidenhain.md 6; language 4.9: the compiler maps names back through the machine configuration,
     // and a Heidenhain machine names none).
-    // TODO(question): D182 gives the FN 18 ids of the iTNC 530 for the SYS_ names and says the read stands in a block
-    // of its own, FN 18: SYSREAD Qn = ID.. NR.. IDX.., before the block that uses Qn; which Q parameter that block
-    // assigns into is not settled, so a $SYS_ name is still refused here.
+    // D397: a SYS_ name is read by FN 18: SYSREAD QLn = ID.. NR.. IDX.. (D182) into the highest free QL of the D338
+    // pool, in a block of its own directly before the block that uses it, one QL per distinct name in the block.
     private string Variable(VariableNode variable)
     {
+        if (IsSystem(variable.Name) && _system is not null)
+        {
+            return _system(variable)
+                ?? Refuse($"{variable.ToCanonical()} has no FN 18 read in [system_variables] of the machine, or no QL "
+                    + "parameter is free to hold it (machine-config 7; D182, D397)");
+        }
+
         if (variable.Index is not null)
         {
             return Refuse($"{variable.ToCanonical()}: a Q parameter of Klartext takes no index");
