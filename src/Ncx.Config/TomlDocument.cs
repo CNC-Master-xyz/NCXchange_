@@ -66,8 +66,15 @@ internal sealed class TomlDocument
             return null;
         }
 
+        // The tables are read by TomlTableConverter, which keeps every entry of an array of tables that comes again
+        // after other tables (TOML 1.0, Array of Tables).
         var metadata = new TomlMetadataStore();
-        var options = new TomlSerializerOptions { MetadataStore = metadata, SourceName = diagnostics.File };
+        var options = new TomlSerializerOptions
+        {
+            MetadataStore = metadata,
+            SourceName = diagnostics.File,
+            Converters = [TomlTableConverter.Instance],
+        };
         try
         {
             TomlTable root = TomlSerializer.Deserialize<TomlTable>(text, options) ?? new TomlTable();
