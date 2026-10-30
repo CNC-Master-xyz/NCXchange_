@@ -63,6 +63,22 @@ public sealed class JobBindingTests
         Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM100\nM96\nM111\nM30\n%\n", texts[1]);
     }
 
+    // D414: a state with a binding of its own follows it, the other states of the table their channels = "all":
+    // SPINDLE_SYNC=OFF of channel 2 under state_channels = { OFF = 1 } moves to channel 1 at the same mark, as the Mori
+    // Seiki wants M36 in one program (D312), while SPINDLE_SYNC=MAIN,SUB stands in both behind a generated wait.
+    [Fact]
+    public void StateChannels_OffBoundToChannel1_MovesWhileOnIsDuplicated()
+    {
+        string machine = JobCompile.Machine(spindleSync: "channels = \"all\"\nstate_channels = { OFF = 1 }");
+
+        List<string> texts = JobCompile.TextsOf(JobCompile.Run(machine,
+            JobCompile.Program(1000, "SYNC=110", "SPINDLE_SYNC=MAIN,SUB", "SYNC=111"),
+            JobCompile.Program(1000, "SYNC=110", "SYNC=111", "SPINDLE_SYNC=OFF")));
+
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM100\nM96\nM111\nM97\nM30\n%\n", texts[0]);
+        Assert.Equal("%\nO1000 (T)\nG21\nG18 G99 G40 G80\nM110\nM100\nM96\nM111\nM30\n%\n", texts[1]);
+    }
+
     // Virtual machine 3.8 rule 2a, D56: every function the compiler writes is bound, also a word an expansion rule
     // generates: FUNC:CLAMP=ON, which [tool_change] pre generates before the tool change of channel 1, stands in both
     // programs behind a generated wait.

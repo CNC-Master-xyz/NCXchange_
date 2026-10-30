@@ -577,6 +577,68 @@ public sealed class MachineConfigLoaderTests
         Assert.Equal(DiagnosticCodes.ValueNotAllowed, Assert.Single(diagnostics.Items).Code);
     }
 
+    // D414: state_channels binds the states it names, a channel number or "all"; the other states keep the binding of
+    // the table.
+    [Fact]
+    public void StateChannels_StatesWithABindingOfTheirOwn_Load()
+    {
+        MachineConfig machine = LoadClean("""
+            [machine]
+            name = "Test lathe"
+            controller = "fanuc"
+
+            [spindle_sync]
+            ON = "M35"
+            OFF = "M36"
+            PHASE = "M34"
+            channels = "all"
+            state_channels = { OFF = 1 }
+
+            [func]
+            DOOR = { OPEN = "M68", CLOSE = "M69", state_channels = { OPEN = "all", CLOSE = 2 } }
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
+            """);
+
+        FunctionTable sync = machine.SpindleSync!;
+        Assert.Equal(["ON", "OFF", "PHASE"], sync.States.Keys);
+        Assert.Equal((1, false), (sync.ForState("OFF").Channel, sync.ForState("OFF").AllChannels));
+        Assert.Equal((null, true), (sync.ForState("ON").Channel, sync.ForState("ON").AllChannels));
+        FunctionTable door = machine.Functions["DOOR"];
+        Assert.Equal(["OPEN", "CLOSE"], door.States.Keys);
+        Assert.Equal((null, true), (door.ForState("OPEN").Channel, door.ForState("OPEN").AllChannels));
+        Assert.Equal((2, false), (door.ForState("CLOSE").Channel, door.ForState("CLOSE").AllChannels));
+        Assert.Equal((null, false), (door.ForState(null).Channel, door.ForState(null).AllChannels));
+    }
+
+    // D414: a state name that the table does not have is CFG005, and a binding other than a channel number or "all" is
+    // reported as well.
+    [Theory]
+    [InlineData("state_channels = { CLOSED = 1 }")]
+    [InlineData("state_channels = { OFF = \"some\" }")]
+    [InlineData("state_channels = { OFF = 1.5 }")]
+    public void StateChannels_UnknownStateOrBinding_IsReported(string binding)
+    {
+        Diagnostics diagnostics = Report($$"""
+            [machine]
+            name = "Test lathe"
+            controller = "fanuc"
+
+            [spindle_sync]
+            ON = "M35"
+            OFF = "M36"
+            {{binding}}
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
+            """);
+
+        Diagnostic error = Assert.Single(diagnostics.Items);
+        Assert.Equal(Severity.Error, error.Severity);
+        Assert.Contains("state_channels", error.Message, StringComparison.Ordinal);
+    }
+
     // Machine-config 4, D100: home and limits in machine coordinates, the dynamics of the runtime estimate, the named
     // positions.
     [Fact]

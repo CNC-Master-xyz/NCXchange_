@@ -54,6 +54,29 @@ public sealed class ChannelBindingTests
         Assert.Equal(DiagnosticCodes.WordBoundToEveryChannel, ErrorOf(result).Code);
     }
 
+    // D414: state_channels = { OFF = 1 } binds SPINDLE_SYNC=OFF to channel 1 alone, as the Mori Seiki wants M36 in one
+    // program (D312): the program of channel 1 writes it, one of channel 2 reports CMP700, and the other states keep
+    // channels = "all".
+    [Theory]
+    [InlineData("SPINDLE_SYNC=OFF", 1, null)]
+    [InlineData("SPINDLE_SYNC=OFF", 2, DiagnosticCodes.WordBoundToAnotherChannel)]
+    [InlineData("SPINDLE_SYNC=MAIN,SUB", 1, DiagnosticCodes.WordBoundToEveryChannel)]
+    public void SingleChannelCompile_StateWithABindingOfItsOwn_FollowsIt(string block, int channel, string? code)
+    {
+        CompileResult result = Compile(
+            JobCompile.Machine(spindleSync: "channels = \"all\"\nstate_channels = { OFF = 1 }"), block, channel);
+
+        if (code is null)
+        {
+            Assert.False(result.Diagnostics.HasErrors, result.Diagnostics.ToText());
+            Assert.Contains("\nM97\n", Assert.Single(result.Files).Text, StringComparison.Ordinal);
+        }
+        else
+        {
+            Assert.Equal(code, ErrorOf(result).Code);
+        }
+    }
+
     // Virtual machine 3.8 rule 2a: every function the compiler writes is bound, also a word an expansion rule
     // generates: FUNC:DOOR=OPEN of [tool_change] pre in a program of channel 2.
     [Fact]

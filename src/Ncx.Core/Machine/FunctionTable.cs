@@ -23,6 +23,13 @@ public sealed record FunctionTable
     public bool AllChannels { get; init; }
 
     /// <summary>
+    /// state_channels: the states that take a binding of their own, OFF = 1 or OPEN = "all"; every other state follows
+    /// channel and channels (machine-config 5, D414). Empty when left out.
+    /// </summary>
+    public IReadOnlyDictionary<string, StateBinding> StateChannels { get; init; } =
+        new Dictionary<string, StateBinding>();
+
+    /// <summary>
     /// pre, post, requires, restore of the table (machine-config 5a); null when it has none of the four keys.
     /// </summary>
     public ExpansionRule? Rule { get; init; }
@@ -44,4 +51,16 @@ public sealed record FunctionTable
     /// out.
     /// </summary>
     public decimal? AccelTime { get; init; }
+
+    /// <summary>
+    /// The table as it binds one of its states (D414): a state that state_channels lists takes that binding, every
+    /// other state, and a word that names none, the channel or channels of the table, unbound when it has neither.
+    /// </summary>
+    /// <param name="state">The state a word sets (FunctionStates.Of); null for none.</param>
+    public FunctionTable ForState(string? state)
+    {
+        return state is not null && StateChannels.TryGetValue(state, out StateBinding? binding)
+            ? this with { Channel = binding.Channel, AllChannels = binding.AllChannels }
+            : this;
+    }
 }

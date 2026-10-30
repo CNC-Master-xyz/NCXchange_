@@ -235,6 +235,10 @@ public sealed class ExampleMachinesTests
         Assert.Equal("1.", machine.ToolChange?.KindMap["TURNING"]);
         Assert.Equal(PreloadPosition.BeforeFirstMotion, machine.ToolChange?.PreloadPosition);
         Assert.True(machine.SpindleSync?.AllChannels);
+
+        // D312, D414: M36 is written in the program of channel 1 only.
+        Assert.Equal(1, machine.SpindleSync?.ForState("OFF").Channel);
+        Assert.False(machine.SpindleSync?.ForState("OFF").AllChannels);
     }
 
     // Machine-config 5a: the DMG runs the tool change point cycle before every change.

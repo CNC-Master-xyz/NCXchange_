@@ -43,6 +43,7 @@ internal static class ExpansionRules
     // of the table fires it, so COOLANT:THROUGH=OFF stops and restarts the spindle only when the table says so.
     private static TriggeredRule? RuleOf(Word word, MachineConfig machine)
     {
+        string? state = FunctionStates.Of(word);
         switch (word.Key)
         {
             case "TOOL":
@@ -52,20 +53,20 @@ internal static class ExpansionRules
                 return spindleRole is null
                     ? null
                     : Triggered(TableOf(machine.SpindleTables, spindleRole)?.Rule, "[spindle." + spindleRole + "]",
-                        StateOf(word));
+                        state);
             case "SPINDLE_MODE":
                 string? modeRole = word.Addr ?? StateKeys.RoleOfDefaultSpindle(machine);
                 return modeRole is null
                     ? null
                     : Triggered(TableOf(machine.SpindleModeTables, modeRole)?.Rule,
-                        "[spindle_mode." + modeRole + "]", StateOf(word));
+                        "[spindle_mode." + modeRole + "]", state);
             case "SPINDLE_SYNC" or "PHASE":
-                return Triggered(machine.SpindleSync?.Rule, "[spindle_sync]", StateOf(word));
+                return Triggered(machine.SpindleSync?.Rule, "[spindle_sync]", state);
             case "COOLANT":
                 string channel = word.Addr ?? DefaultCoolantChannel;
-                return Triggered(TableOf(machine.Coolant, channel)?.Rule, "[coolant] " + channel, StateOf(word));
+                return Triggered(TableOf(machine.Coolant, channel)?.Rule, "[coolant] " + channel, state);
             case "FUNC" when word.Addr is string function:
-                return Triggered(TableOf(machine.Functions, function)?.Rule, "[func] " + function, StateOf(word));
+                return Triggered(TableOf(machine.Functions, function)?.Rule, "[func] " + function, state);
             // D204: the rule of a catalog cycle covers the cycle while it is active. It fires on the block that names
             // the cycle, never on a CYCLE_CALL block, and its post and @RESTORE stand at the block that ends the
             // cycle (decisions.md; machine-config 5a, language 4.7.1, CycleRuleEnds).
@@ -121,23 +122,6 @@ internal static class ExpansionRules
         }
 
         return null;
-    }
-
-    // The state a word sets, under the state names machine-config 5 gives its table (D198): SPINDLE=CW, CCW or OFF the
-    // state of that name; RPM, ORIENT and RPM_MAX their own state; CSS=ON and VC the state VC, CSS=OFF the state
-    // CSS_OFF; SPINDLE_MODE, COOLANT and FUNC their value; SPINDLE_SYNC with two roles ON and SPINDLE_SYNC=OFF OFF;
-    // PHASE the state PHASE.
-    private static string? StateOf(Word word)
-    {
-        string? ident = word.Value is IdentValue name ? name.Name : null;
-        return word.Key switch
-        {
-            "RPM" or "ORIENT" or "RPM_MAX" or "PHASE" => word.Key,
-            "VC" => "VC",
-            "CSS" => ident == "OFF" ? "CSS_OFF" : "VC",
-            "SPINDLE_SYNC" => ident == "OFF" ? "OFF" : "ON",
-            _ => ident,
-        };
     }
 
     private static bool Contains(List<TriggeredRule> triggered, string source)

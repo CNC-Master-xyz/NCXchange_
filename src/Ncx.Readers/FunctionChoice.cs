@@ -109,8 +109,9 @@ public static class FunctionChoice
     // does not address, the OFF of a resource that is not on.
     private static bool RuledOut(FunctionMatch match, FunctionContext context)
     {
-        if (match.Table is { AllChannels: false, Channel: int bound } && context.Channel is int channel
-            && bound != channel)
+        // D414: the binding of the state, which state_channels may give it apart from its table.
+        if (match.Table?.ForState(match.State) is { AllChannels: false, Channel: int bound }
+            && context.Channel is int channel && bound != channel)
         {
             return true;
         }
