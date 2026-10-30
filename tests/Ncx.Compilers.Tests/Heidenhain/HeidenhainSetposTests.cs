@@ -33,7 +33,7 @@ public sealed class HeidenhainSetposTests
             HeidenhainCompile.Body(result));
     }
 
-    // Virtual machine 3.4: the next ORIGIN clears the setpos shift; the TODO(question) D253 of HeidenhainChain: its
+    // Virtual machine 3.4: the next ORIGIN clears the setpos shift; D253(a) and D398 (HeidenhainChain): its
     // cycle 7 is cancelled before cycle 247, as the entries of the chain are.
     [Fact]
     public void Setpos_ThenOrigin_CancelsTheCycle7BeforeCycle247()
@@ -75,8 +75,8 @@ public sealed class HeidenhainSetposTests
             HeidenhainCompile.Body(result));
     }
 
-    // The TODO(question) of HeidenhainSetpos.CheckRemoved: where the setpos shift of X acts once the rotation it was
-    // declared under is removed is not given, so the RESET is CMP114.
+    // D398 (HeidenhainSetpos.CheckRemoved): where the setpos shift of X acts once the rotation it was
+    // declared under is removed is not settled, so the RESET is CMP114, the end state.
     [Fact]
     public void Setpos_UnderARotationThenItsReset_IsTheErrorCmp114()
     {
@@ -87,7 +87,7 @@ public sealed class HeidenhainSetposTests
         Assert.Equal(7, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainSetposFrameRemoved).Line);
     }
 
-    // The TODO(question) D253 of HeidenhainSetpos: the cycle 7 of the SETPOS would replace the cycle 7 of the SHIFT.
+    // D253(a), D398 (HeidenhainSetpos): the cycle 7 of the SETPOS would replace the cycle 7 of the SHIFT.
     [Fact]
     public void Setpos_WhileAShiftStandsInTheChain_IsTheErrorCmp106()
     {
@@ -98,7 +98,7 @@ public sealed class HeidenhainSetposTests
         Assert.Equal(6, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainTransformReplacesAnother).Line);
     }
 
-    // The TODO(question) D253 of HeidenhainChain.Append: the cycle 7 of the SHIFT would replace the cycle 7 of the
+    // D253(a), D398 (HeidenhainChain.Append): the cycle 7 of the SHIFT would replace the cycle 7 of the
     // SETPOS.
     [Fact]
     public void Shift_WhileASetposShiftStands_IsTheErrorCmp106()
@@ -110,7 +110,7 @@ public sealed class HeidenhainSetposTests
         Assert.Equal(6, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainTransformReplacesAnother).Line);
     }
 
-    // The TODO(question) D253 of HeidenhainSetpos: the second cycle 7 would replace the first, which the cycle 10 of
+    // D253(a), D398 (HeidenhainSetpos): the second cycle 7 would replace the first, which the cycle 10 of
     // the ROTATE follows.
     [Fact]
     public void Setpos_ReplacingACycle7ThatARotationFollows_IsTheErrorCmp106()
@@ -164,7 +164,7 @@ public sealed class HeidenhainSetposTests
             HeidenhainCompile.Body(result));
     }
 
-    // The TODO(question) of HeidenhainSetpos.NamedAxes: after HOME the axis is known in the MACHINE frame only (D35,
+    // D320 (HeidenhainSetpos.NamedAxes): after HOME the axis is known in the MACHINE frame only (D35,
     // D101), and the shift of cycle 7 against the active preset is not known.
     [Fact]
     public void Setpos_AfterHome_IsTheErrorCmp113()
@@ -188,8 +188,8 @@ public sealed class HeidenhainSetposTests
         Assert.Equal(5, HeidenhainCompile.Single(result, Ncx.Core.Model.DiagnosticCodes.AxisWordWithoutVerb).Line);
     }
 
-    // Controllers heidenhain.md 6 and the TODO(question) of HeidenhainNumbers: the shift of a declared Q parameter is
-    // the formula position minus Q1, which Klartext does not take as a coordinate (CMP102).
+    // Controllers heidenhain.md 6 and D338, whose SETPOS formulas are not spilled yet: the shift of a declared Q
+    // parameter is the formula position minus Q1, which Klartext does not take as a coordinate (CMP102).
     [Fact]
     public void Setpos_OfAnExpression_IsTheErrorCmp102()
     {

@@ -54,11 +54,6 @@ internal sealed record HeidenhainElement
     public bool Incremental { get; init; }
 
     /// <summary>
-    /// The decimals of the numbers the points of the element have.
-    /// </summary>
-    public int Decimals { get; init; }
-
-    /// <summary>
     /// True for an arc.
     /// </summary>
     public bool IsArc => Center is not null;

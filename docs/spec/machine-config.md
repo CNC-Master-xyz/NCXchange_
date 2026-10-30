@@ -74,7 +74,8 @@ block_numbers = { enabled = true, start = 10, step = 10 }   # Heidenhain: consec
 line_ending = "CRLF"
 program_end = "M30"                # M30 | M2 (Siemens also M17), written for PROGRAM=END (D48, D49)
 sub_end = "M99"                    # written for SUB=END, and for RETURN where the family has no jump to it; Heidenhain "LBL 0", once per section: a RETURN before the end jumps to an LBL directly before it (D272); Siemens "RET"
-program_layout = "one_file"        # one_file: all programs and subprograms of an NCX file into one output file (Fanuc O programs, Siemens %_N_ units)
+program_layout = "one_file"        # left out: the family default, file_per_program for Heidenhain, one_file else (row W3-3 of 03-open-questions)
+                                   # one_file: all programs and subprograms of an NCX file into one output file (Fanuc O programs, Siemens %_N_ units)
                                    # file_per_program: one output file per program, subprograms copied after the M30 of every caller (Heidenhain)
                                    # a subprogram no program calls goes after the last program, or into the first program's file (D264); a file is named
                                    # after its program's NAME, else the NCX file stem, a name taken already (case-insensitive) gets _2, _3 with CMP005 (D266)

@@ -93,7 +93,7 @@ public sealed class HeidenhainFrameTests
             HeidenhainCompile.Body(result));
     }
 
-    // Language 4.2, D31, and the TODO(question) D253 of HeidenhainChain: ORIGIN empties the chain, so the shift is
+    // Language 4.2, D31, and D253(a), D398 (HeidenhainChain): ORIGIN empties the chain, so the shift is
     // cancelled before cycle 247.
     [Fact]
     public void Origin_OverAShift_CancelsTheShiftBeforeCycle247()
@@ -106,7 +106,7 @@ public sealed class HeidenhainFrameTests
             HeidenhainCompile.Body(result));
     }
 
-    // The TODO(question) D253 of HeidenhainChain.Append: a second cycle 7 would replace the first on the control, so a
+    // D253(a), D398 (HeidenhainChain.Append): a second cycle 7 would replace the first on the control, so a
     // SHIFT appended while a shift stands in the chain is CMP106.
     [Fact]
     public void Shift_WhileAShiftStandsInTheChain_IsTheErrorCmp106()
@@ -143,7 +143,7 @@ public sealed class HeidenhainFrameTests
         Assert.Equal(9, HeidenhainCompile.Single(result, DiagnosticCodes.HeidenhainLabelChainsDiffer).Line);
     }
 
-    // Language 4.2 and 4.9; the TODO(question) D253 of HeidenhainChainArrivals: ORIGIN after the label cancels the
+    // Language 4.2 and 4.9; D253(a), D398 (HeidenhainChain): ORIGIN after the label cancels the
     // entries of the chain of the way the text runs, none, before cycle 247, and the jump brings the rotation, which
     // ORIGIN removes in the program and cycle 247 does not end on the control as far as the documents say, CMP119 on
     // the JUMP.

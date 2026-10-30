@@ -29,12 +29,11 @@ internal static class HeidenhainFunctions
     // their place in it (decisions.md; controllers heidenhain.md 2, the table). Every function of an NCX block is
     // written in a Klartext block of its own before the motion, so a word whose function acts at the block end,
     // SPINDLE=OFF and COOLANT=OFF, acts before the motion as language 5 rule 3 requires.
-    // TODO(question): D252's compiler sentence names STOP with those two, and the compiler does not follow it there:
-    // STOP is a block word and not a state word, and its NCX block stops when the motion of the block is done
-    // (language 4.1; virtual machine 3 steps 5 and 7, which raise the STOP event after the MOTION, BlockEvents), so an
-    // M0 in a block before the L would stop earlier than the NCX block says. WriteStop therefore writes M0 and M1
-    // after the motion until the maintainer says whether that half of the sentence or the order of the virtual machine
-    // gives way (decisions.md D252; heidenhain 8 rule 8; P3-04 question 33).
+    // D395: STOP is not one of them. It is a block word and not a state word, and its NCX block stops when the motion
+    // of the block is done (language 4.1; virtual machine 3 steps 5 and 7, which raise the STOP event after the
+    // MOTION, BlockEvents), and D252's own evidence lists M0 and M1 among the functions that act at the block end, so
+    // WriteStop writes M0 and M1 after the motion; the half of D252's compiler sentence that put
+    // STOP before the L is withdrawn (decisions.md D252, D395; heidenhain 8 rule 8).
 
     /// <summary>
     /// Writes the functions of the block that act before its motion: FEED_MODE, SPINDLE, ORIENT, COOLANT, FUNC and
@@ -73,7 +72,7 @@ internal static class HeidenhainFunctions
 
     /// <summary>
     /// Writes STOP after the motion of its block, where its NCX block stops: STOP=PROGRAM as M0, STOP=OPTIONAL as M1
-    /// (controller-mapping 1, STOP; controllers heidenhain.md 1, 8 rule 8; the TODO(question) of D252 above).
+    /// (controller-mapping 1, STOP; controllers heidenhain.md 1, 8 rule 8; D395).
     /// </summary>
     public static void WriteStop(HeidenhainBlock writing)
     {

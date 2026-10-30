@@ -50,7 +50,7 @@ public sealed class HeidenhainCornerTests
     public void Chf_BeforeAnIncrementalLine_WritesItsIncrementalWordFromTheEndOfTheChamfer()
     {
         Assert.Equal(
-            Lines("RAPID X=0 Y=0", "LINE X=29.293 Y=29.293 F=100", "LINE X=31 Y=30", "LINE IX=9", "LINE Y=0"),
+            Lines("RAPID X=0 Y=0", "LINE X=29.292893 Y=29.292893 F=100", "LINE X=31 Y=30", "LINE IX=9", "LINE Y=0"),
             Body("1 L X+0 Y+0 FMAX\n2 L X+30 Y+30 F100\n3 CHF 1\n4 L IX+10\n5 L Y+0"));
     }
 
@@ -100,7 +100,7 @@ public sealed class HeidenhainCornerTests
 
     // A rounding between a line and an arc is the arc of radius R tangent to both, turning with the corner: from the
     // line along X to (10, 0) into the clockwise arc of radius 4 about (14, 0), the rounding R2.5 about (8, 2.5)
-    // touches the line at (8, 0) and the arc at (10.308, 1.538), and the arc keeps its end and its centre (D58,
+    // touches the line at (8, 0) and the arc at (10.307692, 1.538462), and the arc keeps its end and its centre (D58,
     // language 4.3). The pole may stand before the line, before the corner or after it; a pole by IX and IY, the
     // polar angle IPA of a CP and the incremental end of a CR count from the corner point (D255), and
     // an axis a C leaves out stays there; an arc by its radius CR keeps R, an arc of more than a turn its sweep ANGLE
@@ -109,9 +109,9 @@ public sealed class HeidenhainCornerTests
     [InlineData("1 CC X+14 Y+0\n2 L X+0 Y+0 R0 FMAX\n3 L X+10 F100\n4 RND R2.5\n5 C X+18 DR-",
         "ARC=CW X=18 Y=0 CENTER:X=14 CENTER:Y=0")]
     [InlineData("1 L X+0 Y+0 R0 FMAX\n2 L X+10 F100\n3 RND R2.5\n4 CR IX+4 IY+4 R+4 DR-",
-        "ARC=CW IX=3.692 IY=2.462 R=4")]
+        "ARC=CW IX=3.692308 IY=2.461538 R=4")]
     [InlineData("1 CC X+14 Y+0\n2 L X+0 Y+0 R0 FMAX\n3 L X+10 F100\n4 RND R2.5\n5 CP IPA-450 DR-",
-        "ARC=CW CENTER:X=14 CENTER:Y=0 ANGLE=427.385")]
+        "ARC=CW CENTER:X=14 CENTER:Y=0 ANGLE=427.380131")]
     [InlineData("1 CC X+14 Y+0\n2 L X+0 Y+0 R0 FMAX\n3 L X+10 F100\n4 RND R2.5\n5 C X+14 Y+4 DR-", CenterArc)]
     [InlineData("1 L X+0 Y+0 R0 FMAX\n2 L X+10 F100\n3 CC X+14 Y+0\n4 RND R2.5\n5 C X+14 Y+4 DR-", CenterArc)]
     [InlineData("1 L X+0 Y+0 R0 FMAX\n2 L X+10 F100\n3 RND R2.5\n4 CC X+14 Y+0\n5 C X+14 Y+4 DR-", CenterArc)]
@@ -120,16 +120,16 @@ public sealed class HeidenhainCornerTests
     [InlineData("1 L X+0 Y+0 R0 FMAX\n2 L X+10 F100\n3 RND R2.5\n4 CR X+14 Y+4 R+4 DR-", "ARC=CW X=14 Y=4 R=4")]
     public void Rnd_BetweenALineAndAnArc_IsAnArcTangentToBoth(string snippet, string arc)
     {
-        Assert.Equal(Lines("RAPID X=0 Y=0 COMP=OFF", "LINE X=8 Y=0 F=100", "ARC=CCW X=10.308 Y=1.538 R=2.5", arc),
+        Assert.Equal(Lines("RAPID X=0 Y=0 COMP=OFF", "LINE X=8 Y=0 F=100", "ARC=CCW X=10.307692 Y=1.538462 R=2.5", arc),
             Body(snippet));
     }
 
-    // The same rounding from the arc into the line: the arc ends where the rounding begins, at (10.308, 1.538), and the
-    // rounding turns clockwise to (8, 0), where the line begins; an arc of more than a turn, CP IPA beyond 360 degrees,
-    // keeps its sweep ANGLE less the part the rounding took (D58, language 4.3, D84).
+    // The same rounding from the arc into the line: the arc ends where the rounding begins, at (10.307692, 1.538462),
+    // and the rounding turns clockwise to (8, 0), where the line begins; an arc of more than a turn, CP IPA beyond 360
+    // degrees, keeps its sweep ANGLE less the part the rounding took (D58, language 4.3, D84).
     [Theory]
-    [InlineData("3 C X+10 Y+0 DR+ F100", "ARC=CCW X=10.308 Y=1.538 CENTER:X=14 CENTER:Y=0 F=100")]
-    [InlineData("3 CP IPA+450 DR+ F100", "ARC=CCW CENTER:X=14 CENTER:Y=0 ANGLE=427.385 F=100")]
+    [InlineData("3 C X+10 Y+0 DR+ F100", "ARC=CCW X=10.307692 Y=1.538462 CENTER:X=14 CENTER:Y=0 F=100")]
+    [InlineData("3 CP IPA+450 DR+ F100", "ARC=CCW CENTER:X=14 CENTER:Y=0 ANGLE=427.380131 F=100")]
     public void Rnd_BetweenAnArcAndALine_IsAnArcTangentToBoth(string arcBlock, string arc)
     {
         Assert.Equal(Lines("RAPID X=14 Y=4 COMP=OFF", arc, "ARC=CW X=8 Y=0 R=2.5", "LINE X=0"),
@@ -152,9 +152,10 @@ public sealed class HeidenhainCornerTests
     // and before it (language 4.3, R; D58).
     [Theory]
     [InlineData("1 L X+0 Y+0 R0 FMAX\n2 L X+10 F100\n3 RND R2.5\n4 CR X+17.84 Y-1.12 R-4 DR-",
-        "RAPID X=0 Y=0 COMP=OFF\nLINE X=8 Y=0 F=100\nARC=CCW X=10.308 Y=1.538 R=2.5\nARC=CW X=17.84 Y=-1.12 R=4\n")]
+        "RAPID X=0 Y=0 COMP=OFF\nLINE X=8 Y=0 F=100\nARC=CCW X=10.307692 Y=1.538462 R=2.5\n"
+            + "ARC=CW X=17.84 Y=-1.12 R=4\n")]
     [InlineData("1 L X+17.84 Y-1.12 R0 FMAX\n2 CR X+10 Y+0 R-4 DR+ F100\n3 RND R2.5\n4 L X+0",
-        "RAPID X=17.84 Y=-1.12 COMP=OFF\nARC=CCW X=10.308 Y=1.538 R=4 F=100\nARC=CW X=8 Y=0 R=2.5\nLINE X=0\n")]
+        "RAPID X=17.84 Y=-1.12 COMP=OFF\nARC=CCW X=10.307692 Y=1.538462 R=4 F=100\nARC=CW X=8 Y=0 R=2.5\nLINE X=0\n")]
     public void Rnd_NextToARadiusArcOfMoreThanAHalfTurn_TurnsItsRadiusPositive(string snippet, string expected)
     {
         Assert.Equal(expected, Body(snippet));
@@ -169,8 +170,8 @@ public sealed class HeidenhainCornerTests
             Body("1 L X+0 Y+0 R0 FMAX\n2 L X+10 F100\n3 RND R2\n4 CC\n5 LP PR+10 PA+90"));
     }
 
-    // A chamfer next to an arc stays RAW, the elements about it as the source writes them: no document says what its
-    // length measures along an arc (the TODO(question) of HeidenhainCorners).
+    // D401: a chamfer whose neighbour is not a straight line is invalid on the control, so it stays RAW with the reason
+    // "CHF only between two straight lines", the elements about it as the source writes them.
     [Theory]
     [InlineData("1 L X+0 Y+0 R0 FMAX\n2 L X+10 F100\n3 CHF 2\n4 CC X+14 Y+0\n5 C X+14 Y+4 DR-",
         "RAPID X=0 Y=0 COMP=OFF\nLINE X=10 F=100\nRAW:HEIDENHAIN=\"3 CHF 2\"\n" + CenterArc + "\n")]
@@ -180,12 +181,14 @@ public sealed class HeidenhainCornerTests
     public void Chf_NextToAnArc_IsKeptAsRaw(string snippet, string expected)
     {
         Assert.Equal(expected, Body(snippet));
-        Assert.Contains(DiagnosticCodes.KeptAsRaw, Codes(FramedProgram(snippet)));
+        Diagnostic warning = Assert.Single(FramedProgram(snippet).Diagnostics.Items,
+            diagnostic => diagnostic.Code == DiagnosticCodes.KeptAsRaw);
+        Assert.Contains("CHF only between two straight lines", warning.Message, StringComparison.Ordinal);
     }
 
-    // A CT after a chamfer or a rounding continues an element whose end it decides itself: no document says what it is
-    // tangent to, so the corner stays RAW, and the CT after it too, whose direction the reader then does not know (the
-    // TODO(question) of HeidenhainNextElement).
+    // D402: a CT after a chamfer or a rounding continues an element whose end it decides itself, which leaves no corner
+    // for the RND or CHF, so the combination is redundant or an error on the control; the corner stays RAW with a
+    // WARNING that names the CT, and the CT after it too, whose direction the reader then does not know.
     [Theory]
     [InlineData("3 CHF 2")]
     [InlineData("3 RND R2")]
@@ -194,6 +197,10 @@ public sealed class HeidenhainCornerTests
         Assert.Equal(Lines("RAPID X=0 Y=0 COMP=OFF", "LINE X=10 F=100", $"RAW:HEIDENHAIN=\"{corner}\"",
                 "RAW:HEIDENHAIN=\"4 CT X+20 Y+10\""),
             Body("1 L X+0 Y+0 R0 FMAX\n2 L X+10 F100\n" + corner + "\n4 CT X+20 Y+10"));
+        Assert.Contains(FramedProgram("1 L X+0 Y+0 R0 FMAX\n2 L X+10 F100\n" + corner + "\n4 CT X+20 Y+10")
+            .Diagnostics.Items, diagnostic => diagnostic.Code == DiagnosticCodes.KeptAsRaw
+            && diagnostic.Message.Contains("4 CT X+20 Y+10", StringComparison.Ordinal)
+            && diagnostic.Message.Contains("D402", StringComparison.Ordinal));
     }
 
     // A rounding that does not fit the elements about it stays RAW: larger than the arc it rounds on the inside, or
@@ -303,7 +310,7 @@ public sealed class HeidenhainCornerTests
     [Theory]
     [InlineData("2 L X+0 Y+0 FMAX\n3 L X+10 F100\n4 RND R2\n5 L IY+10 M99", "ARC=CCW X=10 Y=2 R=2", "LINE IY=8")]
     [InlineData("2 CC X+14 Y+0\n3 L X+0 Y+0 FMAX\n4 L X+10 F100\n5 RND R2.5\n6 C X+14 Y+4 DR- M99",
-        "ARC=CCW X=10.308 Y=1.538 R=2.5", CenterArc)]
+        "ARC=CCW X=10.307692 Y=1.538462 R=2.5", CenterArc)]
     public void Rnd_BeforeAnElementWithM99OfACatalogCycle_IsExpandedAndTheCallFollowsTheElement(string snippet,
         string corner, string element)
     {

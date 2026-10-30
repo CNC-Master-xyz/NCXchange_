@@ -170,7 +170,7 @@ internal static partial class HeidenhainProgramFrame
             Block block = steps[index].Block;
             if (block.Has("PROGRAM", null, "END"))
             {
-                return writing.Machine.Format?.ProgramLayout == ProgramLayout.FilePerProgram
+                return ProgramLayouts.Of(writing.Machine) == ProgramLayout.FilePerProgram
                     ? FirstProgram(steps) : null;
             }
 

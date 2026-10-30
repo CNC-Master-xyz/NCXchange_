@@ -70,7 +70,8 @@ internal static class HeidenhainToolCall
 
         MachineConfig machine = writing.Machine;
         string? spindle = SpindleOf(machine, holder);
-        if (SpeedOf(writing, writing.Step, spindle) is not string speed)
+        if (SpeedOf(writing, writing.Step, spindle) is not string key
+            || WrittenSpeed(writing, writing.Step, spindle, key) is not string speed)
         {
             return;
         }
@@ -122,7 +123,8 @@ internal static class HeidenhainToolCall
             ? following
             : writing.Step;
         string axis = HeidenhainAxes.LetterOf(writing, HeidenhainAxes.ToolAxis(planeStep.After.Frame.Workplane));
-        if (SpeedOf(writing, speedStep, spindle) is not string speed)
+        if (SpeedOf(writing, speedStep, spindle) is not string key
+            || WrittenSpeed(writing, speedStep, spindle, key) is not string speed)
         {
             return;
         }
@@ -141,7 +143,7 @@ internal static class HeidenhainToolCall
         if (!emptied && spindle is not null)
         {
             writing.Target.Set(PlaneKey, axis);
-            writing.Target.Set(SpeedKey + spindle, ActiveSpeed(writing, speedStep, spindle, speed));
+            writing.Target.Set(SpeedKey + spindle, ActiveSpeed(writing, speedStep, spindle, key));
         }
     }
 
@@ -182,13 +184,14 @@ internal static class HeidenhainToolCall
         foreach (Word word in writing.TakeAll("RPM"))
         {
             string? spindle = word.Addr is string role ? machine.ResolveRole(role)?.Id : SpindleOf(machine, null);
-            if (spindle is null || SpeedOf(writing, writing.Step, spindle) is not string speed
-                || HasSpeedActive(writing, spindle, speed))
+            if (spindle is null || SpeedOf(writing, writing.Step, spindle) is not string key
+                || HasSpeedActive(writing, spindle, key)
+                || WrittenSpeed(writing, writing.Step, spindle, key) is not string speed)
             {
                 continue;
             }
 
-            writing.Target.Set(SpeedKey + spindle, ActiveSpeed(writing, writing.Step, spindle, speed));
+            writing.Target.Set(SpeedKey + spindle, ActiveSpeed(writing, writing.Step, spindle, key));
 
             string? tableRole = word.Addr ?? HeidenhainFunctions.RoleOf(machine, spindle);
             string? template = null;
@@ -359,8 +362,9 @@ internal static class HeidenhainToolCall
         }
     }
 
-    // The speed of the spindle after a step as S writes it, 1592, or the Q parameter that set it, Q2; null when it has
-    // no Klartext form, which is reported.
+    // The speed of the spindle after a step as S writes it, 1592, or the Q parameter that set it, Q2, or the formula
+    // that set it after its mark, =Q2 * 2 (HeidenhainParameters.KeyOf; D396); null when it has no Klartext form, which
+    // is reported. WrittenSpeed gives what S writes for it.
     private static string? SpeedOf(HeidenhainBlock writing, BlockStep step, string? spindle)
     {
         if (spindle is null || !step.After.Spindles.TryGetValue(spindle, out SpindleSnapshot? state))
@@ -393,13 +397,32 @@ internal static class HeidenhainToolCall
 
         Word word = SpeedWord(machine, writing.LookAhead.Steps[source].Block, spindle)
             ?? throw new InvalidOperationException("The source of the speed has no RPM.");
-        if (HeidenhainParameters.Of(word.Value) is not string parameter)
+        if (HeidenhainParameters.KeyOf(writing, word) is not string key)
         {
-            HeidenhainParameters.ReportValue(writing, word);
             return null;
         }
 
-        return HeidenhainParameters.Keeps(writing, word, parameter, source, afterVariables: false) ? parameter : null;
+        return HeidenhainParameters.Keeps(writing, word, HeidenhainParameters.ReadsOf(word), source,
+            afterVariables: false)
+            ? key
+            : null;
+    }
+
+    // What S writes for the speed of a step as SpeedOf gives it: the number or the Q parameter as they are, a formula
+    // as the QL parameter it is spilled into in a block of its own written now, before the TOOL CALL (D396); null
+    // where no QL is free, which is reported.
+    private static string? WrittenSpeed(HeidenhainBlock writing, BlockStep step, string? spindle, string key)
+    {
+        if (!HeidenhainParameters.IsFormula(key) || spindle is null)
+        {
+            return key;
+        }
+
+        Word word = SpeedSource(writing, step, spindle) is int source
+            && SpeedWord(writing.Machine, writing.LookAhead.Steps[source].Block, spindle) is Word found
+            ? found
+            : throw new InvalidOperationException("The formula of the speed has no RPM.");
+        return HeidenhainParameters.Written(writing, word);
     }
 
     // The step of the RPM word that set a speed the virtual machine keeps UNKNOWN (HeidenhainParameters.SourceOf).
@@ -431,7 +454,8 @@ internal static class HeidenhainToolCall
         }
 
         return SpeedSource(writing, writing.Step, spindle) is int source
-            && HeidenhainParameters.Holds(writing, active, speed, source);
+            && SpeedWord(writing.Machine, writing.LookAhead.Steps[source].Block, spindle) is Word word
+            && HeidenhainParameters.Holds(writing, active, speed, HeidenhainParameters.ReadsOf(word), source);
     }
 
     // The spindle of a holder, or the default spindle for a holder without one (virtual machine 3.8 rule 2).

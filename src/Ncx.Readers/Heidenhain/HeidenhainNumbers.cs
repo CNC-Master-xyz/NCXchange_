@@ -10,51 +10,28 @@ namespace Ncx.Readers.Heidenhain;
 /// </summary>
 internal static class HeidenhainNumbers
 {
-    // Computed numbers keep the decimals of the source numbers they come from, at least these.
-    public const int LeastDecimals = 3;
-
     /// <summary>
     /// A computed number as an NCX number: an integer when it has no fraction, a decimal without trailing zeros
-    /// otherwise, 5.000 is 5 and -21.7320 is -21.732 (language 3).
+    /// otherwise, 5.000 is 5 and -21.7320 is -21.732 (language 3; ComputedNumbers.Of).
     /// </summary>
     /// <param name="number">The number.</param>
     public static Value Of(decimal number)
     {
-        string text = number.ToString("0.############################", CultureInfo.InvariantCulture);
-        if (text == "-0")
-        {
-            text = "0";
-        }
-
-        return text.Contains('.', StringComparison.Ordinal)
-            ? new DecimalValue(decimal.Parse(text, NumberStyles.Number, CultureInfo.InvariantCulture), text)
-            : new IntegerValue(long.Parse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture), text);
+        return ComputedNumbers.Of(number);
     }
 
-    // TODO(question): no document says how many decimals a number the reader computes with trigonometry keeps, a point
-    // of a polar coordinate or the centre of a tangential arc (wave-1 question #46); the caller keeps as many as the
-    // source words it was computed from, at least three.
+    // D403 extends D121 to the readers: a number the reader computes with trigonometry, a point of a polar coordinate,
+    // the centre of a tangential arc, a chamfer or rounding point, keeps six decimals, half away from zero, whatever
+    // the decimals of the source words it comes from (ComputedNumbers).
 
     /// <summary>
-    /// A number of the geometry, computed in double, rounded to a decimal: half away from zero, the one rounding NCX
-    /// defines (language 4.12, ROUND).
+    /// A number of the geometry, computed in double, rounded to six decimals, half away from zero (D403;
+    /// ComputedNumbers.Round).
     /// </summary>
     /// <param name="number">The computed number.</param>
-    /// <param name="decimals">The decimals to keep.</param>
-    public static decimal Round(double number, int decimals)
+    public static decimal Round(double number)
     {
-        return Math.Round((decimal)number, decimals, MidpointRounding.AwayFromZero);
-    }
-
-    /// <summary>
-    /// The digits a source number has after its decimal separator: 3 for X-6,964, 0 for X+10.
-    /// </summary>
-    /// <param name="word">The source word with a number.</param>
-    public static int DecimalsOf(SourceWord word)
-    {
-        string text = word.Text.Replace(',', '.');
-        int separator = text.IndexOf('.', StringComparison.Ordinal);
-        return separator < 0 ? 0 : text.Length - separator - 1;
+        return ComputedNumbers.Round(number);
     }
 
     /// <summary>

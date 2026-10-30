@@ -71,11 +71,10 @@ internal readonly record struct HeidenhainVector(double First, double Second)
     }
 
     /// <summary>
-    /// The point with the decimals the reader keeps for a computed number (wave-1 question #46).
+    /// The point with the six decimals the reader keeps for a computed number (D403).
     /// </summary>
-    /// <param name="decimals">The decimals to keep.</param>
-    public HeidenhainPoint Round(int decimals)
+    public HeidenhainPoint Round()
     {
-        return new HeidenhainPoint(HeidenhainNumbers.Round(First, decimals), HeidenhainNumbers.Round(Second, decimals));
+        return new HeidenhainPoint(HeidenhainNumbers.Round(First), HeidenhainNumbers.Round(Second));
     }
 }

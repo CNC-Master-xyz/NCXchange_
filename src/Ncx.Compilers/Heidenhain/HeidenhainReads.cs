@@ -26,6 +26,16 @@ internal static class HeidenhainReads
         return names;
     }
 
+    /// <summary>
+    /// The names an expression reads, uppercase as the parser keeps them: Q1, SYS_POS_X.
+    /// </summary>
+    public static HashSet<string> NamesOf(ExprNode tree)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        Collect(tree, names);
+        return names;
+    }
+
     private static void Collect(ExprNode node, HashSet<string> names)
     {
         switch (node)
