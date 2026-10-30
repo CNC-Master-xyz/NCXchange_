@@ -34,8 +34,10 @@ internal static class FanucHeader
             : null;
 
         // D34: the configuration defaults apply to the readers only, and the workplane of virtual machine 2.1 starts
-        // as XY, so a program that sets no plane in its header gets WORKPLANE=XY.
-        string plane = "XY";
+        // as XY, so a program that sets no plane in its header gets WORKPLANE=XY; a lathe system, a machine with a
+        // G-code system, starts in G18 under the factory setting of parameter 3458#0 TPS (30i-B B-64490EN-05 p.204,
+        // 0i-F B-64610EN p.203), so it gets WORKPLANE=ZX.
+        string plane = system is null ? "XY" : "ZX";
         string feedMode = "PER_MIN";
         int index = fanuc.IndexOf(begin) + (begin.Find("O") is null ? 0 : 1);
         for (; index >= 0 && index < fanuc.Blocks.Count; index++)

@@ -117,13 +117,15 @@ public sealed class FanucProgramTests
             Body("G4 X2.\nG4 X2\nG4 P500", LatheWith("[format]\ncalculator_input = false")));
     }
 
-    // A lathe whose X is programmed in diameters reads with DIAMETER=ON (controller-mapping 1, DIAMETER; D60).
+    // A lathe whose X is programmed in diameters reads with DIAMETER=ON (controller-mapping 1, DIAMETER; D60). A lathe
+    // starts in G18, the Z-X plane, under the factory setting of parameter 3458#0 TPS (B-64490EN-05 p.204), so a
+    // header without a plane is WORKPLANE=ZX on a lathe (D34).
     [Fact]
     public void Header_XInDiameters_HasDiameterOn()
     {
         string text = Text("%\nO0001\nG0 X20.\nM30\n%\n", Lathe());
 
-        Assert.Contains("\nFEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY DIAMETER=ON CYCLE=OFF\nRAPID X=20\n",
+        Assert.Contains("\nFEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF\nRAPID X=20\n",
             text, StringComparison.Ordinal);
     }
 

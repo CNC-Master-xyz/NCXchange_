@@ -861,7 +861,7 @@ public sealed class FanucCycleTests
             Lines(
                 "FILE=BEGIN NCX=1",
                 "PROGRAM=BEGIN NUMBER=1",
-                "FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY DIAMETER=ON CYCLE=OFF",
+                "FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
                 "RAPID X=40 Z=2",
                 "CYCLE=" + cycle + " CONTOUR=CONTOUR_10_20",
                 "CYCLE_CALL",
