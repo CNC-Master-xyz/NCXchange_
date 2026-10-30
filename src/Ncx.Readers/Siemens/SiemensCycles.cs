@@ -315,7 +315,8 @@ internal static partial class SiemensCycles
             afterMcall |= word.Address == "MCALL";
         }
 
-        return call is null || !call.Text.StartsWith('(') || block.Machine.CycleCatalog.FindNative(call.Address) is null;
+        return call is null || !call.Text.StartsWith('(')
+            || block.Machine.CycleCatalog.FindNative(call.Address) is null;
     }
 
     // True where an MCALL block arms a call, MCALL CYCLE81(...), and does not end one.
