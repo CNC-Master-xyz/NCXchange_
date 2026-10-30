@@ -35,6 +35,7 @@ sub_end = "M99"
 MAIN = "S1"
 SUB = "S2"
 TOOL = "S3"
+TOOL2 = "S4"
 TURRET1 = "T1"
 TURRET2 = "T2"
 
@@ -50,9 +51,11 @@ axis = "C2"
 
 [[resource]]
 id = "S3"
-type = "tool_spindle"              # the rotary tool drive of the upper turret (4800602ECA p.27: both turrets take turning and rotary tools; p.187 rotary tool drive upper/lower)
-# TODO(question): the lower turret drives rotary tools too, with the same M88/M89/M90 in its own path (4810004EEE p.75, p.159), but a spindle table binds its codes
-# to one role, so M88 of path 2 reads as SPINDLE:TOOL of this drive, as on nakamura-ntjx.toml; a second tool spindle needs a per-channel spindle table.
+type = "tool_spindle"              # the rotary tool drive of the upper turret, M88/M89/M90 (4800602ECA p.27, p.187; 4810004EEE p.273)
+
+[[resource]]
+id = "S4"
+type = "tool_spindle"              # the rotary tool drive of the lower turret, M488/M489/M490 (4800602ECA p.27, p.187; 4810004EEE p.273; WY-Anleitung 2008 p.12-13)
 
 [[resource]]
 id = "T1"
@@ -64,6 +67,7 @@ channel = 1
 [[resource]]
 id = "T2"
 type = "tool_holder"
+spindle = "S4"
 magazine = false                   # lower turret, 24 stations (4800602ECA p.27, p.186)
 channel = 2
 
@@ -136,8 +140,8 @@ home = 0
 [[axis]]
 id = "C2"
 ncx = "C2"                         # a program writes C; the VM resolves it to C2 while the sub spindle holds the workpiece (VM 3.8 rule 3)
-# The NTJX is a two-path lathe, so its sub spindle C axis is the C2 axis commanded with plain C and H (Nakamura ECL-1 2013 p.235 §14-5-8; NT-Nurse 4800001EBG
-# p.347 "56 NTJX Drehmaschine mit 2 Bahnen"; Programmierhandbuch 2019 p.174-175, G28 H0 after M491). M432/M442 change which axis C drives, not the address (D179).
+# The WY-250L is a two-path lathe like the NTJX, so its R spindle C axis is the C2 axis commanded with plain C and H after M491 "Rechte Spindel C-Achse EIN"
+# (WY-Anleitung 2008 p.12; 4810004EEE p.274 M491; Programmierhandbuch 2019 p.174-175, G28 H0 after M491). M432/M442 change which axis C drives, not the address (D179).
 letter = "C"
 incremental_letter = "H"
 kind = "rotary"
@@ -150,7 +154,7 @@ acceleration = 2000
 home = 0
 
 [positions]                        # named machine-frame positions (D100); an expansion rule reaches them with {position:NAME}, e.g. pre = ["RAPID {position:tool_change} FRAME=MACHINE"]
-tool_change = { X = 0, Z = -120 }  # clearance point of turret 1 for the ATC change (the values of machine-config 4)
+tool_change = { X = 0, Z = -120 }  # turret indexing point of turret 1, #528 = 0 and #529 = -120. of path 1 of the WY pair (G53 X#528 Z#529, "WZW. *X/Z*")
 program_end = { X = 0, Z = 0 }     # the reference point (G28 U0 W0 in the WY-250L sample programs)
 
 [dynamics]                         # control behaviour for the runtime estimate (D64)
@@ -159,7 +163,8 @@ path_mode = "continuous"           # G64 cutting mode (fanuc 3, group 15)
 corner_speed = 1000                # mm/min carried through a corner
 
 [tool_change]
-change = "T{tool:02}{offset:02}"   # turret indexing: two digits of the station, two of the offset (4810004EEE p.66), stations 1 to 24 (p.69), "G0T0101" in the WY pair;
+change = "G0 T{tool:02}{offset:02}"   # turret indexing: two digits of the station, two of the offset (4810004EEE p.66), stations 1 to 24 (p.69), G00 in the same
+                                       # line as the T code (p.67), "G0T0101" in the WY pair;
                                    # turret 2 (channel 2) needs no table of its own, its T word is the same turret form with the role TURRET2 (D219). No ATC, so no preload.
 unload = "G0 T{tool:02}00"         # offset number 00 cancels the offset (4810004EEE p.68; Handbuch 2019 p.11 "G0 T0500")
 
@@ -198,6 +203,14 @@ CCW = "M89"
 OFF = "M90"
 rpm_min = 50
 rpm_max = 6000                     # rotary tool spindle range 6000 min-1 (4800602ECA p.187)
+accel_time = 1.0
+
+[spindle.TOOL2]                    # the lower turret's rotary tool (4810004EEE p.273; WY-Anleitung 2008 p.12-13)
+CW = "M488"
+CCW = "M489"
+OFF = "M490"
+rpm_min = 50
+rpm_max = 6000                     # rotary tool spindle range 6000 min-1, upper and lower turret (4800602ECA p.187)
 accel_time = 1.0
 
 [spindle_mode.MAIN]

@@ -153,6 +153,20 @@ public sealed class JobCommandTests : IDisposable
             StringComparison.Ordinal);
     }
 
+    // Architecture 10, D97: --job without its manifest is a usage error, CLI001 with exit code 2, not a crash.
+    [Theory]
+    [InlineData("check")]
+    [InlineData("analyze")]
+    [InlineData("compile")]
+    public void Job_WithoutAValue_IsUsageError(string command)
+    {
+        int exitCode = _cli.Run(command, "--job");
+
+        Assert.Equal(2, exitCode);
+        Assert.Contains("ERROR CLI001: ", _cli.Error, StringComparison.Ordinal);
+        Assert.Contains("--job", _cli.Error, StringComparison.Ordinal);
+    }
+
     // Architecture 10, implementation 16 (P6-02): ncx compile --job writes one NC file per channel of the job into the
     // folder of --output, on the machine the manifest names, whose start_mark M198 is the first block of both programs
     // (machine-config 5, D388 9), named O1000 and O1000.P-2 by its [format] channel_files = "path_suffix" (D310).

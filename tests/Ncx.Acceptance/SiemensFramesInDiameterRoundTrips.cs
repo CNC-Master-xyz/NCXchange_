@@ -16,59 +16,88 @@ namespace Ncx.Acceptance;
 /// The frame offset and the machine position of a facing axis read by the Siemens reader and compiled back by the
 /// Siemens compiler, for every combination of DIAMETER and [[axis]] frames_in_diameter on the switchable X axis of
 /// millturn1.toml (D125, D240, D388; Funktionshandbuch Grundfunktionen 2012 p.901-903): the reader is the inverse of
-/// the compiler, so TRANS X comes back as the source wrote it, SHIFT X keeps its NCX value, and the factor the reader
-/// puts on $AA_IM[X] and the one the compiler puts on $SYS_MPOS_X multiply to 1.
+/// the compiler, so the X of TRANS, G59 and CYCLE800 comes back as the source wrote it, SHIFT X keeps its NCX value,
+/// and the factor the reader puts on $AA_IM[X] and the one the compiler puts on $SYS_MPOS_X multiply to 1.
 /// </summary>
 public sealed class SiemensFramesInDiameterRoundTrips
 {
     /// <summary>
-    /// The four combinations: the DIAMON or DIAMOF of the source, frames_in_diameter on the X axis, the SHIFT X the
-    /// reader writes for TRANS X10, and the R1 line the compiler writes back for R1=$AA_IM[X], the reader's factor
-    /// inside the compiler's.
+    /// The four combinations: the DIAMON or DIAMOF of the source, frames_in_diameter on the X axis, and the R1 line the
+    /// compiler writes back for R1=$AA_IM[X], the reader's factor inside the compiler's.
     /// </summary>
-    public static TheoryData<string, bool, string, string> Combinations()
+    public static TheoryData<string, bool, string> Combinations()
     {
-        return new TheoryData<string, bool, string, string>
+        return new TheoryData<string, bool, string>
         {
             // Frames in radii (MD20360 bits 3, 6, 7 off): under DIAMON the radius is doubled into the NCX diameter
             // and halved again; under DIAMOF both are radii.
-            { "DIAMON", false, "SHIFT X=20 Z=5", "R1=(($AA_IM[X]*2)/2)" },
-            { "DIAMOF", false, "SHIFT X=10 Z=5", "R1=$AA_IM[X]" },
+            { "DIAMON", false, "R1=(($AA_IM[X]*2)/2)" },
+            { "DIAMOF", false, "R1=$AA_IM[X]" },
 
             // Frames in diameters (the bits set): under DIAMON both are diameters; under DIAMOF the diameter is
             // halved into the NCX radius and doubled again.
-            { "DIAMON", true, "SHIFT X=10 Z=5", "R1=$AA_IM[X]" },
-            { "DIAMOF", true, "SHIFT X=5 Z=5", "R1=(($AA_IM[X]/2)*2)" },
+            { "DIAMON", true, "R1=$AA_IM[X]" },
+            { "DIAMOF", true, "R1=(($AA_IM[X]/2)*2)" },
         };
     }
 
-    // D125, D388: TRANS X is read into SHIFT X with the frame factor of the axis and written back with its inverse, so
-    // the source line comes back, and the NCX the compiled program reads into is the NCX of the source.
-    [Theory]
-    [MemberData(nameof(Combinations))]
-    public void TransX_ReadAndCompiledBack_IsTheSourceLine(string diameter, bool framesInDiameter, string shift,
-        string machinePosition)
+    /// <summary>
+    /// The frame instructions that carry an X frame value, TRANS, G59 and CYCLE800 with _X0, in each of the four
+    /// combinations: the source line, the NCX line the reader writes for its X, and the line the compiler writes back
+    /// with the X of the source. G59 replaces the X of the programmable shift and comes back as ATRANS after TRANS Z5
+    /// (controllers siemens.md 4); CYCLE800 comes back with the tool carrier of millturn1.toml's TILT_ON and its
+    /// reference point (D333); under DIAMON with radius frames its _X0 has no known unit and stays RAW (D125, D333).
+    /// </summary>
+    public static TheoryData<string, bool, string, string, string> FrameInstructions()
     {
-        _ = machinePosition;
+        const string Swivel = "CYCLE800(0,\"TABLE\",0,27,10,0,0,0,45,0,0,0,0,-1,100,1)";
+        const string Compiled = "CYCLE800(1,\"TC1\",0,27,10,0,0,0,45,0,0,0,0,-1,100,1)";
+        var rows = new TheoryData<string, bool, string, string, string>
+        {
+            { "DIAMON", false, "TRANS X10 Z5", "SHIFT X=20 Z=5", "TRANS X10 Z5" },
+            { "DIAMOF", false, "TRANS X10 Z5", "SHIFT X=10 Z=5", "TRANS X10 Z5" },
+            { "DIAMON", true, "TRANS X10 Z5", "SHIFT X=10 Z=5", "TRANS X10 Z5" },
+            { "DIAMOF", true, "TRANS X10 Z5", "SHIFT X=5 Z=5", "TRANS X10 Z5" },
+            { "DIAMON", false, "TRANS Z5\nG59 X10", "SHIFT X=20", "ATRANS X10" },
+            { "DIAMOF", false, "TRANS Z5\nG59 X10", "SHIFT X=10", "ATRANS X10" },
+            { "DIAMON", true, "TRANS Z5\nG59 X10", "SHIFT X=10", "ATRANS X10" },
+            { "DIAMOF", true, "TRANS Z5\nG59 X10", "SHIFT X=5", "ATRANS X10" },
+            { "DIAMON", false, Swivel, "RAW:SIEMENS=\"CYCLE800(0,\\\"TABLE\\\",0,27,10,0,0,0,45,0,0,0,0,-1,100,1)\"",
+                Swivel },
+            { "DIAMOF", false, Swivel, "SHIFT X=10", Compiled },
+            { "DIAMON", true, Swivel, "SHIFT X=10", Compiled },
+            { "DIAMOF", true, Swivel, "SHIFT X=5", Compiled },
+        };
+        return rows;
+    }
+
+    // D125, D388: the X of TRANS, G59 and CYCLE800 is read with the frame factor of the axis and written back with
+    // its inverse, so the source value comes back, and the compiled program reads into the same SHIFT X values. The
+    // read-back of CYCLE800 also holds the RETRACT and the chain the compiler writes around the swivel (D333), so the
+    // SHIFT X values are compared, not the whole body.
+    [Theory]
+    [MemberData(nameof(FrameInstructions))]
+    public void FrameX_ReadAndCompiledBack_IsTheSourceValue(string diameter, bool framesInDiameter, string frame,
+        string shift, string compiledLine)
+    {
         MachineConfig machine = MillTurn(framesInDiameter);
-        string source = diameter + "\nTRANS X10 Z5\nG0 X40 Z5\n";
+        string source = diameter + "\n" + frame + "\nG0 X40 Z5\n";
 
         string ncx = Read(source, machine);
         string compiled = Compile(ncx, machine);
 
         Assert.Contains(shift, Lines(ncx));
-        Assert.Contains("TRANS X10 Z5", Lines(compiled));
-        Assert.Equal(Body(ncx), Body(Read(compiled, machine)));
+        Assert.Contains(compiledLine, Lines(compiled));
+        Assert.Equal(ShiftXValues(ncx), ShiftXValues(Read(compiled, machine)));
     }
 
     // D240, D388: $AA_IM[X] is read into $SYS_MPOS_X with the actual-value factor of the axis and $SYS_MPOS_X written
     // back with its inverse, so the value of R1 is the value the source assigns.
     [Theory]
     [MemberData(nameof(Combinations))]
-    public void AaImX_ReadAndCompiledBack_KeepsItsValue(string diameter, bool framesInDiameter, string shift,
+    public void AaImX_ReadAndCompiledBack_KeepsItsValue(string diameter, bool framesInDiameter,
         string machinePosition)
     {
-        _ = shift;
         MachineConfig machine = MillTurn(framesInDiameter);
         string source = diameter + "\nR1=$AA_IM[X]\n";
 
@@ -109,14 +138,25 @@ public sealed class SiemensFramesInDiameterRoundTrips
         return lines;
     }
 
-    // The NCX lines from the first DIAMETER word to PROGRAM=END, the part the source's own blocks read into.
-    private static List<string> Body(string ncx)
+    // The distinct X values of the SHIFT lines of an NCX text, in the order they first stand.
+    private static List<string> ShiftXValues(string ncx)
     {
-        List<string> lines = Lines(ncx);
-        int first = lines.FindIndex(line => line.StartsWith("DIAMETER=", StringComparison.Ordinal));
-        int last = lines.FindIndex(line => line.Contains("PROGRAM=END", StringComparison.Ordinal));
-        Assert.True(first >= 0 && last > first, ncx);
-        return lines.GetRange(first, last - first);
+        var values = new List<string>();
+        foreach (string line in Lines(ncx))
+        {
+            if (!line.StartsWith("SHIFT X=", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            string value = line.Substring("SHIFT X=".Length).Split(' ')[0];
+            if (!values.Contains(value))
+            {
+                values.Add(value);
+            }
+        }
+
+        return values;
     }
 
     // millturn1.toml with or without frames_in_diameter on its switchable X axis, $AA_IM[X] mapped to SYS_MPOS_X, and

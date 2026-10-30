@@ -150,8 +150,9 @@ public sealed class ExampleMachinesTests
         Assert.Equal(MotionCode.EveryBlock, Shipped("millturn1.toml").Format?.MotionCode);
     }
 
-    // D250: SYS_WEAR_Z and SYS_MPOS_B of the Nakamura; D314, D388 (9): the NTJX start mark is M198; D179: the sub
-    // spindle C axis is C/H on the Nakamura and the Doosan.
+    // D250: SYS_WEAR_Z and SYS_MPOS_B of the Nakamura; D314, D388 (9): the NTJX start mark is M198; the lower turret
+    // drives its rotary tools with M488 (4810004EDG-1 p.58, p.252); D179: the sub spindle C axis is C/H on the
+    // Nakamura and the Doosan.
     [Fact]
     public void LatheMachines_Data_IsTheDecidedOne()
     {
@@ -159,6 +160,8 @@ public sealed class ExampleMachinesTests
         Assert.Equal("#11{index:03}", nakamura.SystemVariables.Find("SYS_WEAR_Z"));
         Assert.Equal("#5025", nakamura.SystemVariables.Find("SYS_MPOS_B"));
         Assert.Equal(198, nakamura.Sync?.StartMark);
+        Assert.Equal("S4", nakamura.FindResource("T2")?.Spindle);
+        Assert.Equal("M488", nakamura.SpindleTables["TOOL2"].States["CW"]);
         foreach (MachineConfig lathe in new[] { nakamura, Shipped("doosan-puma-2600sy.toml") })
         {
             AxisDef c2 = Assert.Single(lathe.Axes, axis => axis.Id == "C2");
@@ -212,11 +215,18 @@ public sealed class ExampleMachinesTests
         Assert.Equal(100, wy.Sync?.MarkRange?.First);
         Assert.Equal(199, wy.Sync?.MarkRange?.Last);
         Assert.DoesNotContain(wy.Functions.Values, function => function.States.Values.Contains("M198"));
-        Assert.Equal("T{tool:02}{offset:02}", wy.ToolChange?.Change);
+        Assert.Equal("G0 T{tool:02}{offset:02}", wy.ToolChange?.Change);
         Assert.Null(wy.ToolChange?.Preload);
         Assert.Equal("#5025", wy.SystemVariables.Find("SYS_MPOS_B"));
         Assert.Equal("C2", wy.ResolveAxis("C", "S2")?.Id);
         Assert.Equal(2, wy.SpindleSync?.Channel);
+
+        // The lower turret drives its rotary tools with M488/M489/M490 (4810004EEE p.273; WY-Anleitung 2008 p.12-13).
+        Assert.Equal("S4", wy.ResolveRole("TOOL2")?.Id);
+        Assert.Equal("S4", wy.FindResource("T2")?.Spindle);
+        Assert.Equal("M488", wy.SpindleTables["TOOL2"].States["CW"]);
+        Assert.Equal("M489", wy.SpindleTables["TOOL2"].States["CCW"]);
+        Assert.Equal("M490", wy.SpindleTables["TOOL2"].States["OFF"]);
     }
 
     // F23: the sub spindle of the Nakamura names the axis C2, which the file declares; C resolves to it while the sub

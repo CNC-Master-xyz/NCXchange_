@@ -193,9 +193,17 @@ internal static class SiemensFrames
         }
 
         decimal factor = XFactor(block);
-        return factor == 2m ? SiemensMotion.Doubled(block, value)
-            : factor == 0.5m ? SiemensMotion.Halved(block, value)
-            : value;
+        if (factor == 2m)
+        {
+            return SiemensMotion.Doubled(block, value);
+        }
+
+        if (factor == 0.5m)
+        {
+            return SiemensMotion.Halved(block, value);
+        }
+
+        return value;
     }
 
     /// <summary>
