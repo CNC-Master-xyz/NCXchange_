@@ -231,8 +231,8 @@ SPINDLE = "M246"
 ON = "M35"                         # speed synchronization spindle 1 and 2
 OFF = "M36"
 PHASE = "M34"                      # speed and phase synchronization (hexagonal bar)
-channels = "all"                   # D56: written in the tool spindle and the turret 2 program, each behind a wait code; M36 in either one (D312)
-# TODO(question): D312 confirmed that the NTX wants M36 in one program only, and that machine-config 5 therefore needs a way to bind only some states of a table; it names no key, and the states key of D198 is open, so channels = "all" still binds OFF as well and a single-file compile reports CMP701 on it.
+channels = "all"                   # D56: written in the tool spindle and the turret 2 program, each behind a wait code
+state_channels = { OFF = 1 }       # D312, D414: M36 in the program of channel 1 only
 
 [workpiece]
 MAIN = "M303"

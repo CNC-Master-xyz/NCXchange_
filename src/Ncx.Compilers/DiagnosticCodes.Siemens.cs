@@ -31,6 +31,12 @@ public static partial class DiagnosticCodes
     public const string SiemensUnitNameTaken = "CMP503";
 
     /// <summary>
+    /// CMP504, a WARNING: two RAW lines of one program or subprogram carry the same block number, which RAW keeps as
+    /// written, so a GOTO to that number names no one block (controllers siemens.md 1, 8; D417).
+    /// </summary>
+    public const string SiemensBlockNumberTwice = "CMP504";
+
+    /// <summary>
     /// CMP510, a WARNING: OFFSET:LEN and OFFSET:RAD name two registers, and the D of the control is one register for
     /// length and radius (controller-mapping 3, OFFSET:LEN; controllers siemens.md 5).
     /// </summary>
@@ -118,6 +124,13 @@ public static partial class DiagnosticCodes
     /// p.901-903; D125, D333).
     /// </summary>
     public const string SiemensTiltShiftUnderDiameter = "CMP537";
+
+    /// <summary>
+    /// CMP538, a WARNING: an entry of the chain whose value is not known, which the compiler would write again because
+    /// the frame is unknown after a RAW line; the control keeps the frame the RAW line left, so the entry is not
+    /// written (D430).
+    /// </summary>
+    public const string SiemensChainNotRestated = "CMP538";
 
     /// <summary>
     /// CMP550: an ARC with ANGLE whose start, center or end the virtual machine does not know, so that neither AR nor
@@ -215,7 +228,8 @@ public static partial class DiagnosticCodes
     /// <summary>
     /// CMP596: a bare F or S block under a modal call that a RAW line armed, which the compiler does not write,
     /// because S or F with G0 or G1 active calls the modal subprogram and the pattern of the RAW range would drill one
-    /// hole more (controllers siemens.md 7; controller-mapping 5, CYCLE_F; D259).
+    /// hole more (controllers siemens.md 7; controller-mapping 5, CYCLE_F; D259): an ERROR where a RAW line before the
+    /// next block that writes the word may use it, a WARNING otherwise (D418).
     /// </summary>
     public const string SiemensWordUnderARawModalCall = "CMP596";
 

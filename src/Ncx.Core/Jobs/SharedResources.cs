@@ -9,9 +9,8 @@ namespace Ncx.Core.Jobs;
 /// commanded them since two channels last synchronized: two channels commanding the same spindle between two marks is a
 /// WARNING (virtual machine 3.7), and the axes of [shared] are checked like the spindles (F24).
 /// </summary>
-// TODO(question): virtual machine 3.7 warns for two channels commanding "the same spindle" between two marks, while
-// machine-config 8 and D20 declare in [shared] the spindles and axes the channels share and let the scheduler check
-// those; the spindles and axes of [shared] are checked and no other, until that is answered.
+// D20 and machine-config 8: [shared] declares the spindles and axes the channels share and the scheduler checks
+// those, so the spindles and axes of [shared] are checked and no other; [shared] has no other use.
 internal sealed class SharedResources
 {
     // The spindles of [shared] by resource id, S1 (machine-config 4, 8).

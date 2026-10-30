@@ -16,17 +16,29 @@ internal static class ChannelBinding
     private static readonly string[] s_spindleKeys = ["SPINDLE", "RPM", "ORIENT", "CSS", "VC", "RPM_MAX"];
 
     /// <summary>
-    /// The table a word is written from, when that table is bound to one channel or to every channel; null for a word
-    /// of an unbound table, and for a word of no table.
+    /// The table a word is written from, as it binds the state the word sets, when that binding is to one channel or
+    /// to every channel; null for a word of an unbound state, and for a word of no table.
     /// </summary>
-    // TODO(question): D312 settled that a machine may want one state of a bound table in one program only (the Mori
-    // Seiki M36 that cancels the synchronization, the Nakamura M443), so machine-config 5 needs a way to bind only
-    // some states of a table; it names no key, and the states key of D198 is still open. channel and channels = "all"
-    // bind every state of their table, as the model has them, until that is answered.
+    // D414: a state that state_channels lists takes that binding, every other state the table's channel or channels,
+    // so a machine binds one state of a bound table to one program only, the Mori Seiki M36 that cancels the
+    // synchronization (D312; machine-config 5).
     public static FunctionTable? BoundTableOf(Word word, MachineConfig machine)
     {
-        FunctionTable? table = TableOf(word, machine);
+        FunctionTable? table = TableOf(word, machine)?.ForState(FunctionStates.Of(word));
         return table is not null && (table.Channel is not null || table.AllChannels) ? table : null;
+    }
+
+    /// <summary>
+    /// What binds a word, as a message names it: the section of machine-config 5, "[spindle_sync]", "[func] DOOR", and
+    /// the state behind it where state_channels binds that state alone, "[spindle_sync] OFF" (D414).
+    /// </summary>
+    public static string BindingName(Word word, MachineConfig machine)
+    {
+        string name = TableName(word, machine);
+        string? state = FunctionStates.Of(word);
+        return state is not null && TableOf(word, machine)?.StateChannels.ContainsKey(state) == true
+            ? name + " " + state
+            : name;
     }
 
     /// <summary>
@@ -82,7 +94,7 @@ internal static class ChannelBinding
                 continue;
             }
 
-            string name = TableName(word, machine);
+            string name = BindingName(word, machine);
             if (table.Channel is int owner && !channels.Contains(owner))
             {
                 diagnostics.Error(block, DiagnosticCodes.WordBoundToAnotherChannel, string.Create(

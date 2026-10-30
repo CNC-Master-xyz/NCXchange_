@@ -75,7 +75,7 @@ public sealed partial class CompileCommandTests : IDisposable
         Assert.Equal(Controller.Fanuc, compiler.Machine?.Machine.Controller);
     }
 
-    // Architecture 10 and the TODO(question) of CompileCommand.Run: --output names the folder the files go into.
+    // Architecture 10, the compile row: --output names the folder the files go into.
     [Fact]
     public void Compile_OutputOption_WritesIntoThatFolder()
     {

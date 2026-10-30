@@ -205,10 +205,6 @@ internal static partial class SiemensCycles
     /// (controllers siemens.md 7; controller-mapping 5, CYCLE_F; D259).
     /// </summary>
     /// <param name="write">The block being written.</param>
-    // TODO(question): D259 says the compiler writes no bare F or S block between two RAW lines; it does not say what
-    // becomes of the feed or the speed there. The word is left out with the WARNING CMP596 and written again at the
-    // next block that needs it, which loses the drilling feed where a RAW pattern of the range takes the modal F,
-    // until that is answered.
     public static bool RawModalCallStands(SiemensBlock write)
     {
         if (write.ActiveOf(ModalCall) != RawArmed)
@@ -218,10 +214,61 @@ internal static partial class SiemensCycles
             return false;
         }
 
-        Block block = write.Block;
-        bool ends = (block.Verb is Word verb && (s_motions.Contains(verb.Key) || verb.Key == "CYCLE_CALL"))
+        return !EndsRawModalCall(write.Block);
+    }
+
+    /// <summary>
+    /// Reports a bare F or S that the compiler leaves out under a modal call a RAW line armed (D259). D418: severity
+    /// follows the risk. Where a RAW line stands between the block and the next block that writes the word, that RAW
+    /// line may use it, a pattern of the range its drilling feed, which would silently change, and no text is safe,
+    /// since a bare F or S fires the modal call: the ERROR CMP596. Otherwise the WARNING CMP596, and the word stands
+    /// again at the next block that needs it (controllers siemens.md 7).
+    /// </summary>
+    /// <param name="write">The block being written.</param>
+    /// <param name="word">The word as the block would write it, F or S1200.</param>
+    /// <param name="letter">F or S, the address that calls the modal subprogram.</param>
+    public static void ReportWordUnderRawModalCall(SiemensBlock write, string word, string letter)
+    {
+        string under = $"The block programs {word} alone under a modal call that a RAW line armed, where {letter} with "
+            + "G0 or G1 active calls the modal subprogram: it is not written here";
+        if (RawLineBeforeTheNextWrite(write))
+        {
+            write.Error(DiagnosticCodes.SiemensWordUnderARawModalCall, under + ", and a RAW line before the next block "
+                + "that writes it may use it, whose feed or speed would silently change (controllers siemens.md 7; "
+                + "D259, D418).");
+            return;
+        }
+
+        write.Warning(DiagnosticCodes.SiemensWordUnderARawModalCall, under + ", and stands again at the next block "
+            + "that needs it (controllers siemens.md 7; D259, D418).");
+    }
+
+    // D418: a RAW line among the blocks of the section after this one, up to the block that ends the modal call a RAW
+    // line armed and writes F and S again where they are needed: a motion, a CYCLE_CALL, a CALL or CYCLE=OFF.
+    private static bool RawLineBeforeTheNextWrite(SiemensBlock write)
+    {
+        foreach (BlockStep step in write.File.StepsAfter(write.Step))
+        {
+            if (step.Block.Has("RAW"))
+            {
+                return true;
+            }
+
+            if (EndsRawModalCall(step.Block))
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    // A block that ends what a modal call a RAW line armed stands over: a motion or a CYCLE_CALL, which uses it, a CALL
+    // or CYCLE=OFF, which the compiler writes MCALL alone before (D259).
+    private static bool EndsRawModalCall(Block block)
+    {
+        return (block.Verb is Word verb && (s_motions.Contains(verb.Key) || verb.Key == "CYCLE_CALL"))
             || block.Has("CALL") || block.Has("CYCLE", null, "OFF");
-        return !ends;
     }
 
     /// <summary>

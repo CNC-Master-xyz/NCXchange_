@@ -65,16 +65,14 @@ internal static class SpindleSpeed
     /// while it turns, under CSS the rpm from VC and the X radius capped by RPM_MAX (virtual machine 8); null when a
     /// value it needs is unknown. Along a motion that changes X the radius is the mean of the start and the end X
     /// radius for a cutting motion (D289), which is the one speed per motion the runtime estimate's profile wants,
-    /// and the end radius for a RAPID, because nothing is cut on the way.
+    /// and the end radius for a RAPID, a HOME and a RETRACT, because nothing is cut on the way (D289, D412).
     /// </summary>
     public static double? RpmOf(MotionEvent motion, MachineConfig machine)
     {
-        // D289: the end radius for a RAPID, the mean for a cutting motion.
-        // TODO(question): the answer names a cutting motion and a RAPID. HOME and RETRACT cut nothing either and the
-        // runtime estimate times all three at the rapid rate (virtual machine 8, D287), but no document extends the
-        // Fanuc rapid rule to them, so they keep the mean of the general clause here; nothing reads it today (the
-        // estimate never asks a rapid-rate motion for its feed, and the tool list counts a LINE or an ARC only).
-        return RpmOf(motion, machine, motion.Verb == Verb.Rapid ? Radius.End : Radius.Mean);
+        // D289: the end radius for a RAPID, the mean for a cutting motion. D412: HOME and RETRACT take the end radius,
+        // like RAPID, since all three move at the rapid rate and cut nothing (virtual machine 8, D287).
+        bool rapidRate = motion.Verb is Verb.Rapid or Verb.Home or Verb.Retract;
+        return RpmOf(motion, machine, rapidRate ? Radius.End : Radius.Mean);
     }
 
     /// <summary>
@@ -96,7 +94,8 @@ internal static class SpindleSpeed
     }
 
     // The rpm at one radius of the motion, the mean for a cutting motion of the runtime estimate, the end radius for
-    // a RAPID and the two ends for the rpm range of the tool list (D289); the radius matters under CSS only.
+    // a motion at the rapid rate (D412) and the two ends for the rpm range of the tool list (D289); the radius matters
+    // under CSS only.
     private static double? RpmOf(MotionEvent motion, MachineConfig machine, Radius which)
     {
         ChannelSnapshot state = motion.After;

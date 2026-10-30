@@ -211,9 +211,8 @@ internal static class SiemensArcs
         double d = Math.Sqrt((dx * dx) + (dy * dy));
         double h = d / 2 / Math.Tan((double)angle * Math.PI / 360);
         double side = ccw ? 1 : -1;
-        int decimals = Decimals(block);
-        decimal x = SiemensNumbers.Round(((double)(a.First + b.First) / 2) + (side * h * -dy / d), decimals);
-        decimal y = SiemensNumbers.Round(((double)(a.Second + b.Second) / 2) + (side * h * dx / d), decimals);
+        decimal x = SiemensNumbers.Round(((double)(a.First + b.First) / 2) + (side * h * -dy / d));
+        decimal y = SiemensNumbers.Round(((double)(a.Second + b.Second) / 2) + (side * h * dx / d));
         main.Add("CENTER", plane.First, SiemensNumbers.Of(x)).Add("CENTER", plane.Second, SiemensNumbers.Of(y));
         return true;
     }
@@ -235,7 +234,7 @@ internal static class SiemensArcs
         double sweep = ccw ? end - start : start - end;
         sweep = ((sweep % 360) + 360) % 360;
         sweep = sweep < 1e-9 ? 360 : sweep;
-        decimal angle = SiemensNumbers.Round(sweep + (360.0 * extra), Decimals(block));
+        decimal angle = SiemensNumbers.Round(sweep + (360.0 * extra));
         main.Remove(plane.First);
         main.Remove(plane.Second);
         main.Remove("I" + plane.First);
@@ -258,11 +257,10 @@ internal static class SiemensArcs
         double turn = (double)sweep * Math.PI / 180 * (ccw ? 1 : -1);
         double dx = (double)(a.First - c.First);
         double dy = (double)(a.Second - c.Second);
-        int decimals = Decimals(block);
         block.State.SetPosition(plane.First, SiemensNumbers.Round((double)c.First + (dx * Math.Cos(turn))
-            - (dy * Math.Sin(turn)), decimals));
+            - (dy * Math.Sin(turn))));
         block.State.SetPosition(plane.Second, SiemensNumbers.Round((double)c.Second + (dx * Math.Sin(turn))
-            + (dy * Math.Cos(turn)), decimals));
+            + (dy * Math.Cos(turn))));
     }
 
     private static bool Turns(SiemensBlock block, SourceWord turns, out int extra)
@@ -317,8 +315,7 @@ internal static class SiemensArcs
         double ux = ((a2 * (by - cy)) + (b2 * (cy - ay)) + (c2 * (ay - by))) / denominator;
         double uy = ((a2 * (cx - bx)) + (b2 * (ax - cx)) + (c2 * (bx - ax))) / denominator;
         bool ccw = ((bx - ax) * (cy - by)) - ((by - ay) * (cx - bx)) > 0;
-        int decimals = Decimals(block);
-        var center = new SiemensPoint(SiemensNumbers.Round(ux, decimals), SiemensNumbers.Round(uy, decimals));
+        var center = new SiemensPoint(SiemensNumbers.Round(ux), SiemensNumbers.Round(uy));
         main.WithVerb("ARC", Direction(ccw));
         main.Add("CENTER", plane.First, SiemensNumbers.Of(center.First))
             .Add("CENTER", plane.Second, SiemensNumbers.Of(center.Second));
@@ -374,9 +371,8 @@ internal static class SiemensArcs
         }
 
         double scale = ((dx * dx) + (dy * dy)) / (2 * across);
-        int decimals = Decimals(block);
-        var center = new SiemensPoint(SiemensNumbers.Round((double)a.First + (scale * normalX), decimals),
-            SiemensNumbers.Round((double)a.Second + (scale * normalY), decimals));
+        var center = new SiemensPoint(SiemensNumbers.Round((double)a.First + (scale * normalX)),
+            SiemensNumbers.Round((double)a.Second + (scale * normalY)));
         bool ccw = scale > 0;
         main.WithVerb("ARC", Direction(ccw));
         main.Add("CENTER", plane.First, SiemensNumbers.Of(center.First))
@@ -425,7 +421,7 @@ internal static class SiemensArcs
         double side = (ccw && radius > 0) || (!ccw && radius < 0) ? 1 : -1;
         double x = ((double)(start.First + end.First) / 2) + (side * h * -dy / d);
         double y = ((double)(start.Second + end.Second) / 2) + (side * h * dx / d);
-        return new SiemensPoint(SiemensNumbers.Round(x, 6), SiemensNumbers.Round(y, 6));
+        return new SiemensPoint(SiemensNumbers.Round(x), SiemensNumbers.Round(y));
     }
 
     private static IdentValue Direction(bool ccw)
@@ -433,18 +429,4 @@ internal static class SiemensArcs
         return new IdentValue(ccw ? "CCW" : "CW");
     }
 
-    // Computed coordinates keep the decimals of the source words of the block, at least three (wave-1 question #46).
-    private static int Decimals(SiemensBlock block)
-    {
-        int decimals = SiemensNumbers.LeastDecimals;
-        foreach (SourceWord word in block.Source.Words)
-        {
-            if (word.Number is not null)
-            {
-                decimals = Math.Max(decimals, SiemensNumbers.DecimalsOf(word.Text));
-            }
-        }
-
-        return decimals;
-    }
 }

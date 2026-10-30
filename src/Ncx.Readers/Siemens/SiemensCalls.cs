@@ -58,6 +58,24 @@ internal static class SiemensCalls
     }
 
     /// <summary>
+    /// True where a block calls a subprogram or a builder cycle: a name it calls that is no command of a G group, an L
+    /// number, CALL "NAME" (D430).
+    /// </summary>
+    /// <param name="block">A source block.</param>
+    public static bool CallsAProgram(SourceBlock block)
+    {
+        foreach (string name in NamesCalledBy(block))
+        {
+            if (SiemensGroups.GroupOf(name) is null)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Reads the declaration of a subprogram, EXTERN, CALL, and the calls of a block.
     /// </summary>
     /// <param name="block">The block being read.</param>

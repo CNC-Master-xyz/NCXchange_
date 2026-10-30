@@ -178,8 +178,8 @@ public static partial class DiagnosticCodes
     public const string SyncDeadlock = "VM571";
 
     /// <summary>
-    /// VM572, a WARNING: two channels command one spindle between two marks; raised by the job scheduler of a
-    /// multi-channel job (virtual machine 3.7, 5).
+    /// VM572, a WARNING: two channels command one spindle or axis of [shared] between two marks; raised by the job
+    /// scheduler of a multi-channel job (virtual machine 3.7, 5; machine-config 8, D20).
     /// </summary>
     public const string SpindleSharedBetweenMarks = "VM572";
 

@@ -13,6 +13,10 @@ internal sealed partial class SiemensUnits
 {
     private readonly Dictionary<int, SiemensUnit> _unitOfLine = [];
 
+    // The place of each block in the blocks of its unit, by its line, so that a step to the next or the previous
+    // block costs constant time.
+    private readonly Dictionary<int, int> _indexInUnit = [];
+
     /// <summary>
     /// The units in file order.
     /// </summary>
@@ -22,6 +26,11 @@ internal sealed partial class SiemensUnits
     /// How many blocks of the file call each subprogram of the file, by its name.
     /// </summary>
     public Dictionary<string, int> CallCounts { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The modal ranges kept RAW of each unit, found once per unit when the reader first asks (D422).
+    /// </summary>
+    public Dictionary<SiemensUnit, SiemensModalRanges> ModalRanges { get; } = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>
     /// The labels of the programs of the file that stand directly before the program end: the targets a
@@ -78,6 +87,7 @@ internal sealed partial class SiemensUnits
             }
 
             units._unitOfLine[block.Line] = current;
+            units._indexInUnit[block.Line] = current.Blocks.Count - 1;
         }
 
         foreach (SiemensUnit unit in units.Units)
@@ -215,7 +225,7 @@ internal sealed partial class SiemensUnits
             return null;
         }
 
-        int index = unit.Blocks.IndexOf(block);
+        int index = IndexInUnit(unit, block);
         return index >= 0 && index + 1 < unit.Blocks.Count ? unit.Blocks[index + 1] : null;
     }
 
@@ -230,8 +240,17 @@ internal sealed partial class SiemensUnits
             return null;
         }
 
-        int index = unit.Blocks.IndexOf(block);
+        int index = IndexInUnit(unit, block);
         return index > 0 ? unit.Blocks[index - 1] : null;
+    }
+
+    // The place of a block among the blocks of its unit; -1 where it is none of them.
+    private int IndexInUnit(SiemensUnit unit, SourceBlock block)
+    {
+        return _indexInUnit.TryGetValue(block.Line, out int index) && index >= 0 && index < unit.Blocks.Count
+            && ReferenceEquals(unit.Blocks[index], block)
+            ? index
+            : unit.Blocks.IndexOf(block);
     }
 
     /// <summary>

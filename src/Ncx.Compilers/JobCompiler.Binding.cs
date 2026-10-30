@@ -89,7 +89,7 @@ public sealed partial class JobCompiler
         MachineConfig machine)
     {
         Block block = from.File.Blocks[index];
-        string table = ChannelBinding.TableName(words[0], machine);
+        string table = ChannelBinding.BindingName(words[0], machine);
         if (Find(channels, owner) is not JobChannel to)
         {
             from.Diagnostics.Error(block, DiagnosticCodes.BoundChannelNotInJob, string.Create(
@@ -121,7 +121,7 @@ public sealed partial class JobCompiler
         MachineConfig machine, int? mark, List<Duplication> duplicated)
     {
         Block block = from.File.Blocks[index];
-        string table = ChannelBinding.TableName(words[0], machine);
+        string table = ChannelBinding.BindingName(words[0], machine);
         if (channels.Count < 2 || StandsInEveryChannel(from, index, words, channels))
         {
             return;

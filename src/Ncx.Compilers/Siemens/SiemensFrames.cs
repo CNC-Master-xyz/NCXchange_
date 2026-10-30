@@ -78,15 +78,30 @@ internal static partial class SiemensFrames
         // RAW text did: ORIGIN starts an empty chain and a RESET removes the entries of its kind (language 4.2); TRANS
         // alone ends the programmable frame and CYCLE800() the swivel (controllers siemens.md 4). What stays of the
         // chain is written again after it, so that the control has the chain of the virtual machine from here on.
-        bool endsProgrammable = write.IsMadeUnknown(ProgrammableFrame) && EndsProgrammableFrame(block);
-        bool endsSwivel = write.IsMadeUnknown(Swivel) && EndsSwivel(write);
+        // D421: the entries of the swivel that the reader writes again after a datum, which the control still holds,
+        // are written neither at the datum nor again.
+        if (write.File.IsHeldSwivel(write.Step))
+        {
+            return;
+        }
+
+        // D430: while the programmable frame is unknown after a RAW line, a block that appends to it writes it in its
+        // replacing form, the chain from its first entry with TRANS, ROT or MIRROR, as a block that ends it does.
         ChainChange change = ChainWriter.Between(write.Before.Frame, write.After.Frame);
+        bool endsProgrammable = write.IsMadeUnknown(ProgrammableFrame)
+            && (EndsProgrammableFrame(block) || AppendsProgrammable(change));
+        bool endsSwivel = write.IsMadeUnknown(Swivel) && EndsSwivel(write);
         if (change.IsEmpty && !endsProgrammable && !endsSwivel)
         {
             return;
         }
 
         int kept = write.After.Frame.Chain.Count - change.Appended.Count;
+        if (block.Has("ORIGIN") && HeldSwivel(write) is { Count: > 0 } held)
+        {
+            change = change with { Removed = [.. change.Removed.Where(entry => !held.Contains(entry))] };
+        }
+
         WriteRemoved(write, change, kept, endsProgrammable, endsSwivel);
         if (endsProgrammable)
         {
@@ -103,6 +118,85 @@ internal static partial class SiemensFrames
         {
             WriteEntry(write, chain, index, StartsProgrammableFrame(chain, index), appended: true);
         }
+    }
+
+    // D421: the swivel of CYCLE800 stands on the control after a datum of group 8, a component of the total frame of
+    // its own (D333, D340 (3)), and the reader writes it again after the ORIGIN, the TILT with MOVE=STAY. Where the
+    // blocks right after the ORIGIN append exactly the entries of the chain before it up to its last tilt, the tilts
+    // with MOVE=STAY, the control still holds that swivel: those entries, the shifts its reference point carries among
+    // them, are held, and neither the datum ends them nor those blocks write them again. Empty where they differ.
+    private static HashSet<TransformEntry> HeldSwivel(SiemensBlock write)
+    {
+        var held = new HashSet<TransformEntry>(ReferenceEqualityComparer.Instance);
+        IReadOnlyList<TransformEntry> before = write.Before.Frame.Chain;
+        int lastTilt = -1;
+        for (int index = 0; index < before.Count; index++)
+        {
+            lastTilt = IsTilt(before[index]) ? index : lastTilt;
+        }
+
+        if (lastTilt < 0 || write.After.Frame.Chain.Count > 0)
+        {
+            return held;
+        }
+
+        var steps = new List<BlockStep>();
+        foreach (BlockStep step in write.File.StepsAfter(write.Step))
+        {
+            IReadOnlyList<TransformEntry> chain = step.After.Frame.Chain;
+            bool chainOnly = step.Block.Verb?.Key is "SHIFT" or "TILT" or "TILT_AXIS";
+            if (!chainOnly || chain.Count != steps.Count + 1 || chain.Count > lastTilt + 1
+                || !SameSwivelEntry(before[chain.Count - 1], chain[^1]))
+            {
+                return held;
+            }
+
+            steps.Add(step);
+            if (chain.Count == lastTilt + 1)
+            {
+                write.File.HoldSwivel(steps);
+                for (int index = 0; index <= lastTilt; index++)
+                {
+                    held.Add(before[index]);
+                }
+
+                return held;
+            }
+        }
+
+        return held;
+    }
+
+    // The same entry of a swivel written again after a datum: the same kind and values, a tilt with MOVE=STAY (D421).
+    private static bool SameSwivelEntry(TransformEntry standing, TransformEntry again)
+    {
+        if (IsTilt(again) && again.Move != TiltMove.Stay)
+        {
+            return false;
+        }
+
+        return standing.Kind == again.Kind && standing.Rot == again.Rot && standing.Angle == again.Angle
+            && standing.Workplane == again.Workplane && standing.Mirrored.SequenceEqual(again.Mirrored)
+            && SameValues(standing.Shift, again.Shift) && SameValues(standing.Angles, again.Angles);
+    }
+
+    private static bool SameValues(
+        IReadOnlyDictionary<string, decimal?> first, IReadOnlyDictionary<string, decimal?> second)
+    {
+        if (first.Count != second.Count)
+        {
+            return false;
+        }
+
+        foreach (KeyValuePair<string, decimal?> value in first)
+        {
+            if (!second.TryGetValue(value.Key, out decimal? other) || other != value.Value)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     // D333: CYCLE800 writes system frames, and a swivel to a new plane (_ST ones digit 0) deletes the programmable
@@ -267,11 +361,12 @@ internal static partial class SiemensFrames
     /// siemens.md 4; controller-mapping 1, TILT; language 4.1, D5): it is unknown until a block ends it (WriteChain).
     /// The settable frame is the datum, which every RAW line leaves unknown already.
     /// </summary>
-    // TODO(question): the documents do not say whether a RAW line that names none of them, a builder cycle (the STAMA
-    // DREH(...), NEWCOORD(...); machine-builders 2) or a subprogram it calls, changes the frame; the frame stays as the
-    // chain has it after such a RAW, since TRANS and CYCLE800() before the next ORIGIN after every MSG and STOPRE would
-    // stand where the source has none (controllers sample-corpus.md: MSG before every operation), until that is
-    // answered, as for the modal call (SiemensCycles.AfterRaw).
+    // D420 as D430 revises it: a RAW subprogram or builder-cycle call (the STAMA DREH(...), NEWCOORD; machine-builders
+    // 2) may change the frame as well, and the control keeps whatever frame the call left (NC Programming p.500-502),
+    // so the frame is unknown after it (KeysNamedBy) and the compiler writes no frame of its own: the next frame word
+    // of the program goes out in its replacing form (WriteChain). A RAW line that is MSG, STOPRE, a comment, G4 or
+    // another frame-neutral instruction leaves the frame known (controllers sample-corpus.md: MSG before every
+    // operation; SiemensRawCall).
     public static void AfterRaw(SiemensBlock write, string raw)
     {
         foreach (string key in KeysNamedBy(raw))
@@ -296,26 +391,39 @@ internal static partial class SiemensFrames
 
     /// <summary>
     /// The keys of the target state that a RAW text may change, the programmable frame and the swivel, by the
-    /// instructions and the frame variables it names (AfterRaw).
+    /// instructions and the frame variables it names, or both where it calls a subprogram or a builder cycle (AfterRaw,
+    /// D420).
     /// </summary>
     /// <param name="raw">The text of the RAW block.</param>
     public static List<string> KeysNamedBy(string raw)
     {
         // The words of the text, without its strings and its comments, whose words are no instructions.
         string code = StringOrComment().Replace(raw, " ");
-        bool frameVariable = FrameVariable().IsMatch(code);
+        bool everyFrame = FrameVariable().IsMatch(code) || SiemensRawCall.IsCall(raw);
         var keys = new List<string>();
-        if (frameVariable || ProgrammableInstruction().IsMatch(code))
+        if (everyFrame || ProgrammableInstruction().IsMatch(code))
         {
             keys.Add(ProgrammableFrame);
         }
 
-        if (frameVariable || SwivelInstruction().IsMatch(code))
+        if (everyFrame || SwivelInstruction().IsMatch(code))
         {
             keys.Add(Swivel);
         }
 
         return keys;
+    }
+
+    /// <summary>
+    /// True where a RAW text names an instruction of the programmable frame or of the swivel, or a frame variable, as
+    /// KeysNamedBy finds them; such a line is no call (SiemensRawCall, D430).
+    /// </summary>
+    /// <param name="raw">The text of the RAW block.</param>
+    public static bool NamesFrame(string raw)
+    {
+        string code = StringOrComment().Replace(raw, " ");
+        return FrameVariable().IsMatch(code) || ProgrammableInstruction().IsMatch(code)
+            || SwivelInstruction().IsMatch(code);
     }
 
     // A removed shift, rotation or mirror: the programmable frame again from its first entry, TRANS alone where none
@@ -373,7 +481,8 @@ internal static partial class SiemensFrames
 
             if ((isTilt && tilt) || (!isTilt && programmable))
             {
-                WriteEntry(write, chain, index, first: !isTilt && startsFrame, appended: false);
+                WriteEntry(write, chain, index, first: !isTilt && startsFrame, appended: false,
+                    restating: endsProgrammable || endsSwivel);
                 rewritesProgrammable |= !isTilt;
                 startsFrame = isTilt;
             }
@@ -397,22 +506,23 @@ internal static partial class SiemensFrames
     // AMIRROR for the rest, CYCLE800 for a tilt (controllers siemens.md 4, 12 rule 4; controller-mapping 1, SHIFT,
     // ROTATE, MIRROR, TILT).
     private static void WriteEntry(SiemensBlock write, IReadOnlyList<TransformEntry> chain, int index, bool first,
-        bool appended)
+        bool appended, bool restating = false)
     {
         TransformEntry entry = chain[index];
         switch (entry.Kind)
         {
             case TransformKind.Shift:
-                WriteShift(write, entry, first, appended);
+                WriteShift(write, entry, first, appended, restating);
                 break;
             case TransformKind.Rotate:
-                WriteRotation(write, entry, first, appended);
+                WriteRotation(write, entry, first, appended, restating);
                 break;
             case TransformKind.Mirror:
                 WriteMirror(write, entry, first);
                 break;
             case TransformKind.Tilt:
-                WriteTilt(write, chain, index, write.Machine.Transform?.TiltOn, "[transform] TILT_ON", appended);
+                WriteTilt(write, chain, index, write.Machine.Transform?.TiltOn, "[transform] TILT_ON", appended,
+                    restating);
                 break;
             case TransformKind.TiltAxis:
                 // TILT_AXIS needs the kinematics module where the machine has no TILT_AXIS_ON (D82).
@@ -425,7 +535,7 @@ internal static partial class SiemensFrames
                     return;
                 }
 
-                WriteTilt(write, chain, index, template, "[transform] TILT_AXIS_ON", appended);
+                WriteTilt(write, chain, index, template, "[transform] TILT_AXIS_ON", appended, restating);
                 break;
         }
     }
@@ -435,7 +545,8 @@ internal static partial class SiemensFrames
     // radius of the diameter the SHIFT wrote (D125). A frame of the control on a facing axis is a radius unless the
     // machine keeps frames in diameters ([[axis]] frames_in_diameter, MD20360 bit 3; D125, D388), so the frame
     // factors of SiemensAxes apply, not those of a motion word.
-    private static void WriteShift(SiemensBlock write, TransformEntry entry, bool first, bool appended)
+    private static void WriteShift(SiemensBlock write, TransformEntry entry, bool first, bool appended,
+        bool restating)
     {
         var words = new List<string>();
         bool fromBlock = appended && write.Block.Verb?.Key == "SHIFT";
@@ -453,7 +564,7 @@ internal static partial class SiemensFrames
                     : null;
             if (text is null)
             {
-                write.Error(DiagnosticCodes.SiemensChainNotWritable,
+                ChainNotWritable(write, restating,
                     $"The shift of {axis.Key} is not known, so {(first ? "TRANS" : "ATRANS")} cannot be written "
                     + "(virtual machine 1; language 4.2).");
                 return;
@@ -467,7 +578,8 @@ internal static partial class SiemensFrames
 
     // ROT RPL= or AROT RPL=, the rotation about the axis perpendicular to the plane (controllers siemens.md 4;
     // controller-mapping 1, ROTATE); in another plane than the one of the entry, about the tool axis of its plane.
-    private static void WriteRotation(SiemensBlock write, TransformEntry entry, bool first, bool appended)
+    private static void WriteRotation(SiemensBlock write, TransformEntry entry, bool first, bool appended,
+        bool restating)
     {
         Word? word = appended ? write.Block.Find("ROTATE") : null;
         string? angle = word is not null && word.Value is not IdentValue
@@ -475,7 +587,7 @@ internal static partial class SiemensFrames
             : entry.Angle is decimal known ? write.Format("ROTATE", known) : null;
         if (angle is null)
         {
-            write.Error(DiagnosticCodes.SiemensChainNotWritable,
+            ChainNotWritable(write, restating,
                 "The angle of the rotation is not known, so AROT cannot be written (virtual machine 1; language 4.2).");
             return;
         }
@@ -510,11 +622,11 @@ internal static partial class SiemensFrames
     // without {dir} cannot write STAY or MOVE, because its constant _DIR turns the rotary axes (machine-config 5,
     // TILT_ON and move; controller-mapping 1, TILT and MOVE; controllers siemens.md 4, 12 rule 4; decisions.md D262).
     private static void WriteTilt(SiemensBlock write, IReadOnlyList<TransformEntry> chain, int index,
-        string? template, string what, bool appended)
+        string? template, string what, bool appended, bool restating)
     {
         TransformEntry entry = chain[index];
         var values = new TemplateValues();
-        if (!SetReferencePoint(write, chain, index, template, what, values))
+        if (!SetReferencePoint(write, chain, index, template, what, values, restating))
         {
             return;
         }
@@ -563,7 +675,7 @@ internal static partial class SiemensFrames
     // ERROR CMP535 until a rule for additive swivels is drafted; a shift the template has no placeholder for is
     // CMP532. False where the tilt cannot be written.
     private static bool SetReferencePoint(SiemensBlock write, IReadOnlyList<TransformEntry> chain, int index,
-        string? template, string what, TemplateValues values)
+        string? template, string what, TemplateValues values, bool restating)
     {
         var sums = new Dictionary<string, decimal> { ["X"] = 0m, ["Y"] = 0m, ["Z"] = 0m };
         for (int before = index - 1; before >= 0; before--)
@@ -602,7 +714,7 @@ internal static partial class SiemensFrames
 
                 if (axis.Value is not decimal known)
                 {
-                    write.Error(DiagnosticCodes.SiemensChainNotWritable,
+                    ChainNotWritable(write, restating,
                         $"The shift of {axis.Key} before the tilt is not known, so the reference point of CYCLE800 "
                         + "cannot be written (virtual machine 1; language 4.2; D333).");
                     return false;
@@ -986,6 +1098,34 @@ internal static partial class SiemensFrames
     private static string Invariant(decimal value)
     {
         return value.ToString(CultureInfo.InvariantCulture);
+    }
+
+    // An entry of the chain that cannot be written: the ERROR CMP531, and the WARNING CMP538 where the compiler
+    // restates a chain the control may no longer hold after a RAW line, which the program did not ask it to write
+    // (D430).
+    private static void ChainNotWritable(SiemensBlock write, bool restating, string message)
+    {
+        if (restating)
+        {
+            write.Warning(DiagnosticCodes.SiemensChainNotRestated, message);
+            return;
+        }
+
+        write.Error(DiagnosticCodes.SiemensChainNotWritable, message);
+    }
+
+    // True where a block appends a shift, a rotation or a mirror to the chain (D430).
+    private static bool AppendsProgrammable(ChainChange change)
+    {
+        foreach (TransformEntry entry in change.Appended)
+        {
+            if (!IsTilt(entry))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // The words that end the programmable frame in NCX: ORIGIN starts an empty chain, SHIFT=RESET and ROTATE=RESET

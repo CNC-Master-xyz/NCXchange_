@@ -12,10 +12,10 @@ public sealed record ExpansionRule
     /// coolant. Empty means every state of the table triggers it (machine-config 5a, D198). The tool change and a
     /// catalog cycle have no states and leave it empty.
     /// </summary>
-    // TODO(question): D198 settles which states fire the one rule of a table, not how a machine that needs two
-    // different sequences for one state is written. The DMG chuck has M436 "open with the spindle standing still"
-    // and M433 "open with the spindle running", two codes for one state under two conditions, which this shape
-    // reaches only through two function entries. Until that is settled a table has one rule.
+    // D415: a table has one rule. Where a machine has two codes for one state under two conditions, the code that is
+    // safe in every condition is the table's state and the other a function of its own that the program asks for
+    // explicitly: the DMG chuck opens with M436, "spindle standing", and MAIN_CHUCK_RUNNING OPEN is M433, "open with
+    // the spindle running".
     public IReadOnlyList<string> States { get; init; } = [];
 
     /// <summary>

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Ncx.Core.Machine;
 using Ncx.Core.Model;
 using Ncx.Core.VirtualMachine.State;
@@ -14,7 +15,7 @@ namespace Ncx.Compilers.Siemens;
 /// SiemensProgramFrame, SiemensMotion with SiemensArcs, SiemensTools, SiemensSpindles, SiemensFunctions, SiemensFrames,
 /// SiemensCycles, SiemensFlow, SiemensChannels.
 /// </summary>
-public sealed class SiemensCompiler : CompilerBase, ICompiler
+public sealed partial class SiemensCompiler : CompilerBase, ICompiler
 {
     // What the compiler knows of the file being written across its blocks.
     private SiemensFile? _file;
@@ -119,10 +120,15 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
     // written verbatim (siemens 12 rule 6), its own number too: the numbering of block_numbers goes on past every
     // number a line of the file carries, so that each number names one block. Siemens 1 asks the numbers to be unique,
     // not ascending; a RAW number stands where its block stands.
-    // TODO(question): no document says whether block_numbers may renumber the N of a RAW line so that the numbers of
-    // the file ascend, which would change the RAW text against rule 6 and move the target of a GOTO to a block number
-    // (siemens 8); the number is kept and passed over, until that is answered.
+    // D417: block_numbers never renumbers the N of a RAW line, which would change the RAW text against rule 6 and move
+    // the target of a GOTO to a block number (siemens 8): the number is kept and passed over.
     protected override int? OwnBlockNumber(string line)
+    {
+        return BlockNumberOf(line);
+    }
+
+    // The N a line carries itself, after its skip mark (controllers siemens.md 1); null for none.
+    private static int? BlockNumberOf(string line)
     {
         // The skip mark, / or /0 to /9, stands before the number (controllers siemens.md 1).
         int start = 0;
@@ -227,6 +233,7 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
 
         write.Written("RAW");
         write.Written("SKIP");
+        CheckBlockNumber(write, raw);
         SiemensCycles.EndModalCallBeforeRaw(write, raw);
         if (raw.StartsWith('/'))
         {
@@ -243,10 +250,30 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
             write.MakeUnknown(key);
         }
 
+        // D424: a RAW G973 switches the surface speed off with the feed per revolution, which the control then has
+        // active, so no G96 is written again after it for a speed the program gives in rpm (NC Programming 2020 p.98).
+        if (G973().IsMatch(raw))
+        {
+            SiemensMotion.RawG973(write);
+        }
+
         SiemensCycles.AfterRaw(write, raw);
         SiemensFrames.AfterRaw(write, raw);
         SiemensProgramFrame.WriteComment(write);
         return true;
+    }
+
+    // D417: the numbering passes over the N of a RAW line, so a generated number never equals it; two RAW lines of one
+    // program or subprogram with the same N leave a GOTO to it no one block, the WARNING CMP504 (siemens 1, 8). A line
+    // that two walks of one subprogram meet is one block.
+    private static void CheckBlockNumber(SiemensBlock write, string raw)
+    {
+        if (BlockNumberOf(raw) is int number && !write.File.TakeBlockNumber(write.Step.Section, number, write.Block))
+        {
+            write.Warning(DiagnosticCodes.SiemensBlockNumberTwice, string.Create(CultureInfo.InvariantCulture,
+                $"N{number} stands on two RAW lines of one unit, and RAW is written as it is, so a GOTO to N{number} "
+                + $"names no one block (controllers siemens.md 1, 8; D417)."));
+        }
     }
 
     private void WriteWords(SiemensBlock write, string fileStem)
@@ -342,4 +369,8 @@ public sealed class SiemensCompiler : CompilerBase, ICompiler
             ? config.ChangeNamed
             : config?.Change;
     }
+
+    // G973 as a word of its own, not inside a string or a longer name (controllers siemens.md 2, group 15).
+    [GeneratedRegex("(?<![A-Za-z0-9_$\"])G973(?![0-9])", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex G973();
 }

@@ -169,9 +169,8 @@ internal static class CompileCommand
         // written after the ERROR of a plugin that failed: the run went on without the plugin, and a program the
         // plugin did not see must not reach the machine (implementation 17, P7-01).
         // compile writes no NC file after any ERROR, because that file goes to a control (architecture 10; D205).
-        // TODO(question): architecture 10 writes the NC file "under out/<machine>/" and names no --output for compile,
-        // while format and convert take --output as a file; a compile under file_per_program writes several files. The
-        // --output of compile names the folder the files go into, until that is answered.
+        // The --output of compile names the folder the files go into, since a compile under file_per_program writes
+        // several files (architecture 10, the compile row: [--output <folder>]; 13-phase-3 P3-03).
         if (!diagnostics.HasErrors)
         {
             WriteFiles(result.Files, OutputFolderOf(settings, outputFolder, runMachine), diagnostics);

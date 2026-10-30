@@ -229,10 +229,9 @@ internal static class SiemensMotion
             return;
         }
 
-        // TODO(question): a block with a position while the reader does not know what MCALL armed, after the RAW
-        // MCALL of a pattern range (D259) or after MCALL of a subprogram, still calls that modal subprogram on the
-        // control; the reader keeps the least committal form and reads it as a plain motion, so the output loses the
-        // call. No decision covers it: D259 settles the range of a pattern, not a position inside an unknown one.
+        // D422: a block with a position in the range of an MCALL the reader keeps RAW, of a pattern range (D259) or
+        // of a subprogram, never reaches this point: it stays RAW with the range (SiemensCycles.InRawRange), since it
+        // calls that modal subprogram on the control.
         if (facts.ModalCycle is not null && !arc)
         {
             SiemensCycles.CallAt(block, axes);

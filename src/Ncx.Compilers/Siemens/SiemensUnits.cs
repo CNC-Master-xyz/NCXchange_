@@ -17,9 +17,9 @@ internal static class SiemensUnits
     /// line before the next; the header line itself stays out of the file, which is named after the unit. Lines before
     /// the first header stay at the head of the first unit, so that no line is dropped (language 2 rule 8).
     /// </summary>
-    // TODO(question): siemens 12 rule 1 writes the %_N_ headers "when program_layout = one_file, else one file per
-    // unit", and siemens 1 says the header is not part of the text on the control itself; a file of one unit is written
-    // without its header, until that is answered.
+    // Siemens 12 rule 1 writes the %_N_ headers "when program_layout = one_file, else one file per unit", and
+    // machine-config 2 names the %_N_ units the one_file form: each file that file_per_program splits off is written
+    // without its header, while a one_file output of a single unit keeps it.
     public static List<CompiledFile> Split(CompiledFile archive)
     {
         var files = new List<CompiledFile>();

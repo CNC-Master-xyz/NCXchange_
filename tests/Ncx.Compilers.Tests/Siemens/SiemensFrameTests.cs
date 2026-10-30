@@ -335,6 +335,101 @@ public sealed class SiemensFrameTests
             MillTurnBody("ORIGIN=1", "RAW:SIEMENS=\"MSG(\\\"TRANS X10\\\")\"", "ORIGIN=1"));
     }
 
+    // D421: a datum leaves the swivel of CYCLE800 standing on the control, and the reader writes it again after the
+    // ORIGIN with MOVE=STAY; where the tilt right after the ORIGIN equals the swivel the control still holds, the
+    // compiler writes neither CYCLE800() at the datum nor CYCLE800 for the tilt, so the round trip is unchanged.
+    [Fact]
+    public void Origin_FollowedByTheStandingTiltWithMoveStay_WritesNoSwivel()
+    {
+        Assert.Equal(Lines("G54", "CYCLE800(1,\"TC1\",0,27,0,0,0,0,45,0,0,0,0,-1,100,1)", "TRANS X2.5", "TRANS", "G55",
+                "TRANS X2.5", "G1 X10 F100"),
+            MillTurnBody("ORIGIN=1", "TILT A=0 B=45 C=0 MOVE=TURN", "SHIFT X=5", "ORIGIN=2",
+                "TILT A=0 B=45 C=0 MOVE=STAY", "SHIFT X=5", "LINE X=10 F=100"));
+    }
+
+    // D421: the reference point before the rotation, a SHIFT before the TILT, belongs to the swivel the control holds,
+    // so neither it nor the tilt is written again after the datum.
+    [Fact]
+    public void Origin_FollowedByTheStandingSwivelWithItsReferencePoint_WritesNoSwivel()
+    {
+        Assert.Equal(Lines("G54", "TRANS Y7", "CYCLE800(1,\"TC1\",0,27,0,7,0,0,45,0,0,0,0,-1,100,1)", "G55",
+                "G1 X10 F100"),
+            MillTurnBody("ORIGIN=1", "SHIFT Y=7", "TILT A=0 B=45 C=0 MOVE=TURN", "ORIGIN=2", "SHIFT Y=7",
+                "TILT A=0 B=45 C=0 MOVE=STAY", "LINE X=10 F=100"));
+    }
+
+    // D421: a tilt after the datum that differs from the swivel the control holds is written, after CYCLE800() at the
+    // datum, as before.
+    [Fact]
+    public void Origin_FollowedByAnotherTilt_EndsTheSwivelAndWritesTheNewOne()
+    {
+        Assert.Equal(Lines("G54", "CYCLE800(1,\"TC1\",0,27,0,0,0,0,45,0,0,0,0,-1,100,1)", "CYCLE800()", "G55",
+                "CYCLE800(1,\"TC1\",0,27,0,0,0,0,30,0,0,0,0,0,100,1)", "G1 X10 F100"),
+            MillTurnBody("ORIGIN=1", "TILT A=0 B=45 C=0 MOVE=TURN", "ORIGIN=2", "TILT A=0 B=30 C=0 MOVE=STAY",
+                "LINE X=10 F=100"));
+    }
+
+    // D430, revising D420: after a RAW subprogram or builder-cycle call the control keeps whatever frame the call
+    // left (NC Programming p.500-502), so the compiler writes no frame of its own before the next motion.
+    [Theory]
+    [InlineData("DREH(1,2)")]
+    [InlineData("NEWCOORD")]
+    [InlineData("L100")]
+    [InlineData("CALL \\\"MYSUB\\\"")]
+    public void Motion_AfterARawCall_WritesNoFrame(string call)
+    {
+        string written = call.Replace("\\", "", StringComparison.Ordinal);
+        Assert.Equal(Lines("G54", "TRANS X5", written, "MCALL", "G1 G90 G95 X1 F100"),
+            MillTurnBody("ORIGIN=1", "SHIFT X=10", $"RAW:SIEMENS=\"{call}\"", "LINE X=1 F=100"));
+    }
+
+    // D430: the frame is unknown after a RAW call, or after a RAW line that names a programmable frame instruction, so
+    // the next frame word of the program goes out in its replacing form, the chain from its first entry with TRANS;
+    // a line that is no call and names no programmable frame instruction (a label, TCOFR, TOFRAME, which names the
+    // swivel only) leaves the programmable frame known, and the SHIFT appends with ATRANS.
+    [Theory]
+    [InlineData("DREH(1,2)", true)]
+    [InlineData("AROT RPL=30", true)]
+    [InlineData("SCALE X2 Y2", true)]
+    [InlineData("TOFRAME", false)]
+    [InlineData("TCOFR", false)]
+    [InlineData("LABEL:", false)]
+    public void Shift_AfterARawLine_IsWrittenInItsReplacingFormWhereTheFrameIsUnknown(string raw, bool unknown)
+    {
+        string[] shift = unknown ? ["TRANS X5", "ATRANS Y5"] : ["ATRANS Y5"];
+        Assert.Equal(Lines(["G54", "TRANS X5", raw, .. shift]),
+            MillTurnBody("ORIGIN=1", "SHIFT X=10", $"RAW:SIEMENS=\"{raw}\"", "SHIFT Y=5"));
+    }
+
+    // D430: an entry of the chain that the compiler cannot write again after a RAW call, a shift from an expression,
+    // is the WARNING CMP538 and not the ERROR CMP531: the control keeps the frame the call left.
+    [Fact]
+    public void Shift_AfterARawCallOverAShiftOfUnknownValue_IsAWarning()
+    {
+        CompileResult result = Run(Program(MillTurnHeader, "ORIGIN=1", "SHIFT X={$R43}", "LINE X=0 F=100",
+            "RAW:SIEMENS=\"TI_ON(1)\"", "LINE X=1 F=100", "SHIFT Y=5"), MillTurn());
+
+        Assert.False(result.Diagnostics.HasErrors, result.Diagnostics.ToText());
+        Assert.Contains(DiagnosticCodes.SiemensChainNotRestated, CompilerCodes(result));
+    }
+
+    // D420: a RAW line that is MSG, STOPRE, a comment, G4 or another frame-neutral instruction leaves the frame known,
+    // so no frame is written before the next motion.
+    [Theory]
+    [InlineData("STOPRE")]
+    [InlineData("G4 F2")]
+    [InlineData("SOFT")]
+    [InlineData("WORKPIECE(,,,\\\"CYLINDER\\\",0,0,-80,-80,40)")]
+    [InlineData("CYCLE832(0.01,0,1)")]
+    [InlineData("R1=SIN(30)")]
+    [InlineData("IF R1>2 GOTOF MARKE")]
+    public void Motion_AfterAFrameNeutralRawLine_WritesNoFrame(string neutral)
+    {
+        string written = neutral.Replace("\\", "", StringComparison.Ordinal);
+        Assert.Equal(Lines("G54", "TRANS X5", written, "MCALL", "G1 G90 G95 X1 F100"),
+            MillTurnBody("ORIGIN=1", "SHIFT X=10", $"RAW:SIEMENS=\"{neutral}\"", "LINE X=1 F=100"));
+    }
+
     // Controller-mapping 1, HOME: G74 with the machine axis names and 0 (siemens 3), G75 with the axes, FP= the point.
     [Fact]
     public void Home_ReferencePointAndPoint2_IsG74WithMachineNamesAndG75WithFp()
@@ -474,7 +569,7 @@ public sealed class SiemensFrameTests
             MillTurnBody("RAPID X=40 Z=5", "WORKPIECE=SUB", "RAPID X=40 Z=5", "LINE IZ=-2 F=0.1"));
     }
 
-    // The TODO(question) of SiemensArcs: with Z negated, an arc in the ZX plane turns the other way round.
+    // D298 (SiemensArcs.Mirrored): with Z negated, an arc in the ZX plane turns the other way round.
     [Fact]
     public void ArcOnTheSubSpindleSide_WithADatum_TurnsTheOtherWay()
     {

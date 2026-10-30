@@ -17,6 +17,9 @@ internal static class SiemensMotion
     private const string CompensationGroup = "G40";
     private const string DistanceGroup = "G90";
     private const string FeedTypeGroup = "G94";
+
+    // The target key of a surface speed that a RAW G973 switched off while NCX holds it on (D424).
+    private const string RawSurfaceSpeedOff = "G973";
     private const string UnitsGroup = "G70";
     private const string Feed = "F";
 
@@ -145,6 +148,25 @@ internal static class SiemensMotion
     }
 
     /// <summary>
+    /// True where a RAW G973 switched the constant surface speed off and the control has no code of group 15 active
+    /// since that switches it on again (D424): S is then a speed in rpm on the control, whatever NCX holds.
+    /// </summary>
+    public static bool SurfaceSpeedOffOnTheControl(SiemensBlock write)
+    {
+        return write.ActiveOf(RawSurfaceSpeedOff) == "ON" && write.ActiveOf(FeedTypeGroup) is "G93" or "G94" or "G95";
+    }
+
+    /// <summary>
+    /// Records that a RAW G973 switched the constant surface speed off, with the feed per revolution (D424; 840D sl NC
+    /// Programming 2020, connector p.98).
+    /// </summary>
+    public static void RawG973(SiemensBlock write)
+    {
+        FeedTypeSwitched(write, "G973");
+        write.Target.Set(RawSurfaceSpeedOff, "ON");
+    }
+
+    /// <summary>
     /// Records the code of group 15 that a template wrote (controllers siemens.md 2, 5; D342): G93 to G96, G961 and
     /// G962 as they are, G962 with either feed type; G97 switches the surface speed off with the feed type G95, G971
     /// with G94, G973 is G97 without the speed limit and so leaves the feed per revolution, and G972 leaves the feed
@@ -211,14 +233,11 @@ internal static class SiemensMotion
 
             // D259: a bare F block under a modal call that a RAW line armed fires the modal subprogram, so the
             // compiler does not write it; the F stands again at the next block that needs it, and where a RAW line
-            // before the next one takes the modal feed, it takes the feed the control had before this block.
+            // before that block could take the modal feed, the drop is an ERROR (D418).
             if (SiemensCycles.RawModalCallStands(write))
             {
                 write.Written("F");
-                write.Warning(DiagnosticCodes.SiemensWordUnderARawModalCall,
-                    "The block programs F alone under a modal call that a RAW line armed, where F with G0 or G1 "
-                    + "active calls the modal subprogram: the F is not written here, and stands again at the next "
-                    + "block that needs it (controllers siemens.md 7; D259).");
+                SiemensCycles.ReportWordUnderRawModalCall(write, "F", "F");
                 return;
             }
 

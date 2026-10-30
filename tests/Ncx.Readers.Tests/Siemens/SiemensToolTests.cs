@@ -122,6 +122,27 @@ public sealed class SiemensToolTests
             CheckedBody("G961 S200 M3\nG97 S1000\nG961 S200\nG971 S1000"));
     }
 
+    // D424: G973, constant surface speed off without the speed limit, has no NCX form and stays a RAW word of its
+    // block, written back as the source wrote it, with the WARNING RDR511 that names the missing form beside the RAW
+    // word WARNING RDR501.
+    [Fact]
+    public void G973_StaysARawWordWithTheWarning()
+    {
+        NcxProgram program = FramedProgram("G96 S200 M3\nG973 X10");
+
+        Assert.Contains("RAW:SIEMENS=\"G973\"", BodyOf(NcxWriter.Write(program)), StringComparison.Ordinal);
+        Assert.Equal([DiagnosticCodes.SiemensG973HasNoForm, DiagnosticCodes.SiemensWordsKeptAsRaw], Codes(program));
+    }
+
+    // D424: after G973 S is a spindle speed in rpm again until the next code of group 15 (840D sl NC Programming 2020,
+    // connector p.98, p.101), so S1500 is RPM and not VC.
+    [Fact]
+    public void SpeedAfterG973_IsRpm()
+    {
+        Assert.Equal(Lines("FEED_MODE=PER_REV SPINDLE=CW CSS=ON VC=200", Raw("G973"), "RPM=1500"),
+            Body("G96 S200 M3\nG973\nS1500"));
+    }
+
     // D154: M19 orients at the angle the machine sets (SD43240), so the reader writes ORIENT=0 with the WARNING RDR021
     // naming the code.
     [Fact]

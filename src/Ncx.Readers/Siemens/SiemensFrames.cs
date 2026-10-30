@@ -41,10 +41,10 @@ internal static class SiemensFrames
     // starts an empty chain (language 4.2). The settable frame and the programmable frame are separate components of
     // the total frame on the control, so a datum of group 8 leaves TRANS, ROT, MIRROR and SCALE standing: the reader
     // writes the entries of the programmable frame again after the ORIGIN that empties the chain (D340).
-    // TODO(question): D340 (3) settles the programmable frame of group 3 alone, and the swivel of CYCLE800 belongs to
-    // none of its instructions; whether a datum of group 8 leaves that swivel standing is the open D333. A tilt of
-    // CYCLE800 in the chain is therefore not written again, as it was not before D340, so a datum writes no second
-    // swivel motion into the converted program.
+    // D421: the datum leaves the swivel of CYCLE800 standing as well, since CYCLE800 writes system frames (D333), so
+    // the reader writes its entries again too, in the order of the chain, the TILT with MOVE=STAY, which moves no
+    // rotary axis a second time (the reading D253 (d) gives Heidenhain cycle 247; 840D sl Programming Manual NC
+    // Programming 2020, connector p.305-306, p.653-654: the basic, settable, system and programmable frames chained).
     private static void ReadOrigin(SiemensBlock block)
     {
         foreach (SourceWord word in block.Unread())
@@ -64,15 +64,14 @@ internal static class SiemensFrames
                 _ => number - 53,
             };
             SiemensChain chain = block.Facts.Chain;
-            var programmable = new List<SiemensChainEntry>();
+            var standing = new List<SiemensChainEntry>();
             if (chain.Known)
             {
                 foreach (SiemensChainEntry entry in chain.Entries)
                 {
-                    if (entry.Instruction != "CYCLE800")
-                    {
-                        programmable.Add(entry);
-                    }
+                    standing.Add(entry.Instruction == "CYCLE800" && entry.Kind is "TILT" or "TILT_AXIS"
+                        ? entry with { Block = Staying(entry.Block) }
+                        : entry with { Block = entry.Block.Copy() });
                 }
             }
 
@@ -80,9 +79,9 @@ internal static class SiemensFrames
             block.Draft.AddState("ORIGIN", null, new IntegerValue(datum, datum.ToString(CultureInfo.InvariantCulture)));
             chain.Clear();
             var again = new List<SiemensDraftBlock>();
-            foreach (SiemensChainEntry entry in programmable)
+            foreach (SiemensChainEntry entry in standing)
             {
-                chain.Append(entry with { Block = entry.Block.Copy() }, again);
+                chain.Append(entry, again);
             }
 
             if (!known)
@@ -94,6 +93,14 @@ internal static class SiemensFrames
             block.Facts.Unknown.Remove(SiemensFacts.Frames);
             block.Siemens.ForgetPositions();
         }
+    }
+
+    // The tilt of a swivel that stands after a datum, written again with MOVE=STAY (D421).
+    private static SiemensDraftBlock Staying(SiemensDraftBlock tilt)
+    {
+        SiemensDraftBlock copy = tilt.Copy();
+        copy.Remove("MOVE");
+        return copy.Add("MOVE", new IdentValue("STAY"));
     }
 
     // TRANS X Y Z, ROT, MIRROR X0, SCALE: the replacing instructions delete every earlier programmable frame

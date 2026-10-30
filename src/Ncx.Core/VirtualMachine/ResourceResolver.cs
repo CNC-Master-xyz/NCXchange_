@@ -247,9 +247,9 @@ internal sealed class ResourceResolver
             return true;
         }
 
-        // TODO(question): language 4.6 addresses "a named channel from the machine configuration", and neither virtual
-        // machine 3.8 nor 5 says what a channel the configuration does not name is; it is treated like an unknown
-        // function: an ERROR with a machine file, the D103 WARNING without one (D130).
+        // D416: language 4.6 addresses "a named channel from the machine configuration", and a channel the
+        // configuration does not name is what an unknown function is: an ERROR with a machine file, the D103 WARNING
+        // without one (D130; virtual machine 5).
         if (!WithoutMachineFile)
         {
             diagnostics.Error(block, DiagnosticCodes.UnknownCoolantChannel,

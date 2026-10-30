@@ -6,7 +6,7 @@ namespace Ncx.Config.Tests;
 
 /// <summary>
 /// The tool table of D10: the tool kind, length and radius per tool, which [machine] tool_table names (machine-config
-/// 1), read in the form of the TODO(question) of ToolTable.
+/// 1), read in the form D265 gives it.
 /// </summary>
 public sealed class ToolTableTests
 {

@@ -92,7 +92,7 @@ public sealed class SiemensMotionTests
     [Fact]
     public void ChfAndChr_AreExpandedIntoLines()
     {
-        Assert.Equal(Lines("RAPID X=0 Y=0", "LINE X=8.586 Y=0 F=100", "LINE X=10 Y=1.414", "LINE Y=10",
+        Assert.Equal(Lines("RAPID X=0 Y=0", "LINE X=8.585786 Y=0 F=100", "LINE X=10 Y=1.414214", "LINE Y=10",
                 "LINE X=19 Y=10", "LINE X=20 Y=11", "LINE Y=20"),
             CheckedBody("G0 X0 Y0\nG1 X10 CHF=2 F100\nG1 Y10\nG1 X20 CHR=1\nG1 Y20"));
     }

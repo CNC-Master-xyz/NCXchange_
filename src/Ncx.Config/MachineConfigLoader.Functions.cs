@@ -21,10 +21,11 @@ public static partial class MachineConfigLoader
     private static readonly string[] s_spindleSyncStates = ["ON", "OFF", "PHASE"];
     private static readonly string[] s_coolantStates = ["ON", "OFF"];
 
-    // The keys every function table may carry besides its states: the channel binding (D56) and the four keys of the
-    // expansion rule (machine-config 5a); a spindle table also carries the machine limits (D64).
+    // The keys every function table may carry besides its states: the channel binding (D56) with the bindings of single
+    // states (D414) and the four keys of the expansion rule (machine-config 5a); a spindle table also carries the
+    // machine limits (D64).
     private static readonly string[] s_bindingAndRuleKeys =
-        ["channel", "channels", "pre", "post", "requires", "restore", "states"];
+        ["channel", "channels", "state_channels", "pre", "post", "requires", "restore", "states"];
 
     private static readonly string[] s_ruleKeys = ["pre", "post", "requires", "restore"];
     private static readonly string[] s_spindleLimitKeys = ["rpm_min", "rpm_max", "accel_time"];
@@ -205,11 +206,50 @@ public static partial class MachineConfigLoader
             States = templates,
             Channel = table.Integer("channel"),
             AllChannels = table.Choice("channels", s_allChannels) is not null,
+            StateChannels = ReadStateChannels(table, templates),
             Rule = ReadRule(table),
             RpmMin = spindleLimits ? table.Number("rpm_min") : null,
             RpmMax = spindleLimits ? table.Number("rpm_max") : null,
             AccelTime = spindleLimits ? table.Number("accel_time") : null,
         };
+    }
+
+    // D414: state_channels = { OFF = 1 } binds the states it names, each to a channel number or to "all"; a state name
+    // that the table does not have is CFG005, and so is a binding that is neither (machine-config 5).
+    private static Dictionary<string, StateBinding> ReadStateChannels(
+        ConfigTable table, IReadOnlyDictionary<string, string> states)
+    {
+        var bindings = new Dictionary<string, StateBinding>(StringComparer.Ordinal);
+        if (table.Table("state_channels") is not ConfigTable stateChannels)
+        {
+            return bindings;
+        }
+
+        var stateNames = new List<string>(states.Keys);
+        foreach (string state in stateChannels.Keys)
+        {
+            if (!states.ContainsKey(state))
+            {
+                stateChannels.NotAllowed(state, state, stateNames);
+                continue;
+            }
+
+            Value? value = stateChannels.NumberOrString(state);
+            if (value is IntegerValue channel && channel.Number is >= 1 and <= int.MaxValue)
+            {
+                bindings[state] = new StateBinding { Channel = (int)channel.Number };
+            }
+            else if (value is StringValue { Content: "all" })
+            {
+                bindings[state] = new StateBinding { AllChannels = true };
+            }
+            else if (value is not null)
+            {
+                stateChannels.NotAllowed(state, value.ToCanonical(), ["a channel number", "all"]);
+            }
+        }
+
+        return bindings;
     }
 
     // The optional keys of a function table, the tool change or a catalog cycle: pre and post are NCX blocks,

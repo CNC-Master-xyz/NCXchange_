@@ -259,8 +259,10 @@ SLIDE2 = { ON = "M208", OFF = "M209" }
 ALL_OFF = { OFF = "M9" }
 
 [func]
-MAIN_CHUCK = { OPEN = "M436", CLOSE = "M437", OPEN_RUNNING = "M433" }   # spindle 4 clamping device
-SUB_CHUCK = { OPEN = "M336", CLOSE = "M337", OPEN_RUNNING = "M333" }    # spindle 3 clamping device
+MAIN_CHUCK = { OPEN = "M436", CLOSE = "M437" }   # spindle 4 clamping device; M436 opens it with the spindle standing (D415)
+SUB_CHUCK = { OPEN = "M336", CLOSE = "M337" }    # spindle 3 clamping device
+MAIN_CHUCK_RUNNING = { OPEN = "M433" }           # D415: open with the spindle running (bar feed), asked for explicitly
+SUB_CHUCK_RUNNING = { OPEN = "M333" }
 MAIN_CHUCK_FORCE = { NORMAL = "M434", LOW = "M435" }
 SUB_CHUCK_FORCE = { NORMAL = "M334", LOW = "M335" }
 TOOL_CARRIER_CLAMP = { OPEN = "M136", CLOSE = "M137" }

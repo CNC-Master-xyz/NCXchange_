@@ -225,6 +225,42 @@ public sealed class SiemensProgramFrameTests
         Assert.Equal(numbers.Distinct().Count(), numbers.Count);
     }
 
+    // D417: RAW text is never changed, so the N of a RAW line stays and the numbering passes over it; where two lines
+    // of one program carry the same N, a GOTO to it names no one block, which is the WARNING CMP504. The lines are
+    // written as they are.
+    [Fact]
+    public void BlockNumbers_TwoRawLinesWithTheSameNumber_AreAWarningAndStayAsWritten()
+    {
+        CompileResult result = Run(Program(MillHeader, "RAW:SIEMENS=\"N20 MSG(\\\"OP1\\\")\"", "RAPID X=0",
+            "RAW:SIEMENS=\"N20 STOPRE\""), Mill());
+
+        Assert.Equal([DiagnosticCodes.SiemensBlockNumberTwice], CompilerCodes(result));
+        string text = Assert.Single(result.Files).Text.ReplaceLineEndings("\n");
+        Assert.Contains("\nN20 MSG(\"OP1\")\n", text, StringComparison.Ordinal);
+        Assert.Contains("\nN20 STOPRE\n", text, StringComparison.Ordinal);
+    }
+
+    // D417: a RAW line of a subprogram that two calls walk carries its number once, which is no number twice.
+    [Fact]
+    public void BlockNumbers_RawLineOfASubprogramCalledTwice_IsNoNumberTwice()
+    {
+        string program = """
+            FILE=BEGIN NCX=1
+            PROGRAM=BEGIN NAME="MAIN"
+            FEED_MODE=PER_MIN COMP=OFF UNITS=MM WORKPLANE=XY CYCLE=OFF
+            CALL=DRILL
+            CALL=DRILL
+            PROGRAM=END
+            SUB=BEGIN NAME=DRILL
+            RAW:SIEMENS="N20 STOPRE"
+            SUB=END
+            FILE=END
+            """;
+        CompileResult result = Run(program, Mill());
+
+        Assert.DoesNotContain(DiagnosticCodes.SiemensBlockNumberTwice, CompilerCodes(result));
+    }
+
     // Language 4.1, RAW: RAW of another controller compiles only to it, an ERROR here (D5, CMP001 of the framework).
     [Fact]
     public void RawFanuc_OnASiemensMachine_IsAnError()

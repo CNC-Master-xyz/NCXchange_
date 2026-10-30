@@ -97,8 +97,10 @@ internal static partial class SiemensSpindles
                 break;
             case "RPM":
                 // Under CSS the spindle follows VC and RPM is ignored (language 4.11): on the control S would be the
-                // cutting speed, so the speed is written when CSS goes off.
-                if (spindle is { Css: true })
+                // cutting speed, so the speed is written when CSS goes off. D424: after a RAW G973 the control runs
+                // without the surface speed although NCX holds it, and S is a speed in rpm there (NC Programming 2020
+                // p.98, p.101), so RPM is written.
+                if (spindle is { Css: true } && !SiemensMotion.SurfaceSpeedOffOnTheControl(write))
                 {
                     break;
                 }
@@ -286,13 +288,11 @@ internal static partial class SiemensSpindles
         foreach (SpindleText text in texts)
         {
             // D259: a bare S block under a modal call that a RAW line armed fires the modal subprogram, as a bare F
-            // does, so the compiler does not write it; the speed stands again at the next block that needs it.
+            // does, so the compiler does not write it; the speed stands again at the next block that needs it, and
+            // where a RAW line before that block could take it, the drop is an ERROR (D418).
             if (IsBareSpeed(text.Text) && SiemensCycles.RawModalCallStands(write))
             {
-                write.Warning(DiagnosticCodes.SiemensWordUnderARawModalCall,
-                    $"The block programs {text.Text} alone under a modal call that a RAW line armed, where S with G0 "
-                    + "or G1 active calls the modal subprogram: it is not written here, and stands again at the next "
-                    + "block that needs it (controllers siemens.md 7; D259).");
+                SiemensCycles.ReportWordUnderRawModalCall(write, text.Text, "S");
                 continue;
             }
 
