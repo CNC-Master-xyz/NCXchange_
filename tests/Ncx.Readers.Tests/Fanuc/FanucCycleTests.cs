@@ -826,18 +826,98 @@ public sealed class FanucCycleTests
             Body("G70 P10 Q20\nG0 X50.\nN10 G0 X20.\nN20 G1 Z-10.", Lathe()));
     }
 
-    // The other words of G70 to G76, depth of cut, allowances and feed, have no NCX word (wave-1 question #18): a G71
-    // with U, W and F stays RAW with the blocks of its contour, which the RAW cycle reads as the control does (D5).
+    // D409: the two blocks of G71 are one catalog cycle: U and R of the first block are DEPTH_OF_CUT and
+    // RETRACT_AMOUNT, U, W and F of the second ALLOWANCE_X, ALLOWANCE_Z and CYCLE_F, with P and Q the contour; the
+    // first block writes no block of its own.
     [Fact]
-    public void G71_WithWordsTheCatalogDoesNotMap_IsKeptAsRawWithItsContour()
+    public void G71_TwoBlockForm_IsOneCycleWithTheParamsOfBothBlocks()
     {
         Assert.Equal(
             Lines(
-                "RAW:FANUC=\"G71 P10 Q20 U0.5 W0.1 F0.2\"",
+                "RAPID X=40 Z=2",
+                "CYCLE=ROUGH_TURN CYCLE_F=0.2 CONTOUR=CONTOUR_10_20 DEPTH_OF_CUT=2 RETRACT_AMOUNT=0.5 ALLOWANCE_X=0.5 "
+                    + "ALLOWANCE_Z=0.1",
+                "CYCLE_CALL",
+                "CYCLE=OFF",
+                "RAPID X=100"),
+            Body("G0 X40. Z2.\nG71 U2. R0.5\nG71 P10 Q20 U0.5 W0.1 F0.2\nN10 G0 X20.\nN20 G1 Z-10.\nG0 X100.",
+                Lathe()));
+    }
+
+    // D409: the catalog params of the two-block cycles are words the parser takes and the virtual machine checks
+    // against the catalog of the machine (D114), and the program formats to itself.
+    [Fact]
+    public void TwoBlockCycles_ReadProgram_ChecksWithoutErrorAndFormatsToItself()
+    {
+        string text = Text("%\nO0001\nG0 X40. Z2.\nG71 U2. R0.5\nG71 P10 Q20 U0.5 W0.1 F0.2\nN10 G0 X20.\n"
+            + "N20 G1 Z-10.\nG0 X42. Z-20.\nG75 R0.5\nG75 X30. Z-30. P1000 Q2000 F0.1\nG0 X30. Z5.\n"
+            + "G76 P021060 Q100 R0.02\nG76 X27.4 Z-20. R0 P1300 Q400 F2.\nM30\n%\n", Lathe());
+
+        Assert.DoesNotContain("RAW:", text, StringComparison.Ordinal);
+        AssertFormatsToItself(text);
+        Assert.False(Check(text, Lathe()).HasErrors, Check(text, Lathe()).ToText());
+    }
+
+    // D409: the second block alone is the cycle with the params it carries; the control takes the depth of cut and
+    // the retract from its parameters.
+    [Fact]
+    public void G71_SecondBlockAlone_IsTheCycleWithItsOwnParams()
+    {
+        Assert.Equal(
+            Lines(
+                "CYCLE=ROUGH_TURN CYCLE_F=0.2 CONTOUR=CONTOUR_10_20 ALLOWANCE_X=0.5 ALLOWANCE_Z=0.1",
+                "CYCLE_CALL",
+                "CYCLE=OFF",
+                "RAPID X=100"),
+            Body("G71 P10 Q20 U0.5 W0.1 F0.2\nN10 G0 X20.\nN20 G1 Z-10.\nG0 X100.", Lathe()));
+    }
+
+    // D409: the one-block form of Series 15, G71 P Q U W D F, carries D, which no param maps, and stays RAW with the
+    // blocks of its contour, which the RAW cycle reads as the control does (D5); so does a first block that its
+    // second block does not follow.
+    [Fact]
+    public void G71_OneBlockFormOrALoneFirstBlock_StaysRaw()
+    {
+        Assert.Equal(
+            Lines(
+                "RAW:FANUC=\"G71 P10 Q20 U0.5 W0.1 D2. F0.2\"",
                 "RAW:FANUC=\"N10 G0 X20.\"",
                 "RAW:FANUC=\"N20 G1 Z-10.\"",
                 "RAPID X=100"),
-            Body("G71 P10 Q20 U0.5 W0.1 F0.2\nN10 G0 X20.\nN20 G1 Z-10.\nG0 X100.", Lathe()));
+            Body("G71 P10 Q20 U0.5 W0.1 D2. F0.2\nN10 G0 X20.\nN20 G1 Z-10.\nG0 X100.", Lathe()));
+        Assert.Contains("RAW:FANUC=\"G71 U2. R0.5\"", Body("G71 U2. R0.5\nG0 X100.", Lathe()),
+            StringComparison.Ordinal);
+    }
+
+    // D409: G75 R(e) / G75 X Z P Q F is GROOVE with RETURN_AMOUNT, STEP_X, STEP_Z and CYCLE_F; X and Z of the second
+    // block are the end point, the axis words of the CYCLE_CALL, after which the tool stands at the start point again
+    // (D411).
+    [Fact]
+    public void G75_TwoBlockForm_IsGrooveWithItsEndPointOnTheCall()
+    {
+        Assert.Equal(
+            Lines(
+                "RAPID X=42 Z=-20",
+                "CYCLE=GROOVE CYCLE_F=0.1 RETURN_AMOUNT=0.5 STEP_X=1000 STEP_Z=2000",
+                "CYCLE_CALL X=30 Z=-30",
+                "CYCLE=OFF",
+                "RAPID IX=10"),
+            Body("G0 X42. Z-20.\nG75 R0.5\nG75 X30. Z-30. P1000 Q2000 F0.1\nG0 U10.", Lathe()));
+    }
+
+    // D409: G76 P(m r a) Q(dmin) R(d) / G76 X Z R(i) P(k) Q(d) F(L) is THREAD with THREAD_DATA, MIN_DEPTH,
+    // FINISH_ALLOWANCE, TAPER, HEIGHT, FIRST_DEPTH and PITCH.
+    [Fact]
+    public void G76_TwoBlockForm_IsThreadWithTheParamsOfBothBlocks()
+    {
+        Assert.Equal(
+            Lines(
+                "RAPID X=30 Z=5",
+                "CYCLE=THREAD PITCH=2 THREAD_DATA=021060 MIN_DEPTH=100 FINISH_ALLOWANCE=0.02 TAPER=0 HEIGHT=1300 "
+                    + "FIRST_DEPTH=400",
+                "CYCLE_CALL X=27.4 Z=-20",
+                "CYCLE=OFF"),
+            Body("G0 X30. Z5.\nG76 P021060 Q100 R0.02\nG76 X27.4 Z-20. R0 P1300 Q400 F2.", Lathe()));
     }
 
     // G76 of a mill has no cycle in the catalog: its blocks stay RAW until G80.

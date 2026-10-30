@@ -71,4 +71,10 @@ public static partial class DiagnosticCodes
     /// axis word of D93 (D114).
     /// </summary>
     public const string CycleParameterAxisForm = "CFG159";
+
+    /// <summary>
+    /// ERROR: first_block of a catalog entry names a word that is no params word of the entry (machine-config 6,
+    /// D409).
+    /// </summary>
+    public const string CycleFirstBlockNotAParameter = "CFG160";
 }

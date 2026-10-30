@@ -210,6 +210,24 @@ public sealed class MachineCycleEntriesTests
         Assert.Empty(catalog.ChannelEntries);
     }
 
+    // D409: first_block names params of the entry only; another word is CFG160.
+    [Fact]
+    public void CatalogFile_FirstBlockOfAWordThatIsNoParam_IsCfg160()
+    {
+        var diagnostics = new Diagnostics("cycles/test.toml");
+
+        CycleCatalogLoader.LoadText("""
+            [[cycle]]
+            name = "GROOVE"
+            native = "G75"
+            params = { STEP_X = "P" }
+            first_block = ["RETURN_AMOUNT"]
+            """, Controller.Fanuc, diagnostics);
+
+        Diagnostic error = Assert.Single(diagnostics.Items);
+        Assert.Equal((Severity.Error, "CFG160"), (error.Severity, error.Code));
+    }
+
     // D361: the Mori Seiki taps rigidly with M329, the before line of its TAP entries on G84 and G88; the Nakamura
     // keeps the catalog's M29 on both paths (D377).
     [Theory]

@@ -159,6 +159,24 @@ public sealed class ShippedCatalogsTests
         Assert.Equal(modal, entry.Modal);
     }
 
+    // D409: the two-block cycles of the lathe catalog name the params of their first block; U of G71 is DEPTH_OF_CUT
+    // there and ALLOWANCE_X in the second block.
+    [Theory]
+    [InlineData("ROUGH_TURN", "DEPTH_OF_CUT RETRACT_AMOUNT")]
+    [InlineData("ROUGH_FACE", "DEPTH_OF_CUT RETRACT_AMOUNT")]
+    [InlineData("PATTERN_REPEAT", "RELIEF_X RELIEF_Z DIVISIONS")]
+    [InlineData("FACE_GROOVE", "RETURN_AMOUNT")]
+    [InlineData("GROOVE", "RETURN_AMOUNT")]
+    [InlineData("THREAD", "THREAD_DATA MIN_DEPTH FINISH_ALLOWANCE")]
+    [InlineData("FINISH", "")]
+    public void FanucLathe_TwoBlockCycles_NameTheParamsOfTheFirstBlock(string name, string firstBlock)
+    {
+        CycleEntry entry = Load("fanuc-lathe.toml", Controller.Fanuc).Find(name)!;
+
+        Assert.Equal(firstBlock, string.Join(" ", entry.FirstBlock));
+        Assert.All(entry.FirstBlock, word => Assert.True(entry.Params.ContainsKey(word)));
+    }
+
     // D410: the lathe catalog withdraws the mill entries of the built-in family that no Fanuc lathe has, so G82 and
     // G86 name no cycle there, and G73 and G74 are the lathe's PATTERN_REPEAT and FACE_GROOVE.
     [Fact]

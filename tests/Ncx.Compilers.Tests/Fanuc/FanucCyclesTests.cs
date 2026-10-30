@@ -700,6 +700,63 @@ public sealed class FanucCyclesTests
             diagnostic => diagnostic.Code == DiagnosticCodes.FanucNativeParameterNotALetter);
     }
 
+    // D409: ROUGH_TURN with the params of both blocks is written as the two blocks of the control, U(d) R(e) first,
+    // then P Q with U(u) W(w) and F.
+    [Fact]
+    public void ContourCycles_G71WithTheParamsOfBothBlocks_WritesTheTwoBlocks()
+    {
+        string program = ContourProgram("RAPID X=20").Replace("CYCLE=ROUGH_TURN CONTOUR=C1",
+            "CYCLE=ROUGH_TURN CYCLE_F=0.25 CONTOUR=C1 DEPTH_OF_CUT=2 RETRACT_AMOUNT=0.5 ALLOWANCE_X=0.5 "
+            + "ALLOWANCE_Z=0.1", StringComparison.Ordinal);
+
+        CompileResult result = FanucCompile.Run(program, FanucCompile.Lathe());
+
+        Assert.Empty(FanucCompile.CompilerDiagnostics(result));
+        Assert.Contains("\nG71 U2. R0.5\nG71 P1 Q2 U0.5 W0.1 F0.25\nN1 G0 X20.\n", FanucCompile.TextOf(result),
+            StringComparison.Ordinal);
+    }
+
+    // D409: GROOVE is G75 R(e) and G75 X(U) Z(W) P(i) Q(k) F with the end point of the CYCLE_CALL; P and Q are least
+    // input increments, written without a decimal point (B-64304EN-1-01 p.88).
+    [Fact]
+    public void Groove_WithTheParamsOfBothBlocks_WritesTheTwoBlocksOfG75()
+    {
+        string text = FanucCompile.TextOf(FanucCompile.Run(LatheCycle("RAPID X=42 Z=-20",
+            "CYCLE=GROOVE CYCLE_F=0.1 RETURN_AMOUNT=0.5 STEP_X=1000 STEP_Z=2000", "CYCLE_CALL X=30 Z=-30"),
+            FanucCompile.Lathe()));
+
+        Assert.Contains("\nG75 R0.5\nG75 X30. Z-30. P1000 Q2000 F0.1\n", text, StringComparison.Ordinal);
+    }
+
+    // D409: THREAD is G76 P(m r a) Q(dmin) R(d) and G76 X(U) Z(W) R(i) P(k) Q(d) F(L); P is a number, so the
+    // THREAD_DATA 021060 of the source is P21060, the same m r a for the control.
+    [Fact]
+    public void Thread_WithTheParamsOfBothBlocks_WritesTheTwoBlocksOfG76()
+    {
+        string text = FanucCompile.TextOf(FanucCompile.Run(LatheCycle("RAPID X=30 Z=5",
+            "CYCLE=THREAD PITCH=2 THREAD_DATA=021060 MIN_DEPTH=100 FINISH_ALLOWANCE=0.02 TAPER=0 HEIGHT=1300 "
+            + "FIRST_DEPTH=400", "CYCLE_CALL X=27.4 Z=-20"), FanucCompile.Lathe()));
+
+        Assert.Contains("\nG76 P21060 Q100 R0.02\nG76 X27.4 Z-20. R0. P1300 Q400 F2.\n", text,
+            StringComparison.Ordinal);
+    }
+
+    // A lathe program around one cycle of the catalog, closed with CYCLE=OFF.
+    private static string LatheCycle(params string[] blocks)
+    {
+        return FanucCompile.Lines(
+            [
+                "FILE=BEGIN NCX=1",
+                "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+                "FEED_MODE=PER_REV COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
+                "SPINDLE:MAIN=CW RPM:MAIN=500",
+                .. blocks,
+                "CYCLE=OFF",
+                "PROGRAM=END",
+                "FILE=END",
+            ]);
+    }
+
     // The contour program of the D278 tests: G71 and G70 name one contour section.
     private static string ContourProgram(string first, string cycles = "")
     {

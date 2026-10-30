@@ -37,7 +37,7 @@ internal static class FanucCycles
     private static readonly string[] s_repetitiveOfSystemC = ["G72", "G73", "G74", "G75", "G76", "G77", "G78"];
 
     // The one-shot cycles the manual states a return to the cycle start point for (D187).
-    private static readonly string[] s_returnToTheStartPoint = ["G70", "G73", "G76"];
+    private static readonly string[] s_returnToTheStartPoint = ["G70", "G71", "G72", "G73", "G74", "G75", "G76"];
 
     private static readonly string[] s_motion = ["G0", "G1", "G2", "G3"];
 
@@ -253,12 +253,12 @@ internal static class FanucCycles
             return null;
         }
 
-        // TODO(question): the other words of G70 to G76, depth of cut, allowances, retract and thread data, have no
-        // NCX word (wave-1 question #18); a block with a word its catalog entry does not map stays RAW with its
-        // contour.
+        // D409: the other words of G70 to G73 are params of the catalog entry, those of its second block here, where
+        // the contour stands; a block with a word the entry does not map there, D of the one-block form of Series 15
+        // among them, stays RAW with its contour.
         foreach (SourceWord word in block.Words)
         {
-            bool mapped = entry.Params.Values.Contains(word.Address) && word.Number is not null
+            bool mapped = SecondBlockAddresses(entry).Contains(word.Address) && word.Number is not null
                 && word.Expression is null;
             bool own = ReferenceEquals(word, code) || ReferenceEquals(word, first) || ReferenceEquals(word, last);
             if (word.Address != "N" && !own && !mapped)
@@ -277,8 +277,8 @@ internal static class FanucCycles
     // the catalog cycle with CONTOUR=name (language 4.7, CONTOUR; machine-config 6, modal and contour; D65). A cycle
     // whose contour the structure pass made no section of stays RAW with the blocks of its contour, as the control
     // reads them (FanucReader.MarkContour; D5).
-    // TODO(question): the catalog gives G75 (GROOVE) and G76 (THREAD, D161) a contour as the documents say, which
-    // wave-1 questions #19 and #29 doubt; the reader follows the entry of the catalog.
+    // D176: G75 (GROOVE) and G76 (THREAD) carry no contour; their entries have none, and they are read with their end
+    // point (ReadEndPointCycle, D409).
     private static bool ReadRepetitiveCycle(FanucBlock block)
     {
         if (block.System is null)
@@ -296,10 +296,25 @@ internal static class FanucCycles
             }
 
             block.MarkRead(word);
-            if (block.Fanuc.Contours.TryGetValue(block.Line, out string? contour)
+            string native = SystemANative(code, block.System);
+            FanucFirstBlock? first = block.Fanuc.FirstBlock;
+            block.Fanuc.FirstBlock = null;
+            if (OneShotEntry(block.Machine.CycleCatalog, native) is CycleEntry twoBlocks
+                && twoBlocks.FirstBlock.Count > 0 && IsFirstBlock(block, twoBlocks))
+            {
+                ReadFirstBlock(block, twoBlocks, code);
+                return true;
+            }
+
+            first = first?.SecondLine == block.Line ? first : null;
+            if (OneShotEntry(block.Machine.CycleCatalog, native) is { Contour.Count: 0 } endPoint)
+            {
+                ReadEndPointCycle(block, endPoint, first);
+            }
+            else if (block.Fanuc.Contours.TryGetValue(block.Line, out string? contour)
                 && ContourEntry(block.Machine.CycleCatalog, SystemANative(code, block.System)) is CycleEntry entry)
             {
-                ReadContourCycle(block, entry, contour);
+                ReadContourCycle(block, entry, contour, first);
             }
             else
             {
@@ -312,6 +327,190 @@ internal static class FanucCycles
         }
 
         return false;
+    }
+
+    // The one-shot entry of a native cycle, G70 to G76 of a lathe (machine-config 6, modal); null where the catalog has
+    // none.
+    private static CycleEntry? OneShotEntry(CycleCatalog catalog, string native)
+    {
+        foreach (CycleEntry entry in catalog.Entries)
+        {
+            if (entry.Native == native && !entry.Modal && entry.Available)
+            {
+                return entry;
+            }
+        }
+
+        return null;
+    }
+
+    // D409: the addresses of the params of the second block of a two-block cycle, every params address of a cycle
+    // of one block.
+    private static HashSet<string> SecondBlockAddresses(CycleEntry entry)
+    {
+        var addresses = new HashSet<string>(StringComparer.Ordinal);
+        foreach (KeyValuePair<string, string> parameter in entry.Params)
+        {
+            if (!entry.FirstBlock.Contains(parameter.Key))
+            {
+                addresses.Add(parameter.Value);
+            }
+        }
+
+        return addresses;
+    }
+
+    // D409: the first block of a two-block cycle names no contour (G71 U R without P and Q) and no end point (G75 R
+    // without X and Z); the second block names one of them.
+    private static bool IsFirstBlock(FanucBlock block, CycleEntry entry)
+    {
+        if (entry.Contour.Count == 2)
+        {
+            return block.Find(entry.Contour[0]) is null && block.Find(entry.Contour[1]) is null;
+        }
+
+        foreach (SourceWord word in block.Source.Words)
+        {
+            if (FanucAxes.Of(word, block) is not null)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // D409: the first block of a two-block cycle writes no block of NCX: its params, numbers of the addresses its
+    // entry names for the first block, wait for the second block, which must follow it directly with the same code,
+    // and the cycle is one CYCLE block there. A first block with another word, or one that its second block does not
+    // follow, stays RAW, and the control takes it as it stands (D5).
+    private static void ReadFirstBlock(FanucBlock block, CycleEntry entry, string code)
+    {
+        var addresses = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (string name in entry.FirstBlock)
+        {
+            addresses[entry.Params[name]] = name;
+        }
+
+        var values = new List<KeyValuePair<string, Value>>();
+        foreach (SourceWord word in block.Unread())
+        {
+            if (word.Address == "N")
+            {
+                continue;
+            }
+
+            if (!addresses.TryGetValue(word.Address, out string? name) || word.Number is null
+                || word.Expression is not null)
+            {
+                block.Draft.KeepAsRaw($"{word.Address}{word.Text} of the first block of {code} has no param in the "
+                    + $"catalog entry {entry.Name} (D409)");
+                return;
+            }
+
+            block.MarkRead(word);
+            if (FanucMacro.ValueOf(block, word) is not Value value)
+            {
+                return;
+            }
+
+            values.Add(new KeyValuePair<string, Value>(name, value));
+        }
+
+        if (block.Fanuc.NextBlock(block.Source) is not SourceBlock next || next.BlockSkip
+            || !next.Words.Any(word => word.Address == "G" && NativeCode.Of(word) == code))
+        {
+            block.Draft.KeepAsRaw($"the first block of {code} is not followed by its second block (D409)");
+            return;
+        }
+
+        block.Fanuc.FirstBlock = new FanucFirstBlock(next.Line, values);
+    }
+
+    // D409: the second block of G74, G75 or G76, the cycle with the params of both blocks and the end point X(U) Z(W)
+    // as the axis words of its CYCLE_CALL, absolute, an incremental word counted from where the tool stands; the
+    // one-shot cycle is closed with CYCLE=OFF (D224), and the tool stands at the start point again (D411). A word the
+    // entry does not map stays RAW.
+    private static void ReadEndPointCycle(FanucBlock block, CycleEntry entry, FanucFirstBlock? first)
+    {
+        var definition = new DraftBlock().Add("CYCLE", new IdentValue(entry.Name));
+        AddParams(block, entry, first, definition);
+        var call = new DraftBlock().WithVerb("CYCLE_CALL");
+        foreach (FanucAxisWord position in FanucAxes.Unread(block))
+        {
+            block.MarkRead(position.Word);
+            if (FanucMacro.ValueOf(block, position.Word) is not Value value)
+            {
+                return;
+            }
+
+            if (FanucNumbers.NumberOf(value) is not decimal number)
+            {
+                block.Draft.KeepAsRaw($"the end point of {entry.Native} is no number the reader knows");
+                return;
+            }
+
+            if (position.Incremental)
+            {
+                if (!block.State.Positions.TryGetValue(position.Axis, out decimal start))
+                {
+                    block.Draft.KeepAsRaw($"{position.Word.Address} of {entry.Native} counts from a start point the "
+                        + "reader does not know");
+                    return;
+                }
+
+                number += start;
+            }
+
+            call.Add(position.Axis, FanucNumbers.Of(number));
+        }
+
+        foreach (SourceWord word in block.Unread())
+        {
+            if (word.Address != "N")
+            {
+                block.Draft.KeepAsRaw($"{word.Address}{word.Text} of {entry.Native} has no param in the catalog entry "
+                    + $"{entry.Name} (D409)");
+                return;
+            }
+        }
+
+        if (block.Draft.IsRaw)
+        {
+            return;
+        }
+
+        foreach (Word word in definition.Words)
+        {
+            block.Draft.AddState(word.Key, word.Addr, word.Value);
+        }
+
+        block.Draft.After.Add(call);
+        block.Draft.After.Add(new DraftBlock().Add("CYCLE", new IdentValue("OFF")));
+        block.Fanuc.Record("CYCLE", "OFF");
+        if (block.Fanuc.Cycle is FanucCycle active)
+        {
+            active.Written = null;
+        }
+    }
+
+    // D409: the params of a one-shot cycle in the order of its entry, those of the first block from that block and the
+    // others taken from this one, a number or an expression each.
+    private static void AddParams(FanucBlock block, CycleEntry entry, FanucFirstBlock? first, DraftBlock definition)
+    {
+        foreach (KeyValuePair<string, Value> parameter in first?.Params ?? [])
+        {
+            definition.Add(parameter.Key, parameter.Value);
+        }
+
+        foreach (KeyValuePair<string, string> parameter in entry.Params)
+        {
+            if (!entry.FirstBlock.Contains(parameter.Key) && block.Take(parameter.Value) is SourceWord word
+                && FanucMacro.ValueOf(block, word) is Value value)
+            {
+                definition.Add(parameter.Key, value);
+            }
+        }
     }
 
     // The one-shot entry of a native cycle whose contour two words name, the first and the last block of the contour
@@ -336,20 +535,14 @@ internal static class FanucCycles
     // follow.
     // D224: a one-shot entry runs once where it stands (machine-config 6), while the virtual machine keeps a CYCLE
     // until CYCLE=OFF, so the reader closes it with CYCLE=OFF after its call.
-    private static void ReadContourCycle(FanucBlock block, CycleEntry entry, string contour)
+    private static void ReadContourCycle(FanucBlock block, CycleEntry entry, string contour, FanucFirstBlock? first)
     {
         block.Take(entry.Contour[0]);
         block.Take(entry.Contour[1]);
         var definition = new DraftBlock()
             .Add("CYCLE", new IdentValue(entry.Name))
             .Add("CONTOUR", new IdentValue(contour));
-        foreach (KeyValuePair<string, string> parameter in entry.Params)
-        {
-            if (block.Take(parameter.Value) is SourceWord word && FanucMacro.ValueOf(block, word) is Value value)
-            {
-                definition.Add(parameter.Key, value);
-            }
-        }
+        AddParams(block, entry, first, definition);
 
         foreach (Word word in definition.Words)
         {
@@ -367,9 +560,8 @@ internal static class FanucCycles
             active.Written = null;
         }
 
-        // D187: G70 returns in rapid to the cycle start point, note 3 of G73 says the same and the tool path of G76
-        // is a closed loop back to it, so the tool stands where it stood; where G71, G72, G74 and G75 leave it no
-        // page of the manual says, and the reader forgets the positions there (decisions.md; fanuc 6).
+        // D187, D411: G70 to G76 bring the tool back to the cycle start point, so it stands where it stood
+        // (decisions.md; fanuc 6).
         if (Array.IndexOf(s_returnToTheStartPoint, entry.Native) < 0)
         {
             block.Fanuc.ForgetPositions();

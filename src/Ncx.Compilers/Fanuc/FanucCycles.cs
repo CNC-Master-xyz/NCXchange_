@@ -282,6 +282,67 @@ internal static class FanucCycles
         return parameters;
     }
 
+    /// <summary>
+    /// D409: the first block of a two-block cycle, the code with the params the entry names in first_block, G71 U2.
+    /// R0.5; null for a cycle of one block and where the cycle gives none of them, so the control takes its own
+    /// parameters.
+    /// </summary>
+    /// <param name="write">The block of the CYCLE_CALL.</param>
+    /// <param name="entry">The catalog entry.</param>
+    /// <param name="cycle">The cycle of NCX.</param>
+    /// <param name="code">The code in the numbers of the machine's G-code system.</param>
+    public static string? FirstBlockLine(FanucBlock write, CycleEntry entry, CycleSnapshot cycle, string code)
+    {
+        var words = new List<string>();
+        foreach (string parameter in entry.FirstBlock)
+        {
+            string address = entry.Params[parameter];
+            if (Parameter(cycle, parameter) is Value value
+                && FanucExpressions.WordValue(write, DecimalsAddressOf(address), value, 1m) is string text)
+            {
+                words.Add(address + text);
+            }
+        }
+
+        return words.Count == 0 ? null : code + " " + string.Join(" ", words);
+    }
+
+    /// <summary>
+    /// D409: the params of the second block of a contour cycle after its P and Q, " U0.5 W0.1 F0.25", in the order of
+    /// the entry; CYCLE_F is the F. Empty where the cycle gives none.
+    /// </summary>
+    /// <param name="write">The block of the CYCLE_CALL.</param>
+    /// <param name="entry">The catalog entry.</param>
+    /// <param name="cycle">The cycle of NCX.</param>
+    public static string SecondBlockWords(FanucBlock write, CycleEntry entry, CycleSnapshot cycle)
+    {
+        var words = new List<string>();
+        foreach (KeyValuePair<string, string> parameter in entry.Params)
+        {
+            if (!entry.FirstBlock.Contains(parameter.Key) && Parameter(cycle, parameter.Key) is Value value
+                && FanucExpressions.WordValue(write, DecimalsAddressOf(parameter.Value), value, 1m) is string text)
+            {
+                words.Add(" " + parameter.Value + text);
+            }
+        }
+
+        return string.Concat(words);
+    }
+
+    // D409: the decimals a param of a turning cycle takes: U and W those of X and Z, P and Q none, since the lathe
+    // takes them in least input increments without a decimal point (0i-D B-64304EN-1-01 p.82-88; B-64484EN p.229),
+    // any other address its own.
+    private static string DecimalsAddressOf(string address)
+    {
+        return address switch
+        {
+            "U" => "X",
+            "W" => "Z",
+            "P" or "Q" => "P",
+            _ => address,
+        };
+    }
+
     // Whether a word's value is the number 0 (D362).
     private static bool IsZero(Value value)
     {
@@ -418,6 +479,12 @@ internal static class FanucCycles
         if (entry is not null && !WriteBefore(write, entry, code))
         {
             return;
+        }
+
+        // D409: the first block of a two-block cycle, G75 R(e), stands in a line of its own before the cycle block.
+        if (entry is not null && FirstBlockLine(write, entry, cycle, code) is string firstBlock)
+        {
+            write.Write(firstBlock);
         }
 
         write.Main.Code(FanucCodes.RankOf(FanucCodes.Cycle), code);
@@ -651,8 +718,13 @@ internal static class FanucCycles
         }
         foreach (string parameter in CatalogParameters(entry))
         {
-            // D114: a parameter name of the catalog entry, TAPER of G90 as R (D175).
-            AddMapped(write, entry, cycle, parameter, entry.Params[parameter], entry.Params[parameter], 1m);
+            // D114: a parameter name of the catalog entry, TAPER of G90 as R (D175); D409: those of the second block
+            // of a two-block cycle, the first block standing in a line of its own.
+            if (!entry.FirstBlock.Contains(parameter))
+            {
+                string native = entry.Params[parameter];
+                AddMapped(write, entry, cycle, parameter, native, DecimalsAddressOf(native), 1m);
+            }
         }
 
         // D177: P stands where the entry maps CYCLE_DWELL, G82, G84, G89 on a machining centre and every lathe entry.
@@ -797,8 +869,7 @@ internal static class FanucCycles
     // not the F of NCX, so the next LINE or ARC writes that again where it differs (FanucBlock.WroteAnotherValue); one
     // from an expression stands every time, since its value may have changed since the last one (controllers fanuc.md
     // 7).
-    // TODO(question): D218: the F of the cycle block is written only where the control's feed differs, as D218
-    // recommends, until D218 is answered.
+    // D218: the F of the cycle block is written only where the control's feed differs.
     private static void AddFeed(FanucBlock write, CycleEntry entry, CycleSnapshot cycle)
     {
         // D175: the F of a thread turning cycle is the lead itself, which the entry maps as PITCH; it is written as

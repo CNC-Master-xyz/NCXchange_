@@ -152,8 +152,11 @@ params = { CYCLE_F = "F", TAPER = "R" }                                         
 # contour as a SUB section of the file, referenced by CONTOUR=name on the cycle block (D65, language 4.7).
 # D176 names G73 PATTERN_REPEAT (with a contour) and G74 FACE_GROOVE (without one), and both stand in this lathe catalog, because their numbers are CHIP_BREAK
 # and left-hand tapping on a mill, which cycles/fanuc.toml carries (D160, D176).
-# TODO(question): the other words of G70..G76 (depth of cut, allowances, retract, thread data) and the two-block form of the lathe manual wait for the later
-# catalog decision D175 leaves them to (fanuc 6; machine-config 6); no parameter of them is mapped, and a block that carries one stays RAW.
+# D409: the other words of G71..G76 are catalog parameters with names of their own (D114), no new NCX words, and the two-block form of the lathe manual is one
+# catalog cycle: first_block names the params of the first block (G71 U R), the others stand in the second (G71 P Q U W F), so U of G71 is DEPTH_OF_CUT in the
+# first block and ALLOWANCE_X in the second. The values are the native ones: U of the first block is a radius, U of the second a diameter, and P and Q of G74,
+# G75 and G76 are least input increments without a decimal point (0i-D B-64304EN-1-01 p.82-88). F is CYCLE_F on G71..G75, as on G90 and G94. The one-block
+# form of Series 15 (G71 P Q U W D F) carries a word no entry maps and stays RAW.
 
 [[cycle]]
 name = "FINISH"
@@ -166,35 +169,46 @@ name = "ROUGH_TURN"
 native = "G71"
 modal = false
 contour = ["P", "Q"]
+params = { DEPTH_OF_CUT = "U", RETRACT_AMOUNT = "R", ALLOWANCE_X = "U", ALLOWANCE_Z = "W", CYCLE_F = "F" }  # G71 U(d) R(e) / G71 P Q U(u) W(w) F (D409)
+first_block = ["DEPTH_OF_CUT", "RETRACT_AMOUNT"]
 
 [[cycle]]
 name = "ROUGH_FACE"
 native = "G72"
 modal = false
 contour = ["P", "Q"]
+params = { DEPTH_OF_CUT = "W", RETRACT_AMOUNT = "R", ALLOWANCE_X = "U", ALLOWANCE_Z = "W", CYCLE_F = "F" }  # G72 W(d) R(e) / G72 P Q U(u) W(w) F (D409)
+first_block = ["DEPTH_OF_CUT", "RETRACT_AMOUNT"]
 
 [[cycle]]
 name = "PATTERN_REPEAT"
 native = "G73"
 modal = false
 contour = ["P", "Q"]
+params = { RELIEF_X = "U", RELIEF_Z = "W", DIVISIONS = "R", ALLOWANCE_X = "U", ALLOWANCE_Z = "W", CYCLE_F = "F" }  # G73 U(i) W(k) R(d) / G73 P Q U W F
+first_block = ["RELIEF_X", "RELIEF_Z", "DIVISIONS"]
 
 [[cycle]]
 name = "FACE_GROOVE"
 native = "G74"
 modal = false
+params = { RETURN_AMOUNT = "R", STEP_X = "P", STEP_Z = "Q", ESCAPE = "R", CYCLE_F = "F" }      # G74 R(e) / G74 X(U) Z(W) P(i) Q(k) R(d) F (D409)
+first_block = ["RETURN_AMOUNT"]
 
 [[cycle]]
 name = "GROOVE"
 native = "G75"
 modal = false
+params = { RETURN_AMOUNT = "R", STEP_X = "P", STEP_Z = "Q", ESCAPE = "R", CYCLE_F = "F" }      # G75 R(e) / G75 X(U) Z(W) P(i) Q(k) R(d) F (D409)
+first_block = ["RETURN_AMOUNT"]
 
 [[cycle]]
 name = "THREAD"
 native = "G76"
 modal = false
-params = { PITCH = "F" }                                                               # F is the thread lead L of the second block (D175)
+params = { THREAD_DATA = "P", MIN_DEPTH = "Q", FINISH_ALLOWANCE = "R", TAPER = "R", HEIGHT = "P", FIRST_DEPTH = "Q", PITCH = "F" }  # D409; F the lead (D175)
+first_block = ["THREAD_DATA", "MIN_DEPTH", "FINISH_ALLOWANCE"]                         # G76 P(m r a) Q(dmin) R(d) / G76 X(U) Z(W) R(i) P(k) Q(d) F(L)
 
 # FACE_GROOVE, GROOVE and THREAD carry no contour (D176): a face cut-off, an OD groove and a thread cut with G76 have no contour blocks, and the manual gives
-# P and Q of G74 and G75 as the two infeed steps and those of G76 as the thread data. Such a block therefore carries words its entry does not map and the
-# reader keeps it RAW (D5, D175).
+# P and Q of G74 and G75 as the two infeed steps and those of G76 as the thread data, which the params above map (D409); X(U) and Z(W) of their second block
+# are the end point, the axis words of the CYCLE_CALL.

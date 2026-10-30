@@ -11,7 +11,7 @@ public static partial class CycleCatalogLoader
     private static readonly string[] s_entryKeys =
     [
         "name", "native", "for_axis", "params", "absolute_from_surface", "modal", "contour", "signature",
-        "fixed", "before", "defaults", "title", "dwell_native", "channel", "available",
+        "fixed", "before", "defaults", "title", "dwell_native", "channel", "available", "first_block",
         "pre", "post", "requires", "restore",
     ];
 
@@ -84,6 +84,7 @@ public static partial class CycleCatalogLoader
         IReadOnlyList<string> absoluteFromSurface = table.TextList("absolute_from_surface");
         bool modal = table.Flag("modal");
         IReadOnlyList<string> contour = ReadContour(table);
+        IReadOnlyList<string> firstBlock = ReadFirstBlock(table, parameters);
         IReadOnlyList<string> signature = table.TextList("signature");
         IReadOnlyDictionary<string, decimal> fixedValues =
             table.Table("fixed")?.Numbers() ?? new Dictionary<string, decimal>();
@@ -111,6 +112,7 @@ public static partial class CycleCatalogLoader
             AbsoluteFromSurface = absoluteFromSurface,
             Modal = modal,
             Contour = contour,
+            FirstBlock = firstBlock,
             Signature = signature,
             Fixed = fixedValues,
             Defaults = defaults,
@@ -237,6 +239,25 @@ public static partial class CycleCatalogLoader
         }
 
         return contour;
+    }
+
+    // D409: first_block names the params of a two-block Fanuc cycle that stand in its first block, so each must be a
+    // params word of the entry.
+    private static IReadOnlyList<string> ReadFirstBlock(ConfigTable table,
+        IReadOnlyDictionary<string, string> parameters)
+    {
+        IReadOnlyList<string> firstBlock = table.TextList("first_block");
+        foreach (string word in firstBlock)
+        {
+            if (!parameters.ContainsKey(word))
+            {
+                table.Diagnostics.Error(table.LineOf("first_block"), DiagnosticCodes.CycleFirstBlockNotAParameter,
+                    $"first_block in {table.Name} names {word}, which is no params word of the entry; the first block "
+                    + "of a two-block cycle carries params of the entry only (machine-config 6, D409).");
+            }
+        }
+
+        return firstBlock;
     }
 
     // Heidenhain and Siemens entries leave modal out, their calls are words of their own (CYCL CALL, M99, MCALL);
