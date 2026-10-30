@@ -123,7 +123,7 @@ public sealed class ToolChangeTests
 
     // Machine-config 3; virtual machine 3.9, D99: the first motion after the change lies in the walk of a subprogram,
     // whose section is written once for every caller, so the preload stands before the CALL that enters the walk (the
-    // TODO(question) of LookAhead.BeforeFirstMotion); the next change does not preload its own tool.
+    // LookAhead.BeforeFirstMotion, D99); the next change does not preload its own tool.
     [Fact]
     public void AutoPreload_BeforeFirstMotionInACalledSub_StandsBeforeTheCall()
     {

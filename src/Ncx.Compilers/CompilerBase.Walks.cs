@@ -122,9 +122,8 @@ public abstract partial class CompilerBase
     // BLOCK_WRITE is raised before the lines of a block are written, the lines open to change: every block writer of
     // the plugins in its order edits them in place (virtual machine 7, architecture 8, D106). A line broken with a line
     // break becomes two lines.
-    // TODO(question): virtual machine 7 gives BLOCK_WRITE "the block's words, mutable", and says nothing of what a
-    // change to them does once the compiler has written the lines. A block writer receives a copy of the words to
-    // read, and only the lines it leaves are written, until that is answered.
+    // A block writer receives a copy of the words to read; only the lines it leaves are written, so a change to the
+    // words does nothing (VM 7, architecture 1 principle 7, 8 and 9, D61).
     private List<string> RaiseBlockWrite(BlockStep step, List<string> lines)
     {
         if (Options.BlockWriters.Count == 0)

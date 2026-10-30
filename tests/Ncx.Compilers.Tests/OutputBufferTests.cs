@@ -58,7 +58,7 @@ public sealed class OutputBufferTests
         Assert.Equal("0 BEGIN PGM T MM\n1 L Z+2 FMAX\n", output.ToText(new Diagnostics("T.ncx")));
     }
 
-    // Machine-config 2 and the TODO(question) of OutputBuffer: without block_numbers no line is numbered, and without
+    // Machine-config 2 and OutputBuffer: without block_numbers no line is numbered, and without
     // line_ending the lines end with LF.
     [Fact]
     public void ToText_WithoutBlockNumbersAndLineEnding_WritesTheLinesAsTheyAre()
@@ -69,7 +69,7 @@ public sealed class OutputBufferTests
         Assert.Equal("G0 X1.\n", output.ToText(new Diagnostics("T.ncx")));
     }
 
-    // Machine-config 2 and the TODO(question) of OutputBuffer: a line longer than max_line_length, its block number
+    // Machine-config 2 and OutputBuffer: a line longer than max_line_length, its block number
     // counted, is kept with a WARNING on its block.
     [Fact]
     public void ToText_LineLongerThanMaxLineLength_IsTheWarningCmp021()

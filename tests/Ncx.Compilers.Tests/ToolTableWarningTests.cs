@@ -87,7 +87,7 @@ public sealed class ToolTableWarningTests
         Assert.Contains("\nN30 T2 M6 D0.\n", text, StringComparison.Ordinal);
     }
 
-    // D10 (the TODO(question) of ToolDataWarning): a machine whose templates never write {kind} needs no tool data,
+    // D10 (ToolDataWarning): a machine whose templates never write {kind} needs no tool data,
     // and its programs get no warning block.
     [Fact]
     public void Warning_TemplatesWithoutKind_IsNotWritten()

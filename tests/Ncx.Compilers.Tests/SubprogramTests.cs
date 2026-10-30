@@ -106,7 +106,7 @@ public sealed class SubprogramTests
         Assert.Equal("%\nO2 (B)\nN10 M98 P100\nN20 M30\nO100\nN30 G0 X10. Y0. Z5.\nN40 M99\n%\n", result.Files[1].Text);
     }
 
-    // D99 and the TODO(question) of OneFile: a subprogram that no program calls is walked once from the default entry
+    // D99, D264 and OneFile: a subprogram that no program calls is walked once from the default entry
     // state and written after the last program.
     [Fact]
     public void OneFile_SubThatNoProgramCalls_FollowsTheLastProgram()

@@ -44,7 +44,7 @@ public sealed class ChannelBindingTests
         Assert.Equal(DiagnosticCodes.WordBoundToAnotherChannel, ErrorOf(result).Code);
     }
 
-    // D56 and the TODO(question) of ChannelBinding.Check: a word bound to every channel, M34/M35 of the Mori Seiki,
+    // D56 and ChannelBinding.Check: a word bound to every channel, M34/M35 of the Mori Seiki,
     // cannot stand in every channel program behind a wait in a single-channel compile of a machine of two channels.
     [Fact]
     public void SingleChannelCompile_WordBoundToEveryChannel_IsCmp701()

@@ -61,11 +61,8 @@ internal static class ChannelBinding
     /// 2a, D56), whether the file or an expansion rule writes it: a program runs on its CHANNEL, 1 without one; a
     /// subprogram on the channels of the programs of the file.
     /// </summary>
-    // TODO(question): virtual machine 3.8 rule 2a makes only a word bound to another channel an ERROR of a
-    // single-channel compile, D56 says "a single-file compile reports an ERROR" for both forms, and the task of
-    // implementation 16 lists the ERROR for the channels = "all" word as well; a word bound to every channel is an
-    // ERROR too when the machine has more than one channel, since the compile cannot put it into the other programs,
-    // until that is answered.
+    // A word bound to every channel is an ERROR too when the machine has more than one channel, since a single-file
+    // compile cannot put it into the other programs (D56, implementation 16 P6-02; VM 3.8 rule 2a).
     public static void Check(NcxProgram program, MachineConfig machine, Diagnostics diagnostics)
     {
         var fileChannels = new List<int>();

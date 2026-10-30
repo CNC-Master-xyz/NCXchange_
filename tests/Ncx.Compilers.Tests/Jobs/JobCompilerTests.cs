@@ -69,7 +69,7 @@ public sealed class JobCompilerTests
         Assert.Equal("%\nO1000 (T)\nG21\nM199\nG18 G99 G40 G80\nM110\nM30\n%\n", texts[1]);
     }
 
-    // Machine-config 5, start_mark, and the TODO(question) of InsertStartMark: programs whose first mark is the start
+    // Machine-config 5, start_mark, and InsertStartMark (D314): programs whose first mark is the start
     // mark, as the WY pair of the Nakamura writes M199, wait at it once.
     [Fact]
     public void StartMark_EveryProgramPassesItFirst_IsNotWrittenAgain()

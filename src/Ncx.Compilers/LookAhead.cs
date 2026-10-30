@@ -183,10 +183,9 @@ public sealed class LookAhead
     // (virtual machine 5). The preload is written into the part (program or walk of a subprogram) of the change, or
     // into the caller that part returns to: the shallowest part the walk order reaches from the change to that step,
     // SUB=BEGIN and SUB=END standing inside their walk (virtual machine 3.9, D99).
-    // TODO(question): machine-config 3 puts the preload before the first motion after the change and does not say
-    // where it stands when that motion lies in the walk of a subprogram, whose section is written once for every
-    // caller (virtual machine 3.9, D99): before the line of the CALL that enters the walk, or right after the change
-    // where no line of its part stands between the change and that walk, until that is answered.
+    // When the first motion lies in the walk of a subprogram, written once for every caller, the preload stands before
+    // the line of the CALL that enters the walk, or right after the change where no line of its part stands between
+    // the change and that walk (machine-config 3, VM 3.9, D99).
     internal BlockStep? BeforeFirstMotion(BlockStep toolStep, string holder, ToolRef tool)
     {
         int depth = 0;
