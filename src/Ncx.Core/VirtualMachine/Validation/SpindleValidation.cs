@@ -34,7 +34,8 @@ internal static class SpindleValidation
             ValidationRule.Warning(DiagnosticCodes.SpindleOffBeforeLine,
                 "Spindle OFF before a LINE, an ARC or a CYCLE_CALL of the built-in drilling family other than TAP: "
                 + "the spindle of the current tool holder, the default spindle when the holder has none, while the "
-                + "spindle of the workpiece holder does not run either.",
+                + "spindle of the workpiece holder does not run either; a LINE that moves only linear axes owned by "
+                + "another resource, such as a work spindle's slide, is no cut.",
                 "VM 2.3, 5; D129, D194") with { SuppressedInUncalledSub = true },
             ValidationRule.Warning(DiagnosticCodes.RpmAboveMax, "RPM above the spindle's rpm_max.",
                 "VM 5; machine-config 5; D64"),
@@ -103,7 +104,12 @@ internal static class SpindleValidation
     private static bool Cuts(BlockContext context)
     {
         string? verb = context.Block.Verb?.Key;
-        if (verb is "LINE" or "ARC")
+        if (verb == "LINE")
+        {
+            return !MovesOnlySlidesOfAnotherResource(context);
+        }
+
+        if (verb == "ARC")
         {
             return true;
         }
@@ -114,6 +120,41 @@ internal static class SpindleValidation
             && cycle.Name is string name
             && name != "TAP"
             && DrillingFamily.Names.Contains(name);
+    }
+
+    // A LINE whose axis words all name linear axes owned by another resource than the current tool holder and its
+    // spindle, the slide of a work spindle such as the B slide of the Nakamura sub spindle (G01 B in the WY-250L
+    // transfer) or Z2 of a mill-turn (machine-config 4, [[axis]] owner), moves no tool of that holder along the
+    // workpiece, so it is no cut with that tool (virtual machine 5). A rotary axis of a work spindle stays a cut: a
+    // LINE C under a stationary rotary tool mills (language 4.5). A LINE without an axis word is checked as before.
+    private static bool MovesOnlySlidesOfAnotherResource(BlockContext context)
+    {
+        MachineConfig machine = context.Machine;
+        string? holder = context.State.LastHolder;
+        string? holderSpindle = holder is null ? null : machine.FindResource(holder)?.Spindle;
+        bool anyAxis = false;
+        foreach (Word word in context.Block.Words)
+        {
+            AxisDef? axis = machine.ResolveAxis(word.Key);
+            if (axis is null && word.Key.Length > 1 && word.Key[0] == 'I')
+            {
+                axis = machine.ResolveAxis(word.Key.Substring(1));
+            }
+
+            if (axis is null)
+            {
+                continue;
+            }
+
+            anyAxis = true;
+            if (axis.Kind != AxisKind.Linear || axis.Owner is null || axis.Owner == holder
+                || axis.Owner == holderSpindle)
+            {
+                return false;
+            }
+        }
+
+        return anyAxis;
     }
 
     /// <summary>
