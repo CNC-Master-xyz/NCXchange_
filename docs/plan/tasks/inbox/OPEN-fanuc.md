@@ -4,7 +4,7 @@ Branch `open-fanuc`, from main 1ecacb6, 2026-10-30. Brief: `.worktrees/openitems
 
 ## Log
 
-- D403: `src/Ncx.Readers/ComputedNumbers.cs`, a neutral helper (6 decimals, half away from zero), since the Heidenhain package's helper was not in main; the Fanuc reader uses it for G16 points, chamfers, roundings, G68.2 angles and the pitch F / S. `FanucNumbers.DecimalsOf` and the `LeastDecimals` constants are gone. The helix F keeps 3 (D354). HeidenhainNumbers and the Siemens reader are not touched.
+- D403: `src/Ncx.Readers/ComputedNumbers.cs`, a neutral helper (6 decimals, half away from zero); the Heidenhain package (open-hh d0a7461) adds the same file, and this branch takes its content byte for byte, so the merge is clean; the Fanuc reader uses it for G16 points, chamfers, roundings, G68.2 angles and the pitch F / S. `FanucNumbers.DecimalsOf` and the `LeastDecimals` constants are gone. The helix F keeps 3 (D354). HeidenhainNumbers and the Siemens reader are not touched.
 - D404: `[variables] atan_nat` (bool, default false); reader `((ATAN2(y, x) + 360) MOD 360)` and the same for ASIN, compiler `[f - 360 * FIX[f / 180]]`; plain under true.
 - D405: `G28 B<position>`; a `RAPID B=v` directly before `HOME B` folds into it (FanucFrames.FoldsIntoHome); CMP321 for an unknown B; the Nakamura job test compiles for the shipped machine file.
 - D406: comment only; the hard-rule test now asserts the settled row.
