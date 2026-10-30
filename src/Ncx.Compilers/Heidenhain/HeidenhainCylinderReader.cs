@@ -25,8 +25,13 @@ internal sealed record CylinderPass(decimal StartAxial, decimal StartCircumferen
 /// An element of the contour of cycle 27: its end point on the developed surface, and for an arc its radius or its
 /// centre, and its direction in the NCX cylinder plane, the cylinder axis then C (D102).
 /// </summary>
-internal sealed record CylinderElement(decimal Axial, decimal Circumference, decimal? Radius,
-    (decimal Circumference, decimal Axial)? Center, bool Ccw);
+internal sealed record CylinderElement(decimal Axial, decimal Circumference, decimal? Radius, CylinderPoint? Center,
+    bool Ccw);
+
+/// <summary>
+/// A point on the developed surface of cycle 27: along the circumference, a length (D102), and along the axis.
+/// </summary>
+internal sealed record CylinderPoint(decimal Circumference, decimal Axial);
 
 /// <summary>
 /// Reads the blocks of a CYLINDER section into the passes of cycle 27 (D394): each pass is positioning RAPIDs, one
@@ -227,7 +232,7 @@ internal sealed class HeidenhainCylinderReader
             && HeidenhainNumbers.NumberOf(centerAxial.Value) is decimal ca
             && HeidenhainNumbers.NumberOf(centerCircumference.Value) is decimal cc)
         {
-            return new CylinderElement(axial, circumference, null, (cc, ca), ccw);
+            return new CylinderElement(axial, circumference, null, new CylinderPoint(cc, ca), ccw);
         }
 
         problem = "an arc of the contour has neither R nor the CENTER of both axes of the cylinder plane";

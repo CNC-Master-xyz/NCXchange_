@@ -448,8 +448,9 @@ public sealed class HeidenhainFrameTests
 
     // D394: a CYLINDER section of the shape of cycle 27 is CYCL DEF 14 KONTUR, CYCL DEF 27 with Q1 = depth - r,
     // Q6 = plunge start - r, Q10 = |Q1| for one pass, Q11 and Q12 the feeds, Q16 = r and Q17 = 1, and CYCL CALL; on the
-    // iTNC 530 the contour subprogram after the M30 takes the rotary letter A and the parallel axis X (D146), the start
-    // point with both coordinates and RL, and the arc directions of the plane X then A, which are those of NCX.
+    // iTNC 530 the contour subprogram after the M30 takes the rotary letter A and the parallel axis X (D146), the
+    // circumference letter first, as on the TNC 640: that is the mirror of the NCX plane (the cylinder axis then C,
+    // D102), so COMP=LEFT is RR and an NCX CW arc is DR+ (TNC 640 Zyklen 892905-18 p. 346-347).
     [Fact]
     public void Cylinder_OfTheShapeOfCycle27_IsCycle27WithItsContourAfterTheM30()
     {
@@ -463,15 +464,15 @@ public sealed class HeidenhainFrameTests
         List<string> lines = HeidenhainCompile.LinesOf(HeidenhainCompile.TextOf(result));
         int end = lines.IndexOf("M30");
         Assert.Equal(
-            ["LBL 1", "L A+40 X+20 RL", "L A+50 X+20", "CR A+70 X+40 R+20 DR-", "L A+70 X+60", "CC A+55 X+60",
-                "C A+40 X+60 DR+", "LBL 0", "END PGM T MM"],
+            ["LBL 1", "L A+40 X+20 RR", "L A+50 X+20", "CR A+70 X+40 R+20 DR+", "L A+70 X+60", "CC A+55 X+60",
+                "C A+40 X+60 DR-", "LBL 0", "END PGM T MM"],
             lines.GetRange(end + 1, lines.Count - end - 1));
         Assert.Contains(result.Diagnostics.Items,
             diagnostic => diagnostic.Code == DiagnosticCodes.HeidenhainCylinderClearanceUnchecked);
     }
 
     // D394, D146: on the TNC 640 the contour is always in X along the circumference and Y along the axis; X before Y
-    // turns the plane of NCX, the cylinder axis then C, so the arc directions flip.
+    // mirrors the plane of NCX, the cylinder axis then C, so the arc directions and RL/RR flip.
     [Fact]
     public void Cylinder_OnTheTnc640_WritesTheContourInXAndY()
     {
@@ -481,7 +482,7 @@ public sealed class HeidenhainFrameTests
         List<string> lines = HeidenhainCompile.LinesOf(HeidenhainCompile.TextOf(result));
         int end = lines.IndexOf("M30");
         Assert.Equal(
-            ["LBL 1", "L X+40 Y+20 RL", "L X+50 Y+20", "CR X+70 Y+40 R+20 DR+", "L X+70 Y+60", "CC X+55 Y+60",
+            ["LBL 1", "L X+40 Y+20 RR", "L X+50 Y+20", "CR X+70 Y+40 R+20 DR+", "L X+70 Y+60", "CC X+55 Y+60",
                 "C X+40 Y+60 DR-", "LBL 0", "END PGM T MM"],
             lines.GetRange(end + 1, lines.Count - end - 1));
     }
@@ -519,6 +520,21 @@ public sealed class HeidenhainFrameTests
         Diagnostic error = Assert.Single(result.Diagnostics.Items,
             diagnostic => diagnostic.Code == DiagnosticCodes.HeidenhainWordWithoutKlartext && diagnostic.Line == 6);
         Assert.Contains("cycle 27", error.Message, StringComparison.Ordinal);
+    }
+
+    // D394 (delegated 2026-10-30): no manual says whether Q11 and Q12 are per revolution under M136, so a section
+    // under FEED_MODE=PER_REV is CMP101.
+    [Fact]
+    public void Cylinder_UnderFeedPerRevolution_IsTheErrorCmp101()
+    {
+        var blocks = new List<string> { "FEED_MODE=PER_REV" };
+        blocks.AddRange(s_cylinderSection);
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program([.. blocks]), CylinderMill());
+
+        Assert.Empty(result.Files);
+        Assert.Contains(result.Diagnostics.Items, diagnostic =>
+            diagnostic.Code == DiagnosticCodes.HeidenhainWordWithoutKlartext
+            && diagnostic.Message.Contains("PER_REV", StringComparison.Ordinal));
     }
 
     // D394: a set-up clearance Q6 at or below the radius the tool table gives is CMP101.

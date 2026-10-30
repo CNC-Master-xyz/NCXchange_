@@ -28,6 +28,13 @@ internal sealed class HeidenhainBlock
     // connector p. 569: FN 18 reads a system datum and stores it in a Q parameter).
     private const string SystemReadKey = "FN 18: SYSREAD ";
 
+    // The block that stops the look-ahead of the control before an FN 18 read of real-time data (D397, delegated
+    // 2026-10-30).
+    private const string WaitForSync = "FN 20: WAIT FOR SYNC";
+
+    // The FN 18 groups of real-time data: the position in the active system and in the REF system (D182).
+    private static readonly string[] s_realTimeIds = ["ID270 ", "ID240 "];
+
     private readonly HashSet<Word> _written = [];
 
     // The formulas of the block spilled into QL parameters, by formula (D338).
@@ -366,6 +373,13 @@ internal sealed class HeidenhainBlock
         if (Spills.Free(_spilled.Count) is not string register)
         {
             return null;
+        }
+
+        // A position read needs the real time: FN 20: WAIT FOR SYNC stops the look-ahead until the program has
+        // reached the block (iTNC 530 Programmierung-Klartext 340490-05, connector p. 313-314, the example of ID270).
+        if (s_realTimeIds.Any(id => ids.StartsWith(id, StringComparison.Ordinal)))
+        {
+            Line(WaitForSync);
         }
 
         Line(SystemReadKey + register + " = " + ids);

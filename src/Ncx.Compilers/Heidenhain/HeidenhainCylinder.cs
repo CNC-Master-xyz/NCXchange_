@@ -112,19 +112,19 @@ internal static class HeidenhainCylinder
         {
             "LBL " + number,
             "L " + Point(writing, section, pass.StartCircumference, pass.StartAxial) + " "
-                + (pass.Left ? "RL" : "RR"),
+                + (pass.Left ? "RR" : "RL"),
         };
         foreach (CylinderElement element in pass.Elements)
         {
             string end = Point(writing, section, element.Circumference, element.Axial);
-            string direction = element.Ccw != section.Flipped ? "DR+" : "DR-";
+            string direction = element.Ccw ? "DR-" : "DR+";
             if (element.Radius is decimal radius)
             {
                 lines.Add("CR " + end + " R" + HeidenhainNumbers.Signed(writing, "R", radius) + " " + direction);
             }
-            else if (element.Center is (decimal centerCircumference, decimal centerAxial))
+            else if (element.Center is CylinderPoint center)
             {
-                lines.Add("CC " + Point(writing, section, centerCircumference, centerAxial));
+                lines.Add("CC " + Point(writing, section, center.Circumference, center.Axial));
                 lines.Add("C " + end + " " + direction);
             }
             else
@@ -170,8 +170,16 @@ internal static class HeidenhainCylinder
             return null;
         }
 
-        if (Letters(writing, axial, out string circumferenceLetter, out string axialLetter, out bool flipped)
-            is string lettersProblem)
+        // Cycle 27 takes the feeds Q11 and Q12 per minute; whether they are per revolution under M136 the manuals do
+        // not say, so a section under FEED_MODE=PER_REV is refused (D394, delegated 2026-10-30).
+        if (start.After.Motion.FeedMode == FeedMode.PerRev)
+        {
+            problem = "it runs under FEED_MODE=PER_REV, and no manual says whether the feeds Q11 and Q12 of the cycle "
+                + "are per revolution under M136";
+            return null;
+        }
+
+        if (Letters(writing, axial, out string circumferenceLetter, out string axialLetter) is string lettersProblem)
         {
             problem = lettersProblem;
             return null;
@@ -191,18 +199,19 @@ internal static class HeidenhainCylinder
             writing.Cylinders.Covered.Add(steps[index].Block);
         }
 
-        return new Shape(radius, passes, circumferenceLetter, axialLetter, flipped);
+        return new Shape(radius, passes, circumferenceLetter, axialLetter);
     }
 
-    // The letters of the contour: on the TNC 640 X for the circumference and Y along the axis, on the iTNC 530 the
-    // rotary letter and the letter of the parallel axis (D146). Klartext turns DR+ from the first axis of the plane to
-    // the second, NCX from the cylinder axis to C (D102), so the direction flips where the circumference comes first.
+    // The letters of the contour, the circumference letter first: on the TNC 640 X for the circumference and Y along
+    // the axis, on the iTNC 530 the rotary letter and the letter of the parallel axis (D146; TNC 640 Zyklen 892905-18
+    // p. 346-347 L X+40 Y+20 RL and iTNC 530 Zyklen 670388-12 p. 239-240 L C+40 X+20 RL, the same part). NCX turns from
+    // the cylinder axis to C (D102), so the contour of the control is the mirror of the NCX plane: DR and RL/RR both
+    // flip, COMP=LEFT is RR and an NCX CW arc is DR+.
     private static string? Letters(HeidenhainBlock writing, string axial, out string circumference,
-        out string axialLetter, out bool flipped)
+        out string axialLetter)
     {
         circumference = "X";
         axialLetter = "Y";
-        flipped = true;
         if (!string.Equals(writing.Machine.Machine.Dialect, Itnc530, StringComparison.OrdinalIgnoreCase))
         {
             return null;
@@ -215,8 +224,6 @@ internal static class HeidenhainCylinder
 
         circumference = letter;
         axialLetter = HeidenhainAxes.LetterOf(writing, axial);
-        string[] plane = HeidenhainAxes.PlaneAxes(writing.After.Frame.Workplane);
-        flipped = plane[0] != axial;
         return null;
     }
 
@@ -299,5 +306,5 @@ internal static class HeidenhainCylinder
 
     // A CYLINDER section of the shape of cycle 27 with the letters of its contour.
     private sealed record Shape(decimal Radius, List<CylinderPass> Passes, string CircumferenceLetter,
-        string AxialLetter, bool Flipped);
+        string AxialLetter);
 }

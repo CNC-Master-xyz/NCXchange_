@@ -38,3 +38,16 @@ Branch open-hh. Brief: `.worktrees/openitems/BRIEF.md`.
   words inside the section stay CMP101; (5) the tool axis must be the radial axis. The reader is unchanged: a source
   CYCL DEF 27 is not in the catalog and stays RAW (not expanded); the native CYCLE:HEIDENHAIN=27 form of D394 would need
   a catalog entry and is left open. Row CAM-234 settled.
+
+## Review fixes (after merging main)
+
+- B1/B2: the contour is circumference letter first on both dialects (TNC 640 Zyklen 892905-18 p. 346-347, iTNC 530
+  Zyklen 670388-12 p. 239-240), the mirror of the NCX plane, so DR and RL/RR both flip: COMP=LEFT is RR, NCX CW is
+  DR+. Gap choice (1) of D394 is dropped.
+- D394 reader half (delegated): a source cycle 14 + cycle 27 and the LBL n .. LBL 0 that KONTURLABEL n names stay RAW
+  as one unit (HeidenhainLabels.ContourLines); row CAM-234 and its code location updated.
+- D397 (delegated): `FN 20: WAIT FOR SYNC` before an FN 18 read of ID270 and ID240 (iTNC 530 Klartext 340490-05
+  p. 313-314).
+- Cycle 27 under FEED_MODE=PER_REV is CMP101 (delegated).
+- Tuples replaced by the record CylinderPoint; README updated; code locations of rows 19, 29, 40, 139, 234 fixed; the
+  D401 RAW reason no longer gets the D58 suffix.

@@ -344,4 +344,37 @@ public sealed class HeidenhainCycleTests
 
         Assert.False(check.HasErrors, check.ToText());
     }
+
+    // D394, gap closed 2026-10-30 (delegated): a source cycle 14 and cycle 27 stay RAW with their contour subprogram,
+    // which after the M30 does not become motion blocks behind JUMP=END.
+    [Fact]
+    public void Cycle27_AndItsContourSubprogram_StayRawAsOneUnit()
+    {
+        string text = Text(Lines(
+            "0 BEGIN PGM C27 MM",
+            "1 TOOL CALL 1 Z S2000",
+            "2 CYCL DEF 14.0 KONTUR",
+            "3 CYCL DEF 14.1 KONTURLABEL 1",
+            "4 CYCL DEF 27 ZYLINDER-MANTEL ~",
+            "  Q1=-7 ~",
+            "  Q3=+0 ~",
+            "  Q6=2 ~",
+            "  Q10=4 ~",
+            "  Q11=100 ~",
+            "  Q12=250 ~",
+            "  Q16=25 ~",
+            "  Q17=1",
+            "5 CYCL CALL",
+            "6 M30",
+            "7 LBL 1",
+            "8 L X+40 Y+20 RL",
+            "9 L X+50",
+            "10 LBL 0",
+            "11 END PGM C27 MM"));
+
+        Assert.Contains("RAW:HEIDENHAIN=\"5 CYCL CALL\"", text, StringComparison.Ordinal);
+        Assert.Contains("RAW:HEIDENHAIN=\"8 L X+40 Y+20 RL\"\nRAW:HEIDENHAIN=\"9 L X+50\"", text,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("LINE", text, StringComparison.Ordinal);
+    }
 }

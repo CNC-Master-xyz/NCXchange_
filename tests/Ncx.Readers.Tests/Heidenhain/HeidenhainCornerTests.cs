@@ -183,7 +183,8 @@ public sealed class HeidenhainCornerTests
         Assert.Equal(expected, Body(snippet));
         Diagnostic warning = Assert.Single(FramedProgram(snippet).Diagnostics.Items,
             diagnostic => diagnostic.Code == DiagnosticCodes.KeptAsRaw);
-        Assert.Contains("CHF only between two straight lines", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("CHF only between two straight lines (D401)", warning.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("D58", warning.Message, StringComparison.Ordinal);
     }
 
     // D402: a CT after a chamfer or a rounding continues an element whose end it decides itself, which leaves no corner

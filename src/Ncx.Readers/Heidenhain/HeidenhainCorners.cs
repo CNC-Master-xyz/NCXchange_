@@ -90,8 +90,12 @@ internal static class HeidenhainCorners
         if (corner is null || corner.Problem is not null || corner.End is not HeidenhainPoint end)
         {
             state.Corner = null;
-            block.Draft.KeepAsRaw((corner?.Problem ?? "a chamfer or a rounding stands between two contour elements, "
-                + "and the reader has read none before it") + " (D58)");
+            // A reason that cites its own decision, D401 or D402, keeps it alone; any other is the D58 expansion's.
+            string reason = corner?.Problem ?? "a chamfer or a rounding stands between two contour elements, and the "
+                + "reader has read none before it";
+            block.Draft.KeepAsRaw(reason.EndsWith(')') && reason.Contains("(D", StringComparison.Ordinal)
+                ? reason
+                : reason + " (D58)");
             return;
         }
 

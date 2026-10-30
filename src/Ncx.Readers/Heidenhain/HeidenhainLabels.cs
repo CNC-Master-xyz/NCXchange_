@@ -8,6 +8,9 @@ namespace Ncx.Readers.Heidenhain;
 /// </summary>
 internal sealed class HeidenhainLabels
 {
+    // The words of cycle 14 that name its contour subprograms (controllers heidenhain.md 5).
+    private const string ContourLabel = "KONTURLABEL";
+
     /// <summary>
     /// The name of every subprogram by the line of its LBL block.
     /// </summary>
@@ -66,6 +69,13 @@ internal sealed class HeidenhainLabels
     /// with the label of that part (D213).
     /// </summary>
     public Dictionary<int, string> JumpsLeavingRepeats { get; } = [];
+
+    /// <summary>
+    /// The lines of the contour subprograms of cycle 14, LBL n .. LBL 0 for a CYCL DEF 14.1 KONTURLABEL n: the reader
+    /// keeps them RAW with the cycle, so that the contour after the M30 does not become motion blocks behind
+    /// JUMP=END (D394, gap closed 2026-10-30, delegated).
+    /// </summary>
+    public HashSet<int> ContourLines { get; } = [];
 
     /// <summary>
     /// The label a block names after its keyword LBL: "1" of LBL 1 and of CALL LBL 1 REP 3, "NAME" of LBL "NAME"; null
@@ -200,6 +210,7 @@ internal sealed class HeidenhainLabels
             }
         }
 
+        labels.FindContours(blocks);
         labels.DecideJumps(blocks, jumps);
         labels.FindJumpsLeavingRepeats(blocks, jumps, repeats);
         labels.DecideSubs(blocks, called, mainEnd);
@@ -298,6 +309,36 @@ internal sealed class HeidenhainLabels
             SubFirst[label] = index;
             SubLast[label] = closing;
             insideUntil = closing;
+        }
+    }
+
+    // D394, gap closed 2026-10-30 (delegated): cycle 27 stays RAW with its contour. Every LBL n that a CYCL DEF 14.1
+    // KONTURLABEL n names, KONTURLABEL 1/2/3 naming several, is a contour of cycle 14 (iTNC 530
+    // Benutzerhandbuch-Klartext 340490, connector p. 430-431), and its blocks up to the LBL 0 after it stay RAW.
+    private void FindContours(IReadOnlyList<SourceBlock> blocks)
+    {
+        foreach (SourceBlock block in blocks)
+        {
+            int at = block.Text.IndexOf(ContourLabel, StringComparison.Ordinal);
+            if (at < 0 || !block.Text.Contains("CYCL DEF 14.1", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            string list = block.Text.Substring(at + ContourLabel.Length).Trim();
+            const StringSplitOptions Options = StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries;
+            foreach (string label in list.Split('/', Options))
+            {
+                int start = FindLabel(blocks, label);
+                for (int index = start; start >= 0 && index < blocks.Count; index++)
+                {
+                    ContourLines.Add(blocks[index].Line);
+                    if (index > start && IsLabel(blocks[index]) && LabelOf(blocks[index]) == "0")
+                    {
+                        break;
+                    }
+                }
+            }
         }
     }
 

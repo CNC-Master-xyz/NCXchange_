@@ -262,8 +262,21 @@ public sealed class HeidenhainMotionTests
         CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
             "RAPID X={$SYS_POS_X + 5} Y={$SYS_POS_X}"));
 
-        Assert.Equal("FN 18: SYSREAD QL499 = ID270 NR1 IDX1\nQL498 = QL499 + 5\nL X+QL498 Y+QL499 R0 FMAX",
+        Assert.Equal(
+            "FN 20: WAIT FOR SYNC\nFN 18: SYSREAD QL499 = ID270 NR1 IDX1\nQL498 = QL499 + 5\nL X+QL498 Y+QL499 R0 FMAX",
             HeidenhainCompile.Body(result));
+    }
+
+    // D397 (delegated 2026-10-30): an FN 18 read of real-time data, the position ID270 or ID240, stands after FN 20:
+    // WAIT FOR SYNC, which stops the look-ahead (iTNC 530 Klartext 340490-05 p. 313-314); other data needs none.
+    [Fact]
+    public void Rule2_SystemVariableOfThePosition_IsReadAfterWaitForSync()
+    {
+        CompileResult result = HeidenhainCompile.Run(HeidenhainCompile.Program(
+            "VAR:Q1={$SYS_MPOS_Z}", "VAR:Q2={$SYS_TOOL_LEN}"));
+
+        Assert.Equal("FN 20: WAIT FOR SYNC\nFN 18: SYSREAD QL499 = ID240 NR1 IDX3\nQ1 = QL499\n"
+            + "FN 18: SYSREAD QL499 = ID200 NR2\nQ2 = QL499", HeidenhainCompile.Body(result));
     }
 
     // D397: a SYS_ name in an assignment is read the same way, with the index of [system_variables].
