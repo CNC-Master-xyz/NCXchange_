@@ -479,3 +479,16 @@ The manual audit of 2026-10-26 (`../decisions/manual-audit-2026-10-26.md`) found
 | 2 | P5-01 | How does SINUMERIK `DIV` round a negative operand, towards zero (`-7 DIV 2 = -3`, `INT(a / b)` of language 4.12) or towards minus infinity (`-4`)? | settled 2026-10-27 by D382 (kept RAW where the quotient is not exact; the rounding itself is still undocumented) | `src/Ncx.Readers/Siemens/SiemensExpression.cs:174` |
 | 3 | P3-02 (D256) | May a block that can move an axis without an axis word - the tool change `M6`, a `T` word, the tool length compensation `G43`, `G44`, `G49` - stand between a Fanuc `M29 S` line and its `G84`? | settled 2026-10-27 (D383) | `src/Ncx.Readers/Fanuc/FanucReader.cs:861` |
 | 4 | P3-02 (D256) | Does a Fanuc `M29 S` line hold where its own block carries a group-01 code or another code that cancels rigid tapping, `G0 Z10. M29 S500;` in front of `G84`? | settled 2026-10-27 (D384) | `src/Ncx.Readers/Fanuc/FanucReader.cs:869` |
+
+## Markers without a row, fifteenth round (2026-10-30)
+
+The inventory of 2026-10-30 (`.worktrees/openitems/inventory.md`) found `TODO(question)` markers that no row of the tables above lists. Each was decided in the fifteenth round of `../decisions/rationale.md` (D394 to D425) and its marker is gone; the rows below record them, with the place the decision now stands. The conventions are those of wave 1. This part holds the Siemens, Core, Config, Analytics and Cli markers (package open-siemens).
+
+| # | Task | Question | Disposition | Code location |
+|---|---|---|---|---|
+| 1 | P1-02 (D198) | How does a table write two different sequences for one state (DMG M436 / M433 chuck open)? | settled 2026-10-30 (D415) | `src/Ncx.Core/Machine/ExpansionRule.cs` States; `machines/dmg-ctx-840d.toml` [func] MAIN_CHUCK_RUNNING, SUB_CHUCK_RUNNING |
+| 2 | P1-02 (D130) | What is a coolant channel that the machine configuration does not name? | settled 2026-10-30 (D416) | `src/Ncx.Core/VirtualMachine/ResourceResolver.cs` ResolveCoolantChannel |
+| 3 | RF-P5-02 | May block_numbers renumber the N of a Siemens RAW line? | settled 2026-10-30 (D417) | `src/Ncx.Compilers/Siemens/SiemensCompiler.cs` OwnBlockNumber, CheckBlockNumber (CMP504) |
+| 4 | P5-02 (D259) | What happens to an F or S the Siemens compiler may not write between two RAW lines? | settled 2026-10-30 (D418) | `src/Ncx.Compilers/Siemens/SiemensCycles.cs` ReportWordUnderRawModalCall (CMP596) |
+| 5 | RF-P5-02 | Does a RAW builder cycle or subprogram call change the Siemens frame? | settled 2026-10-30 (D420) | `src/Ncx.Compilers/Siemens/SiemensFrames.cs` AfterRaw, WriteFullFrame; `SiemensRawCall.cs` |
+| 6 | APPLY-siemens-2 (D259) | What is a position block while an unknown modal call (RAW MCALL) is armed? | settled 2026-10-30 (D422) | `src/Ncx.Readers/Siemens/SiemensCycles.cs` InRawRange; `SiemensReader.cs` ReadBlock |
