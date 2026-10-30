@@ -1038,6 +1038,74 @@ public sealed class MachineConfigLoaderTests
         Assert.Equal("fanuc.toml", machine.Cycles?.CatalogFile);
     }
 
+    // TOML 1.0, array of tables: a [[axis]] after other tables appends to the array the earlier [[axis]] began, so
+    // the file has four axes; Tomlyn 2.10.1 kept only the last entry, which dropped X, Y and Z without a word.
+    [Fact]
+    public void ArrayOfTables_AnEntryAfterOtherTables_KeepsTheEarlierEntries()
+    {
+        MachineConfig machine = LoadClean("""
+            [machine]
+            name = "Test mill"
+            controller = "heidenhain"
+
+            [[axis]]
+            id = "X1"
+            ncx = "X"
+            kind = "linear"
+
+            [[axis]]
+            id = "Y1"
+            ncx = "Y"
+            kind = "linear"
+
+            [[axis]]
+            id = "Z1"
+            ncx = "Z"
+            kind = "linear"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
+
+            [[axis]]
+            id = "C1"
+            ncx = "C"
+            kind = "rotary"
+            """);
+
+        Assert.Equal(["X1", "Y1", "Z1", "C1"], machine.Axes.Select(axis => axis.Id));
+    }
+
+    // P2-01 with TOML 1.0, array of tables: a [[resource]] after other tables is the third resource and reports at its
+    // own header line, not at the header of the first [[resource]].
+    [Fact]
+    public void ArrayOfTables_ALateResourceWithoutType_ReportsAtItsOwnHeader()
+    {
+        Diagnostics diagnostics = Report("""
+            [machine]
+            name = "Test mill"
+            controller = "fanuc"
+
+            [[resource]]
+            id = "S1"
+            type = "work_spindle"
+
+            [[resource]]
+            id = "T1"
+            type = "tool_holder"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
+
+            [[resource]]
+            id = "S2"
+            """);
+
+        Diagnostic error = Assert.Single(diagnostics.Items);
+        Assert.Equal(DiagnosticCodes.MissingKey, error.Code);
+        Assert.Equal(16, error.Line);
+        Assert.Contains("type", error.Message, StringComparison.Ordinal);
+    }
+
     // Loads a machine file that is expected to report something and returns what it reported.
     private static Diagnostics Report(string toml)
     {

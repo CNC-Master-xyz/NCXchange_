@@ -33,6 +33,15 @@ public sealed class HeidenhainRotTests
         owner = "TABLE1"
         """;
 
+    // TOML 1.0, array of tables: the [[axis]] of the tilting table, appended after the other tables of the file, add
+    // A and C to the X, Y and Z of the iTNC 530, so every test of this class runs on a five-axis machine.
+    [Fact]
+    public void MillAnd_TheTiltingTable_KeepsTheLinearAxesOfTheFile()
+    {
+        Assert.Equal(["X1", "Y1", "Z1", "A1", "C1"],
+            HeidenhainCompile.MillAnd(TiltingTable).Axes.Select(axis => axis.Id));
+    }
+
     // D191, D269: an absent ROT means TABLE in NCX, and the compiler writes it, since the control's default is COORD.
     [Fact]
     public void Tilt_WithoutRot_WritesTableRot()
