@@ -483,6 +483,30 @@ public sealed class FanucCyclesTests
         Assert.Contains("\nG90 X60. Z-70. F0.3\nX50. Z-70.\nG80\n", text, StringComparison.Ordinal);
     }
 
+    // A lathe takes no decimal point in Q (B-64484EN p.229), so the peck of G83 is written in least input increments,
+    // 0.001 mm or 0.0001 inch, as the lathe manual writes it (B-64484EN-1 p.96, Q5000).
+    [Theory]
+    [InlineData("MM", "PECK=2", "X=0 Z=5", "CLEARANCE=2 DEPTH=-40", "\nG83 Z-40. R-3. Q2000 F0.2\n")]
+    [InlineData("MM", "PECK=0.5", "X=0 Z=5", "CLEARANCE=2 DEPTH=-40", "\nG83 Z-40. R-3. Q500 F0.2\n")]
+    [InlineData("INCH", "PECK=0.1", "X=0 Z=0.2", "CLEARANCE=0.1 DEPTH=-1", "\nG83 Z-1. R-0.1 Q1000 F0.2\n")]
+    public void Peck_OnALathe_IsQInLeastInputIncrements(string units, string peck, string start, string planes,
+        string written)
+    {
+        string text = FanucCompile.TextOf(FanucCompile.Run(FanucCompile.Lines(
+            "FILE=BEGIN NCX=1",
+            "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+            $"FEED_MODE=PER_REV COMP=OFF UNITS={units} WORKPLANE=XY DIAMETER=ON CYCLE=OFF",
+            "SPINDLE:MAIN=CW RPM:MAIN=500",
+            "RAPID " + start,
+            $"CYCLE=PECK {planes} {peck} CYCLE_F=0.2",
+            "CYCLE_CALL",
+            "CYCLE=OFF",
+            "PROGRAM=END",
+            "FILE=END"), FanucCompile.Lathe()));
+
+        Assert.Contains(written, text, StringComparison.Ordinal);
+    }
+
     // D174: the lathe manual gives the simple turning cycles G90, G92, G94 of system A as G77, G78, G79 in system B
     // and G20, G21, G24 in system C; the catalog keeps the system A numbers and the compiler translates by
     // gcode_system (controllers fanuc.md 3; decisions.md).

@@ -1,4 +1,5 @@
 using System.Globalization;
+using Ncx.Core.Machine;
 using Ncx.Core.Model;
 
 namespace Ncx.Readers.Fanuc;
@@ -51,6 +52,20 @@ internal static class FanucNumbers
     {
         int dot = word.Text.IndexOf('.', StringComparison.Ordinal);
         return dot < 0 ? 0 : word.Text.Length - dot - 1;
+    }
+
+    /// <summary>
+    /// The least input increment of a linear address in the units of the block, 0.001 mm or 0.0001 inch: the unit of
+    /// an address that takes no decimal point (B-64484EN p.229, 8.3; p.527-528, the increment system IS-B), the
+    /// increment system NCX assumes for every family (machine-config 2, decimals; parameter 1004#7 IPR is not
+    /// modelled).
+    /// </summary>
+    /// <param name="block">The block being read, whose source-side state gives G20 or G21 (G70 or G71 in system
+    /// C).</param>
+    public static decimal LeastInputIncrement(FanucBlock block)
+    {
+        string inch = block.System == GcodeSystem.C ? "G70" : "G20";
+        return block.State.ActiveCode(FanucModalGroups.Units) == inch ? 0.0001m : 0.001m;
     }
 
     /// <summary>

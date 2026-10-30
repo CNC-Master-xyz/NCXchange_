@@ -968,7 +968,7 @@ internal static class FanucCycles
         SourceWord? peck = block.Take("Q");
         if (peck is not null)
         {
-            cycle.Peck = FanucMacro.ValueOf(block, peck);
+            cycle.Peck = block.IsLathe ? LathePeck(block, peck) : FanucMacro.ValueOf(block, peck);
         }
 
         // D159: P of a cycle is the dwell in units of [machine] dwell_increment, seconds per unit, 0.001 by default.
@@ -1026,6 +1026,30 @@ internal static class FanucCycles
         {
             Call(block, cycle, positions, count);
         }
+    }
+
+    // A lathe takes no decimal point in Q (B-64484EN p.229, the T list of 8.3, cnc-manuals page 229), so the peck Q of
+    // G83 and G87 counts least input increments whatever parameter 3401#0 DPI says, Q5000 for 5 mm (B-64484EN-1 p.96,
+    // the example of 4.3.1): PECK is Q times the increment of the units (controllers fanuc.md 2). A Q with a decimal
+    // point, or from an expression whose scaling the manuals do not give for an address without one, stays RAW.
+    private static Value? LathePeck(FanucBlock block, SourceWord word)
+    {
+        if (word.Number is not decimal units || word.Expression is not null)
+        {
+            block.Draft.KeepAsRaw($"Q{word.Text} of {block.Fanuc.Cycle?.Code ?? "the cycle"}: a lathe takes Q in least "
+                + "input increments without a decimal point (B-64484EN p.229), and the reader does not know how the "
+                + "control scales an expression there");
+            return null;
+        }
+
+        if (word.Text.Contains('.', StringComparison.Ordinal))
+        {
+            block.Draft.KeepAsRaw($"Q{word.Text}: a lathe takes Q without a decimal point only, in least input "
+                + "increments (B-64484EN p.229, controllers fanuc.md 2)");
+            return null;
+        }
+
+        return FanucNumbers.Of(units * FanucNumbers.LeastInputIncrement(block));
     }
 
     // D248: the R level of a lathe drilling cycle, the initial level plus R, twice R on a diameter X axis.

@@ -639,11 +639,45 @@ public sealed class FanucCycleTests
     [InlineData("G83 Z-40. R-5. F0.2",
         "CYCLE=DRILL AXIS=Z SURFACE=0 CLEARANCE=0 DEPTH=-40 CYCLE_RETRACT=CLEARANCE CYCLE_F=0.2")]
     [InlineData("G83 Z-40. R-5. Q2000 F0.2",
-        "CYCLE=PECK AXIS=Z SURFACE=0 CLEARANCE=0 DEPTH=-40 CYCLE_RETRACT=CLEARANCE PECK=2000 CYCLE_F=0.2")]
+        "CYCLE=PECK AXIS=Z SURFACE=0 CLEARANCE=0 DEPTH=-40 CYCLE_RETRACT=CLEARANCE PECK=2 CYCLE_F=0.2")]
     public void LatheDrillingEntry_G83WithAndWithoutQ_IsPeckAndDrill(string source, string cycle)
     {
         Assert.Equal(Lines("RAPID Z=5", cycle, "CYCLE_CALL", "CYCLE=OFF"),
             Body("G0 Z5.\n" + source + "\nG80", Lathe()));
+    }
+
+    // A lathe takes no decimal point in Q (B-64484EN p.229, the T list of 8.3), so the peck Q of G83 counts least input
+    // increments whatever parameter 3401#0 says: Q2000 is 2 mm at the 0.001 mm of IS-B, Q20000 is 2 inch at 0.0001 inch
+    // (B-64484EN-1 p.96, G83 Z-40.0 R-5.0 Q5000).
+    [Theory]
+    [InlineData("G21", "G0 Z5.\nG83 Z-40. R-5. Q2000 F0.2", "PECK=2 ")]
+    [InlineData("G21", "G0 Z5.\nG83 Z-40. R-5. Q500 F0.2", "PECK=0.5 ")]
+    [InlineData("G20", "G0 Z0.2\nG83 Z-1. R-0.1 Q20000 F0.01", "PECK=2 ")]
+    public void LathePeckQ_WithoutADecimalPoint_CountsLeastInputIncrements(string units, string source, string peck)
+    {
+        string text = Text("%\nO0001\n" + units + "\n" + source + "\nG80\nM30\n%\n", Lathe());
+
+        Assert.Contains(peck, text, StringComparison.Ordinal);
+        Assert.DoesNotContain("RAW:", text, StringComparison.Ordinal);
+    }
+
+    // A lathe takes no decimal point in Q (B-64484EN p.229), so a lathe Q2. is no peck the reader can read: RAW.
+    [Fact]
+    public void LathePeckQ_WithADecimalPoint_StaysRaw()
+    {
+        NcxProgram program = Program("%\nO0001\nG0 Z5.\nG83 Z-40. R-5. Q2. F0.2\nG80\nM30\n%\n", Lathe());
+
+        Assert.Contains("RAW:FANUC=\"G83 Z-40. R-5. Q2. F0.2\"", NcxWriter.Write(program), StringComparison.Ordinal);
+        Assert.Contains("p.229", program.Diagnostics.ToText(), StringComparison.Ordinal);
+    }
+
+    // A mill takes a decimal point in Q (B-64484EN p.229, the M list), so Q without one follows the rule of every such
+    // address, X and R among them: the reader assumes calculator-type input, parameter 3401#0 = 1, and reads Q2000 as
+    // 2000 mm, as it reads X70 as 70 mm (controllers fanuc.md 2).
+    [Fact]
+    public void MillPeckQ_WithoutADecimalPoint_FollowsTheCalculatorTypeAssumption()
+    {
+        Assert.Contains("PECK=2000 ", Body("G0 X0 Y0 Z5.\nG83 Z-40. R-5. Q2000 F100\nG80"), StringComparison.Ordinal);
     }
 
     // D161: THREAD is G76, the one-shot cycle that cuts the whole thread, and the modal G92, which cuts one pass per

@@ -642,13 +642,22 @@ internal static class FanucCycles
             write.Main.Word("R" + r);
         }
 
-        AddMapped(write, entry, cycle, "PECK", "Q", address, 1m);
-        if (entry.NativeOf("PECK") is null && TakesPeckRigidTapping(write, entry) && Parameter(cycle, "PECK") is Value
-            peck && !IsZero(peck) && FanucExpressions.WordValue(write, address, peck, 1m) is string q)
+        if (write.IsLathe)
         {
-            // D279: peck rigid tapping, Q on G84 where the machine declares it.
-            write.Main.Word("Q" + q);
+            AddLathePeck(write, entry, cycle);
         }
+        else
+        {
+            AddMapped(write, entry, cycle, "PECK", "Q", address, 1m);
+            if (entry.NativeOf("PECK") is null && TakesPeckRigidTapping(write, entry)
+                && Parameter(cycle, "PECK") is Value peck && !IsZero(peck)
+                && FanucExpressions.WordValue(write, address, peck, 1m) is string q)
+            {
+                // D279: peck rigid tapping, Q on G84 where the machine declares it.
+                write.Main.Word("Q" + q);
+            }
+        }
+
         foreach (string parameter in CatalogParameters(entry))
         {
             // D114: a parameter name of the catalog entry, TAPER of G90 as R (D175).
@@ -766,6 +775,33 @@ internal static class FanucCycles
         if (FanucExpressions.WordValue(write, decimalsAddress, value, factor) is string text)
         {
             write.Main.Word(address + text);
+        }
+    }
+
+    // A lathe takes no decimal point in Q (B-64484EN p.229, the T list of 8.3, cnc-manuals page 229), so the peck of
+    // G83 and G87, and of G84 under peck rigid tapping (D279), is Q in least input increments, an integer, 0.001 mm or
+    // 0.0001 inch, as the lathe manual writes Q5000 (B-64484EN-1 p.96); an expression is written with its factor
+    // (controllers fanuc.md 2, 6).
+    private static void AddLathePeck(FanucBlock write, CycleEntry entry, CycleSnapshot cycle)
+    {
+        bool rigidPeck = entry.NativeOf("PECK") is null && TakesPeckRigidTapping(write, entry);
+        if (Parameter(cycle, "PECK") is not Value peck || (entry.NativeOf("PECK") is null && !rigidPeck)
+            || (rigidPeck && IsZero(peck)))
+        {
+            return;
+        }
+
+        decimal increment = write.After.Frame.Units == Units.Inch ? 0.0001m : 0.001m;
+        if (FanucFunctions.NumberOf(peck) is decimal depth)
+        {
+            decimal units = Math.Round(depth / increment, 0, MidpointRounding.AwayFromZero);
+            write.Main.Word("Q" + units.ToString("0", CultureInfo.InvariantCulture));
+            return;
+        }
+
+        if (FanucExpressions.WordValue(write, "P", peck, 1m / increment) is string text)
+        {
+            write.Main.Word("Q" + text);
         }
     }
 
