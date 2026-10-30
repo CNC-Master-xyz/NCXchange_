@@ -888,6 +888,18 @@ public sealed class FanucCyclesTests
         Assert.Contains("\nG75 R0.5\nG75 X30. Z-30. P1000 Q2000 F0.1\n", text, StringComparison.Ordinal);
     }
 
+    // D409: P and Q of G75 take no decimal point (0i-D B-64304EN-1-01 p.87), so STEP_X=1.5 is the ERROR CMP397 and
+    // no P is written.
+    [Fact]
+    public void Groove_StepWithAFraction_IsTheErrorCmp397()
+    {
+        CompileResult result = FanucCompile.Run(LatheCycle("RAPID X=42 Z=-20",
+            "CYCLE=GROOVE CYCLE_F=0.1 STEP_X=1.5 STEP_Z=2000", "CYCLE_CALL X=30 Z=-30"), FanucCompile.Lathe());
+
+        Diagnostic error = FanucCompile.ErrorOf(result);
+        Assert.Equal(DiagnosticCodes.FanucCycleIncrementWithFraction, error.Code);
+    }
+
     // D409: THREAD is G76 P(m r a) Q(dmin) R(d) and G76 X(U) Z(W) R(i) P(k) Q(d) F(L); P is a number, so the
     // THREAD_DATA 021060 of the source is P21060, the same m r a for the control.
     [Fact]

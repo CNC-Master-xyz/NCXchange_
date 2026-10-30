@@ -41,6 +41,7 @@ internal static class FanucDecimalPoint
         GcodeSystem? system = machine.Machine.GcodeSystem;
         string addresses = system is null ? MillAddresses : LatheAddresses + (system == GcodeSystem.A ? "H" : "");
         bool dwell = block.Words.Any(word => word.Address == "G" && NativeCode.Of(word) == "G4");
+        bool divisions = IsFirstBlockOfPatternRepeat(block, system);
         bool inch = FanucNumbers.IsInch(state, machine);
         var words = new List<SourceWord>();
         bool changed = false;
@@ -50,7 +51,8 @@ internal static class FanucDecimalPoint
             if (word.Number is decimal && word.Expression is null && word.Address.Length == 1
                 && addresses.Contains(word.Address, StringComparison.Ordinal)
                 && !word.Text.Contains('.', StringComparison.Ordinal)
-                && !(dwell && word.Address is "X" or "U"))
+                && !(dwell && word.Address is "X" or "U")
+                && !(divisions && word.Address == "R"))
             {
                 if (word.Address != "F")
                 {
@@ -89,6 +91,17 @@ internal static class FanucDecimalPoint
         }
 
         return changed ? block with { Words = words } : block;
+    }
+
+    // D409: R of the first block of G73 (G74 in system C), G73 U W R, is the number of divisions, a count of cycles
+    // (0i-D B-64304EN-1-01 p.79-80; parameter 5137, unit cycle), which no input increment scales; the first block is
+    // the one without the contour words P and Q.
+    private static bool IsFirstBlockOfPatternRepeat(SourceBlock block, GcodeSystem? system)
+    {
+        string patternRepeat = system == GcodeSystem.C ? "G74" : "G73";
+        return system is not null
+            && block.Words.Any(word => word.Address == "G" && NativeCode.Of(word) == patternRepeat)
+            && !block.Words.Any(word => word.Address is "P" or "Q");
     }
 
     // The least input increment of an address other than F (B-64484EN p.527-528, NOTE 2 and 3) from [machine]

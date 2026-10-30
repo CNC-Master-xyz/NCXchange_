@@ -584,7 +584,8 @@ internal static class FanucFrames
     /// <summary>
     /// D405 (a): true for a RAPID in G-code system A that moves only axes without an incremental letter, absolute,
     /// directly before a HOME of every one of them: the reader's reading of G28 B0 (D243), which the HOME writes again
-    /// as one G28 B0 block, so the RAPID writes no line of its own.
+    /// as one G28 B0 block, so the RAPID writes no line of its own. Only where the HOME has a [home] template to be
+    /// written with; without one the HOME is an ERROR and the RAPID keeps its own line.
     /// </summary>
     /// <param name="write">The block being written.</param>
     public static bool FoldsIntoHome(FanucBlock write)
@@ -593,6 +594,13 @@ internal static class FanucFrames
         int next = write.Step.Index + 1;
         if (write.System != GcodeSystem.A || block.Verb?.Key != "RAPID" || block.Skip || next >= write.Steps.Count
             || write.Steps[next].Block.Verb?.Key != "HOME" || write.Steps[next].Block.Skip)
+        {
+            return false;
+        }
+
+        int point = write.Steps[next].Block.Find("POINT")?.Value is IntegerValue number ? (int)number.Number : 1;
+        string? template = point > 1 ? write.Machine.Home?.Point : write.Machine.Home?.Template;
+        if (string.IsNullOrEmpty(template))
         {
             return false;
         }

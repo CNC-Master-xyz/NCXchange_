@@ -303,11 +303,9 @@ internal static class FanucCycles
         var words = new List<string>();
         foreach (string parameter in entry.FirstBlock)
         {
-            string address = entry.Params[parameter];
-            if (Parameter(cycle, parameter) is Value value
-                && FanucExpressions.WordValue(write, DecimalsAddressOf(address), value, 1m) is string text)
+            if (ParamWord(write, entry, cycle, parameter) is string word)
             {
-                words.Add(address + text);
+                words.Add(word);
             }
         }
 
@@ -326,14 +324,40 @@ internal static class FanucCycles
         var words = new List<string>();
         foreach (KeyValuePair<string, string> parameter in entry.Params)
         {
-            if (!entry.FirstBlock.Contains(parameter.Key) && Parameter(cycle, parameter.Key) is Value value
-                && FanucExpressions.WordValue(write, DecimalsAddressOf(parameter.Value), value, 1m) is string text)
+            if (!entry.FirstBlock.Contains(parameter.Key)
+                && ParamWord(write, entry, cycle, parameter.Key) is string word)
             {
-                words.Add(" " + parameter.Value + text);
+                words.Add(" " + word);
             }
         }
 
         return string.Concat(words);
+    }
+
+    // D409: a param of a catalog entry as its address and value, R0.5; null where the cycle gives none. P and Q of a
+    // one-shot turning cycle, G74 to G76, take no decimal point (0i-D B-64304EN-1-01 p.85, p.87, p.89): a value with
+    // a fraction is the ERROR CMP397 and is not written, never rounded.
+    private static string? ParamWord(FanucBlock write, CycleEntry entry, CycleSnapshot cycle, string parameter)
+    {
+        string address = entry.Params[parameter];
+        if (Parameter(cycle, parameter) is not Value value)
+        {
+            return null;
+        }
+
+        if (!entry.Modal && address is "P" or "Q" && value is DecimalValue { Number: var number }
+            && number != decimal.Truncate(number))
+        {
+            write.Error(DiagnosticCodes.FanucCycleIncrementWithFraction,
+                $"{parameter}={value.ToCanonical()} of CYCLE={entry.Name} is {address} of {entry.Native}, which takes "
+                + "least input increments without a decimal point, so a fraction cannot be written (0i-D "
+                + "B-64304EN-1-01 p.85-89; D409).");
+            return null;
+        }
+
+        return FanucExpressions.WordValue(write, DecimalsAddressOf(address), value, 1m) is string text
+            ? address + text
+            : null;
     }
 
     // D409: the decimals a param of a turning cycle takes: U and W those of X and Z, P and Q none, since the lathe
@@ -810,10 +834,9 @@ internal static class FanucCycles
         {
             // D114: a parameter name of the catalog entry, TAPER of G90 as R (D175); D409: those of the second block
             // of a two-block cycle, the first block standing in a line of its own.
-            if (!entry.FirstBlock.Contains(parameter))
+            if (!entry.FirstBlock.Contains(parameter) && ParamWord(write, entry, cycle, parameter) is string word)
             {
-                string native = entry.Params[parameter];
-                AddMapped(write, entry, cycle, parameter, native, DecimalsAddressOf(native), 1m);
+                write.Main.Word(word);
             }
         }
 

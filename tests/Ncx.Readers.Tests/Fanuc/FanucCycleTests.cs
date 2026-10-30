@@ -1021,6 +1021,52 @@ public sealed class FanucCycleTests
             Body("G0 X42. Z-20.\nG75 R0.5\nG75 X30. Z-30. P1000 Q2000 F0.1\nG0 U10.", Lathe()));
     }
 
+    // D409: a first block whose second block stays RAW is no longer held: the control reads both as they stand, so
+    // the first block stands RAW in front of the second, never dropped. S of G71, M8 on G76, a variable end point
+    // and an incremental end point from an unknown start each keep the second block RAW.
+    [Theory]
+    [InlineData("G0 X40. Z2.\nG71 U2. R0.5\nG71 P10 Q20 U0.5 W0.1 F0.2 S800\nN10 G0 X20.\nN20 G1 Z-10.\nG0 X100.",
+        "G71 U2. R0.5", "G71 P10 Q20 U0.5 W0.1 F0.2 S800")]
+    [InlineData("G0 X30. Z5.\nG76 P021060 Q100 R0.02\nG76 X27.4 Z-20. R0 P1300 Q400 F2. M8\nG0 X100.",
+        "G76 P021060 Q100 R0.02", "G76 X27.4 Z-20. R0 P1300 Q400 F2. M8")]
+    [InlineData("G0 X42. Z-20.\nG75 R0.5\nG75 X#100 Z-30. P1000 Q2000 F0.1\nG0 X100.",
+        "G75 R0.5", "G75 X#100 Z-30. P1000 Q2000 F0.1")]
+    [InlineData("G75 R0.5\nG75 U-12. W-10. P1000 Q2000 F0.1\nG0 X100.",
+        "G75 R0.5", "G75 U-12. W-10. P1000 Q2000 F0.1")]
+    public void FirstBlock_BeforeASecondBlockThatStaysRaw_StaysRawInFrontOfIt(string source, string first,
+        string second)
+    {
+        string text = Body(source, Lathe());
+
+        Assert.Contains("RAW:FANUC=\"" + first + "\"\nRAW:FANUC=\"" + second + "\"", text,
+            StringComparison.Ordinal);
+    }
+
+    // D409, D218: F of G71 and of G75 is the modal F of the control as well, so a later G1 without F runs at it and
+    // the reader writes that feed on the LINE, as after G90 and G94.
+    [Theory]
+    [InlineData("G0 X40. Z2.\nG71 P10 Q20 U0.5 W0.1 F0.3\nN10 G0 X20.\nN20 G1 Z-10. F0.1\nG0 X40. Z2.\n"
+        + "G1 X50.")]
+    [InlineData("G0 X40. Z2.\nG1 X41. F0.1\nG0 X42. Z-20.\nG75 R0.5\nG75 X30. Z-30. P1000 Q2000 F0.3\n"
+        + "G1 X50.")]
+    public void CycleFeed_OfG71AndG75_IsTheFeedOfTheNextLine(string source)
+    {
+        string text = Body(source, Lathe());
+
+        Assert.EndsWith("LINE X=50 F=0.3", text.TrimEnd('\n'), StringComparison.Ordinal);
+    }
+
+    // D409: R of the first G73 block is the number of divisions, a count (0i-D B-64304EN-1-01 p.79-80; parameter
+    // 5137, unit cycle), which calculator_input = false does not scale, while U and W of the block are lengths.
+    [Fact]
+    public void G73_DivisionsWithoutADecimalPoint_AreACountUnderCalculatorInputFalse()
+    {
+        string text = Body("G0 X40. Z2.\nG73 U2. W2. R3\nG73 P10 Q20 U0.5 W0.1 F0.2\nN10 G0 X20.\nN20 G1 Z-10.\n"
+            + "G0 X100.", LatheWith("[format]\ncalculator_input = false"));
+
+        Assert.Contains(" RELIEF_X=2 RELIEF_Z=2 DIVISIONS=3 ", text, StringComparison.Ordinal);
+    }
+
     // D409: G76 P(m r a) Q(dmin) R(d) / G76 X Z R(i) P(k) Q(d) F(L) is THREAD with THREAD_DATA, MIN_DEPTH,
     // FINISH_ALLOWANCE, TAPER, HEIGHT, FIRST_DEPTH and PITCH.
     [Fact]

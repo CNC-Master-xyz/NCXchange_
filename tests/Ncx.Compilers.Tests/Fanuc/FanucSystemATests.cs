@@ -62,6 +62,19 @@ public sealed class FanucSystemATests
         Assert.Equal("%\nO0001 (T)\nG21\nG18 G99 G40 G80\nG0 X50. Z2.\nG28 U0 B0\nM30\n%\n", text);
     }
 
+    // D405 (a): without a [home] template the HOME cannot be written, so the RAPID before it keeps its own line and
+    // is not lost with the HOME.
+    [Fact]
+    public void Home_WithoutATemplate_LeavesTheRapidBeforeItUnfolded()
+    {
+        string lathe = LatheWithSlideB().Replace("template = \"G28 {axes}\"", "template = \"\"",
+            StringComparison.Ordinal);
+
+        CompileResult result = FanucCompile.Run(HomeProgram("RAPID B=0", "HOME X B"), lathe);
+
+        Assert.Contains(result.Files, file => file.Text.Contains("\nB0.\n", StringComparison.Ordinal));
+    }
+
     // D405 (b): without such a RAPID, the B the virtual machine knows is the intermediate point, where the axis stands,
     // so the control moves it no further before the reference point; the compiler never writes G91, which is no code
     // of system A.
