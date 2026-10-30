@@ -220,6 +220,7 @@ public sealed class FanucCompiler : CompilerBase
         FanucFlow.WriteLabel(write);
         FanucFrames.WriteChain(write);
         WriteTools(write);
+        FanucCycles.CancelBeforeSpindle(write);
         FanucToolWords.WriteSpindleLines(write);
         FanucFrames.WriteTransformations(write);
         FanucUnits.Check(write);

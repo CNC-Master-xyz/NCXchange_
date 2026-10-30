@@ -293,6 +293,39 @@ internal static class FanucCycles
         };
     }
 
+    /// <summary>
+    /// A run of a cycle entered with its "before" line, the rigid tapping of M29 S, ends with G80 in a line of its own
+    /// before a block that writes an S word or a spindle code: an S command between M29 and G84 is alarm PS0203 and an
+    /// M29 inside a running tapping cycle PS0204 (B-64484EN-2 p.104 and p.108, cnc-manuals pages 104 and 108), and the
+    /// cancel clears the speed of the rigid tapping to S0 (p.104, S command). The next call enters the run again with
+    /// the line and the full definition (WriteCall, WriteBefore), so the program keeps running with the new speed
+    /// (controllers fanuc.md 10 rule 7).
+    /// </summary>
+    public static void CancelBeforeSpindle(FanucBlock write)
+    {
+        bool spindle = write.Block.Words.Any(word => word.Key is "SPINDLE" or "RPM" or "ORIENT" or "VC" or "CSS"
+            or "RPM_MAX" or "SPINDLE_MODE");
+        if (spindle && InARunWithItsBeforeLine(write))
+        {
+            Cancel(write);
+        }
+    }
+
+    // Whether the control runs a cycle that its catalog entry enters with a "before" line, CYCLE=TAP with M29 S on
+    // G84 (machine-config 6, D256).
+    private static bool InARunWithItsBeforeLine(FanucBlock write)
+    {
+        if (write.Target.ActiveOf(FanucCodes.Cycle) is not string code || code == "G80"
+            || write.Target.ActiveOf(Definition) is not string active)
+        {
+            return false;
+        }
+
+        string name = active.Substring(0, active.IndexOf(' ', StringComparison.Ordinal));
+        return CatalogOf(write).Entries.Any(entry => entry.Name == name && entry.Native == code
+            && !string.IsNullOrEmpty(entry.Before));
+    }
+
     // G80 in a line of its own where the control has a canned cycle active, or where the target state does not know
     // whether it has one: in a subprogram, which is written from an unknown target state (D99), and after a label that
     // a jump reaches; a caller of the subprogram may have left a cycle active, and in NCX a RAPID, LINE, ARC or HOME

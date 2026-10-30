@@ -507,6 +507,30 @@ public sealed class FanucCyclesTests
         Assert.Contains(written, text, StringComparison.Ordinal);
     }
 
+    // B-64484EN-2 p.104 and p.108: an S command between M29 and G84 is alarm PS0203 and an M29 inside a running tapping
+    // cycle PS0204, so a new speed inside a run of the rigid TAP ends the run with G80 before the S and enters it again
+    // with the line and the full definition at the next call; the program stays runnable.
+    [Fact]
+    public void Tap_WithANewSpeedInsideTheRun_EndsTheRunAndEntersItAgain()
+    {
+        string body = FanucCompile.Body("TOOL=1\nSPINDLE=CW RPM=500\nRAPID X=10 Y=10\nRAPID Z=5"
+            + "\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL\nSPINDLE=CW RPM=600\nCYCLE_CALL X=30"
+            + "\nCYCLE=OFF");
+
+        Assert.EndsWith("M29 S500\nG84 G99 Z-20. R5. F750.\nG80\nS600 M3\nM29 S600\nG84 G99 X30. Z-20. R5.\nG80\n",
+            body, StringComparison.Ordinal);
+    }
+
+    // A spindle stop inside a run of the rigid TAP ends the run the same way (B-64484EN-2 p.104).
+    [Fact]
+    public void Tap_WithASpindleStopInsideTheRun_EndsTheRunFirst()
+    {
+        string body = FanucCompile.Body("TOOL=1\nSPINDLE=CW RPM=500\nRAPID X=10 Y=10\nRAPID Z=5"
+            + "\nCYCLE=TAP CLEARANCE=5 DEPTH=-20 CYCLE_F=750\nCYCLE_CALL\nSPINDLE=OFF");
+
+        Assert.EndsWith("G84 G99 Z-20. R5. F750.\nG80\nM5\n", body, StringComparison.Ordinal);
+    }
+
     // D174: the lathe manual gives the simple turning cycles G90, G92, G94 of system A as G77, G78, G79 in system B
     // and G20, G21, G24 in system C; the catalog keeps the system A numbers and the compiler translates by
     // gcode_system (controllers fanuc.md 3; decisions.md).
