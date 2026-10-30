@@ -109,6 +109,12 @@ internal static class FanucMotion
         }
 
         write.Written(verb);
+        if (FanucFrames.FoldsIntoHome(write))
+        {
+            write.WrittenAll();
+            return;
+        }
+
         bool machineFrame = block.Has("FRAME", null, "MACHINE");
         if (machineFrame)
         {
