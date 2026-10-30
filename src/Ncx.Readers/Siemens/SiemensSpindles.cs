@@ -201,11 +201,9 @@ internal static class SiemensSpindles
 
     // G96 switches the constant surface speed on and G95 with it, G961 with the feed per minute, G962 leaves the feed
     // mode; G97 switches it off with the feed type G95, G971 with G94, G972 leaves the feed type (controller-mapping 4,
-    // CSS; D342). G973, off without the speed limit, has no NCX word and stays a RAW word written back in place.
-    // TODO(question): D342 settles that G973 leaves the feed per revolution and asks the reader to write FEED_MODE for
-    // it, but G973 itself has no NCX word: a FEED_MODE in its block makes the block unwritable (the RAW word takes it),
-    // and one after it compiles under the CSS that NCX still holds to G96, which switches the surface speed back on.
-    // Nothing is written for it until that is settled, so the block round-trips as the source wrote it.
+    // CSS; D342). D424: G973, off without the speed limit, has no NCX form and stays a RAW word written back in place
+    // with the WARNING RDR511, so the round trip stays exact and the control keeps exactly what the source programmed;
+    // no FEED_MODE and no CSS=OFF is written for it, since the G97 the compiler would write keeps the limit.
     private static void ReadSurfaceSpeed(SiemensBlock block)
     {
         foreach (string code in new[] { "G96", "G961", "G962", "G97", "G971", "G972", "G973" })
@@ -218,6 +216,10 @@ internal static class SiemensSpindles
             if (code == "G973")
             {
                 block.KeepAsRawWord(word);
+                block.Draft.ReadingWarnings.Add(new SiemensWarning(DiagnosticCodes.SiemensG973HasNoForm,
+                    "G973 switches the constant surface speed off without the speed limit, which NCX has no form for; "
+                    + "it stays a RAW word written back as the source wrote it, and NCX keeps the surface speed of the "
+                    + "code before it (D342, D424)."));
                 continue;
             }
 

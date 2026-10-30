@@ -69,4 +69,11 @@ public static partial class DiagnosticCodes
     /// is not yet measured on a machine, and frames_in_diameter on the X axis turns it off (D240).
     /// </summary>
     public const string SiemensMachinePositionDoubled = "RDR510";
+
+    /// <summary>
+    /// RDR511, a WARNING: G973 switches the constant surface speed off without the speed limit, which NCX has no form
+    /// for, so it stays a RAW word written back as the source wrote it, and NCX holds the surface speed of the code
+    /// before it (D342, D424).
+    /// </summary>
+    public const string SiemensG973HasNoForm = "RDR511";
 }
