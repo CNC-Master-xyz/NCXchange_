@@ -31,9 +31,11 @@ internal static class CycleRules
     // D187: the Fanuc turning cycles that bring the tool back to their start point, so that after their call no axis
     // has moved and none becomes unknown. Operation 4 of G90, G92 and G94 (G77, G78, G79 in the G-code systems B and
     // C) is the return to the start point A, G70 returns in rapid to the cycle start point, note 3 of G73 says the
-    // same, and the tool path of G76 is a closed loop back to A (fanuc 6).
+    // same, and the tool path of G76 is a closed loop back to A (fanuc 6). D411: G71 and G72, type I and II, return to
+    // the cycle start point as well (0i-FPlus B-64700EN p.290, parameter DTP; B-64694EN-1 p.77), and so do G74 and G75
+    // after their last pass (0i-D B-64304EN-1-01 p.88).
     private static readonly string[] s_cyclesReturningToTheStartPoint =
-        ["G90", "G92", "G94", "G77", "G78", "G79", "G70", "G73", "G76"];
+        ["G90", "G92", "G94", "G77", "G78", "G79", "G70", "G71", "G72", "G73", "G74", "G75", "G76"];
 
     /// <summary>
     /// Executes a CYCLE_CALL block.
@@ -64,9 +66,8 @@ internal static class CycleRules
         if (cycle.Controller is not null || !DrillingFamily.Names.Contains(name))
         {
             // The one exception: a Fanuc turning cycle brings the tool back to its start point and has no drilling
-            // axis, so no axis moves and none becomes unknown; the words of its call are the end point of one pass.
-            // TODO(question): no manual page says where G71 type I, G72 type I, G74 and G75 leave the tool, so those
-            // four keep the D94 rule and the drilling axis becomes unknown after them.
+            // axis, so no axis moves and none becomes unknown; the words of its call are the end point of one pass
+            // (D187, D411: G70 to G76 and the simple turning cycles).
             if (!ReturnsToTheStartPoint(context, cycle, name))
             {
                 PositionTheHoleOnly(context, cycle);
