@@ -13,7 +13,7 @@ public static partial class MachineConfigLoader
     ];
 
     private static readonly string[] s_variablesKeys =
-        ["unassigned", "map", "declared", "block_cap", "call_depth", "repeat_counters"];
+        ["unassigned", "map", "declared", "block_cap", "call_depth", "repeat_counters", "atan_nat"];
 
     private static readonly string[] s_reamFeedOutValues = ["CLEARANCE", "SAFE"];
     private static readonly string[] s_unassignedValues = ["error", "0"];
@@ -90,6 +90,7 @@ public static partial class MachineConfigLoader
             BlockCap = table.LongInteger("block_cap") ?? defaults.BlockCap,
             CallDepth = table.Integer("call_depth") ?? defaults.CallDepth,
             RepeatCounters = table.TextList("repeat_counters"),
+            AtanNat = table.Flag("atan_nat"),
         };
     }
 

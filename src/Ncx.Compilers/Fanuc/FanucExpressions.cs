@@ -234,10 +234,8 @@ internal static class FanucExpressions
     // The functions of custom macro B take their argument in brackets; INT truncates toward zero as FIX does, and
     // ATAN2(a, b) is ATAN[a]/[b] as the reader reads it (controllers fanuc.md 7, language 4.12).
     // D119: ATAN2(y, x) takes the ordinate first and runs above -180 up to 180 degrees, the argument order Fanuc's
-    // two-argument ATAN has too, so ATAN2(a, b) is written as ATAN[a]/[b] (decisions.md).
-    // TODO(question): the Fanuc result runs 0 to 360 unless bit 0 (NAT) of parameter 6004 is 1, and D119 has the
-    // compiler convert the range from what the machine file says the control uses; no key of machine-config 7 carries
-    // that, so the range is written unconverted.
+    // two-argument ATAN has too, so ATAN2(a, b) is written as ATAN[a]/[b] (decisions.md), converted to the NCX range
+    // where the control's differs (D404).
     private static string? Call(FanucBlock write, CallNode call)
     {
         string? name = call.Function switch
@@ -260,7 +258,9 @@ internal static class FanucExpressions
         {
             string? first = Expression(write, call.Arguments[0]);
             string? second = Expression(write, call.Arguments[1]);
-            return first is null || second is null ? null : "ATAN[" + first + "]/[" + second + "]";
+            return first is null || second is null
+                ? null
+                : InTheNcxRange(write, "ATAN[" + first + "]/[" + second + "]");
         }
 
         if (name is null || call.Arguments.Count != 1)
@@ -268,7 +268,23 @@ internal static class FanucExpressions
             return NotWritable(write, call.ToCanonical());
         }
 
-        return Expression(write, call.Arguments[0]) is string argument ? name + "[" + argument + "]" : null;
+        if (Expression(write, call.Arguments[0]) is not string argument)
+        {
+            return null;
+        }
+
+        return call.Function == ExprFunction.Asin
+            ? InTheNcxRange(write, name + "[" + argument + "]")
+            : name + "[" + argument + "]";
+    }
+
+    // D404: under the factory setting of parameter 6004#0 NAT, [variables] atan_nat = false, the control's
+    // two-argument ATAN gives 0 to 360 and its ASIN 270 to 0 to 90 (B-64490EN-05 p.340-341), so the compiler writes
+    // [f - 360 * FIX[f / 180]], which maps them to -180 to 180 and -90 to 90; exactly 180 becomes -180, the same
+    // direction. Under NAT = 1 the ranges agree and the function is written plain.
+    private static string InTheNcxRange(FanucBlock write, string function)
+    {
+        return write.Machine.Variables.AtanNat ? function : "[" + function + " - 360 * FIX[" + function + " / 180]]";
     }
 
     // NOT has no operator in custom macro B: a comparison is inverted, AND and OR by De Morgan, anything else compared

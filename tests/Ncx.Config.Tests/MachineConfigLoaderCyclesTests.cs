@@ -132,6 +132,24 @@ public sealed class MachineConfigLoaderCyclesTests
         Assert.Equal(["#149", "#148"], machine.Variables.RepeatCounters);
     }
 
+    // D404: [variables] atan_nat is the setting of Fanuc parameter 6004#0 NAT, false (0 to 360) when left out.
+    [Fact]
+    public void Variables_AtanNat_LoadsAndDefaultsToFalse()
+    {
+        const string Head = """
+            [machine]
+            name = "Test mill"
+            controller = "fanuc"
+
+            [coolant]
+            STANDARD = { ON = "M8", OFF = "M9" }
+
+            """;
+
+        Assert.False(LoadClean(Head).Variables.AtanNat);
+        Assert.True(LoadClean(Head + "[variables]\natan_nat = true\n").Variables.AtanNat);
+    }
+
     private static Diagnostics Report(string toml)
     {
         var diagnostics = new Diagnostics("test.toml");

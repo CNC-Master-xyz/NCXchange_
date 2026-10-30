@@ -91,4 +91,10 @@ public static partial class DiagnosticCodes
     /// control ignores it and the reader drops it (B-64484EN-2 p.56, 61-84; D177).
     /// </summary>
     public const string FanucCycleDwellIgnored = "RDR122";
+
+    /// <summary>
+    /// RDR123, a WARNING: a call of an external program, whose blocks the reader does not see, after the caller has
+    /// assigned one of #1..#33; that program may read or write them, and the CALL of NCX passes none (D407, D148).
+    /// </summary>
+    public const string FanucExternalProgramLocals = "RDR123";
 }

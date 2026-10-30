@@ -70,7 +70,8 @@ internal static class FanucContour
             // the blocks P to Q, whose codes and F take effect (B-64484EN-1 p.76, p.281), so afterwards they are
             // unknown as after the first copy.
             WriteModes(write, written.Modes);
-            write.Write(CycleLine(code, written));
+            WriteFirstBlock(write, entry, cycle, code);
+            write.Write(CycleLine(code, written) + FanucCycles.SecondBlockWords(write, entry, cycle));
             ForgetAfter(write, written.Forgotten);
             return true;
         }
@@ -127,7 +128,8 @@ internal static class FanucContour
         var range = new FanucContourRange(first, last) { Modes = modes, Forgotten = forgotten };
         contours.Add(program, contour, range);
         WriteModes(write, modes);
-        write.Write(CycleLine(code, range));
+        WriteFirstBlock(write, entry, cycle, code);
+        write.Write(CycleLine(code, range) + FanucCycles.SecondBlockWords(write, entry, cycle));
         foreach (string line in lines)
         {
             write.Write(line);
@@ -135,6 +137,15 @@ internal static class FanucContour
 
         ForgetAfter(write, forgotten);
         return true;
+    }
+
+    // D409: the first block of G71, G72 or G73, U(d) R(e), stands directly before the block with P and Q.
+    private static void WriteFirstBlock(FanucBlock write, CycleEntry entry, CycleSnapshot cycle, string code)
+    {
+        if (FanucCycles.FirstBlockLine(write, entry, cycle, code) is string first)
+        {
+            write.Write(first);
+        }
     }
 
     // D278 (B-64484EN-1 p.90): the modes the range runs under stand in front of the G7x line, where the program's

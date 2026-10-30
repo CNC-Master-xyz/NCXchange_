@@ -10,9 +10,6 @@ namespace Ncx.Readers.Fanuc;
 /// </summary>
 internal static class FanucTilt
 {
-    // Computed angles keep the decimals of the source angles, at least these (FanucNumbers.Round).
-    private const int LeastDecimals = 3;
-
     // Below this the cosine of B is 0, and A and C turn about the same axis.
     private const double GimbalLimit = 1e-9;
 
@@ -96,12 +93,6 @@ internal static class FanucTilt
             return;
         }
 
-        int decimals = LeastDecimals;
-        foreach (SourceWord word in new[] { first, second, third })
-        {
-            decimals = Math.Max(decimals, FanucNumbers.DecimalsOf(word));
-        }
-
         decimal a;
         decimal b;
         decimal c;
@@ -110,9 +101,10 @@ internal static class FanucTilt
             case 0m:
                 SpatialAngles((double)i, (double)j, (double)k, out double spatialA, out double spatialB,
                     out double spatialC);
-                a = FanucNumbers.Round(spatialA, decimals);
-                b = FanucNumbers.Round(spatialB, decimals);
-                c = FanucNumbers.Round(spatialC, decimals);
+                // The spatial angles keep 6 decimals, whatever the decimals of the Euler angles (D403).
+                a = ComputedNumbers.Round(spatialA);
+                b = ComputedNumbers.Round(spatialB);
+                c = ComputedNumbers.Round(spatialC);
                 break;
             case 1m:
                 // Roll, pitch and yaw turn about X, Y and Z of the frame in that order, the spatial angles of TILT.

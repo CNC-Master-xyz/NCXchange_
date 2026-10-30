@@ -310,10 +310,45 @@ internal static class FanucMacro
             return;
         }
 
-        if (external is null)
+        if (external is not null
+            || !block.Fanuc.Calls.Begins.ContainsKey(called.ToString(CultureInfo.InvariantCulture)))
         {
-            ReadSharedLocals(block, called);
+            WarnExternalLocals(block, called);
+            return;
         }
+
+        ReadSharedLocals(block, called);
+    }
+
+    // D407: an external program, the call code of [format] external_call or a P the file holds no O line for, has
+    // blocks the reader does not see, so it cannot tell which of #1..#33 that program reads or writes, and the CALL
+    // carries no ARG (D99 does not follow it). Where the caller has assigned one of #1..#33 before the call, the
+    // program may read or write it, and the reader reports the WARNING RDR123 on the call rather than lose it
+    // silently.
+    private static void WarnExternalLocals(FanucBlock block, long called)
+    {
+        var read = new SortedSet<int>();
+        var written = new SortedSet<int>();
+        var assigned = new HashSet<int>();
+        foreach (SourceBlock body in block.Fanuc.SectionOf(block.Source))
+        {
+            if (body.Line == block.Line)
+            {
+                break;
+            }
+
+            LocalsOf(body, read, written, assigned);
+        }
+
+        if (written.Count == 0)
+        {
+            return;
+        }
+
+        block.Draft.Warnings.Add((DiagnosticCodes.FanucExternalProgramLocals,
+            $"The external program {called.ToString(CultureInfo.InvariantCulture)} may read or write #1..#33, which "
+            + "the caller assigns before the call; the reader does not see its blocks, so NCX passes none of them "
+            + "(D407, D148)."));
     }
 
     // D148: a subprogram call opens no local-variable level, so an M98 subprogram (and the M200 of the builder
@@ -325,10 +360,7 @@ internal static class FanucMacro
     // the reader reports (decisions.md, D148; RDR106). D148 settles those two alone: a local the subprogram assigns
     // itself before it reads it is no local it reads from the caller, and one it leaves behind that no block of the
     // caller reads is none it writes back for the caller, so neither puts a word or a diagnostic on the CALL.
-    // TODO(question): an external program, the call code of [format] external_call and a P the file holds no O line
-    // for, has blocks the reader does not see, so it cannot tell which of #1..#33 that program reads or writes; D148
-    // settles the subprogram of the file and says nothing of one outside it, and the reader passes no ARG and reports
-    // nothing there, as main does (wave-3 question #194).
+    // An external program, whose blocks the reader does not see, is WarnExternalLocals (D407).
     private static void ReadSharedLocals(FanucBlock block, long called)
     {
         var read = new SortedSet<int>();

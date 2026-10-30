@@ -23,10 +23,8 @@ namespace Ncx.Acceptance.Jobs;
 /// </summary>
 // The Fanuc compiler writes G97 of the sub spindle from the family code, since [spindle.SUB] of nakamura-wy250l.toml
 // has no CSS_OFF (D258).
-// TODO(question): the Fanuc compiler writes G28 B0 only with an incremental letter of B, which nakamura-wy250l.toml
-// does not give. D243 settles the reader, where B of system A has no incremental twin and is the absolute
-// intermediate point; how the compiler writes HOME of such an axis it does not say. The job is compiled for the
-// machine with B as the incremental letter of B, until that is answered.
+// B of system A has no incremental letter in nakamura-wy250l.toml, and the Fanuc compiler writes G28 B0 back from the
+// RAPID B=0 the reader puts before HOME B (D243, D405), so the job compiles for the machine file as it ships.
 public sealed partial class NakamuraJobCompileTests
 {
     // The wait marks of the Nakamura, M100 to M199 ([sync] mark_range), and its spindle synchronization, M96, M97 and
@@ -123,15 +121,12 @@ public sealed partial class NakamuraJobCompileTests
         return program;
     }
 
-    // nakamura-wy250l.toml with the incremental letter of the TODO(question) above.
+    // nakamura-wy250l.toml as it ships (D405).
     private static MachineConfig Machine()
     {
-        string text = Fixture.ReadText("machines/nakamura-wy250l.toml");
-        string filled = text
-            .Replace("letter = \"B\"\n", "letter = \"B\"\nincremental_letter = \"B\"\n", StringComparison.Ordinal);
-        Assert.Equal(text.Length + "incremental_letter = \"B\"\n".Length, filled.Length);
         var diagnostics = new Diagnostics("nakamura-wy250l.toml");
-        MachineConfig? machine = MachineConfigLoader.LoadText(filled, diagnostics);
+        MachineConfig? machine = MachineConfigLoader.LoadText(Fixture.ReadText("machines/nakamura-wy250l.toml"),
+            diagnostics);
         Assert.True(machine is not null && !diagnostics.HasErrors, diagnostics.ToText());
         return machine;
     }

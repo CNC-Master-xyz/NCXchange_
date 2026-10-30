@@ -37,7 +37,7 @@ internal static class FanucCycles
     private static readonly string[] s_repetitiveOfSystemC = ["G72", "G73", "G74", "G75", "G76", "G77", "G78"];
 
     // The one-shot cycles the manual states a return to the cycle start point for (D187).
-    private static readonly string[] s_returnToTheStartPoint = ["G70", "G73", "G76"];
+    private static readonly string[] s_returnToTheStartPoint = ["G70", "G71", "G72", "G73", "G74", "G75", "G76"];
 
     private static readonly string[] s_motion = ["G0", "G1", "G2", "G3"];
 
@@ -305,13 +305,13 @@ internal static class FanucCycles
             return null;
         }
 
-        // TODO(question): the other words of G70 to G76, depth of cut, allowances, retract and thread data, have no
-        // NCX word (wave-1 question #18); a block with a word its catalog entry does not map stays RAW with its
-        // contour.
+        // D409: the other words of G70 to G73 are params of the catalog entry, those of its second block here, where
+        // the contour stands; a block with a word the entry does not map there, D of the one-block form of Series 15
+        // among them, stays RAW with its contour.
         foreach (SourceWord word in block.Words)
         {
-            bool mapped = entry.Params.Values.Contains(word.Address) && word.Number is not null
-                && word.Expression is null;
+            bool mapped = FanucTwoBlockCycles.SecondBlockAddresses(entry).Contains(word.Address)
+                && word.Number is not null && word.Expression is null;
             bool own = ReferenceEquals(word, code) || ReferenceEquals(word, first) || ReferenceEquals(word, last);
             if (word.Address != "N" && !own && !mapped)
             {
@@ -329,8 +329,8 @@ internal static class FanucCycles
     // the catalog cycle with CONTOUR=name (language 4.7, CONTOUR; machine-config 6, modal and contour; D65). A cycle
     // whose contour the structure pass made no section of stays RAW with the blocks of its contour, as the control
     // reads them (FanucReader.MarkContour; D5).
-    // TODO(question): the catalog gives G75 (GROOVE) and G76 (THREAD, D161) a contour as the documents say, which
-    // wave-1 questions #19 and #29 doubt; the reader follows the entry of the catalog.
+    // D176: G75 (GROOVE) and G76 (THREAD) carry no contour; their entries have none, and they are read with their end
+    // point (ReadEndPointCycle, D409).
     private static bool ReadRepetitiveCycle(FanucBlock block)
     {
         if (block.System is null)
@@ -348,10 +348,25 @@ internal static class FanucCycles
             }
 
             block.MarkRead(word);
-            if (block.Fanuc.Contours.TryGetValue(block.Line, out string? contour)
+            string native = SystemANative(code, block.System);
+            CycleEntry? oneShot = FanucTwoBlockCycles.OneShotEntry(block.Machine.CycleCatalog, native);
+            if (oneShot is { FirstBlock.Count: > 0 } && FanucTwoBlockCycles.IsFirstBlock(block, oneShot))
+            {
+                FanucTwoBlockCycles.ReadFirstBlock(block, oneShot, code);
+                return true;
+            }
+
+            // D409: the params of the first block, where it stands directly before this one (FanucReader.Write emits
+            // it as RAW in front where this block stays RAW).
+            FanucFirstBlock? first = block.Fanuc.FirstBlock?.SecondLine == block.Line ? block.Fanuc.FirstBlock : null;
+            if (oneShot is { Contour.Count: 0 })
+            {
+                FanucTwoBlockCycles.ReadEndPointCycle(block, oneShot, first);
+            }
+            else if (block.Fanuc.Contours.TryGetValue(block.Line, out string? contour)
                 && ContourEntry(block.Machine.CycleCatalog, SystemANative(code, block.System)) is CycleEntry entry)
             {
-                ReadContourCycle(block, entry, contour);
+                ReadContourCycle(block, entry, contour, first);
             }
             else
             {
@@ -388,20 +403,14 @@ internal static class FanucCycles
     // follow.
     // D224: a one-shot entry runs once where it stands (machine-config 6), while the virtual machine keeps a CYCLE
     // until CYCLE=OFF, so the reader closes it with CYCLE=OFF after its call.
-    private static void ReadContourCycle(FanucBlock block, CycleEntry entry, string contour)
+    private static void ReadContourCycle(FanucBlock block, CycleEntry entry, string contour, FanucFirstBlock? first)
     {
         block.Take(entry.Contour[0]);
         block.Take(entry.Contour[1]);
         var definition = new DraftBlock()
             .Add("CYCLE", new IdentValue(entry.Name))
             .Add("CONTOUR", new IdentValue(contour));
-        foreach (KeyValuePair<string, string> parameter in entry.Params)
-        {
-            if (block.Take(parameter.Value) is SourceWord word && FanucMacro.ValueOf(block, word) is Value value)
-            {
-                definition.Add(parameter.Key, value);
-            }
-        }
+        FanucTwoBlockCycles.AddParams(block, entry, first, definition);
 
         foreach (Word word in definition.Words)
         {
@@ -419,9 +428,8 @@ internal static class FanucCycles
             active.Written = null;
         }
 
-        // D187: G70 returns in rapid to the cycle start point, note 3 of G73 says the same and the tool path of G76
-        // is a closed loop back to it, so the tool stands where it stood; where G71, G72, G74 and G75 leave it no
-        // page of the manual says, and the reader forgets the positions there (decisions.md; fanuc 6).
+        // D187, D411: G70 to G76 bring the tool back to the cycle start point, so it stands where it stood
+        // (decisions.md; fanuc 6).
         if (Array.IndexOf(s_returnToTheStartPoint, entry.Native) < 0)
         {
             block.Fanuc.ForgetPositions();
@@ -1246,9 +1254,8 @@ internal static class FanucCycles
         }
         else if (block.Fanuc.Rpm.TryGetValue(block.State.LastSpindle ?? "", out decimal speed) && speed != 0)
         {
-            // TODO(question): no document says how many decimals a quotient the reader computes keeps (wave-1
-            // question #46); the pitch keeps six.
-            definition.Add("PITCH", FanucNumbers.Of(Math.Round(perMinute / speed, 6, MidpointRounding.AwayFromZero)));
+            // The pitch F / S the reader computes keeps 6 decimals (D403).
+            definition.Add("PITCH", FanucNumbers.Of(ComputedNumbers.Round(perMinute / speed)));
         }
     }
 

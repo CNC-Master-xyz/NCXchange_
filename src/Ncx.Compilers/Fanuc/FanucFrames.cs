@@ -516,9 +516,11 @@ internal static class FanucFrames
     // D281: {axes} holds the named axes with an incremental 0, U0 W0 in system A and X0 Y0 Z0 otherwise, and outside
     // system A the compiler writes G91 into the block in front of the template, G91 G28 Z0 (machine-config 3; fanuc 4;
     // decisions.md).
-    // TODO(question): D243 settles the reader, where only an incremental 0 is no intermediate move; it does not say
-    // how the compiler writes HOME of an axis that has no incremental letter in G-code system A (B of G28 B0), which
-    // stays CMP321.
+    // D405: an axis with no incremental letter in system A (B of G28 B0) takes its absolute letter, and its word is
+    // the intermediate point (D243); the compiler writes the position the axis stands at, which the virtual machine
+    // knows, so the control makes no intermediate move, and a RAPID to that point directly before the HOME folds into
+    // it (FoldsIntoHome), the reader's own reading of G28 B0. An unknown position is the ERROR CMP321; G91 is never
+    // written, as it is no code of system A.
     private static void WriteHome(FanucBlock write)
     {
         write.Written("HOME");
@@ -530,15 +532,22 @@ internal static class FanucFrames
         {
             write.Written(axis.Word);
             string? letter = FanucAxes.LetterOf(write, axis.Axis, incremental: systemA);
-            if (letter is null)
+            if (letter is not null)
+            {
+                axes.Add(letter + "0");
+                continue;
+            }
+
+            if (IntermediatePoint(write, axis.Axis) is not string standing)
             {
                 write.Error(DiagnosticCodes.FanucIncrementalWordNotWritable,
-                    $"HOME {axis.Axis} is written with the incremental letter of the axis in G-code system A, which "
-                    + "[[axis]] does not give (controllers fanuc.md 3, 4).");
+                    $"HOME {axis.Axis}: the axis has no incremental letter in G-code system A, and its position is "
+                    + "not known, so no intermediate point without a move can be written (controllers fanuc.md 3, 4; "
+                    + "D243, D405).");
                 return;
             }
 
-            axes.Add(letter + "0");
+            axes.Add(standing);
         }
 
         if (!systemA)
@@ -556,6 +565,62 @@ internal static class FanucFrames
         {
             write.Main.Word(text);
         }
+    }
+
+    // D405 (b): the word of an axis without an incremental letter, its absolute letter and the position it stands at
+    // before the HOME; null where the virtual machine does not know that position.
+    private static string? IntermediatePoint(FanucBlock write, string axis)
+    {
+        if (!write.Before.Motion.Position.TryGetValue(axis, out AxisPosition position) || !position.Known)
+        {
+            return null;
+        }
+
+        string letter = FanucAxes.LetterOf(write, axis, incremental: false)!;
+        decimal value = position.Value * FanucAxes.WordFactor(write, axis);
+        return letter + write.Numbers.Format(FanucMotion.DecimalsAddress(write, axis), value, write.Block);
+    }
+
+    /// <summary>
+    /// D405 (a): true for a RAPID in G-code system A that moves only axes without an incremental letter, absolute,
+    /// directly before a HOME of every one of them: the reader's reading of G28 B0 (D243), which the HOME writes again
+    /// as one G28 B0 block, so the RAPID writes no line of its own. Only where the HOME has a [home] template to be
+    /// written with; without one the HOME is an ERROR and the RAPID keeps its own line.
+    /// </summary>
+    /// <param name="write">The block being written.</param>
+    public static bool FoldsIntoHome(FanucBlock write)
+    {
+        Block block = write.Block;
+        int next = write.Step.Index + 1;
+        if (write.System != GcodeSystem.A || block.Verb?.Key != "RAPID" || block.Skip || next >= write.Steps.Count
+            || write.Steps[next].Block.Verb?.Key != "HOME" || write.Steps[next].Block.Skip)
+        {
+            return false;
+        }
+
+        int point = write.Steps[next].Block.Find("POINT")?.Value is IntegerValue number ? (int)number.Number : 1;
+        string? template = point > 1 ? write.Machine.Home?.Point : write.Machine.Home?.Template;
+        if (string.IsNullOrEmpty(template))
+        {
+            return false;
+        }
+
+        List<FanucAxisWord> axes = FanucAxes.Of(block);
+        if (axes.Count == 0 || block.Words.Count != axes.Count + 1)
+        {
+            return false;
+        }
+
+        foreach (FanucAxisWord axis in axes)
+        {
+            if (axis.Incremental || FanucAxes.LetterOf(write, axis.Axis, incremental: true) is not null
+                || !write.Steps[next].Block.Has(axis.Axis))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     // SETPOS through [setpos], G92 X Z or G50 X Z in system A, {axes} the declared coordinates (language 4.2, SETPOS;

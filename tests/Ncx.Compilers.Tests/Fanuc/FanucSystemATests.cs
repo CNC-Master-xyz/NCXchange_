@@ -40,6 +40,88 @@ public sealed class FanucSystemATests
             text);
     }
 
+    // A B axis of system A without an incremental letter, the sub spindle slide of the Nakamura (D405).
+    private const string SlideB = """
+        [[axis]]
+        id = "B1"
+        ncx = "B"
+        letter = "B"
+        kind = "linear"
+        limits = [-900, 0]
+        home = 0
+        """;
+
+    // D405 (a): the RAPID B=v the reader writes for G28 B0 directly before HOME B folds into G28 B0 again, the
+    // intermediate point of the absolute word (D243), and G28 U0 B0 comes back as it stood.
+    [Fact]
+    public void Home_OfAnAxisWithoutAnIncrementalLetter_FoldsTheRapidBeforeIt()
+    {
+        string text = FanucCompile.TextOf(FanucCompile.Run(HomeProgram("RAPID B=0", "HOME X B"),
+            LatheWithSlideB()));
+
+        Assert.Equal("%\nO0001 (T)\nG21\nG18 G99 G40 G80\nG0 X50. Z2.\nG28 U0 B0\nM30\n%\n", text);
+    }
+
+    // D405 (a): without a [home] template the HOME cannot be written, so the RAPID before it keeps its own line and
+    // is not lost with the HOME.
+    [Fact]
+    public void Home_WithoutATemplate_LeavesTheRapidBeforeItUnfolded()
+    {
+        string lathe = LatheWithSlideB().Replace("template = \"G28 {axes}\"", "template = \"\"",
+            StringComparison.Ordinal);
+
+        CompileResult result = FanucCompile.Run(HomeProgram("RAPID B=0", "HOME X B"), lathe);
+
+        Assert.Contains(result.Files, file => file.Text.Contains("\nB0.\n", StringComparison.Ordinal));
+    }
+
+    // D405 (b): without such a RAPID, the B the virtual machine knows is the intermediate point, where the axis stands,
+    // so the control moves it no further before the reference point; the compiler never writes G91, which is no code
+    // of system A.
+    [Fact]
+    public void Home_OfAnAxisWithoutAnIncrementalLetter_WritesItsKnownPosition()
+    {
+        string text = FanucCompile.TextOf(FanucCompile.Run(HomeProgram("RAPID B=-120.5", "RAPID X=40", "HOME B"),
+            LatheWithSlideB()));
+
+        Assert.Equal(
+            "%\nO0001 (T)\nG21\nG18 G99 G40 G80\nG0 X50. Z2.\nB-120.5\nX40.\nG28 B-120.5\nM30\n%\n",
+            text);
+    }
+
+    // D405 (c): with B unknown, here a slide without a reference point in the machine file, there is no point to
+    // write, and HOME B stays the ERROR CMP321.
+    [Fact]
+    public void Home_OfAnAxisWithoutAnIncrementalLetterAtAnUnknownPosition_IsCmp321()
+    {
+        string lathe = LatheWithSlideB().Replace("limits = [-900, 0]\nhome = 0\n", "limits = [-900, 0]\n",
+            StringComparison.Ordinal);
+
+        CompileResult result = FanucCompile.Run(HomeProgram("HOME B"), lathe);
+
+        Assert.Equal("CMP321", FanucCompile.ErrorOf(result).Code);
+    }
+
+    // The test lathe with the slide B among its axes.
+    private static string LatheWithSlideB()
+    {
+        return FanucCompile.Lathe().Replace("[spindle.MAIN]", SlideB + "\n\n[spindle.MAIN]", StringComparison.Ordinal);
+    }
+
+    private static string HomeProgram(params string[] blocks)
+    {
+        return FanucCompile.Lines(
+            [
+                "FILE=BEGIN NCX=1",
+                "PROGRAM=BEGIN NAME=\"T\" NUMBER=1",
+                "FEED_MODE=PER_REV COMP=OFF UNITS=MM WORKPLANE=ZX DIAMETER=ON CYCLE=OFF",
+                "RAPID X=50 Z=2",
+                .. blocks,
+                "PROGRAM=END",
+                "FILE=END",
+            ]);
+    }
+
     // Fanuc 3, system A: G90 is the simple turning cycle, not a distance code, so a sweep beyond 360 degrees (D84;
     // controller-mapping 2, ANGLE) writes its turns with the absolute letters X Z alone.
     [Fact]

@@ -506,8 +506,21 @@ public sealed partial class FanucReader : ReaderBase
 
     private void Write(FanucBlock reading)
     {
+        // D409: the first block of a two-block cycle wrote nothing and waits for its second block; where that one
+        // stays RAW, the control reads both as they stand, so the first block stands RAW in front of it.
+        FanucFirstBlock? first = reading.Fanuc.FirstBlock is { } held && held.SecondLine == reading.Line ? held : null;
+        if (first is not null)
+        {
+            reading.Fanuc.FirstBlock = null;
+        }
+
         if (reading.Draft.RawReason is string reason)
         {
+            if (first is not null)
+            {
+                EmitRaw(first.Block, "the first block of a two-block cycle whose second block stays RAW (D409)");
+            }
+
             // The modes of the control a RAW block switches on or off, and the entries of the chain it ends, which
             // stand in front of the RAW block (D244, D245).
             FanucFrames.KeepRawModes(reading);

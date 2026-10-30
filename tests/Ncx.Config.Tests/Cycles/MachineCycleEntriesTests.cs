@@ -187,9 +187,10 @@ public sealed class MachineCycleEntriesTests
         Assert.True(machine.CycleCatalog.Find("TAP")?.Available);
     }
 
-    // D377: channel and available describe one machine; in a catalog file they are the WARNING CFG157 and ignored.
+    // D377: channel describes one machine; in a catalog file it is the WARNING CFG157 and ignored. D410: available =
+    // false in a catalog file withdraws an inherited entry, and is no WARNING.
     [Fact]
-    public void CatalogFile_ChannelAndAvailable_WarnAndAreIgnored()
+    public void CatalogFile_ChannelWarnsAndIsIgnored_AvailableWithdrawsTheEntry()
     {
         var diagnostics = new Diagnostics("cycles/test.toml");
 
@@ -202,10 +203,29 @@ public sealed class MachineCycleEntriesTests
             """, Controller.Fanuc, diagnostics);
 
         Assert.NotNull(catalog);
-        Assert.Equal(2, diagnostics.Items.Count);
-        Assert.All(diagnostics.Items, item => Assert.Equal(DiagnosticCodes.CycleMachineKeyInCatalog, item.Code));
-        Assert.True(catalog.Find("TAP")?.Available);
+        Diagnostic warning = Assert.Single(diagnostics.Items);
+        Assert.Equal(DiagnosticCodes.CycleMachineKeyInCatalog, warning.Code);
+        Assert.False(catalog.Find("TAP")?.Available);
+        Assert.Null(catalog.FindNative("G84"));
         Assert.Empty(catalog.ChannelEntries);
+    }
+
+    // D409: first_block names params of the entry only; another word is CFG160.
+    [Fact]
+    public void CatalogFile_FirstBlockOfAWordThatIsNoParam_IsCfg160()
+    {
+        var diagnostics = new Diagnostics("cycles/test.toml");
+
+        CycleCatalogLoader.LoadText("""
+            [[cycle]]
+            name = "GROOVE"
+            native = "G75"
+            params = { STEP_X = "P" }
+            first_block = ["RETURN_AMOUNT"]
+            """, Controller.Fanuc, diagnostics);
+
+        Diagnostic error = Assert.Single(diagnostics.Items);
+        Assert.Equal((Severity.Error, "CFG160"), (error.Severity, error.Code));
     }
 
     // D361: the Mori Seiki taps rigidly with M329, the before line of its TAP entries on G84 and G88; the Nakamura

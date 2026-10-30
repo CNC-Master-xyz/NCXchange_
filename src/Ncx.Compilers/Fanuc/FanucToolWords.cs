@@ -370,6 +370,21 @@ internal static class FanucToolWords
             || write.Machine.Resources.Count(resource => resource.IsSpindle) <= 1;
     }
 
+    // D408: the spindle a limit without a spindle of its own applies to is the one whose M code the control saw last,
+    // its first spindle, the default of the machine, before any; a machine with one spindle has no other.
+    private static bool LimitStandsAlone(FanucBlock write, string id)
+    {
+        string? selected = write.Target.ActiveOf(LastSpindle) ?? write.Machine.ResolveDefaultSpindle()?.Id;
+        return selected == id || write.Machine.Resources.Count(resource => resource.IsSpindle) <= 1;
+    }
+
+    // A template that selects its spindle in its own block: {spindle} or a P word, G92 S3000 P2 (D408).
+    private static bool SelectsItsSpindle(string template)
+    {
+        return template.Contains("{spindle}", StringComparison.Ordinal)
+            || template.Split(' ', StringSplitOptions.RemoveEmptyEntries).Any(token => token.StartsWith('P'));
+    }
+
     // The words of one spindle: S and its M code (controllers fanuc.md 5; controller-mapping 4, SPINDLE and RPM).
     private static void AddSpindle(FanucBlock write, string? role)
     {
@@ -656,12 +671,21 @@ internal static class FanucToolWords
             return;
         }
 
-        // TODO(question): fanuc 5 gives the S of a block to the spindle of the M code in it, otherwise to the spindle
-        // selected last, and fanuc 4 does not say whether the speed limit of G50 S and G92 S is one per spindle; the
-        // limit is written alone, as NAKAMURA_WY250L_O1000.nc writes G50S2500 before any M code, until that is
-        // answered.
+        // D408: the limit of G50 S and G92 S is written alone, as NAKAMURA_WY250L_O1000.nc writes G50S2500 before
+        // any M code, and is the limit of the spindle selected when its block runs, the one whose M code the control
+        // saw last, its first spindle before any (0i-F B-64604EN p.156; 0i-D B-64304EN p.127-128). Where that is
+        // another spindle and the template selects none itself, with {spindle} or a P word, the limit reaches the
+        // wrong spindle: the WARNING CMP343.
         if (id is null || state == "RPM_MAX")
         {
+            if (id is not null && state == "RPM_MAX" && !SelectsItsSpindle(template!) && !LimitStandsAlone(write, id))
+            {
+                write.Warning(DiagnosticCodes.FanucSpeedLimitOfAnotherSpindle,
+                    $"{word.ToCanonical()}: {text} limits the spindle selected when its block runs, and the M code "
+                    + $"the control saw last belongs to another spindle than {word.Addr ?? id}; the template of "
+                    + $"{what} RPM_MAX names no spindle ({{spindle}} or P) (controllers fanuc.md 5; D408).");
+            }
+
             write.Write(text);
             return;
         }

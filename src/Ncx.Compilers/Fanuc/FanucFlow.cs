@@ -412,12 +412,11 @@ internal static class FanucFlow
     // caller, since a subprogram call opens no local-variable level and shares the caller's #1..#33 - but which a G65
     // Pnnnn A#1 of the same locals reads as too (controllers fanuc.md 7; controller-mapping 6, CALL and ARG). A CALL
     // without an ARG is a Subprogram.
-    // TODO(question): no word of the NCX program says which of the two Fanuc calls a PassThrough CALL is: the two
-    // sources convert to the same NCX text (G65 P0100 A#1 passes the caller's #1 to the callee's #1 too), so no
-    // reading of the block compiles both back. D148 settles the reader's side alone, the ARG:Vn={$Vn} of an M98, so
-    // the compiler writes the M98 that shape came from and reports every such block with the WARNING CMP311, which
-    // names the G65 reading it does not write and that virtual machine 3.6 gives a CALL (row 196 of
-    // ../../../docs/implementation/03-open-questions.md).
+    // D406: no word of the NCX program says which of the two Fanuc calls a PassThrough CALL is, since G65 P0100 A#1
+    // passes the caller's #1 to the callee's #1 too; the compiler writes the M98 the reader produced that shape from,
+    // a byte-identical round trip because M98 shares the caller's locals, and reports every such block with the
+    // WARNING CMP311, which names the G65 reading it does not write. The two calls differ only where the callee
+    // writes #1..#33 back, which D148 reports on the reader's side.
     private static CallForm FormOf(Block block)
     {
         bool passThrough = false;

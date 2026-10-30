@@ -211,6 +211,12 @@ internal sealed class FanucState
     public Value? WrittenFeed { get; set; }
 
     /// <summary>
+    /// D409: the params of the first block of a two-block cycle, which the second block takes; null between such
+    /// blocks.
+    /// </summary>
+    public FanucFirstBlock? FirstBlock { get; set; }
+
+    /// <summary>
     /// The active cycle; null while none is.
     /// </summary>
     public FanucCycle? Cycle { get; set; }

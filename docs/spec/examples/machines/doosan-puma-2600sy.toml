@@ -235,7 +235,8 @@ SUB_CHUCK.CLOSE = "workpiece_transfer_to = SUB"        # fallback only; [workpie
 catalog = "fanuc-lathe.toml"       # the Fanuc lathe catalog: drilling along Z and along X by for_axis, turning cycles in system A numbers (machine-config 6, D160, D174)
 # catalog entries for this builder select the peck behaviour with the PECK_MODE function before G83 (expansion rule, machine-config 5a)
 # [[cycle]] name = "PECK"       native = "G83" pre = ["FUNC:PECK_MODE=RETRACT"]
-# [[cycle]] name = "CHIP_BREAK" native = "G83" pre = ["FUNC:PECK_MODE=CHIP_BREAK"]
+# [[cycle]] name = "CHIP_BREAK" native = "G83" pre = ["FUNC:PECK_MODE=CHIP_BREAK"] available = true
+#   available = true: cycles/fanuc-lathe.toml withdraws CHIP_BREAK (D410), and a redefinition inherits available = false without it
 
 [raw]
 known = ["G300", "G301", "G350"]   # sub spindle as tailstock, cut-off check
