@@ -17,6 +17,8 @@ Branch open-siemens, worktree `.worktrees/open-siemens`, from main 1ecacb6. Brie
 - D422: reader keeps every block from an MCALL it keeps RAW to the closing MCALL (or the unit end, whose M30/M17/RET stays the end) RAW; siemens 11 rule 5.
 - D423, D425: comments; language 4.7 sentence.
 - D424: G973 RAW word plus WARNING RDR511.
+- D403 (Siemens reader part, asked for by the coordinator): `src/Ncx.Readers/ComputedNumbers.cs` copied byte for byte from open-hh (identical on open-fanuc). `SiemensNumbers.Of` and `SiemensNumbers.Round` delegate to it; `LeastDecimals`, `DecimalsOf` and the per-file `Decimals` helpers of SiemensArcs, SiemensCorners, SiemensPatterns, SiemensPolar and SiemensTilt are gone, so every computed number (arc centre, chamfer and rounding point, polar point, pattern position, CYCLE800 angle) keeps six decimals, trailing zeros dropped. Controller-mapping 1 (TILT row, CYCLE800) says so instead of "at least three decimals".
+- Expectations changed by D403: `SiemensMotionTests.ChfAndChr_AreExpandedIntoLines` and `SiemensReaderTests.Read_HandWrittenProgram_...` read the CHF=2 chamfer corner as 8.585786 / 1.414214 (38.585786 / 1.414214 in the hand-written program) instead of 8.586 / 1.414: 2 / sqrt(2) = 1.41421356..., which the old rule cut to the three decimals of the source words and D403 keeps to six. No other Siemens expectation changed; the corpus round trips are unchanged, since the compilers' [format] decimals decide what reaches the control.
 - Stale S-3, S-8, S-9 (VM572 doc, VM 3.7 and VM 5 text), S-10; dangling refs in the Siemens, Core, Config, Analytics and Cli tests.
 - 03-open-questions: rows W3-1, 91, 94, 137, 151, 160, 161 (case c), 189-192 set; six rows added at the end.
 

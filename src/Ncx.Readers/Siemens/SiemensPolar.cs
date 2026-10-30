@@ -92,10 +92,8 @@ internal static class SiemensPolar
                 + "the current position (controllers siemens.md 3)");
             return false;
         }
-
-        int decimals = Decimals(angleWord, radiusWord);
-        decimal x = SiemensNumbers.Round((double)pole.First + (r * Math.Cos(a * Math.PI / 180)), decimals);
-        decimal y = SiemensNumbers.Round((double)pole.Second + (r * Math.Sin(a * Math.PI / 180)), decimals);
+        decimal x = SiemensNumbers.Round((double)pole.First + (r * Math.Cos(a * Math.PI / 180)));
+        decimal y = SiemensNumbers.Round((double)pole.Second + (r * Math.Sin(a * Math.PI / 180)));
         main.Add(plane.First, SiemensNumbers.Of(x)).Add(plane.Second, SiemensNumbers.Of(y));
         if (facts.MotionCode is "G2" or "G3")
         {
@@ -119,11 +117,9 @@ internal static class SiemensPolar
             {
                 return null;
             }
-
-            int decimals = Decimals(angle, radius);
             return new SiemensPoint(
-                SiemensNumbers.Round((double)r * Math.Cos((double)a * Math.PI / 180), decimals),
-                SiemensNumbers.Round((double)r * Math.Sin((double)a * Math.PI / 180), decimals));
+                SiemensNumbers.Round((double)r * Math.Cos((double)a * Math.PI / 180)),
+                SiemensNumbers.Round((double)r * Math.Sin((double)a * Math.PI / 180)));
         }
 
         decimal first = 0;
@@ -189,18 +185,4 @@ internal static class SiemensPolar
         return Math.Sqrt((dx * dx) + (dy * dy));
     }
 
-    // Computed coordinates keep the decimals of the source words, at least three (wave-1 question #46).
-    private static int Decimals(SourceWord? angle, SourceWord? radius)
-    {
-        int decimals = SiemensNumbers.LeastDecimals;
-        foreach (SourceWord? word in new[] { angle, radius })
-        {
-            if (word is not null)
-            {
-                decimals = Math.Max(decimals, SiemensNumbers.DecimalsOf(word.Text));
-            }
-        }
-
-        return decimals;
-    }
 }

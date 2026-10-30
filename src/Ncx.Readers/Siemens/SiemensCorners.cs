@@ -150,12 +150,10 @@ internal static class SiemensCorners
         {
             return "the chamfer or the rounding is longer than a line of the corner";
         }
-
-        int decimals = Decimals(block, next);
-        decimal beginFirst = SiemensNumbers.Round((double)c.First - (reach * inFirst), decimals);
-        decimal beginSecond = SiemensNumbers.Round((double)c.Second - (reach * inSecond), decimals);
-        decimal endFirst = SiemensNumbers.Round((double)c.First + (reach * outFirst), decimals);
-        decimal endSecond = SiemensNumbers.Round((double)c.Second + (reach * outSecond), decimals);
+        decimal beginFirst = SiemensNumbers.Round((double)c.First - (reach * inFirst));
+        decimal beginSecond = SiemensNumbers.Round((double)c.Second - (reach * inSecond));
+        decimal endFirst = SiemensNumbers.Round((double)c.First + (reach * outFirst));
+        decimal endSecond = SiemensNumbers.Round((double)c.Second + (reach * outSecond));
         main.Remove(plane.First);
         main.Remove(plane.Second);
         main.Remove("I" + plane.First);
@@ -222,19 +220,18 @@ internal static class SiemensCorners
         }
 
         double radians = (double)angle * Math.PI / 180;
-        int decimals = Decimals(block, null);
         if (first || second)
         {
-            OneBlock(block, main, plane, a, first, radians, decimals);
+            OneBlock(block, main, plane, a, first, radians);
             return;
         }
 
-        TwoBlocks(block, main, plane, a, radians, decimals);
+        TwoBlocks(block, main, plane, a, radians);
     }
 
     // One end coordinate and the angle: the other coordinate of the point on the line (D58).
     private static void OneBlock(SiemensBlock block, SiemensDraftBlock main, SiemensPlane plane, SiemensPoint a,
-        bool first, double radians, int decimals)
+        bool first, double radians)
     {
         double along = first ? Math.Cos(radians) : Math.Sin(radians);
         if (Math.Abs(along) < 1e-9 || (first ? block.State.Positions.ContainsKey(plane.First)
@@ -248,7 +245,7 @@ internal static class SiemensCorners
         decimal known = first ? block.State.Positions[plane.First] : block.State.Positions[plane.Second];
         double t = (double)(known - (first ? a.First : a.Second)) / along;
         decimal other = SiemensNumbers.Round((double)(first ? a.Second : a.First)
-            + (t * (first ? Math.Sin(radians) : Math.Cos(radians))), decimals);
+            + (t * (first ? Math.Sin(radians) : Math.Cos(radians))));
         string axis = first ? plane.Second : plane.First;
         main.Remove(axis);
         main.Remove("I" + axis);
@@ -258,7 +255,7 @@ internal static class SiemensCorners
 
     // No end coordinate: the next block carries both and its own ANG; the line ends where the two lines meet.
     private static void TwoBlocks(SiemensBlock block, SiemensDraftBlock main, SiemensPlane plane, SiemensPoint a,
-        double radians, int decimals)
+        double radians)
     {
         SourceBlock? next = block.Siemens.NextBlock(block.Source);
         SourceWord? secondAngle = next?.Find("ANG");
@@ -283,8 +280,8 @@ internal static class SiemensCorners
         }
 
         double t = (((double)(end.First - a.First) * d2y) - ((double)(end.Second - a.Second) * d2x)) / cross;
-        decimal x = SiemensNumbers.Round((double)a.First + (t * d1x), decimals);
-        decimal y = SiemensNumbers.Round((double)a.Second + (t * d1y), decimals);
+        decimal x = SiemensNumbers.Round((double)a.First + (t * d1x));
+        decimal y = SiemensNumbers.Round((double)a.Second + (t * d1y));
         main.Add(plane.First, SiemensNumbers.Of(x)).Add(plane.Second, SiemensNumbers.Of(y));
         block.State.SetPosition(plane.First, x);
         block.State.SetPosition(plane.Second, y);
@@ -375,22 +372,4 @@ internal static class SiemensCorners
         return value;
     }
 
-    // Computed points keep the decimals of the source words they come from, at least three (wave-1 question #46).
-    private static int Decimals(SiemensBlock block, SourceBlock? next)
-    {
-        int decimals = SiemensNumbers.LeastDecimals;
-        SourceBlock[] sources = next is null ? [block.Source] : [block.Source, next];
-        foreach (SourceBlock source in sources)
-        {
-            foreach (SourceWord word in source.Words)
-            {
-                if (word.Number is not null)
-                {
-                    decimals = Math.Max(decimals, SiemensNumbers.DecimalsOf(word.Text));
-                }
-            }
-        }
-
-        return decimals;
-    }
 }

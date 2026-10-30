@@ -77,7 +77,6 @@ internal static class SiemensPatterns
         }
 
         var numbers = new List<decimal>();
-        int decimals = SiemensNumbers.LeastDecimals;
         foreach (string argument in arguments.GetRange(0, 6))
         {
             if (SiemensNumbers.NumberOf(SiemensNumbers.Parse(argument)) is not decimal number)
@@ -86,7 +85,6 @@ internal static class SiemensPatterns
             }
 
             numbers.Add(number);
-            decimals = Math.Max(decimals, SiemensNumbers.DecimalsOf(argument));
         }
 
         if (Whole(numbers[5]) is not int count || count < 1 || count > MaxHoles)
@@ -114,7 +112,7 @@ internal static class SiemensPatterns
                 y = values[1] + (values[2] * Math.Sin(angle));
             }
 
-            points.Add((SiemensNumbers.Round(x, decimals), SiemensNumbers.Round(y, decimals)));
+            points.Add((SiemensNumbers.Round(x), SiemensNumbers.Round(y)));
         }
 
         return points;
@@ -147,7 +145,6 @@ internal static class SiemensPatterns
     private static List<(decimal First, decimal Second)>? GridPoints(List<string> arguments)
     {
         decimal?[] values = Numbers(arguments, 0, 8);
-        int decimals = Decimals(arguments, 0, 5);
         int? columns = Whole(values[5]);
         int? rows = Whole(values[6]);
         int variant = Whole(values[7]) ?? 0;
@@ -174,7 +171,7 @@ internal static class SiemensPatterns
                 double across2 = row * (double)values[4]!.Value;
                 double x = (double)values[0]!.Value + (along * Math.Cos(angle)) - (across2 * Math.Sin(angle));
                 double y = (double)values[1]!.Value + (along * Math.Sin(angle)) + (across2 * Math.Cos(angle));
-                points.Add((SiemensNumbers.Round(x, decimals), SiemensNumbers.Round(y, decimals)));
+                points.Add((SiemensNumbers.Round(x), SiemensNumbers.Round(y)));
             }
         }
 
@@ -289,17 +286,6 @@ internal static class SiemensPatterns
         return values;
     }
 
-    // The most decimals a run of positions is written with, at least the three of a computed value (D18, language 2).
-    private static int Decimals(List<string> arguments, int from, int to)
-    {
-        int decimals = SiemensNumbers.LeastDecimals;
-        for (int index = from; index <= to && index < arguments.Count; index++)
-        {
-            decimals = Math.Max(decimals, SiemensNumbers.DecimalsOf(arguments[index]));
-        }
-
-        return decimals;
-    }
 
     // True where a value of the run is missing, empty or no number.
     private static bool AnyMissing(decimal?[] values, int from, int to)

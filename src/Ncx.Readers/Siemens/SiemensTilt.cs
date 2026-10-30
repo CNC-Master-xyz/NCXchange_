@@ -126,16 +126,7 @@ internal static class SiemensTilt
             return;
         }
 
-        int decimals = SiemensNumbers.LeastDecimals;
-        for (int index = 0; index < 3; index++)
-        {
-            if (FirstAngle + index < arguments.Count)
-            {
-                decimals = Math.Max(decimals, SiemensNumbers.DecimalsOf(arguments[FirstAngle + index]));
-            }
-        }
-
-        SiemensDraftBlock? entry = Entry(block, modeBits, angles, decimals);
+        SiemensDraftBlock? entry = Entry(block, modeBits, angles);
         if (entry is null)
         {
             return;
@@ -195,7 +186,7 @@ internal static class SiemensTilt
     // takes their NCX names from the machine's [transform] TILT_AXIS_ON template, the placeholder in the place of _A
     // first and the one in the place of _B second, and keeps the block RAW where the machine has no such template
     // (decisions.md D296).
-    private static SiemensDraftBlock? Entry(SiemensBlock block, int mode, decimal?[] angles, int decimals)
+    private static SiemensDraftBlock? Entry(SiemensBlock block, int mode, decimal?[] angles)
     {
         int kind = (mode >> 6) & 3;
         if (kind == 1)
@@ -217,8 +208,8 @@ internal static class SiemensTilt
             }
 
             TiltAngles(rotation, out double a, out double b, out double c);
-            return Tilt(SiemensNumbers.Round(a, decimals), SiemensNumbers.Round(b, decimals),
-                SiemensNumbers.Round(c, decimals));
+            return Tilt(SiemensNumbers.Round(a), SiemensNumbers.Round(b),
+                SiemensNumbers.Round(c));
         }
 
         if (kind == 3 && RotaryAxes(block.Machine) is List<string> rotary)
