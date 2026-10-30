@@ -173,6 +173,13 @@ public static partial class DiagnosticCodes
     public const string FanucToolWithoutLengthOffset = "CMP342";
 
     /// <summary>
+    /// CMP343, a WARNING: the limit of RPM_MAX, G50 S or G92 S, is written while the control has another spindle
+    /// selected, and the template names no spindle with {spindle} or a P word, so the control limits that spindle
+    /// (D408).
+    /// </summary>
+    public const string FanucSpeedLimitOfAnotherSpindle = "CMP343";
+
+    /// <summary>
     /// CMP360: the transform chain of the block cannot be written with the one G52, G68, G51.1 and G68.2 of a Fanuc
     /// control in program order (D31).
     /// </summary>
